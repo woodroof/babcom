@@ -9,7 +9,7 @@ CREATE OR REPLACE FUNCTION json.get_opt_string(
   RETURNS text AS
 $BODY$
 declare
-  v_param jsonb;
+  v_param json;
   v_param_type text;
 begin
   if in_name is not null then
