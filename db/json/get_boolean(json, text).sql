@@ -1,11 +1,11 @@
--- Function: json.get_array(json, text)
+-- Function: json.get_boolean(json, text)
 
--- DROP FUNCTION json.get_array(json, text);
+-- DROP FUNCTION json.get_boolean(json, text);
 
-CREATE OR REPLACE FUNCTION json.get_array(
+CREATE OR REPLACE FUNCTION json.get_boolean(
     in_json json,
     in_name text DEFAULT NULL::text)
-  RETURNS json AS
+  RETURNS boolean AS
 $BODY$
 declare
   v_param json;
@@ -23,11 +23,11 @@ begin
     if v_param_type is null then
       raise exception 'Attribute "%" was not found', in_name;
     end if;
-    if v_param_type != 'array' then
-      raise exception 'Attribute "%" is not an array', in_name;
+    if v_param_type != 'boolean' then
+      raise exception 'Attribute "%" is not a boolean', in_name;
     end if;
-  elseif v_param_type is null or v_param_type != 'array' then
-    raise exception 'Json is not an array';
+  elseif v_param_type is null or v_param_type != 'boolean' then
+    raise exception 'Json is not a boolean';
   end if;
 
   return v_param;

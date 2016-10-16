@@ -1,8 +1,8 @@
--- Function: json.get_opt_bool(jsonb, boolean, text)
+-- Function: json.get_opt_boolean(jsonb, boolean, text)
 
--- DROP FUNCTION json.get_opt_bool(jsonb, boolean, text);
+-- DROP FUNCTION json.get_opt_boolean(jsonb, boolean, text);
 
-CREATE OR REPLACE FUNCTION json.get_opt_bool(
+CREATE OR REPLACE FUNCTION json.get_opt_boolean(
     in_json jsonb,
     in_default boolean DEFAULT NULL::boolean,
     in_name text DEFAULT NULL::text)
@@ -25,7 +25,11 @@ begin
   end if;
 
   if v_param_type != 'boolean' then
-    raise exception 'Attribute "%" is not a boolean', in_name;
+    if in_name is not null then
+      raise exception 'Attribute "%" is not a boolean', in_name;
+    else
+      raise exception 'Json is not a boolean';
+    end if;
   end if;
 
   return v_param;

@@ -26,13 +26,21 @@ begin
   end if;
 
   if v_param_type != 'number' then
-    raise exception 'Attribute "%" is not a number', in_name;
+    if in_name is not null then
+      raise exception 'Attribute "%" is not a number', in_name;
+    else
+      raise exception 'Json is not a number';
+    end if;
   end if;
 
   begin
     v_retval := v_param;
   exception when others then
-    raise exception 'Attribute "%" is not an integer', in_name;
+    if in_name is not null then
+      raise exception 'Attribute "%" is not an integer', in_name;
+    else
+      raise exception 'Json is not an integer';
+    end if;
   end;
 
   return v_retval;

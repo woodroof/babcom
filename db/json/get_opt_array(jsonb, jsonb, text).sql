@@ -32,8 +32,13 @@ begin
   end if;
 
   if v_param_type != 'array' then
-    raise exception 'Attribute "%" is not an array', in_name;
+    if in_name is not null then
+      raise exception 'Attribute "%" is not an array', in_name;
+    else
+      raise exception 'Json is not an array';
+    end if;
   end if;
+
   return v_param;
 end;
 $BODY$

@@ -19,12 +19,17 @@ begin
 
   v_param_type := jsonb_typeof(v_param);
 
-  if v_param_type is null then
-    raise exception 'Attribute "%" was not found', in_name;
+  if in_name is not null then
+    if v_param_type is null then
+      raise exception 'Attribute "%" was not found', in_name;
+    end if;
+    if v_param_type != 'string' then
+      raise exception 'Attribute "%" is not a string', in_name;
+    end if;
+  elseif v_param_type is null or v_param_type != 'string' then
+    raise exception 'Json is not a string';
   end if;
-  if v_param_type != 'string' then
-    raise exception 'Attribute "%" is not a string', in_name;
-  end if;
+
   return v_param#>>'{}';
 end;
 $BODY$

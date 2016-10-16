@@ -1,11 +1,11 @@
--- Function: json.get_object(jsonb, text)
+-- Function: json.get_boolean(jsonb, text)
 
--- DROP FUNCTION json.get_object(jsonb, text);
+-- DROP FUNCTION json.get_boolean(jsonb, text);
 
-CREATE OR REPLACE FUNCTION json.get_object(
+CREATE OR REPLACE FUNCTION json.get_boolean(
     in_json jsonb,
     in_name text DEFAULT NULL::text)
-  RETURNS jsonb AS
+  RETURNS boolean AS
 $BODY$
 declare
   v_param jsonb;
@@ -23,11 +23,11 @@ begin
     if v_param_type is null then
       raise exception 'Attribute "%" was not found', in_name;
     end if;
-    if v_param_type != 'object' then
-      raise exception 'Attribute "%" is not an object', in_name;
+    if v_param_type != 'boolean' then
+      raise exception 'Attribute "%" is not a boolean', in_name;
     end if;
-  elseif v_param_type is null or v_param_type != 'object' then
-    raise exception 'Json is not an object';
+  elseif v_param_type is null or v_param_type != 'boolean' then
+    raise exception 'Json is not a boolean';
   end if;
 
   return v_param;

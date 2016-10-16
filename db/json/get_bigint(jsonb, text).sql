@@ -1,16 +1,16 @@
--- Function: json.get_integer(json, text)
+-- Function: json.get_bigint(jsonb, text)
 
--- DROP FUNCTION json.get_integer(json, text);
+-- DROP FUNCTION json.get_bigint(jsonb, text);
 
-CREATE OR REPLACE FUNCTION json.get_integer(
-    in_json json,
+CREATE OR REPLACE FUNCTION json.get_bigint(
+    in_json jsonb,
     in_name text DEFAULT NULL::text)
-  RETURNS integer AS
+  RETURNS bigint AS
 $BODY$
 declare
-  v_param json;
+  v_param jsonb;
   v_param_type text;
-  v_retval integer;
+  v_retval bigint;
 begin
   if in_name is not null then
     v_param := in_json->in_name;
@@ -18,7 +18,7 @@ begin
     v_param := in_json;
   end if;
 
-  v_param_type := json_typeof(v_param);
+  v_param_type := jsonb_typeof(v_param);
 
   if in_name is not null then
     if v_param_type is null then
@@ -35,9 +35,9 @@ begin
     v_retval := v_param;
   exception when others then
     if in_name is not null then
-      raise exception 'Attribute "%" is not an integer', in_name;
+      raise exception 'Attribute "%" is not a bigint', in_name;
     else
-      raise exception 'Json is not an integer';
+      raise exception 'Json is not a bigint';
     end if;
   end;
 
