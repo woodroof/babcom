@@ -30,7 +30,7 @@ begin
   into v_total_tests_count
   from pg_proc
   where
-    pronamespace =
+    pronamespace in
       (
         select oid
         from pg_namespace
@@ -173,10 +173,10 @@ begin
           raise notice '[       OK ] % (% ms total)', v_test_name, v_test_time;
         end if;
       end loop;
-    end loop;
 
-    raise notice '[----------] % from % (% ms total)', v_tests_text, v_test_case.name, round(extract(milliseconds from clock_timestamp() - v_test_case_start));
-    raise notice '';
+      raise notice '[----------] % from % (% ms total)', v_tests_text, v_test_case.name, round(extract(milliseconds from clock_timestamp() - v_test_case_start));
+      raise notice '';
+    end loop;
   end;
 
   raise notice '[==========] % from % ran. (% ms total)', v_total_tests_text, v_total_test_cases_text, round(extract(milliseconds from clock_timestamp() - v_start));
