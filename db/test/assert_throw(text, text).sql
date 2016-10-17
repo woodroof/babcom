@@ -15,7 +15,7 @@ declare
 begin
   begin
     execute in_expression;
-  exception when raise_exception then
+  exception when others then
     get stacked diagnostics
       v_exception_message = message_text,
       v_exception_call_stack = pg_exception_context;
