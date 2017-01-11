@@ -80,52 +80,58 @@
 					"name": "Изменить",
 					"type": "equipment.action",
 					"params": {},
-					"user_params": {
-						"code": "value",
-						"type": "integer",
-						"data": {
-							"min_value": 300,
-							"max_value": 900
-						},
-						"description": "Введите желаемую длину волны (300-900 нм.)",
-						"default_value": 635,
-						"min_value_count": 1,
-						"max_value_count": 1
-					}
+					"user_params": [
+						{
+							"code": "value",
+							"type": "integer",
+							"data": {
+								"min_value": 300,
+								"max_value": 900
+							},
+							"description": "Введите желаемую длину волны (300-900 нм.)",
+							"default_value": 635,
+							"min_value_count": 1,
+							"max_value_count": 1
+						}
+					]
 				},
 				"set_beam_diameter": {
 					"name": "Изменить",
 					"type": "equipment.action",
 					"params": {},
-					"user_params": {
-						"code": "value",
-						"type": "integer",
-						"data": {
-							"min_value": 100,
-							"max_value": 2000
-						},
-						"description": "Введите желаемый диаметр луча (100-2000 мкм.)",
-						"default_value": 1000,
-						"min_value_count": 1,
-						"max_value_count": 1
-					}
+					"user_params": [
+						{
+							"code": "value",
+							"type": "integer",
+							"data": {
+								"min_value": 100,
+								"max_value": 2000
+							},
+							"description": "Введите желаемый диаметр луча (100-2000 мкм.)",
+							"default_value": 1000,
+							"min_value_count": 1,
+							"max_value_count": 1
+						}
+					]
 				},
 				"set_output_power_percentage": {
 					"name": "Изменить",
 					"type": "equipment.action",
 					"params": {},
-					"user_params": {
-						"code": "value",
-						"type": "integer",
-						"data": {
-							"min_value": 1,
-							"max_value": 100
-						},
-						"description": "Введите желаемую выходную мощность (1-100%)",
-						"default_value": 2,
-						"min_value_count": 1,
-						"max_value_count": 1
-					}
+					"user_params": [
+						{
+							"code": "value",
+							"type": "integer",
+							"data": {
+								"min_value": 1,
+								"max_value": 100
+							},
+							"description": "Введите желаемую выходную мощность (1-100%)",
+							"default_value": 2,
+							"min_value_count": 1,
+							"max_value_count": 1
+						}
+					]
 				},
 				"turn_on": {
 					"name": "Включить",
