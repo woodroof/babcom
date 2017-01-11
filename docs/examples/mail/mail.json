@@ -12,7 +12,18 @@
 					"body": {
 						"value": "Напоминаю всем, что сегодня в 20:00 состоится грандиозное шоу в честь годовщины станции. Не забудьте оставить все распри в ваших аппартаментах и захватить с собой хорошее настроение!\n\nP.S. Меры безопасности усилены. Пожалуйста, отнеситесь с пониманием.\nВаш капитан, Джон Шеридан."
 					},
+					"author": {
+						"value": "16x68z-17TnZm66F",
+						"hidden": true
+					},
+					"author_string": {
+						"value": "Джон Шеридан"
+					},
 					"receivers": {
+						"value": ["16x68z-15TnZm66F", "16x68z-18TnZm66F"],
+						"hidden": true
+					},
+					"receivers_string": {
 						"value": "Персонал станции Вавилон 5, Гости станции Вавилон 5"
 					}
 				},
@@ -100,13 +111,19 @@
 								"max_value_count": 1
 							}
 						]
+					},
+					"delete": {
+						"code": "delete_mail",
+						"name": "Ответить всем",
+						"type": "mail.delete",
+						"params": {}
 					}
 				},
 				"template": {
 					"groups": [
 						{
-							"attributes": ["title", "recievers", "body"],
-							"actions": ["reply", "reply_all"]
+							"attributes": ["title", "author", "recievers", "body"],
+							"actions": ["reply", "reply_all", "delete"]
 						}
 					]
 				}
