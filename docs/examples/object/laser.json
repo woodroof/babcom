@@ -78,6 +78,7 @@
 				},
 				"actions": {
 					"set_wave_length": {
+						"code": "set_wave_length",
 						"name": "Изменить",
 						"type": "equipment.action",
 						"params": 5,
@@ -97,6 +98,7 @@
 						]
 					},
 					"set_beam_diameter": {
+						"code": "set_beam_diameter",
 						"name": "Изменить",
 						"type": "equipment.action",
 						"params": "",
@@ -116,6 +118,7 @@
 						]
 					},
 					"set_output_power_percentage": {
+						"code": "set_output_power_percentage",
 						"name": "Изменить",
 						"type": "equipment.action",
 						"params": [],
@@ -135,6 +138,7 @@
 						]
 					},
 					"turn_on": {
+						"code": "turn_on",
 						"name": "Включить",
 						"type": "equipment.action",
 						"warning": "Вы действительно хотите включить оптический квантовый генератор?",
