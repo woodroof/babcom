@@ -1,0 +1,116 @@
+{
+	"result": "ok",
+	"data": {
+		"last_modified": "2017-01-11T15:00:00.000Z",
+		"objects": [
+			{
+				"code": "16x68z-10MnZm66F",
+				"attributes": {
+					"title": {
+						"value": "Напоминание о предстоящем празднике"
+					},
+					"body": {
+						"value": "Напоминаю всем, что сегодня в 20:00 состоится грандиозное шоу в честь годовщины станции. Не забудьте оставить все распри в ваших аппартаментах и захватить с собой хорошее настроение!\n\nP.S. Меры безопасности усилены. Пожалуйста, отнеситесь с пониманием.\nВаш капитан, Джон Шеридан."
+					},
+					"receivers": {
+						"value": "Персонал станции Вавилон 5, Гости станции Вавилон 5"
+					}
+				},
+				"actions": {
+					"reply": {
+						"code": "send_mail",
+						"name": "Ответить",
+						"type": "mail.reply",
+						"params": {},
+						"user_params": [
+							{
+								"code": "receivers",
+								"type": "objects",
+								"data": {
+									"object_code": "receivers",
+									"attribute_code": "value"
+								},
+								"default_value": "16x68z-17TnZm66F",
+								"description": "Кому",
+								"min_value_count": 1
+							},
+							{
+								"code": "title",
+								"type": "string",
+								"data": {
+									"max_length": "100"
+								},
+								"default_value": "Re: Напоминание о предстоящем празднике",
+								"description": "Тема",
+								"min_value_count": 1,
+								"max_value_count": 1
+							},
+							{
+								"code": "body",
+								"type": "string",
+								"data": {
+									"min_length": "1",
+									"multiline": true
+								},
+								"default_value": "> Напоминаю всем, что сегодня в 20:00 состоится грандиозное шоу в честь годовщины станции. Не забудьте оставить все распри в ваших аппартаментах и захватить с собой хорошее настроение!\n> \n> P.S. Меры безопасности усилены. Пожалуйста, отнеситесь с пониманием.\n> Ваш капитан, Джон Шеридан.",
+								"description": "Сообщение",
+								"min_value_count": 1,
+								"max_value_count": 1
+							}
+						]
+					},
+					"reply_all": {
+						"code": "send_mail",
+						"name": "Ответить всем",
+						"type": "mail.reply_all",
+						"params": {},
+						"user_params": [
+							{
+								"code": "receivers",
+								"type": "objects",
+								"data": {
+									"object_code": "receivers",
+									"attribute_code": "value"
+								},
+								"default_value": ["16x68z-17TnZm66F", "16x68z-15TnZm66F", "16x68z-18TnZm66F"],
+								"description": "Кому",
+								"min_value_count": 1
+							},
+							{
+								"code": "title",
+								"type": "string",
+								"data": {
+									"max_length": "100"
+								},
+								"default_value": "Re: Напоминание о предстоящем празднике",
+								"description": "Тема",
+								"min_value_count": 1,
+								"max_value_count": 1
+							},
+							{
+								"code": "body",
+								"type": "string",
+								"data": {
+									"min_length": "1",
+									"multiline": true
+								},
+								"default_value": "> Напоминаю всем, что сегодня в 20:00 состоится грандиозное шоу в честь годовщины станции. Не забудьте оставить все распри в ваших аппартаментах и захватить с собой хорошее настроение!\n> \n> P.S. Меры безопасности усилены. Пожалуйста, отнеситесь с пониманием.\n> Ваш капитан, Джон Шеридан.",
+								"description": "Сообщение",
+								"min_value_count": 1,
+								"max_value_count": 1
+							}
+						]
+					}
+				},
+				"template": {
+					"groups": [
+						{
+							"attributes": ["title", "recievers", "body"],
+							"actions": ["reply", "reply_all"]
+						}
+					]
+				}
+			}
+		]
+	}
+}
