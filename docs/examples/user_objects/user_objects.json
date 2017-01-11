@@ -1,0 +1,24 @@
+{
+	"result": "ok",
+	"data": {
+		"last_modified": "2016-12-27T23:00:00.000Z",
+		"objects": [
+			{
+				"code": "16x68z-14TnZm66F",
+				"attributes": {
+					"name": {
+						"value": "Г'Кар"
+					}
+				}
+			},
+			{
+				"code": "16x68z-13TnZm66F",
+				"attributes": {
+					"name": {
+						"value": "Кош"
+					}
+				}
+			}
+		]
+	}
+}
