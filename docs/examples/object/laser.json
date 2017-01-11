@@ -143,6 +143,12 @@
 						"type": "equipment.action",
 						"warning": "Вы действительно хотите включить оптический квантовый генератор?",
 						"params": {}
+					},
+					"turn_off": {
+						"code": "turn_off",
+						"name": "Выключить",
+						"type": "equipment.action",
+						"disabled": true
 					}
 				},
 				"template": {
