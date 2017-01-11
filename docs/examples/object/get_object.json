@@ -79,7 +79,7 @@
 				"set_wave_length": {
 					"name": "Изменить",
 					"type": "equipment.action",
-					"params": {},
+					"params": 5,
 					"user_params": [
 						{
 							"code": "value",
@@ -98,7 +98,7 @@
 				"set_beam_diameter": {
 					"name": "Изменить",
 					"type": "equipment.action",
-					"params": {},
+					"params": "",
 					"user_params": [
 						{
 							"code": "value",
@@ -117,7 +117,7 @@
 				"set_output_power_percentage": {
 					"name": "Изменить",
 					"type": "equipment.action",
-					"params": {},
+					"params": [],
 					"user_params": [
 						{
 							"code": "value",
