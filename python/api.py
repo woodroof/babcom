@@ -34,12 +34,13 @@ class HttpRequestHandler(http.server.BaseHTTPRequestHandler):
 			return
 
 		cursor = connection.cursor()
-		cursor.execute("select api.api(%s);", (psycopg2.extras.Json(request),))
+		cursor.execute("select * from api.api(%s);", (psycopg2.extras.Json(request),))
 		result = cursor.fetchone()
 
-		data = json.dumps(result[0]).encode()
+		code = result[0]
+		data = json.dumps(result[1]).encode()
 
-		self.send_response(200)
+		self.send_response(code)
 		self.send_header('Content-Type', 'application/json')
 		self.send_header('Content-Length', len(data))
 		self.end_headers()
