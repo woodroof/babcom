@@ -9,13 +9,16 @@
 						"value": "Напоминание о предстоящем празднике"
 					},
 					"mail_send_time": {
+						"name": "Получено",
 						"value": "05.02.2258 20:49"
 					},
 					"mail_author": {
+						"name": "От",
 						"value": "16x68z-17TnZm66F",
 						"value_description": "Джон Шеридан"
 					},
 					"mail_receivers": {
+						"name": "Кому",
 						"value": ["16x68z-15TnZm66F", "16x68z-18TnZm66F"],
 						"value_description": "Персонал станции Вавилон 5, Гости станции Вавилон 5"
 					},
@@ -120,7 +123,7 @@
 				"template": {
 					"groups": [
 						{
-							"attributes": ["title", "author", "recievers", "body"],
+							"attributes": ["mail_title", "mail_send_time", "mail_author", "mail_receivers", "mail_body"],
 							"actions": ["reply", "reply_all", "delete"]
 						}
 					]
