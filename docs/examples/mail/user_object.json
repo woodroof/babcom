@@ -30,6 +30,7 @@
 								"code": "title",
 								"type": "string",
 								"data": {
+									"min_length": "1",
 									"max_length": "100"
 								},
 								"description": "Тема",
