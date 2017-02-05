@@ -38,7 +38,7 @@ class HttpRequestHandler(http.server.BaseHTTPRequestHandler):
 		result = cursor.fetchone()
 
 		code = result[0]
-		data = json.dumps(result[1]).encode()
+		data = json.dumps(result[1], ensure_ascii=False).encode('utf8')
 
 		self.send_response(code)
 		self.send_header('Content-Type', 'application/json')
