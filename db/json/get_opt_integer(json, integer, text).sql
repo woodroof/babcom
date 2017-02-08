@@ -11,10 +11,10 @@ $BODY$
 declare
   v_param json;
   v_param_type text;
-  v_retval integer;
+  v_ret_val integer;
 begin
   if in_name is not null then
-    v_param := in_json->in_name;
+    v_param := json.get_object(in_json)->in_name;
   else
     v_param := in_json;
   end if;
@@ -27,23 +27,23 @@ begin
 
   if v_param_type != 'number' then
     if in_name is not null then
-      raise exception 'Attribute "%" is not a number', in_name;
+      perform utils.raise_invalid_input_param_value('Attribute "%s" is not a number', in_name);
     else
-      raise exception 'Json is not a number';
+      perform utils.raise_invalid_input_param_value('Json is not a number');
     end if;
   end if;
 
   begin
-    v_retval := v_param;
+    v_ret_val := v_param;
   exception when others then
     if in_name is not null then
-      raise exception 'Attribute "%" is not an integer', in_name;
+      perform utils.raise_invalid_input_param_value('Attribute "%s" is not an integer', in_name);
     else
-      raise exception 'Json is not an integer';
+      perform utils.raise_invalid_input_param_value('Json is not an integer');
     end if;
   end;
 
-  return v_retval;
+  return v_ret_val;
 end;
 $BODY$
   LANGUAGE plpgsql IMMUTABLE

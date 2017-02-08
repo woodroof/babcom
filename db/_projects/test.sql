@@ -1,0 +1,488 @@
+-- Расширения
+insert into data.extensions(code) values
+('meta'),
+('mail'),
+('history'),
+('notifications');
+
+-- Параметры
+insert into data.params(code, value, description) values('time_format', jsonb '"dd.mm.2258 hh24:mi"', 'Формат дат');
+
+-- Группы
+insert into data.objects(code) values
+('persons'),
+('masters'),
+('telepaths'),
+('security'),
+('politicians'),
+('medics'),
+('technicians'),
+('pilots'),
+('officers'),
+('traders'),
+('hackers'),
+('scientists'),
+('corporations'),
+('ships'),
+('news_hub');
+
+insert into data.objects(code)
+select 'media' || o.value from generate_series(1, 3) o(value);
+
+insert into data.objects(code)
+select 'race' || o.value from generate_series(1, 20) o(value);
+
+insert into data.objects(code)
+select 'state' || o.value from generate_series(1, 10) o(value);
+
+-- Персонажи
+insert into data.objects(code) values
+('anonymous');
+
+insert into data.objects(code)
+select 'person' || o.* from generate_series(1, 60) o;
+
+-- Объекты
+insert into data.objects(code) values
+('mail_contacts'),
+('personal_document_storage'),
+('library'),
+('med_library'),
+('personal_library'),
+('transactions'),
+('station'),
+('station_medlab'),
+('station_lab'),
+('station_radar'),
+('station_power_computer'),
+('station_hacker_computer'),
+('ship'),
+('ship_radar'),
+('ship_power_computer'),
+('ship_hacker_computer'),
+('assembly'),
+('market'),
+('meta_entities');
+
+insert into data.objects(code)
+select 'station_weapon' || o.* from generate_series(1, 4) o;
+
+insert into data.objects(code)
+select 'station_reactor' || o.* from generate_series(1, 4) o;
+
+insert into data.objects(code)
+select 'ship_weapon' || o.* from generate_series(1, 2) o;
+
+insert into data.objects(code)
+select 'ship_reactor' || o.* from generate_series(1, 2) o;
+
+insert into data.objects(code)
+select 'corporation' || o.* from generate_series(1, 9) o;
+
+insert into data.objects(code)
+select 'asset' || o1.* || o2.* from generate_series(1, 9) o1(value)
+join generate_series(1, 50) o2(value) on 1=1;
+
+insert into data.objects(code)
+select 'news' || o1.* || o2.* from generate_series(1, 3) o1(value)
+join generate_series(1, 100) o2(value) on 1=1;
+
+insert into data.objects(code)
+select 'library_category' || o.* from generate_series(1, 9) o;
+
+insert into data.objects(code)
+select 'library_document' || o1.* || o2.* from generate_series(1, 9) o1(value)
+join generate_series(1, 20) o2(value) on 1=1;
+
+insert into data.objects(code)
+select 'personal_document' || o1.* from generate_series(1, 100) o1(value);
+
+-- Атрибуты
+insert into data.attributes(code, name, type) values
+('mail_contacts', 'Список доступных контактов', 'INVISIBLE'),
+('type', 'Тип', 'HIDDEN'),
+('name', 'Имя', 'NORMAL'),
+('description', 'Описание', 'NORMAL'),
+('content', 'Содержимое', 'NORMAL'),
+('system_value', 'Содержимое', 'SYSTEM'),
+('meta_entities', 'Мета-объекты', 'INVISIBLE'),
+('system_meta', 'Маркер мета-объекта', 'SYSTEM'),
+('system_mail_contact', 'Маркер объекта, которому можно отправлять письма', 'SYSTEM'),
+('person_race', 'Раса', 'NORMAL'),
+('person_state', 'Государство', 'NORMAL'),
+('person_job_position', 'Должность', 'NORMAL'),
+('person_biography', 'Биография', 'NORMAL'),
+('person_psi_scale', 'Сила телепата', 'NORMAL'),
+('mail_title', 'Заголовок', 'NORMAL'),
+('system_mail_send_time', 'Реальное время отправки письма', 'SYSTEM'),
+('mail_send_time', 'Время отправки письма', 'NORMAL'),
+('mail_author', 'Автор', 'NORMAL'),
+('mail_receivers', 'Получатели', 'NORMAL'),
+('mail_body', 'Тело', 'NORMAL'),
+('mail_type', 'Тип письма', 'NORMAL'),
+('inbox', 'Входящие письма', 'INVISIBLE'),
+('outbox', 'Исходящие письма', 'INVISIBLE'),
+('corporation_members', 'Члены корпораций', 'NORMAL'),
+('corporation_capitalization', 'Капитализация корпорации', 'NORMAL'),
+('asset_corporations', 'Корпорации актива', 'NORMAL'),
+('asset_time', 'Время создания актива', 'NORMAL'),
+('asset_status', 'Состояние актива', 'NORMAL'),
+('asset_cost', 'Стоимость актива', 'NORMAL'),
+('market_volume', 'Объём рынка', 'NORMAL'),
+('system_balance', 'Остаток на счету', 'SYSTEM'),
+('balance', 'Остаток на счету', 'NORMAL'),
+('system_master', 'Маркер мастерского персонажа', 'SYSTEM'),
+('system_security', 'Маркер персонажа, имеющего доступ к системе безопасности', 'SYSTEM'),
+('system_politician', 'Маркер персонажа-политика', 'SYSTEM'),
+('system_medic', 'Маркер персонажа-медика', 'SYSTEM'),
+('system_technician', 'Маркер персонажа-техника', 'SYSTEM'),
+('system_pilot', 'Маркер персонажа-пилота', 'SYSTEM'),
+('system_officer', 'Маркер персонажа-офицера', 'SYSTEM'),
+('system_trader', 'Маркер персонажа-корпората', 'SYSTEM'),
+('system_hacker', 'Маркер персонажа-хакера', 'SYSTEM'),
+('system_scientist', 'Маркер персонажа-учёного', 'SYSTEM'),
+('system_library_category', 'Категория документа', 'SYSTEM');
+
+-- Функции для создания связей
+insert into data.attribute_value_change_functions(attribute_id, function, params) values
+(data.get_attribute_id('type'), 'string_value_to_object', jsonb '{"params": {"person": "persons", "corporation": "corporations", "ship": "ships", "media": "news_hub", "library_category": "library"}}'),
+(data.get_attribute_id('system_master'), 'boolean_value_to_object', jsonb '{"object_code": "masters"}'),
+(data.get_attribute_id('person_psi_scale'), 'any_value_to_object', jsonb '{"object_code": "telepaths"}'),
+(data.get_attribute_id('system_security'), 'boolean_value_to_object', jsonb '{"object_code": "security"}'),
+(data.get_attribute_id('system_politician'), 'boolean_value_to_object', jsonb '{"object_code": "politicians"}'),
+(data.get_attribute_id('system_medic'), 'boolean_value_to_object', jsonb '{"object_code": "medics"}'),
+(data.get_attribute_id('system_technician'), 'boolean_value_to_object', jsonb '{"object_code": "technicians"}'),
+(data.get_attribute_id('system_pilot'), 'boolean_value_to_object', jsonb '{"object_code": "pilots"}'),
+(data.get_attribute_id('system_officer'), 'boolean_value_to_object', jsonb '{"object_code": "officers"}'),
+(data.get_attribute_id('system_trader'), 'boolean_value_to_object', jsonb '{"object_code": "traders"}'),
+(data.get_attribute_id('system_hacker'), 'boolean_value_to_object', jsonb '{"object_code": "hackers"}'),
+(data.get_attribute_id('system_scientist'), 'boolean_value_to_object', jsonb '{"object_code": "scientists"}'),
+(data.get_attribute_id('system_mail_contact'), 'boolean_value_to_attribute', jsonb '{"object_code": "mail_contacts", "attribute_code": "mail_contacts"}'),
+(data.get_attribute_id('system_meta'), 'boolean_value_to_value_attribute', jsonb '{"object_code": "meta_entities", "attribute_code": "meta_entities"}');
+
+insert into data.attribute_value_change_functions(attribute_id, function, params)
+select data.get_attribute_id('system_library_category'), 'string_value_to_object', ('{"params": {' || string_agg(s.value, ',') || '}}')::jsonb
+from (select '"library_category' || o.value || '": "library_category' || o.value || '"' as value from generate_series(1, 9) o(value)) s;
+
+insert into data.attribute_value_change_functions(attribute_id, function, params)
+select data.get_attribute_id('person_race'), 'string_value_to_object', ('{"params": {' || string_agg(s.value, ',') || '}}')::jsonb
+from (select '"race' || o.value || '": "race' || o.value || '"' as value from generate_series(1, 20) o(value)) s;
+
+insert into data.attribute_value_change_functions(attribute_id, function, params)
+select data.get_attribute_id('person_state'), 'string_value_to_object', ('{"params": {' || string_agg(s.value, ',') || '}}')::jsonb
+from (select '"state' || o.value || '": "state' || o.value || '"' as value from generate_series(1, 10) o(value)) s;
+
+select data.add_object_to_object(data.get_object_id('personal_document' || o.value), data.get_object_id('person' || ((o.value - 1) % 50 + 1))) from generate_series(1, 100) o(value);
+
+select data.add_object_to_object(data.get_object_id('news' || o1.value || o2.value), data.get_object_id('media' || o1.value))
+from generate_series(1, 3) o1(value)
+join generate_series(1, 100) o2(value) on 1=1;
+
+  -- TODO: Заполнить попадание в ship и station
+
+-- Функции для вычисления атрибутов
+CREATE OR REPLACE FUNCTION attribute_value_fill_functions.merge_metaobjects(in_params jsonb)
+  RETURNS void AS
+$BODY$
+declare
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_attribute_id integer := json.get_integer(in_params, 'attribute_id');
+  v_source_object_id integer := data.get_object_id(json.get_string(in_params, 'object_code'));
+  v_source_attribute_id integer := data.get_attribute_id(json.get_string(in_params, 'attribute_code'));
+
+  v_meta jsonb := json_build_array(data.get_object_code(v_user_object_id));
+  v_metaobjects record;
+  v_codes text[];
+
+  v_attribute_name_id integer := data.get_attribute_id('name');
+begin
+  for v_metaobjects in
+    select json.get_string_array(av.value) codes
+    from data.attribute_values av
+    left join data.object_objects oo on
+      av.value_object_id = oo.parent_object_id and
+      oo.object_id = v_user_object_id
+    where
+      av.object_id = v_source_object_id and
+      av.attribute_id = v_source_attribute_id and
+      (
+        av.value_object_id is null or
+        oo.id is not null
+      )
+  loop
+    v_codes := v_codes || v_metaobjects.codes;
+  end loop;
+
+  select v_meta || coalesce(jsonb_agg(code), jsonb '[]')
+  into v_meta
+  from (
+    select o.code, json.get_opt_string(data.get_attribute_value(v_user_object_id, o.id, v_attribute_name_id)) as name
+    from data.objects o
+    where o.code = any(v_codes)
+    order by name
+  ) o;
+
+  perform data.set_attribute_value(v_object_id, v_attribute_id, v_user_object_id, v_meta, v_user_object_id);
+end;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+
+insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
+(data.get_attribute_id('meta_entities'), 'fill_user_object_attribute_if', '{"attribute_code": "type", "attribute_value": "person", "function": "merge_metaobjects", "params": {"object_code": "meta_entities", "attribute_code": "meta_entities"}}', 'Заполнение списка метаобъектов игрока');
+
+  -- TODO и другие:
+  -- news_hub: object_objects -> content
+  -- person: system_balance -> balance[player]
+  -- media{1,3}: object_objects -> content
+  -- personal_document_storage: system_value[player] -> content[player]
+  -- library: object_objects[intermediate is null] -> content
+  -- med_library: object_objects -> content
+  -- personal_library: object_objects -> content
+  -- transactions: system_value[player] -> content[player]
+  -- news{1,3}{1,100}: media_name + title -> name
+  -- library_category{1,9}: object_objects[intermediate is null] -> content
+  -- mailX: system_mail_send_time -> mail_send_time (с использованием формата из параметров)
+
+-- Заполнение атрибутов
+select data.set_attribute_value(data.get_object_id('mail_contacts'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('mail_contacts'), data.get_attribute_id('type'), null, jsonb '"mail_contacts"');
+select data.set_attribute_value(data.get_object_id('mail_contacts'), data.get_attribute_id('name'), null, jsonb '"Доступные контакты"');
+
+select data.set_attribute_value(data.get_object_id('persons'), data.get_attribute_id('system_priority'), null, jsonb '10');
+select data.set_attribute_value(data.get_object_id('persons'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('persons'), data.get_attribute_id('type'), null, jsonb '"group"');
+select data.set_attribute_value(data.get_object_id('persons'), data.get_attribute_id('name'), null, jsonb '"Все"');
+select data.set_attribute_value(data.get_object_id('persons'), data.get_attribute_id('system_mail_contact'), null, jsonb 'true');
+
+select data.set_attribute_value(data.get_object_id('masters'), data.get_attribute_id('system_priority'), null, jsonb '100');
+select data.set_attribute_value(data.get_object_id('masters'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('masters'), data.get_attribute_id('type'), null, jsonb '"group"');
+select data.set_attribute_value(data.get_object_id('masters'), data.get_attribute_id('name'), null, jsonb '"Справочное бюро"');
+select data.set_attribute_value(data.get_object_id('masters'), data.get_attribute_id('system_mail_contact'), null, jsonb 'true');
+
+select data.set_attribute_value(data.get_object_id('telepaths'), data.get_attribute_id('system_priority'), null, jsonb '90');
+select data.set_attribute_value(data.get_object_id('telepaths'), data.get_attribute_id('type'), null, jsonb '"group"');
+select data.set_attribute_value(data.get_object_id('telepaths'), data.get_attribute_id('name'), null, jsonb '"Телепаты"');
+
+select data.set_attribute_value(data.get_object_id('security'), data.get_attribute_id('system_priority'), null, jsonb '70');
+select data.set_attribute_value(data.get_object_id('security'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('security'), data.get_attribute_id('type'), null, jsonb '"group"');
+select data.set_attribute_value(data.get_object_id('security'), data.get_attribute_id('name'), null, jsonb '"Служба безопасности"');
+select data.set_attribute_value(data.get_object_id('security'), data.get_attribute_id('system_mail_contact'), null, jsonb 'true');
+
+select data.set_attribute_value(data.get_object_id('politicians'), data.get_attribute_id('system_priority'), null, jsonb '40');
+select data.set_attribute_value(data.get_object_id('politicians'), data.get_attribute_id('type'), null, jsonb '"group"');
+select data.set_attribute_value(data.get_object_id('politicians'), data.get_attribute_id('name'), null, jsonb '"Политики"');
+
+select data.set_attribute_value(data.get_object_id('medics'), data.get_attribute_id('system_priority'), null, jsonb '50');
+select data.set_attribute_value(data.get_object_id('medics'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('medics'), data.get_attribute_id('type'), null, jsonb '"group"');
+select data.set_attribute_value(data.get_object_id('medics'), data.get_attribute_id('name'), null, jsonb '"Медицинский персонал"');
+select data.set_attribute_value(data.get_object_id('medics'), data.get_attribute_id('system_mail_contact'), null, jsonb 'true');
+
+select data.set_attribute_value(data.get_object_id('technicians'), data.get_attribute_id('system_priority'), null, jsonb '50');
+select data.set_attribute_value(data.get_object_id('technicians'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('technicians'), data.get_attribute_id('type'), null, jsonb '"group"');
+select data.set_attribute_value(data.get_object_id('technicians'), data.get_attribute_id('name'), null, jsonb '"Технический персонал"');
+select data.set_attribute_value(data.get_object_id('technicians'), data.get_attribute_id('system_mail_contact'), null, jsonb 'true');
+
+select data.set_attribute_value(data.get_object_id('pilots'), data.get_attribute_id('system_priority'), null, jsonb '50');
+select data.set_attribute_value(data.get_object_id('pilots'), data.get_attribute_id('type'), null, jsonb '"group"');
+select data.set_attribute_value(data.get_object_id('pilots'), data.get_attribute_id('name'), null, jsonb '"Пилоты"');
+
+select data.set_attribute_value(data.get_object_id('officers'), data.get_attribute_id('system_priority'), null, jsonb '60');
+select data.set_attribute_value(data.get_object_id('officers'), data.get_attribute_id('type'), null, jsonb '"group"');
+select data.set_attribute_value(data.get_object_id('officers'), data.get_attribute_id('name'), null, jsonb '"Офицеры"');
+
+select data.set_attribute_value(data.get_object_id('traders'), data.get_attribute_id('system_priority'), null, jsonb '40');
+select data.set_attribute_value(data.get_object_id('traders'), data.get_attribute_id('type'), null, jsonb '"group"');
+select data.set_attribute_value(data.get_object_id('traders'), data.get_attribute_id('name'), null, jsonb '"Корпораты"');
+
+select data.set_attribute_value(data.get_object_id('hackers'), data.get_attribute_id('system_priority'), null, jsonb '80');
+select data.set_attribute_value(data.get_object_id('hackers'), data.get_attribute_id('type'), null, jsonb '"group"');
+select data.set_attribute_value(data.get_object_id('hackers'), data.get_attribute_id('name'), null, jsonb '"Хакеры"');
+
+select data.set_attribute_value(data.get_object_id('scientists'), data.get_attribute_id('system_priority'), null, jsonb '50');
+select data.set_attribute_value(data.get_object_id('scientists'), data.get_attribute_id('type'), null, jsonb '"group"');
+select data.set_attribute_value(data.get_object_id('scientists'), data.get_attribute_id('name'), null, jsonb '"Учёные"');
+
+select data.set_attribute_value(data.get_object_id('corporations'), data.get_attribute_id('system_is_visible'), data.get_object_id('traders'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporations'), data.get_attribute_id('type'), null, jsonb '"group"');
+select data.set_attribute_value(data.get_object_id('corporations'), data.get_attribute_id('name'), null, jsonb '"Корпорации"');
+
+select data.set_attribute_value(data.get_object_id('ships'), data.get_attribute_id('system_is_visible'), data.get_object_id('hackers'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('ships'), data.get_attribute_id('system_is_visible'), data.get_object_id('technicians'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('ships'), data.get_attribute_id('system_is_visible'), data.get_object_id('pilots'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('ships'), data.get_attribute_id('type'), null, jsonb '"group"');
+select data.set_attribute_value(data.get_object_id('ships'), data.get_attribute_id('name'), null, jsonb '"Корабли"');
+
+select data.set_attribute_value(data.get_object_id('news_hub'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('news_hub'), data.get_attribute_id('system_meta'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('news_hub'), data.get_attribute_id('type'), null, jsonb '"news_hub"');
+select data.set_attribute_value(data.get_object_id('news_hub'), data.get_attribute_id('name'), null, jsonb '"Новости"');
+
+-- media{1,3}
+-- race{1,20}
+-- state{1,10}
+
+select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('type'), null, jsonb '"person"');
+select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('name'), null, jsonb '"Неавторизованный пользователь"');
+
+-- other anonymous
+
+select
+  data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('type'), null, jsonb '"person"'),
+  data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('name'), null, ('"Person ' || o.value || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_mail_contact'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('description'), null, jsonb '"Born before 2250, currently live & work on Babylon 5"'),
+  data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('person_race'), null, ('"race' || (o.value % 20 + 1) || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('person_state'), null, ('"state' || (o.value % 10 + 1) || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('person_job_position'), null, jsonb '"Some job position"'),
+  data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('person_biography'), null, jsonb '"Born before 2250, currently live & work on Babylon 5"'),
+  data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_balance'), null, utils.random_integer(100,10000000)::text::jsonb)
+from generate_series(1, 60) o(value);
+
+--   case when o.value % 10 = 0 then data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('person_psi_scale'), , utils.random_integer(1,16)::text::jsonb) else null end,
+-- other person{1,60}
+/*
+system_master
+system_security
+system_politician
+system_medic
+system_technician
+system_pilot
+system_officer
+system_trader
+system_hacker
+system_scientist
+*/
+
+  -- TODO: Всё прочее
+/*
+system_priority
+system_is_visible
+type
+name
+description
+content
+system_value
+meta_entities
+system_meta
+system_mail_contact
+person_race
+person_state
+person_job_position
+person_biography
+person_psi_scale
+mail_title
+system_mail_send_time
+mail_send_time
+mail_author
+mail_receivers
+mail_body
+mail_type
+inbox
+outbox
+corporation_members
+corporation_capitalization
+asset_corporations
+asset_time
+asset_status
+asset_cost
+market_volume
+system_balance
+balance
+system_master
+system_security
+system_politician
+system_medic
+system_technician
+system_pilot
+system_officer
+system_trader
+system_hacker
+system_scientist
+system_library_category
+*/
+/*
+personal_document_storage
+library
+med_library
+personal_library
+transactions
+station
+station_medlab
+station_lab
+station_radar
+station_power_computer
+station_hacker_computer
+ship
+ship_radar
+ship_power_computer
+ship_hacker_computer
+assembly
+market
+meta_entities
+station_weapon{1,4}
+station_reactor{1,4}
+ship_weapon{1,2}
+ship_reactor{1,2}
+corporation{1,9}
+asset{1,9}{1,50}
+news{1,3}{1,100}
+library_category{1,9}
+library_document{1,9}{1,20}
+personal_document{1,100}
+*/
+
+-- TODO: Много разных действий
+--   Письма
+--   Транзакции
+
+-- Логины
+insert into data.logins(description)
+select 'player' || o.value from generate_series(1, 50) o(value);
+
+insert into data.logins(description, is_admin)
+select 'master' || o.value, true from generate_series(1, 5) o(value);
+
+-- Связи клиентов и логинов
+select data.set_client_login('client' || o.value, l.id)
+from generate_series(1, 50) o(value)
+join data.logins l on
+  l.description = 'player' || o.value;
+
+select data.set_client_login('client' || (o.value + 50), l.id)
+from generate_series(1, 10) o(value)
+join data.logins l on
+  l.description = 'master' || o.value;
+
+-- Связи логинов и объектов
+select data.add_object_to_login(data.get_object_id('person51'), id)
+from data.logins
+where description = 'player50';
+
+select data.add_object_to_login(data.get_object_id('person' || o.value), l.id)
+from generate_series(1, 50) o(value)
+join data.logins l on
+  l.description = 'player' || o.value;
+
+select data.add_object_to_login(data.get_object_id('anonymous'), id)
+from data.logins
+where id = data.get_integer_param('default_login');
+
+select data.add_object_to_login(data.get_object_id('person' || o1.value), l.id)
+from generate_series(52, 60) o1(value)
+join generate_series(1, 5) o2(value) on 1=1
+join data.logins l on
+  l.description = 'master' || o2.value;
+
+-- TODO: действие для привязки клиента к логину
+-- TODO: deferred_functions (периодическое начисление денег, взлом?)
+-- TODO: уведомления (которых нет!)
+
+-- TODO: действия для нагрузочного тестирования

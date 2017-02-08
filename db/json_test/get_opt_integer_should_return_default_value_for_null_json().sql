@@ -7,7 +7,7 @@ CREATE OR REPLACE FUNCTION json_test.get_opt_integer_should_return_default_value
 $BODY$
 declare
   v_json_type text;
-  v_default_value text := util.random_integer(-5, 5)::text;
+  v_default_value text := utils.random_integer(-5, 5)::text;
 begin
   foreach v_json_type in array array ['json', 'jsonb'] loop
     execute 'select test.assert_eq(' || v_default_value || ', json.get_opt_integer(null::' || v_json_type || ', ' || v_default_value || '))';

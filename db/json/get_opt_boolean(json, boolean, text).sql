@@ -13,7 +13,7 @@ declare
   v_param_type text;
 begin
   if in_name is not null then
-    v_param := in_json->in_name;
+    v_param := json.get_object(in_json)->in_name;
   else
     v_param := in_json;
   end if;
@@ -26,9 +26,9 @@ begin
 
   if v_param_type != 'boolean' then
     if in_name is not null then
-      raise exception 'Attribute "%" is not a boolean', in_name;
+      perform utils.raise_invalid_input_param_value('Attribute "%s" is not a boolean', in_name);
     else
-      raise exception 'Json is not a boolean';
+      perform utils.raise_invalid_input_param_value('Json is not a boolean');
     end if;
   end if;
 

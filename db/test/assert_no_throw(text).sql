@@ -11,6 +11,8 @@ declare
   v_exception_message text;
   v_exception_call_stack text;
 begin
+  assert in_expression is not null;
+
   begin
     execute in_expression;
   exception when others then

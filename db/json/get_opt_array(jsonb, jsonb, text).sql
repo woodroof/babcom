@@ -20,7 +20,7 @@ begin
   end if;
 
   if in_name is not null then
-    v_param := in_json->in_name;
+    v_param := json.get_object(in_json)->in_name;
   else
     v_param := in_json;
   end if;
@@ -33,9 +33,9 @@ begin
 
   if v_param_type != 'array' then
     if in_name is not null then
-      raise exception 'Attribute "%" is not an array', in_name;
+      perform utils.raise_invalid_input_param_value('Attribute "%s" is not an array', in_name);
     else
-      raise exception 'Json is not an array';
+      perform utils.raise_invalid_input_param_value('Json is not an array');
     end if;
   end if;
 
