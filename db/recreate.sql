@@ -31,6 +31,8 @@ create schema "intarray";
 create extension "intarray" schema "intarray";
 create schema "pgcrypto";
 create extension "pgcrypto" schema "pgcrypto";
+-- Privileges
+grant usage on schema api to http;
 -- Types
 -- Type: api.result
 

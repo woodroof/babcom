@@ -47,8 +47,8 @@ for extension in *; do
 done
 popd
 
-echo "-- Privileges"
-echo "grant usage on schema api to http;" >> "${output}";
+echo "-- Privileges" >> "${output}"
+echo "grant usage on schema api to http;" >> "${output}"
 
 echo "-- Types" >> "${output}"
 
