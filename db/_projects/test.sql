@@ -186,16 +186,25 @@ CREATE OR REPLACE FUNCTION attribute_value_fill_functions.merge_metaobjects(in_p
 $BODY$
 declare
   v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
-  v_object_id integer := json.get_integer(in_params, 'object_id');
   v_attribute_id integer := json.get_integer(in_params, 'attribute_id');
   v_source_object_id integer := data.get_object_id(json.get_string(in_params, 'object_code'));
   v_source_attribute_id integer := data.get_attribute_id(json.get_string(in_params, 'attribute_code'));
 
-  v_meta jsonb := json_build_array(data.get_object_code(v_user_object_id));
   v_metaobjects record;
-  v_codes text[];
 
   v_attribute_name_id integer := data.get_attribute_id('name');
+  v_groups jsonb :=
+    json_build_array(
+      json_build_object(
+        'objects',
+        json_build_array(
+          json_build_object(
+            'code',
+            data.get_object_code(v_user_object_id),
+            'name',
+            data.get_attribute_value(v_user_object_id, v_user_object_id, v_attribute_name_id)))));
+  v_codes text[];
+  v_objects jsonb;
 begin
   for v_metaobjects in
     select json.get_string_array(av.value) codes
@@ -214,16 +223,28 @@ begin
     v_codes := v_codes || v_metaobjects.codes;
   end loop;
 
-  select v_meta || coalesce(jsonb_agg(code), jsonb '[]')
-  into v_meta
+  select jsonb_agg(value)
+  into v_objects
   from (
-    select o.code, json.get_opt_string(data.get_attribute_value(v_user_object_id, o.id, v_attribute_name_id)) as name
-    from data.objects o
-    where o.code = any(v_codes)
-    order by name
+    select jsonb_build_object('code', o.code, 'name', o.name) as value
+    from (
+      select o.code, json.get_opt_string(data.get_attribute_value(v_user_object_id, o.id, v_attribute_name_id)) as name
+      from data.objects o
+      where o.code = any(v_codes)
+      order by name
+    ) o
   ) o;
 
-  perform data.set_attribute_value(v_object_id, v_attribute_id, v_user_object_id, v_meta, v_user_object_id);
+  if v_objects is not null then
+    v_groups := v_groups || jsonb_build_array(jsonb_build_object('objects', v_objects));
+  end if;
+
+  perform data.set_attribute_value_if_changed(
+    v_user_object_id,
+    v_attribute_id,
+    v_user_object_id,
+    jsonb_build_object('groups', v_groups),
+    v_user_object_id);
 end;
 $BODY$
   LANGUAGE plpgsql VOLATILE
