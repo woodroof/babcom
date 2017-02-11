@@ -11,9 +11,11 @@ CREATE OR REPLACE FUNCTION api_utils.get_objects_infos(
   RETURNS jsonb AS
 $BODY$
 declare
+  v_template jsonb := data.get_param('template');
   v_object_infos data.object_info[];
   v_object_info data.object_info;
   v_attributes jsonb;
+  v_object_template jsonb;
   v_ret_val jsonb := '[]';
 begin
   assert in_user_object_id is not null;
@@ -36,8 +38,17 @@ begin
         jsonb_build_object(
           'code',
           v_object_info.object_code) ||
-        case when v_attributes is not null then jsonb_build_object('attributes', v_attributes) else jsonb '{}' end);
-    -- TODO: add actions, templates
+        case when v_attributes is not null then
+          jsonb_build_object('attributes', v_attributes)
+        else
+          jsonb '{}'
+        end ||
+        case when v_attributes is not null and in_get_templates then
+          jsonb_build_object('template', data.get_object_template(v_template, v_object_info.attribute_codes))
+        else
+          jsonb '{}'
+        end);
+    -- TODO: add actions
   end loop;
 
   return v_ret_val;

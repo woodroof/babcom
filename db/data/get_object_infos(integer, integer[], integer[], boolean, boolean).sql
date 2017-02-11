@@ -20,7 +20,7 @@ begin
   assert in_get_actions is not null;
   assert in_get_templates is not null;
 
-  -- TODO: add actions, templates
+  -- TODO: add actions
 
   select array_agg(value)
   from

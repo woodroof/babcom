@@ -496,9 +496,11 @@ CREATE OR REPLACE FUNCTION api_utils.get_objects_infos(
   RETURNS jsonb AS
 $BODY$
 declare
+  v_template jsonb := data.get_param('template');
   v_object_infos data.object_info[];
   v_object_info data.object_info;
   v_attributes jsonb;
+  v_object_template jsonb;
   v_ret_val jsonb := '[]';
 begin
   assert in_user_object_id is not null;
@@ -521,8 +523,17 @@ begin
         jsonb_build_object(
           'code',
           v_object_info.object_code) ||
-        case when v_attributes is not null then jsonb_build_object('attributes', v_attributes) else jsonb '{}' end);
-    -- TODO: add value_descriptions, actions, templates
+        case when v_attributes is not null then
+          jsonb_build_object('attributes', v_attributes)
+        else
+          jsonb '{}'
+        end ||
+        case when v_attributes is not null and in_get_templates then
+          jsonb_build_object('template', data.get_object_template(v_template, v_object_info.attribute_codes))
+        else
+          jsonb '{}'
+        end);
+    -- TODO: add actions
   end loop;
 
   return v_ret_val;
@@ -1701,7 +1712,7 @@ begin
   assert in_get_actions is not null;
   assert in_get_templates is not null;
 
-  -- TODO: add actions, templates
+  -- TODO: add actions
 
   select array_agg(value)
   from
@@ -1787,6 +1798,56 @@ exception when invalid_parameter_value then
 end;
 $BODY$
   LANGUAGE plpgsql STABLE
+  COST 100;
+-- Function: data.get_object_template(jsonb, text[])
+
+-- DROP FUNCTION data.get_object_template(jsonb, text[]);
+
+CREATE OR REPLACE FUNCTION data.get_object_template(
+    in_template jsonb,
+    in_object_attribute_codes text[])
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_template_groups jsonb := json.get_object_array(in_template, 'groups');
+  v_group jsonb;
+  v_attributes text[];
+  v_object_groups jsonb := '[]';
+  v_attribute text;
+  v_group_attributes text[];
+begin
+  assert in_object_attribute_codes is not null;
+
+  for v_group in
+    select * from jsonb_array_elements(v_template_groups)
+  loop
+    v_attributes := json.get_opt_string_array(v_group, null, 'attributes');
+    if v_attributes is not null then
+      v_group_attributes := null;
+      foreach v_attribute in array v_attributes loop
+        if v_attribute = any(in_object_attribute_codes) then
+          v_group_attributes := v_group_attributes || array[v_attribute];
+        end if;
+      end loop;
+
+      if v_group_attributes is not null then
+        v_object_groups :=
+          v_object_groups ||
+          (
+            jsonb_build_object('attributes', v_group_attributes) ||
+            case when v_group ? 'name' then
+              jsonb_build_object('name', json.get_string(v_group, 'name'))
+            else
+              jsonb '{}'
+            end);
+      end if;
+    end if;
+  end loop;
+
+  return jsonb_build_object('groups', v_object_groups);
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
   COST 100;
 -- Function: data.get_param(text)
 
@@ -3598,6 +3659,50 @@ end;
 $BODY$
   LANGUAGE plpgsql IMMUTABLE
   COST 100;
+-- Function: json.get_opt_bigint_array(json, bigint[], text)
+
+-- DROP FUNCTION json.get_opt_bigint_array(json, bigint[], text);
+
+CREATE OR REPLACE FUNCTION json.get_opt_bigint_array(
+    in_json json,
+    in_default bigint[] DEFAULT NULL::bigint[],
+    in_name text DEFAULT NULL::text)
+  RETURNS bigint[] AS
+$BODY$
+declare
+  v_array json := json.get_opt_array(in_json, null, in_name);
+begin
+  if v_array is null then
+    return in_default;
+  end if;
+
+  return json.get_bigint_array(v_array);
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+-- Function: json.get_opt_bigint_array(jsonb, bigint[], text)
+
+-- DROP FUNCTION json.get_opt_bigint_array(jsonb, bigint[], text);
+
+CREATE OR REPLACE FUNCTION json.get_opt_bigint_array(
+    in_json jsonb,
+    in_default bigint[] DEFAULT NULL::bigint[],
+    in_name text DEFAULT NULL::text)
+  RETURNS bigint[] AS
+$BODY$
+declare
+  v_array jsonb := json.get_opt_array(in_json, null, in_name);
+begin
+  if v_array is null then
+    return in_default;
+  end if;
+
+  return json.get_bigint_array(v_array);
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
 -- Function: json.get_opt_boolean(json, boolean, text)
 
 -- DROP FUNCTION json.get_opt_boolean(json, boolean, text);
@@ -3776,6 +3881,50 @@ end;
 $BODY$
   LANGUAGE plpgsql IMMUTABLE
   COST 100;
+-- Function: json.get_opt_integer_array(json, integer[], text)
+
+-- DROP FUNCTION json.get_opt_integer_array(json, integer[], text);
+
+CREATE OR REPLACE FUNCTION json.get_opt_integer_array(
+    in_json json,
+    in_default integer[] DEFAULT NULL::integer[],
+    in_name text DEFAULT NULL::text)
+  RETURNS integer[] AS
+$BODY$
+declare
+  v_array json := json.get_opt_array(in_json, null, in_name);
+begin
+  if v_array is null then
+    return in_default;
+  end if;
+
+  return json.get_integer_array(v_array);
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+-- Function: json.get_opt_integer_array(jsonb, integer[], text)
+
+-- DROP FUNCTION json.get_opt_integer_array(jsonb, integer[], text);
+
+CREATE OR REPLACE FUNCTION json.get_opt_integer_array(
+    in_json jsonb,
+    in_default integer[] DEFAULT NULL::integer[],
+    in_name text DEFAULT NULL::text)
+  RETURNS integer[] AS
+$BODY$
+declare
+  v_array jsonb := json.get_opt_array(in_json, null, in_name);
+begin
+  if v_array is null then
+    return in_default;
+  end if;
+
+  return json.get_integer_array(v_array);
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
 -- Function: json.get_opt_object(json, json, text)
 
 -- DROP FUNCTION json.get_opt_object(json, json, text);
@@ -3868,6 +4017,70 @@ end;
 $BODY$
   LANGUAGE plpgsql IMMUTABLE
   COST 100;
+-- Function: json.get_opt_object_array(json, json, text)
+
+-- DROP FUNCTION json.get_opt_object_array(json, json, text);
+
+CREATE OR REPLACE FUNCTION json.get_opt_object_array(
+    in_json json,
+    in_default json DEFAULT NULL::json,
+    in_name text DEFAULT NULL::text)
+  RETURNS json AS
+$BODY$
+declare
+  v_default_type text;
+  v_array json;
+begin
+  if in_default is not null then
+    begin
+      perform json.get_object_array(in_default);
+    exception when invalid_parameter_value then
+      raise exception 'Default value "%" is not an object array', in_default::text;
+    end;
+  end if;
+
+  v_array := json.get_opt_array(in_json, null, in_name);
+  if v_array is null then
+    return in_default;
+  end if;
+
+  return json.get_object_array(v_array);
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+-- Function: json.get_opt_object_array(jsonb, jsonb, text)
+
+-- DROP FUNCTION json.get_opt_object_array(jsonb, jsonb, text);
+
+CREATE OR REPLACE FUNCTION json.get_opt_object_array(
+    in_json jsonb,
+    in_default jsonb DEFAULT NULL::jsonb,
+    in_name text DEFAULT NULL::text)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_default_type text;
+  v_array jsonb;
+begin
+  if in_default is not null then
+    begin
+      perform json.get_object_array(in_default);
+    exception when invalid_parameter_value then
+      raise exception 'Default value "%" is not an object array', in_default::text;
+    end;
+  end if;
+
+  v_array := json.get_opt_array(in_json, null, in_name);
+  if v_array is null then
+    return in_default;
+  end if;
+
+  return json.get_object_array(v_array);
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
 -- Function: json.get_opt_string(json, text, text)
 
 -- DROP FUNCTION json.get_opt_string(json, text, text);
@@ -3942,6 +4155,50 @@ begin
   end if;
 
   return v_param#>>'{}';
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+-- Function: json.get_opt_string_array(json, text[], text)
+
+-- DROP FUNCTION json.get_opt_string_array(json, text[], text);
+
+CREATE OR REPLACE FUNCTION json.get_opt_string_array(
+    in_json json,
+    in_default text[] DEFAULT NULL::text[],
+    in_name text DEFAULT NULL::text)
+  RETURNS text[] AS
+$BODY$
+declare
+  v_array json := json.get_opt_array(in_json, null, in_name);
+begin
+  if v_array is null then
+    return in_default;
+  end if;
+
+  return json.get_string_array(v_array);
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+-- Function: json.get_opt_string_array(jsonb, text[], text)
+
+-- DROP FUNCTION json.get_opt_string_array(jsonb, text[], text);
+
+CREATE OR REPLACE FUNCTION json.get_opt_string_array(
+    in_json jsonb,
+    in_default text[] DEFAULT NULL::text[],
+    in_name text DEFAULT NULL::text)
+  RETURNS text[] AS
+$BODY$
+declare
+  v_array jsonb := json.get_opt_array(in_json, null, in_name);
+begin
+  if v_array is null then
+    return in_default;
+  end if;
+
+  return json.get_string_array(v_array);
 end;
 $BODY$
   LANGUAGE plpgsql IMMUTABLE

@@ -6,7 +6,41 @@ insert into data.extensions(code) values
 ('notifications');
 
 -- Параметры
-insert into data.params(code, value, description) values('time_format', jsonb '"dd.mm.2258 hh24:mi"', 'Формат дат');
+insert into data.params(code, value, description) values
+('time_format', jsonb '"dd.mm.2258 hh24:mi"', 'Формат дат'),
+('template', jsonb '
+{
+  "groups": [
+    {
+      "attributes": ["balance"]
+    },
+    {
+      "attributes": ["person_race", "person_state", "person_psi_scale", "person_job_position"]
+    },
+    {
+      "attributes": ["person_biography"]
+    },
+    {
+      "attributes": ["mail_type", "mail_send_time", "mail_title", "mail_author", "mail_receivers"]
+    },
+    {
+      "attributes": ["mail_body"]
+    },
+    {
+      "attributes": ["corporation_capitalization", "corporation_members", "corporation_asserts"]
+    },
+    {
+      "attributes": ["asset_status", "asset_time", "asset_cost", "asset_corporations"]
+    },
+    {
+      "attributes": ["description", "content"]
+    },
+    {
+      "attributes": ["market_volume"]
+    }
+  ]
+}
+', 'Шаблон объекта');
 
 -- Группы
 insert into data.objects(code) values
@@ -238,6 +272,7 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('outbox', 'Исходящие письма', 'INVISIBLE', null),
 ('corporation_members', 'Члены корпораций', 'NORMAL', 'codes'),
 ('corporation_capitalization', 'Капитализация корпорации', 'NORMAL', null),
+('corporation_asserts', 'Активы корпорации', 'NORMAL', null),
 ('asset_corporations', 'Корпорации актива', 'NORMAL', 'codes'),
 ('asset_time', 'Время создания актива', 'NORMAL', null),
 ('asset_status', 'Состояние актива', 'NORMAL', 'asset_status'),
@@ -473,7 +508,6 @@ select
   data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('type'), null, jsonb '"person"'),
   data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('name'), null, ('"Person ' || o.value || '"')::jsonb),
   data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_mail_contact'), null, jsonb 'true'),
-  data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('description'), null, jsonb '"Born before 2250, currently live & work on Babylon 5"'),
   data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('person_race'), null, ('"race' || (o.value % 20 + 1) || '"')::jsonb),
   data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('person_state'), null, ('"state' || (o.value % 10 + 1) || '"')::jsonb),
   data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('person_job_position'), null, jsonb '"Some job position"'),
@@ -524,6 +558,7 @@ inbox
 outbox
 corporation_members
 corporation_capitalization
+corporation_assets
 asset_corporations
 asset_time
 asset_status
