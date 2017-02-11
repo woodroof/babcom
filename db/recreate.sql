@@ -2,6 +2,7 @@
 drop schema if exists "api" cascade;
 drop schema if exists "api_utils" cascade;
 drop schema if exists "attribute_value_change_functions" cascade;
+drop schema if exists "attribute_value_description_functions" cascade;
 drop schema if exists "attribute_value_fill_functions" cascade;
 drop schema if exists "data" cascade;
 drop schema if exists "deferred_functions" cascade;
@@ -17,6 +18,7 @@ drop schema if exists "pgcrypto" cascade;
 create schema "api";
 create schema "api_utils";
 create schema "attribute_value_change_functions";
+create schema "attribute_value_description_functions";
 create schema "attribute_value_fill_functions";
 create schema "data";
 create schema "deferred_functions";
@@ -73,6 +75,7 @@ CREATE TYPE data.object_info AS
     attribute_codes text[],
     attribute_names text[],
     attribute_values jsonb[],
+    attribute_value_descriptions text[],
     attribute_types data.attribute_type[]);
 -- Type: data.severity
 
@@ -205,14 +208,15 @@ $BODY$
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
   COST 100;
 GRANT EXECUTE ON FUNCTION api.api(jsonb) TO http;
--- Function: api_utils.build_attributes(text[], text[], jsonb[], data.attribute_type[])
+-- Function: api_utils.build_attributes(text[], text[], jsonb[], text[], data.attribute_type[])
 
--- DROP FUNCTION api_utils.build_attributes(text[], text[], jsonb[], data.attribute_type[]);
+-- DROP FUNCTION api_utils.build_attributes(text[], text[], jsonb[], text[], data.attribute_type[]);
 
 CREATE OR REPLACE FUNCTION api_utils.build_attributes(
     in_attribute_codes text[],
     in_attribute_names text[],
     in_attribute_values jsonb[],
+    in_attribute_value_descriptions text[],
     in_attribute_types data.attribute_type[])
   RETURNS jsonb AS
 $BODY$
@@ -223,6 +227,7 @@ begin
   if v_size is not null then
     assert array_length(in_attribute_names, 1) = v_size;
     assert array_length(in_attribute_values, 1) = v_size;
+    assert array_length(in_attribute_value_descriptions, 1) = v_size;
     assert array_length(in_attribute_types, 1) = v_size;
 
     for i in 1..v_size loop
@@ -238,6 +243,12 @@ begin
           case when in_attribute_types[i] != 'NORMAL' then
             jsonb_build_object(
               'hidden', true)
+          else
+            jsonb '{}'
+          end ||
+          case when in_attribute_value_descriptions[i] is not null then
+            jsonb_build_object(
+              'value_description', in_attribute_value_descriptions[i])
           else
             jsonb '{}'
           end);
@@ -503,6 +514,7 @@ begin
         v_object_info.attribute_codes,
         v_object_info.attribute_names,
         v_object_info.attribute_values,
+        v_object_info.attribute_value_descriptions,
         v_object_info.attribute_types);
     v_ret_val :=
       v_ret_val || (
@@ -965,6 +977,58 @@ end;
 $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
+-- Function: attribute_value_description_functions.code(integer, integer, jsonb)
+
+-- DROP FUNCTION attribute_value_description_functions.code(integer, integer, jsonb);
+
+CREATE OR REPLACE FUNCTION attribute_value_description_functions.code(
+    in_user_object_id integer,
+    in_attribute_id integer,
+    in_value jsonb)
+  RETURNS text AS
+$BODY$
+declare
+  v_object_id integer :=
+    data.get_object_id(
+      json.get_string(in_value));
+begin
+  return
+    coalesce(
+      json.get_opt_string(
+        data.get_attribute_value(in_user_object_id, v_object_id, in_attribute_id)),
+      'Инкогнито');
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
+-- Function: attribute_value_description_functions.codes(integer, integer, jsonb)
+
+-- DROP FUNCTION attribute_value_description_functions.codes(integer, integer, jsonb);
+
+CREATE OR REPLACE FUNCTION attribute_value_description_functions.codes(
+    in_user_object_id integer,
+    in_attribute_id integer,
+    in_value jsonb)
+  RETURNS text AS
+$BODY$
+declare
+  v_attribute_name_id integer := data.get_attribute_id('name');
+  v_object_codes text[] := json.get_string_array(in_value);
+  v_object_code text;
+begin
+  select
+    string_agg(
+      coalesce(
+        json.get_opt_string(
+          data.get_attribute_value(in_user_object_id, o.id, v_attribute_name_id)),
+        'Инкогнито'),
+      ', ')
+  from data.objects
+  where o.code = any(v_object_codes);
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
 -- Function: attribute_value_fill_functions.fill_user_object_attribute_if(jsonb)
 
 -- DROP FUNCTION attribute_value_fill_functions.fill_user_object_attribute_if(jsonb);
@@ -1407,6 +1471,50 @@ end;
 $BODY$
   LANGUAGE plpgsql STABLE
   COST 100;
+-- Function: data.get_attribute_values_descriptions(integer, integer[], jsonb[], text[])
+
+-- DROP FUNCTION data.get_attribute_values_descriptions(integer, integer[], jsonb[], text[]);
+
+CREATE OR REPLACE FUNCTION data.get_attribute_values_descriptions(
+    in_user_object_id integer,
+    in_attribute_ids integer[],
+    in_values jsonb[],
+    in_functions text[])
+  RETURNS text AS
+$BODY$
+declare
+  v_ret_val text[];
+  v_next_val text;
+begin
+  assert in_user_object_id is not null;
+
+  if in_attribute_ids is null then
+    assert in_values is null;
+    assert in_functions is null;
+  end if;
+
+  assert array_length(in_attribute_ids, 1) = array_length(in_values, 1);
+  assert array_length(in_attribute_ids, 1) = array_length(in_functions, 1);
+
+  for i in 1..array_length(in_attribute_ids, 1) loop
+    assert in_attribute_ids[i] is not null;
+
+    if in_functions[i] is not null and in_values[i] is not null then
+      execute 'select attribute_value_description_functions.' || in_functions[i] || '($1, $2, $3)'
+      using in_user_object_id, in_attribute_ids[i], in_values[i]
+      into v_next_val;
+
+      v_ret_val := v_ret_val || v_next_val;
+    else
+      v_ret_val := v_ret_val || null::text;
+    end if;
+  end loop;
+
+  return v_ret_val;
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
 -- Function: data.get_attribute_value_for_update(integer, integer, integer)
 
 -- DROP FUNCTION data.get_attribute_value_for_update(integer, integer, integer);
@@ -1593,20 +1701,22 @@ begin
   assert in_get_actions is not null;
   assert in_get_templates is not null;
 
-  -- TODO: add value_descriptions, actions, templates
+  -- TODO: add actions, templates
 
   select array_agg(value)
   from
   (
-    select row(o.code, oi.attribute_codes, oi.attribute_names, oi.attribute_values, oi.attribute_types)::data.object_info as value
+    select row(o.code, oi.attribute_codes, oi.attribute_names, oi.attribute_values, data.get_attribute_values_descriptions(in_user_object_id, oi.attribute_ids, oi.attribute_values, oi.attribute_value_description_functions), oi.attribute_types)::data.object_info as value
     from data.objects o
     left join (
       select
         oi.object_id,
+        array_agg(a.id) attribute_ids,
         array_agg(a.code) attribute_codes,
         array_agg(a.name) attribute_names,
         array_agg(oi.value) attribute_values,
-        array_agg(a.type) attribute_types
+        array_agg(a.type) attribute_types,
+        array_agg(a.value_description_function) attribute_value_description_functions
       into v_ret_val
       from (
         select
@@ -6218,12 +6328,15 @@ CREATE TABLE data.attributes
   name text,
   description text,
   type data.attribute_type NOT NULL,
+  value_description_function text, -- (user_object_id, attribute_id, value)
   CONSTRAINT attributes_pk PRIMARY KEY (id),
   CONSTRAINT attributes_unique_code UNIQUE (code)
 )
 WITH (
   OIDS=FALSE
 );
+COMMENT ON COLUMN data.attributes.value_description_function IS '(user_object_id, attribute_id, value)';
+
 -- Table: data.deferred_functions
 
 -- DROP TABLE data.deferred_functions;

@@ -29,6 +29,7 @@ begin
         v_object_info.attribute_codes,
         v_object_info.attribute_names,
         v_object_info.attribute_values,
+        v_object_info.attribute_value_descriptions,
         v_object_info.attribute_types);
     v_ret_val :=
       v_ret_val || (
@@ -36,7 +37,7 @@ begin
           'code',
           v_object_info.object_code) ||
         case when v_attributes is not null then jsonb_build_object('attributes', v_attributes) else jsonb '{}' end);
-    -- TODO: add value_descriptions, actions, templates
+    -- TODO: add actions, templates
   end loop;
 
   return v_ret_val;

@@ -97,51 +97,165 @@ join generate_series(1, 20) o2(value) on 1=1;
 insert into data.objects(code)
 select 'personal_document' || o1.* from generate_series(1, 100) o1(value);
 
+-- Функции для получения значений атрибутов
+CREATE OR REPLACE FUNCTION attribute_value_description_functions.person_race(
+    in_user_object_id integer,
+    in_attribute_id integer,
+    in_value jsonb)
+  RETURNS text AS
+$BODY$
+declare
+  v_text_value text := json.get_string(in_value);
+begin
+  for i in 1..20 loop
+    if v_text_value = ('race' || i) then
+      return 'Race ' || i || ' value description';
+    end if;
+  end loop;
+
+  return null;
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION attribute_value_description_functions.person_state(
+    in_user_object_id integer,
+    in_attribute_id integer,
+    in_value jsonb)
+  RETURNS text AS
+$BODY$
+declare
+  v_text_value text := json.get_string(in_value);
+begin
+  for i in 1..10 loop
+    if v_text_value = ('state' || i) then
+      return 'State ' || i || ' value description';
+    end if;
+  end loop;
+
+  return null;
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION attribute_value_description_functions.person_psi_scale(
+    in_user_object_id integer,
+    in_attribute_id integer,
+    in_value jsonb)
+  RETURNS text AS
+$BODY$
+declare
+  v_int_value integer := json.get_integer(in_value);
+begin
+  if v_int_value <= 2 then
+    return 'очень слабый';
+  elsif v_int_value <= 5 then
+    return 'слабый';
+  elsif v_int_value <= 8 then
+    return 'средний';
+  elsif v_int_value <= 10 then
+    return 'сильный';
+  elsif v_int_value <= 12 then
+    return 'очень сильный';
+  end if;
+
+  return 'экстремально сильный';
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION attribute_value_description_functions.mail_type(
+    in_user_object_id integer,
+    in_attribute_id integer,
+    in_value jsonb)
+  RETURNS text AS
+$BODY$
+declare
+  v_text_value text := json.get_string(in_value);
+begin
+  case when v_text_value = 'inbox' then
+    return 'Входящее';
+  when v_text_value = 'outbox' then
+    return 'Исходящее';
+  end case;
+
+  return null;
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION attribute_value_description_functions.asset_status(
+    in_user_object_id integer,
+    in_attribute_id integer,
+    in_value jsonb)
+  RETURNS text AS
+$BODY$
+declare
+  v_text_value text := json.get_string(in_value);
+begin
+  case when v_text_value = 'review' then
+    return 'На согласовании';
+  when v_text_value = 'normal' then
+    return 'Работает';
+  end case;
+
+  return null;
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
+  -- TODO
+
 -- Атрибуты
-insert into data.attributes(code, name, type) values
-('mail_contacts', 'Список доступных контактов', 'INVISIBLE'),
-('type', 'Тип', 'HIDDEN'),
-('name', 'Имя', 'NORMAL'),
-('description', 'Описание', 'NORMAL'),
-('content', 'Содержимое', 'NORMAL'),
-('system_value', 'Содержимое', 'SYSTEM'),
-('meta_entities', 'Мета-объекты', 'INVISIBLE'),
-('system_meta', 'Маркер мета-объекта', 'SYSTEM'),
-('system_mail_contact', 'Маркер объекта, которому можно отправлять письма', 'SYSTEM'),
-('person_race', 'Раса', 'NORMAL'),
-('person_state', 'Государство', 'NORMAL'),
-('person_job_position', 'Должность', 'NORMAL'),
-('person_biography', 'Биография', 'NORMAL'),
-('person_psi_scale', 'Сила телепата', 'NORMAL'),
-('mail_title', 'Заголовок', 'NORMAL'),
-('system_mail_send_time', 'Реальное время отправки письма', 'SYSTEM'),
-('mail_send_time', 'Время отправки письма', 'NORMAL'),
-('mail_author', 'Автор', 'NORMAL'),
-('mail_receivers', 'Получатели', 'NORMAL'),
-('mail_body', 'Тело', 'NORMAL'),
-('mail_type', 'Тип письма', 'NORMAL'),
-('inbox', 'Входящие письма', 'INVISIBLE'),
-('outbox', 'Исходящие письма', 'INVISIBLE'),
-('corporation_members', 'Члены корпораций', 'NORMAL'),
-('corporation_capitalization', 'Капитализация корпорации', 'NORMAL'),
-('asset_corporations', 'Корпорации актива', 'NORMAL'),
-('asset_time', 'Время создания актива', 'NORMAL'),
-('asset_status', 'Состояние актива', 'NORMAL'),
-('asset_cost', 'Стоимость актива', 'NORMAL'),
-('market_volume', 'Объём рынка', 'NORMAL'),
-('system_balance', 'Остаток на счету', 'SYSTEM'),
-('balance', 'Остаток на счету', 'NORMAL'),
-('system_master', 'Маркер мастерского персонажа', 'SYSTEM'),
-('system_security', 'Маркер персонажа, имеющего доступ к системе безопасности', 'SYSTEM'),
-('system_politician', 'Маркер персонажа-политика', 'SYSTEM'),
-('system_medic', 'Маркер персонажа-медика', 'SYSTEM'),
-('system_technician', 'Маркер персонажа-техника', 'SYSTEM'),
-('system_pilot', 'Маркер персонажа-пилота', 'SYSTEM'),
-('system_officer', 'Маркер персонажа-офицера', 'SYSTEM'),
-('system_trader', 'Маркер персонажа-корпората', 'SYSTEM'),
-('system_hacker', 'Маркер персонажа-хакера', 'SYSTEM'),
-('system_scientist', 'Маркер персонажа-учёного', 'SYSTEM'),
-('system_library_category', 'Категория документа', 'SYSTEM');
+insert into data.attributes(code, name, type, value_description_function) values
+('mail_contacts', 'Список доступных контактов', 'INVISIBLE', null),
+('type', 'Тип', 'HIDDEN', null),
+('name', 'Имя', 'NORMAL', null),
+('description', 'Описание', 'NORMAL', null),
+('content', 'Содержимое', 'NORMAL', null),
+('system_value', 'Содержимое', 'SYSTEM', null),
+('meta_entities', 'Мета-объекты', 'INVISIBLE', null),
+('system_meta', 'Маркер мета-объекта', 'SYSTEM', null),
+('system_mail_contact', 'Маркер объекта, которому можно отправлять письма', 'SYSTEM', null),
+('person_race', 'Раса', 'NORMAL', 'person_race'),
+('person_state', 'Государство', 'NORMAL', 'person_state'),
+('person_job_position', 'Должность', 'NORMAL', null),
+('person_biography', 'Биография', 'NORMAL', null),
+('person_psi_scale', 'Сила телепата', 'NORMAL', 'person_psi_scale'),
+('mail_title', 'Заголовок', 'NORMAL', null),
+('system_mail_send_time', 'Реальное время отправки письма', 'SYSTEM', null),
+('mail_send_time', 'Время отправки письма', 'NORMAL', null),
+('mail_author', 'Автор', 'NORMAL', 'code'),
+('mail_receivers', 'Получатели', 'NORMAL', 'codes'),
+('mail_body', 'Тело', 'NORMAL', null),
+('mail_type', 'Тип письма', 'NORMAL', 'mail_type'),
+('inbox', 'Входящие письма', 'INVISIBLE', null),
+('outbox', 'Исходящие письма', 'INVISIBLE', null),
+('corporation_members', 'Члены корпораций', 'NORMAL', 'codes'),
+('corporation_capitalization', 'Капитализация корпорации', 'NORMAL', null),
+('asset_corporations', 'Корпорации актива', 'NORMAL', 'codes'),
+('asset_time', 'Время создания актива', 'NORMAL', null),
+('asset_status', 'Состояние актива', 'NORMAL', 'asset_status'),
+('asset_cost', 'Стоимость актива', 'NORMAL', null),
+('market_volume', 'Объём рынка', 'NORMAL', null),
+('system_balance', 'Остаток на счету', 'SYSTEM', null),
+('balance', 'Остаток на счету', 'NORMAL', null),
+('system_master', 'Маркер мастерского персонажа', 'SYSTEM', null),
+('system_security', 'Маркер персонажа, имеющего доступ к системе безопасности', 'SYSTEM', null),
+('system_politician', 'Маркер персонажа-политика', 'SYSTEM', null),
+('system_medic', 'Маркер персонажа-медика', 'SYSTEM', null),
+('system_technician', 'Маркер персонажа-техника', 'SYSTEM', null),
+('system_pilot', 'Маркер персонажа-пилота', 'SYSTEM', null),
+('system_officer', 'Маркер персонажа-офицера', 'SYSTEM', null),
+('system_trader', 'Маркер персонажа-корпората', 'SYSTEM', null),
+('system_hacker', 'Маркер персонажа-хакера', 'SYSTEM', null),
+('system_scientist', 'Маркер персонажа-учёного', 'SYSTEM', null),
+('system_library_category', 'Категория документа', 'SYSTEM', null);
 
 -- Функции для создания связей
 insert into data.attribute_value_change_functions(attribute_id, function, params) values

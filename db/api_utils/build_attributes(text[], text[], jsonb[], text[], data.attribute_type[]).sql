@@ -1,11 +1,12 @@
--- Function: api_utils.build_attributes(text[], text[], jsonb[], data.attribute_type[])
+-- Function: api_utils.build_attributes(text[], text[], jsonb[], text[], data.attribute_type[])
 
--- DROP FUNCTION api_utils.build_attributes(text[], text[], jsonb[], data.attribute_type[]);
+-- DROP FUNCTION api_utils.build_attributes(text[], text[], jsonb[], text[], data.attribute_type[]);
 
 CREATE OR REPLACE FUNCTION api_utils.build_attributes(
     in_attribute_codes text[],
     in_attribute_names text[],
     in_attribute_values jsonb[],
+    in_attribute_value_descriptions text[],
     in_attribute_types data.attribute_type[])
   RETURNS jsonb AS
 $BODY$
@@ -16,6 +17,7 @@ begin
   if v_size is not null then
     assert array_length(in_attribute_names, 1) = v_size;
     assert array_length(in_attribute_values, 1) = v_size;
+    assert array_length(in_attribute_value_descriptions, 1) = v_size;
     assert array_length(in_attribute_types, 1) = v_size;
 
     for i in 1..v_size loop
@@ -31,6 +33,12 @@ begin
           case when in_attribute_types[i] != 'NORMAL' then
             jsonb_build_object(
               'hidden', true)
+          else
+            jsonb '{}'
+          end ||
+          case when in_attribute_value_descriptions[i] is not null then
+            jsonb_build_object(
+              'value_description', in_attribute_value_descriptions[i])
           else
             jsonb '{}'
           end);

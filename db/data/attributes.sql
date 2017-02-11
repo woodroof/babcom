@@ -9,9 +9,12 @@ CREATE TABLE data.attributes
   name text,
   description text,
   type data.attribute_type NOT NULL,
+  value_description_function text, -- (user_object_id, attribute_id, value)
   CONSTRAINT attributes_pk PRIMARY KEY (id),
   CONSTRAINT attributes_unique_code UNIQUE (code)
 )
 WITH (
   OIDS=FALSE
 );
+COMMENT ON COLUMN data.attributes.value_description_function IS '(user_object_id, attribute_id, value)';
+

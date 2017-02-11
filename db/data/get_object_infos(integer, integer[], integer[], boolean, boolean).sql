@@ -20,20 +20,22 @@ begin
   assert in_get_actions is not null;
   assert in_get_templates is not null;
 
-  -- TODO: add value_descriptions, actions, templates
+  -- TODO: add actions, templates
 
   select array_agg(value)
   from
   (
-    select row(o.code, oi.attribute_codes, oi.attribute_names, oi.attribute_values, oi.attribute_types)::data.object_info as value
+    select row(o.code, oi.attribute_codes, oi.attribute_names, oi.attribute_values, data.get_attribute_values_descriptions(in_user_object_id, oi.attribute_ids, oi.attribute_values, oi.attribute_value_description_functions), oi.attribute_types)::data.object_info as value
     from data.objects o
     left join (
       select
         oi.object_id,
+        array_agg(a.id) attribute_ids,
         array_agg(a.code) attribute_codes,
         array_agg(a.name) attribute_names,
         array_agg(oi.value) attribute_values,
-        array_agg(a.type) attribute_types
+        array_agg(a.type) attribute_types,
+        array_agg(a.value_description_function) attribute_value_description_functions
       into v_ret_val
       from (
         select
