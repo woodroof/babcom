@@ -75,7 +75,8 @@ CREATE TYPE data.attribute_value_info AS
 -- DROP TYPE data.object_info;
 
 CREATE TYPE data.object_info AS
-   (object_code text,
+   (object_id integer,
+    object_code text,
     attribute_codes text[],
     attribute_names text[],
     attribute_values jsonb[],
@@ -512,6 +513,7 @@ declare
   v_object_infos data.object_info[];
   v_object_info data.object_info;
   v_attributes jsonb;
+  v_actions jsonb;
   v_object_template jsonb;
   v_ret_val jsonb := '[]';
 begin
@@ -530,6 +532,11 @@ begin
         v_object_info.attribute_values,
         v_object_info.attribute_value_descriptions,
         v_object_info.attribute_types);
+
+    if in_get_actions then
+      v_actions := data.get_object_actions(in_user_object_id, v_object_info.object_id);
+    end if;
+
     v_ret_val :=
       v_ret_val || (
         jsonb_build_object(
@@ -540,12 +547,16 @@ begin
         else
           jsonb '{}'
         end ||
-        case when v_attributes is not null and in_get_templates then
-          jsonb_build_object('template', data.get_object_template(v_template, v_object_info.attribute_codes))
+        case when (v_attributes is not null or v_actions is not null) and in_get_templates then
+          jsonb_build_object('template', data.get_object_template(v_template, v_object_info.attribute_codes, v_actions))
+        else
+          jsonb '{}'
+        end ||
+        case when v_actions is not null then
+          jsonb_build_object('actions', v_actions)
         else
           jsonb '{}'
         end);
-    -- TODO: add actions
   end loop;
 
   return v_ret_val;
@@ -1374,6 +1385,50 @@ end;
 $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
+-- Function: data.fill_actions_checksum(jsonb, integer, integer, text)
+
+-- DROP FUNCTION data.fill_actions_checksum(jsonb, integer, integer, text);
+
+CREATE OR REPLACE FUNCTION data.fill_actions_checksum(
+    in_actions jsonb,
+    in_user_object_id integer,
+    in_generator_id integer,
+    in_generator_code text)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_action record;
+  v_ret_val jsonb := jsonb '{}';
+begin
+  assert in_actions is not null;
+  assert in_user_object_id is not null;
+  assert in_generator_id is not null;
+  assert in_generator_code is not null;
+
+  for v_action in
+    select *
+    from jsonb_each(in_actions)
+  loop
+    v_ret_val :=
+      v_ret_val ||
+      jsonb_build_object(
+        v_action.key,
+        v_action.value ||
+        jsonb_build_object(
+          'params',
+          coalesce(json.get_opt_object(v_action.value, null, 'params'), jsonb '{}') ||
+          jsonb_build_object(
+            'generator',
+            in_generator_id,
+            'checksum',
+            encode(pgcrypto.digest(in_generator_code || in_user_object_id::text || coalesce(json.get_opt_object(v_action.value, null, 'params')::text, ''), 'sha256'), 'base64'))));
+  end loop;
+
+  return v_ret_val;
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
 -- Function: data.fill_attribute_values(integer, integer[], integer[])
 
 -- DROP FUNCTION data.fill_attribute_values(integer, integer[], integer[]);
@@ -1666,6 +1721,46 @@ end;
 $BODY$
   LANGUAGE plpgsql STABLE
   COST 100;
+-- Function: data.get_object_actions(integer, integer)
+
+-- DROP FUNCTION data.get_object_actions(integer, integer);
+
+CREATE OR REPLACE FUNCTION data.get_object_actions(
+    in_user_object_id integer,
+    in_object_id integer)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_generator_info record;
+  v_base_params jsonb := jsonb_build_object('user_object_id', in_user_object_id, 'object_id', in_object_id);
+  v_generator_actions jsonb;
+  v_actions jsonb;
+begin
+  assert in_user_object_id is not null;
+
+  for v_generator_info in
+    select
+      id,
+      code,
+      function,
+      params
+    from data.action_generators
+  loop
+    execute format('select action_generators.%s($1)', v_generator_info.function)
+    using v_base_params || v_generator_info.params
+    into v_generator_actions;
+
+    if v_generator_actions is not null then
+      v_generator_actions := data.fill_actions_checksum(v_generator_actions, in_user_object_id, v_generator_info.id, v_generator_info.code);
+      v_actions := coalesce(v_actions, jsonb '{}') || v_generator_actions;
+    end if;
+  end loop;
+
+  return v_actions;
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
 -- Function: data.get_object_code(integer)
 
 -- DROP FUNCTION data.get_object_code(integer);
@@ -1740,12 +1835,10 @@ begin
   assert in_get_actions is not null;
   assert in_get_templates is not null;
 
-  -- TODO: add actions
-
   select array_agg(value)
   from
   (
-    select row(o.code, oi.attribute_codes, oi.attribute_names, oi.attribute_values, data.get_attribute_values_descriptions(in_user_object_id, oi.attribute_ids, oi.attribute_values, oi.attribute_value_description_functions), oi.attribute_types)::data.object_info as value
+    select row(o.id, o.code, oi.attribute_codes, oi.attribute_names, oi.attribute_values, data.get_attribute_values_descriptions(in_user_object_id, oi.attribute_ids, oi.attribute_values, oi.attribute_value_description_functions), oi.attribute_types)::data.object_info as value
     from data.objects o
     left join (
       select
@@ -1827,48 +1920,83 @@ end;
 $BODY$
   LANGUAGE plpgsql STABLE
   COST 100;
--- Function: data.get_object_template(jsonb, text[])
+-- Function: data.get_object_template(jsonb, text[], jsonb)
 
--- DROP FUNCTION data.get_object_template(jsonb, text[]);
+-- DROP FUNCTION data.get_object_template(jsonb, text[], jsonb);
 
 CREATE OR REPLACE FUNCTION data.get_object_template(
     in_template jsonb,
-    in_object_attribute_codes text[])
+    in_object_attribute_codes text[],
+    in_object_actions jsonb)
   RETURNS jsonb AS
 $BODY$
 declare
   v_template_groups jsonb := json.get_object_array(in_template, 'groups');
   v_group jsonb;
-  v_attributes text[];
   v_object_groups jsonb := '[]';
-  v_attribute text;
+  v_object_action_codes text[];
+
+  v_attributes text[];
   v_group_attributes text[];
+  v_attribute text;
+
+  v_actions text[];
+  v_group_actions text[];
+  v_action text;
 begin
-  assert in_object_attribute_codes is not null;
+  assert in_object_attribute_codes is not null or in_object_actions is not null;
 
   for v_group in
     select * from jsonb_array_elements(v_template_groups)
   loop
-    v_attributes := json.get_opt_string_array(v_group, null, 'attributes');
-    if v_attributes is not null then
-      v_group_attributes := null;
-      foreach v_attribute in array v_attributes loop
-        if v_attribute = any(in_object_attribute_codes) then
-          v_group_attributes := v_group_attributes || array[v_attribute];
-        end if;
-      end loop;
+    v_group_attributes := null;
+    v_group_actions := null;
 
-      if v_group_attributes is not null then
-        v_object_groups :=
-          v_object_groups ||
-          (
-            jsonb_build_object('attributes', v_group_attributes) ||
-            case when v_group ? 'name' then
-              jsonb_build_object('name', json.get_string(v_group, 'name'))
-            else
-              jsonb '{}'
-            end);
+    if in_object_attribute_codes is not null then
+      v_attributes := json.get_opt_string_array(v_group, null, 'attributes');
+      if v_attributes is not null then
+        foreach v_attribute in array v_attributes loop
+          if v_attribute = any(in_object_attribute_codes) then
+            v_group_attributes := v_group_attributes || array[v_attribute];
+          end if;
+        end loop;
       end if;
+    end if;
+
+    if in_object_actions is not null then
+      select array_agg(value)
+      into v_object_action_codes
+      from jsonb_object_keys(in_object_actions) s(value);
+
+      v_actions := json.get_opt_string_array(v_group, null, 'actions');
+      if v_actions is not null then
+        foreach v_action in array v_actions loop
+          if v_action = any(v_object_action_codes) then
+            v_group_actions := v_group_actions || array[v_action];
+          end if;
+        end loop;
+      end if;
+    end if;
+
+    if v_group_attributes is not null or v_group_actions is not null then
+      v_object_groups :=
+        v_object_groups ||
+        (
+          case when v_group_attributes is not null then
+            jsonb_build_object('attributes', v_group_attributes)
+          else
+            jsonb '{}'
+          end ||
+          case when v_group_actions is not null then
+            jsonb_build_object('actions', v_group_actions)
+          else
+            jsonb '{}'
+          end ||
+          case when v_group ? 'name' then
+            jsonb_build_object('name', json.get_string(v_group, 'name'))
+          else
+            jsonb '{}'
+          end);
     end if;
   end loop;
 

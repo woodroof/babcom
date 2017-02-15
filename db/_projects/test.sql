@@ -36,6 +36,9 @@ insert into data.params(code, value, description) values
       "attributes": ["description", "content"]
     },
     {
+      "actions": ["login"]
+    },
+    {
       "attributes": ["market_volume"]
     }
   ]
@@ -363,6 +366,7 @@ declare
             'name',
             data.get_attribute_value(v_user_object_id, v_user_object_id, v_attribute_name_id)))));
   v_codes text[];
+  v_actions jsonb;
   v_objects jsonb;
 begin
   for v_metaobjects in
@@ -381,6 +385,12 @@ begin
   loop
     v_codes := v_codes || v_metaobjects.codes;
   end loop;
+
+  v_actions := data.get_object_actions(v_user_object_id, null);
+
+  if v_actions is not null then
+    v_groups := v_groups || jsonb_build_array(jsonb_build_object('actions', v_actions));
+  end if;
 
   select jsonb_agg(value)
   into v_objects
@@ -510,6 +520,7 @@ select data.set_attribute_value(data.get_object_id('news_hub'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('type'), null, jsonb '"person"');
 select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('name'), null, jsonb '"Неавторизованный пользователь"');
+select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('description'), null, jsonb '"Вы не вошли в систему и работаете в режиме чтения общедоступной информации."');
 
 -- other anonymous
 
@@ -690,7 +701,44 @@ join generate_series(1, 5) o2(value) on 1=1
 join data.logins l on
   l.description = 'master' || o2.value;
 
--- TODO: действие для привязки клиента к логину
+-- Действие для привязки клиента к логину
+CREATE OR REPLACE FUNCTION action_generators.login(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
+  v_test_object_id integer := json.get_integer(in_params, 'test_object_id');
+begin
+  if v_user_object_id = v_test_object_id and (v_object_id is null or v_object_id = v_test_object_id) then
+    return jsonb_build_object(
+      'login',
+      jsonb_build_object(
+        'code', 'login',
+        'name', 'Вход в систему',
+        'type', 'security.login',
+        'params', jsonb '{}',
+        'user_params',
+          jsonb_build_array(
+            jsonb_build_object(
+              'code', 'password',
+              'type', 'string',
+              'data', jsonb_build_object('min_length', 1),
+              'description', 'Пароль',
+              'min_value_count', 1,
+              'max_value_count', 1))));
+  end if;
+
+  return null;
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
+insert into data.action_generators(function, params, description)
+values('login', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция входа в систему');
+
 -- TODO: deferred_functions (периодическое начисление денег, взлом?)
 -- TODO: уведомления (которых нет!)
 

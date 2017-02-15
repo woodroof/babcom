@@ -15,6 +15,7 @@ declare
   v_object_infos data.object_info[];
   v_object_info data.object_info;
   v_attributes jsonb;
+  v_actions jsonb;
   v_object_template jsonb;
   v_ret_val jsonb := '[]';
 begin
@@ -33,6 +34,11 @@ begin
         v_object_info.attribute_values,
         v_object_info.attribute_value_descriptions,
         v_object_info.attribute_types);
+
+    if in_get_actions then
+      v_actions := data.get_object_actions(in_user_object_id, v_object_info.object_id);
+    end if;
+
     v_ret_val :=
       v_ret_val || (
         jsonb_build_object(
@@ -43,12 +49,16 @@ begin
         else
           jsonb '{}'
         end ||
-        case when v_attributes is not null and in_get_templates then
-          jsonb_build_object('template', data.get_object_template(v_template, v_object_info.attribute_codes))
+        case when (v_attributes is not null or v_actions is not null) and in_get_templates then
+          jsonb_build_object('template', data.get_object_template(v_template, v_object_info.attribute_codes, v_actions))
+        else
+          jsonb '{}'
+        end ||
+        case when v_actions is not null then
+          jsonb_build_object('actions', v_actions)
         else
           jsonb '{}'
         end);
-    -- TODO: add actions
   end loop;
 
   return v_ret_val;
