@@ -29,6 +29,8 @@ begin
     v_sort_params_len integer;
     v_sort_param jsonb;
     v_type text;
+    v_ordered_by_code boolean := false;
+    v_attribute_code text;
     v_attribute_id integer;
     v_attributes text[];
     v_order_conditions text[];
@@ -46,23 +48,37 @@ begin
         raise invalid_parameter_value;
       end if;
 
-      v_attribute_id :=
-        data.get_attribute_id(
-          json.get_string(v_sort_param, 'attribute_code'));
+      v_attribute_code := json.get_opt_string(v_sort_param, null, 'attribute_code');
 
-      if data.is_system_attribute(v_attribute_id) then
-        raise invalid_parameter_value;
+      if v_attribute_code is null then
+        v_attributes := v_attributes || ('utils.integer_array_idx($1, o.id) a' || i);
+        v_order_conditions := v_order_conditions || ('a' || i || ' ' || v_type);
+        v_ordered_by_code := true;
+        exit;
+      else
+        v_attribute_id := data.get_attribute_id(v_attribute_code);
+
+        if data.is_system_attribute(v_attribute_id) then
+          raise invalid_parameter_value;
+        end if;
+
+        if v_attribute_id != any(in_filled_attributes_ids) then
+          v_attribute_ids := v_attribute_ids || v_attribute_id;
+        end if;
+
+        v_attributes := v_attributes || ('data.get_attribute_value(' || in_user_object_id  || ', o.id, ' || v_attribute_id || ') a' || i);
+        v_order_conditions := v_order_conditions || ('a' || i || ' ' || v_type);
       end if;
-
-      if v_attribute_id != any(in_filled_attributes_ids) then
-        v_attribute_ids := v_attribute_ids || v_attribute_id;
-      end if;
-
-      v_attributes := v_attributes || ('data.get_attribute_value(' || in_user_object_id  || ', o.id, ' || v_attribute_id || ') a' || i);
-      v_order_conditions := v_order_conditions || ('a' || i || ' ' || v_type);
     end loop;
 
-    perform data.fill_attribute_values(in_user_object_id, in_object_ids, v_attribute_ids);
+    if not v_ordered_by_code then
+      v_attributes := v_attributes || ('utils.integer_array_idx($1, o.id) a' || v_sort_params_len);
+        v_order_conditions := v_order_conditions || ('a' || v_sort_params_len || ' asc');
+    end if;
+
+    if v_attribute_ids is not null then
+      perform data.fill_attribute_values(in_user_object_id, in_object_ids, v_attribute_ids);
+    end if;
 
     v_query := 'select array_agg(o.id) from (select o.id';
     foreach v_attribute in array v_attributes loop

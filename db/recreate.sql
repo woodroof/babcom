@@ -1,4 +1,6 @@
 -- Cleanup
+drop schema if exists "action_generators" cascade;
+drop schema if exists "actions" cascade;
 drop schema if exists "api" cascade;
 drop schema if exists "api_utils" cascade;
 drop schema if exists "attribute_value_change_functions" cascade;
@@ -15,6 +17,8 @@ drop schema if exists "utils_test" cascade;
 drop schema if exists "intarray" cascade;
 drop schema if exists "pgcrypto" cascade;
 -- Schemas
+create schema "action_generators";
+create schema "actions";
 create schema "api";
 create schema "api_utils";
 create schema "attribute_value_change_functions";
@@ -385,6 +389,7 @@ begin
 
     declare
       v_filter jsonb;
+      v_code text;
       v_filters_len integer;
       v_type text;
       v_attribute_id integer;
@@ -398,6 +403,9 @@ begin
 
         if v_type = 'code not in' then
           v_object_codes_to_remove := v_object_codes_to_remove || json.get_string_array(v_filter, 'data');
+        elsif v_type = 'after' then
+          v_code := json.get_string(v_filter, 'data');
+          in_object_codes := utils.string_array_after(in_object_codes, v_code);
         else
           v_attribute_id :=
             data.get_attribute_id(
@@ -448,8 +456,12 @@ begin
 
   select array_agg(id)
   into v_filtered_object_ids
-  from data.objects
-  where code = any(v_filtered_object_codes);
+  from (
+    select id
+    from data.objects
+    where code = any(v_filtered_object_codes)
+    order by utils.string_array_idx(v_filtered_object_codes, code)
+  ) s;
 
   if v_filtered_object_ids is null then
     return null;
@@ -639,6 +651,8 @@ begin
     v_sort_params_len integer;
     v_sort_param jsonb;
     v_type text;
+    v_ordered_by_code boolean := false;
+    v_attribute_code text;
     v_attribute_id integer;
     v_attributes text[];
     v_order_conditions text[];
@@ -656,23 +670,37 @@ begin
         raise invalid_parameter_value;
       end if;
 
-      v_attribute_id :=
-        data.get_attribute_id(
-          json.get_string(v_sort_param, 'attribute_code'));
+      v_attribute_code := json.get_opt_string(v_sort_param, null, 'attribute_code');
 
-      if data.is_system_attribute(v_attribute_id) then
-        raise invalid_parameter_value;
+      if v_attribute_code is null then
+        v_attributes := v_attributes || ('utils.integer_array_idx($1, o.id) a' || i);
+        v_order_conditions := v_order_conditions || ('a' || i || ' ' || v_type);
+        v_ordered_by_code := true;
+        exit;
+      else
+        v_attribute_id := data.get_attribute_id(v_attribute_code);
+
+        if data.is_system_attribute(v_attribute_id) then
+          raise invalid_parameter_value;
+        end if;
+
+        if v_attribute_id != any(in_filled_attributes_ids) then
+          v_attribute_ids := v_attribute_ids || v_attribute_id;
+        end if;
+
+        v_attributes := v_attributes || ('data.get_attribute_value(' || in_user_object_id  || ', o.id, ' || v_attribute_id || ') a' || i);
+        v_order_conditions := v_order_conditions || ('a' || i || ' ' || v_type);
       end if;
-
-      if v_attribute_id != any(in_filled_attributes_ids) then
-        v_attribute_ids := v_attribute_ids || v_attribute_id;
-      end if;
-
-      v_attributes := v_attributes || ('data.get_attribute_value(' || in_user_object_id  || ', o.id, ' || v_attribute_id || ') a' || i);
-      v_order_conditions := v_order_conditions || ('a' || i || ' ' || v_type);
     end loop;
 
-    perform data.fill_attribute_values(in_user_object_id, in_object_ids, v_attribute_ids);
+    if not v_ordered_by_code then
+      v_attributes := v_attributes || ('utils.integer_array_idx($1, o.id) a' || v_sort_params_len);
+        v_order_conditions := v_order_conditions || ('a' || v_sort_params_len || ' asc');
+    end if;
+
+    if v_attribute_ids is not null then
+      perform data.fill_attribute_values(in_user_object_id, in_object_ids, v_attribute_ids);
+    end if;
 
     v_query := 'select array_agg(o.id) from (select o.id';
     foreach v_attribute in array v_attributes loop
@@ -6414,6 +6442,32 @@ end;
 $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
+-- Function: utils.integer_array_idx(integer[], integer)
+
+-- DROP FUNCTION utils.integer_array_idx(integer[], integer);
+
+CREATE OR REPLACE FUNCTION utils.integer_array_idx(
+    in_array integer[],
+    in_value integer)
+  RETURNS integer AS
+$BODY$
+declare
+  v_idx integer;
+begin
+  select num
+  into v_idx
+  from (
+    select row_number() over() as num, s.value
+    from unnest(in_array) s(value)
+  ) s
+  where s.value = in_value
+  limit 1;
+
+  return v_idx;
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
 -- Function: utils.raise_invalid_input_param_value(text)
 
 -- DROP FUNCTION utils.raise_invalid_input_param_value(text);
@@ -6517,6 +6571,59 @@ end;
 $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
+-- Function: utils.string_array_after(text[], text)
+
+-- DROP FUNCTION utils.string_array_after(text[], text);
+
+CREATE OR REPLACE FUNCTION utils.string_array_after(
+    in_array text[],
+    in_value text)
+  RETURNS text[] AS
+$BODY$
+declare
+  v_ret_val text[];
+begin
+  select array_agg(value)
+  into v_ret_val
+  from (
+    select
+      row_number() over() as num,
+      value
+    from unnest(in_array) s(value)
+  ) f
+  where f.num > coalesce(utils.string_array_idx(in_array, in_value), 0);
+
+  return v_ret_val;
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+-- Function: utils.string_array_idx(text[], text)
+
+-- DROP FUNCTION utils.string_array_idx(text[], text);
+
+CREATE OR REPLACE FUNCTION utils.string_array_idx(
+    in_array text[],
+    in_value text)
+  RETURNS integer AS
+$BODY$
+declare
+  v_idx integer;
+begin
+  select num
+  into v_idx
+  from (
+    select row_number() over() as num, s.value
+    from unnest(in_array) s(value)
+  ) s
+  where s.value = in_value
+  limit 1;
+
+  return v_idx;
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
 -- Function: utils_test.random_x_should_return_exact_value()
 
 -- DROP FUNCTION utils_test.random_x_should_return_exact_value();
@@ -6574,6 +6681,25 @@ $BODY$
   LANGUAGE plpgsql IMMUTABLE
   COST 100;
 -- Tables
+-- Table: data.action_generators
+
+-- DROP TABLE data.action_generators;
+
+CREATE TABLE data.action_generators
+(
+  id serial NOT NULL,
+  code text NOT NULL DEFAULT (pgcrypto.gen_random_uuid())::text,
+  function text NOT NULL, -- coalesce(params, jsonb '{}') || jsonb_build_object('user_object_id', <user_obj_id>, 'object_id', <obj_id> | null)
+  params jsonb,
+  description text,
+  CONSTRAINT action_generators_pk PRIMARY KEY (id),
+  CONSTRAINT action_generators_unique_code UNIQUE (code)
+)
+WITH (
+  OIDS=FALSE
+);
+COMMENT ON COLUMN data.action_generators.function IS 'coalesce(params, jsonb ''{}'') || jsonb_build_object(''user_object_id'', <user_obj_id>, ''object_id'', <obj_id> | null)';
+
 -- Table: data.attributes
 
 -- DROP TABLE data.attributes;

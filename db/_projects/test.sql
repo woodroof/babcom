@@ -99,6 +99,12 @@ insert into data.objects(code) values
 ('meta_entities');
 
 insert into data.objects(code)
+select 'global_notification' || o.* from generate_series(1, 3) o;
+
+insert into data.objects(code)
+select 'personal_notification' || o.* from generate_series(1, 60) o;
+
+insert into data.objects(code)
 select 'station_weapon' || o.* from generate_series(1, 4) o;
 
 insert into data.objects(code)
@@ -254,6 +260,10 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('content', 'Содержимое', 'NORMAL', null),
 ('system_value', 'Содержимое', 'SYSTEM', null),
 ('meta_entities', 'Мета-объекты', 'INVISIBLE', null),
+('notifications', 'Уведомления', 'INVISIBLE', null),
+('notification_description', 'Описание уведомления', 'NORMAL', null),
+('notification_object_code', 'Объект, привязанный к уведомлению', 'HIDDEN', null),
+('notification_time', 'Время отправки уведомления', 'NORMAL', null),
 ('system_meta', 'Маркер мета-объекта', 'SYSTEM', null),
 ('system_mail_contact', 'Маркер объекта, которому можно отправлять письма', 'SYSTEM', null),
 ('person_race', 'Раса', 'NORMAL', 'person_race'),
@@ -529,6 +539,35 @@ system_trader
 system_hacker
 system_scientist
 */
+
+select
+  data.set_attribute_value(data.get_object_id('global_notification' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('global_notification' || o.value), data.get_attribute_id('notification_description'), null, ('"Global notification ' || o.value || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('global_notification' || o.value), data.get_attribute_id('notification_time'), null, ('"15.02.2258 17:2' || o.value || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('global_notification' || o.value), data.get_attribute_id('type'), null, jsonb '"notification"')
+from generate_series(1, 3) o(value);
+
+select
+  data.set_attribute_value(data.get_object_id('personal_notification' || o.value), data.get_attribute_id('system_is_visible'), data.get_object_id('person' || o.value), jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('personal_notification' || o.value), data.get_attribute_id('notification_description'), null, ('"Personal notification ' || o.value || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('personal_notification' || o.value), data.get_attribute_id('notification_object_code'), null, ('"person' || o.value || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('personal_notification' || o.value), data.get_attribute_id('notification_time'), null, jsonb '"15.02.2258 17:30"'),
+  data.set_attribute_value(data.get_object_id('personal_notification' || o.value), data.get_attribute_id('type'), null, jsonb '"notification"')
+from generate_series(1, 60) o(value);
+
+select data.set_attribute_value(data.get_object_id('person' || o.pn), data.get_attribute_id('notifications'), data.get_object_id('person' || o.pn), jsonb_agg(o.code))
+from (
+  select o1.value pn, 'global_notification' || o2.value as code
+  from generate_series(1, 60) o1(value)
+  join generate_series(1, 3) o2(value) on 1=1
+  union
+  select o1.value pn, 'personal_notification' || o1.value
+  from generate_series(1, 60) o1(value)
+) o
+group by o.pn;
+
+select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('notifications'), data.get_object_id('anonymous'), jsonb_agg(o.value))
+from generate_series(1, 3) o(value);
 
   -- TODO: Всё прочее
 /*

@@ -29,6 +29,7 @@ begin
 
     declare
       v_filter jsonb;
+      v_code text;
       v_filters_len integer;
       v_type text;
       v_attribute_id integer;
@@ -42,6 +43,9 @@ begin
 
         if v_type = 'code not in' then
           v_object_codes_to_remove := v_object_codes_to_remove || json.get_string_array(v_filter, 'data');
+        elsif v_type = 'after' then
+          v_code := json.get_string(v_filter, 'data');
+          in_object_codes := utils.string_array_after(in_object_codes, v_code);
         else
           v_attribute_id :=
             data.get_attribute_id(
@@ -92,8 +96,12 @@ begin
 
   select array_agg(id)
   into v_filtered_object_ids
-  from data.objects
-  where code = any(v_filtered_object_codes);
+  from (
+    select id
+    from data.objects
+    where code = any(v_filtered_object_codes)
+    order by utils.string_array_idx(v_filtered_object_codes, code)
+  ) s;
 
   if v_filtered_object_ids is null then
     return null;
