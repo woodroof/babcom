@@ -9,7 +9,7 @@ CREATE OR REPLACE FUNCTION user_api.get_objects(
   RETURNS api.result AS
 $BODY$
 declare
-  v_user_object_id integer;
+  v_user_object_id integer := api_utils.get_user_object(in_login_id, in_params);
   v_object_codes text[];
 
   v_filter_result api_utils.objects_process_result;
@@ -23,8 +23,6 @@ declare
   v_etag text;
   v_if_non_match text;
 begin
-  v_user_object_id := api_utils.get_user_object(in_login_id, in_params);
-
   if v_user_object_id is null then
     return api_utils.create_forbidden_result('Invalid user object');
   end if;

@@ -583,7 +583,7 @@ from (
 ) o
 group by o.pn;
 
-select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('notifications'), data.get_object_id('anonymous'), jsonb_agg(o.value))
+select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('notifications'), data.get_object_id('anonymous'), jsonb_agg('global_notification' || o.value))
 from generate_series(1, 3) o(value);
 
   -- TODO: Всё прочее
@@ -670,11 +670,11 @@ personal_document{1,100}
 --   Транзакции
 
 -- Логины
-insert into data.logins(description)
-select 'player' || o.value from generate_series(1, 50) o(value);
+insert into data.logins(code, description)
+select 'player' || o.value || '_code', 'player' || o.value from generate_series(1, 50) o(value);
 
-insert into data.logins(description, is_admin)
-select 'master' || o.value, true from generate_series(1, 5) o(value);
+insert into data.logins(code, description, is_admin)
+select 'master' || o.value || '_code', 'master' || o.value, true from generate_series(1, 5) o(value);
 
 -- Связи клиентов и логинов
 select data.set_client_login('client' || o.value, l.id)
@@ -740,6 +740,35 @@ begin
 end;
 $BODY$
   LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.login(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_password text := json.get_string(in_user_params, 'password');
+  v_login_id integer;
+begin
+  select id
+  into v_login_id
+  from data.logins
+  where code = v_password
+  for share;
+
+  if v_login_id is null then
+    return api_utils.create_ok_result(null, 'Неправильный персональный код!');
+  end if;
+
+  perform data.set_client_login(in_client, v_login_id, in_user_object_id, 'Вход в систему');
+
+  return api_utils.create_ok_result(null);
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
   COST 100;
 
 insert into data.action_generators(function, params, description)

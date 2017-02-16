@@ -8,8 +8,6 @@ CREATE OR REPLACE FUNCTION api_utils.create_ok_result(
   RETURNS api.result AS
 $BODY$
 begin
-  assert in_data is not null;
-
   if in_message is null then
     return row(200, json_build_object('data', in_data));
   end if;

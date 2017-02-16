@@ -34,7 +34,7 @@ begin
             'generator',
             in_generator_id,
             'checksum',
-            encode(pgcrypto.digest(in_generator_code || in_user_object_id::text || coalesce(json.get_opt_object(v_action.value, null, 'params')::text, ''), 'sha256'), 'base64'))));
+            data.create_checksum(in_user_object_id, in_generator_code, json.get_string(v_action.value, 'code'), json.get_opt_object(v_action.value, null, 'params')))));
   end loop;
 
   return v_ret_val;

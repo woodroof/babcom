@@ -280,6 +280,21 @@ end;
 $BODY$
   LANGUAGE plpgsql IMMUTABLE
   COST 100;
+-- Function: api_utils.create_conflict_result(text)
+
+-- DROP FUNCTION api_utils.create_conflict_result(text);
+
+CREATE OR REPLACE FUNCTION api_utils.create_conflict_result(in_message text)
+  RETURNS api.result AS
+$BODY$
+begin
+  assert in_message is not null;
+
+  return row(409, json_build_object('message', in_message));
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
 -- Function: api_utils.create_forbidden_result(text)
 
 -- DROP FUNCTION api_utils.create_forbidden_result(text);
@@ -348,8 +363,6 @@ CREATE OR REPLACE FUNCTION api_utils.create_ok_result(
   RETURNS api.result AS
 $BODY$
 begin
-  assert in_data is not null;
-
   if in_message is null then
     return row(200, json_build_object('data', in_data));
   end if;
@@ -1299,6 +1312,27 @@ end;
 $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
+-- Function: data.create_checksum(integer, text, text, jsonb)
+
+-- DROP FUNCTION data.create_checksum(integer, text, text, jsonb);
+
+CREATE OR REPLACE FUNCTION data.create_checksum(
+    in_user_object_id integer,
+    in_generator_code text,
+    in_action_code text,
+    in_params jsonb)
+  RETURNS text AS
+$BODY$
+begin
+  assert in_user_object_id is not null;
+  assert in_generator_code is not null;
+  assert in_action_code is not null;
+
+  return encode(pgcrypto.digest(in_user_object_id::text || in_generator_code || in_action_code || coalesce(in_params::text, '{}'), 'sha256'), 'base64');
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
 -- Function: data.delete_attribute_value(integer, integer, integer, integer, text)
 
 -- DROP FUNCTION data.delete_attribute_value(integer, integer, integer, integer, text);
@@ -1421,7 +1455,7 @@ begin
             'generator',
             in_generator_id,
             'checksum',
-            encode(pgcrypto.digest(in_generator_code || in_user_object_id::text || coalesce(json.get_opt_object(v_action.value, null, 'params')::text, ''), 'sha256'), 'base64'))));
+            data.create_checksum(in_user_object_id, in_generator_code, json.get_string(v_action.value, 'code'), json.get_opt_object(v_action.value, null, 'params')))));
   end loop;
 
   return v_ret_val;
@@ -6403,7 +6437,7 @@ CREATE OR REPLACE FUNCTION user_api.get_objects(
   RETURNS api.result AS
 $BODY$
 declare
-  v_user_object_id integer;
+  v_user_object_id integer := api_utils.get_user_object(in_login_id, in_params);
   v_object_codes text[];
 
   v_filter_result api_utils.objects_process_result;
@@ -6417,8 +6451,6 @@ declare
   v_etag text;
   v_if_non_match text;
 begin
-  v_user_object_id := api_utils.get_user_object(in_login_id, in_params);
-
   if v_user_object_id is null then
     return api_utils.create_forbidden_result('Invalid user object');
   end if;
@@ -6566,6 +6598,62 @@ begin
     json_build_object(
       'etag', v_etag,
       'objects', v_objects));
+end;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+-- Function: user_api.make_action(text, integer, jsonb)
+
+-- DROP FUNCTION user_api.make_action(text, integer, jsonb);
+
+CREATE OR REPLACE FUNCTION user_api.make_action(
+    in_client text,
+    in_login_id integer,
+    in_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_user_object_id integer := api_utils.get_user_object(in_login_id, in_params);
+  v_action_code text;
+  v_params jsonb;
+  v_user_params jsonb;
+
+  v_generator integer;
+  v_checksum text;
+
+  v_generator_code text;
+
+  v_ret_val api.result;
+begin
+  if v_user_object_id is null then
+    return api_utils.create_forbidden_result('Invalid user object');
+  end if;
+
+  v_action_code := json.get_string(in_params, 'action_code');
+  v_params := json.get_object(in_params, 'params');
+  v_user_params := json.get_opt_object(in_params, null, 'user_params');
+
+  v_generator := json.get_integer(v_params, 'generator');
+  v_checksum := json.get_string(v_params, 'checksum');
+
+  select code
+  into v_generator_code
+  from data.action_generators
+  where id = v_generator;
+
+  v_params := v_params - 'generator' - 'checksum';
+
+  if v_generator_code is null then
+    return api_utils.create_conflict_result('Invalid action generator');
+  elsif v_checksum != data.create_checksum(v_user_object_id, v_generator_code, v_action_code, v_params) then
+    return api_utils.create_conflict_result('Invalid checksum');
+  end if;
+
+  execute format('select * from actions.%s($1, $2, $3, $4)', v_action_code)
+  using in_client, v_user_object_id, v_params, v_user_params
+  into v_ret_val;
+
+  return v_ret_val;
 end;
 $BODY$
   LANGUAGE plpgsql VOLATILE
@@ -6927,10 +7015,12 @@ WITH (
 CREATE TABLE data.logins
 (
   id serial NOT NULL,
+  code text,
   description text,
   is_admin boolean NOT NULL DEFAULT false,
   is_active boolean NOT NULL DEFAULT true,
-  CONSTRAINT logins_pk PRIMARY KEY (id)
+  CONSTRAINT logins_pk PRIMARY KEY (id),
+  CONSTRAINT logins_unique_code UNIQUE (code)
 )
 WITH (
   OIDS=FALSE
