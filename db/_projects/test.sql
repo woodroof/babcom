@@ -85,7 +85,6 @@ insert into data.objects(code) values
 ('personal_document_storage'),
 ('library'),
 ('med_library'),
-('personal_library'),
 ('transactions'),
 ('station'),
 ('station_medlab'),
@@ -252,8 +251,6 @@ $BODY$
   LANGUAGE plpgsql IMMUTABLE
   COST 100;
 
-  -- TODO
-
 -- Атрибуты
 insert into data.attributes(code, name, type, value_description_function) values
 ('mail_contacts', 'Список доступных контактов', 'INVISIBLE', null),
@@ -367,6 +364,8 @@ declare
             data.get_attribute_value(v_user_object_id, v_user_object_id, v_attribute_name_id)))));
   v_codes text[];
   v_actions jsonb;
+  v_action_array jsonb;
+  v_action jsonb;
   v_objects jsonb;
 begin
   for v_metaobjects in
@@ -389,7 +388,15 @@ begin
   v_actions := data.get_object_actions(v_user_object_id, null);
 
   if v_actions is not null then
-    v_groups := v_groups || jsonb_build_array(jsonb_build_object('actions', v_actions));
+    v_action_array := jsonb '[]';
+    for v_action in
+      select value
+      from jsonb_each(v_actions)
+    loop
+      v_action_array := v_action_array || v_action;
+    end loop;
+
+    v_groups := v_groups || jsonb_build_array(jsonb_build_object('actions', v_action_array));
   end if;
 
   select jsonb_agg(value)
@@ -423,13 +430,12 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
 (data.get_attribute_id('meta_entities'), 'fill_user_object_attribute_if', '{"attribute_code": "type", "attribute_value": "person", "function": "merge_metaobjects", "params": {"object_code": "meta_entities", "attribute_code": "meta_entities"}}', 'Заполнение списка метаобъектов игрока');
 
   -- TODO и другие:
-  -- news_hub: object_objects -> content
+  -- news_hub: object_objects[intermediate is null] -> content
   -- person: system_balance -> balance[player]
   -- media{1,3}: object_objects -> content
   -- personal_document_storage: system_value[player] -> content[player]
   -- library: object_objects[intermediate is null] -> content
   -- med_library: object_objects -> content
-  -- personal_library: object_objects -> content
   -- transactions: system_value[player] -> content[player]
   -- news{1,3}{1,100}: media_name + title -> name
   -- library_category{1,9}: object_objects[intermediate is null] -> content
@@ -519,7 +525,7 @@ select data.set_attribute_value(data.get_object_id('news_hub'), data.get_attribu
 
 select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('type'), null, jsonb '"person"');
-select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('name'), null, jsonb '"Неавторизованный пользователь"');
+select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('name'), null, jsonb '"Аноним"');
 select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('description'), null, jsonb '"Вы не вошли в систему и работаете в режиме чтения общедоступной информации."');
 
 -- other anonymous
@@ -725,7 +731,7 @@ begin
               'code', 'password',
               'type', 'string',
               'data', jsonb_build_object('min_length', 1),
-              'description', 'Пароль',
+              'description', 'Персональный код',
               'min_value_count', 1,
               'max_value_count', 1))));
   end if;
@@ -739,7 +745,4 @@ $BODY$
 insert into data.action_generators(function, params, description)
 values('login', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция входа в систему');
 
--- TODO: deferred_functions (периодическое начисление денег, взлом?)
--- TODO: уведомления (которых нет!)
-
--- TODO: действия для нагрузочного тестирования
+-- TODO: deferred_functions (периодическое начисление денег)
