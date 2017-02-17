@@ -24,6 +24,9 @@ insert into data.params(code, value, description) values
       "attributes": ["mail_type", "mail_send_time", "mail_title", "mail_author", "mail_receivers"]
     },
     {
+      "attributes": ["news_time", "news_media", "news_title"]
+    },
+    {
       "attributes": ["mail_body"]
     },
     {
