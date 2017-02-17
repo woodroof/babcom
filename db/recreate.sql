@@ -1171,7 +1171,7 @@ begin
 
   v_function := json.get_string(in_params, 'function');
   v_params :=
-    json.get_object(in_params, 'params') ||
+    json.get_opt_object(in_params, jsonb '{}', 'params') ||
     jsonb_build_object(
       'user_object_id', v_user_object_id,
       'object_id', v_object_id,
