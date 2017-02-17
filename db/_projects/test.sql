@@ -300,7 +300,12 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('system_trader', 'Маркер персонажа-корпората', 'SYSTEM', null),
 ('system_hacker', 'Маркер персонажа-хакера', 'SYSTEM', null),
 ('system_scientist', 'Маркер персонажа-учёного', 'SYSTEM', null),
-('system_library_category', 'Категория документа', 'SYSTEM', null);
+('system_library_category', 'Категория документа', 'SYSTEM', null),
+('news_title', 'Заголовок новости', 'NORMAL', null),
+('news_media', 'Источник новости', 'NORMAL', null),
+('news_time', 'Время публикации новости', 'NORMAL', null);
+
+
 
 -- Функции для создания связей
 insert into data.attribute_value_change_functions(attribute_id, function, params) values
@@ -429,6 +434,44 @@ $BODY$
 insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
 (data.get_attribute_id('meta_entities'), 'fill_user_object_attribute_if', '{"attribute_code": "type", "attribute_value": "person", "function": "merge_metaobjects", "params": {"object_code": "meta_entities", "attribute_code": "meta_entities"}}', 'Заполнение списка метаобъектов игрока');
 
+CREATE OR REPLACE FUNCTION attribute_value_fill_functions.news_hub_content(in_params jsonb)
+  RETURNS void AS
+$BODY$
+declare
+  v_attribute_id integer := json.get_integer(in_params, 'attribute_id');
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_content jsonb;
+  v_attribute_name_id integer := data.get_attribute_id('name');
+  v_attribute_news_time_id integer := data.get_attribute_id('news_time');
+begin
+
+select to_jsonb(string_agg(src.dt || ' <a href="babcom:' || src.code || '">' || src.nm || '</a>', E'<br>\n'::text))
+into v_content
+from
+(select json.get_string(av_date.value) dt, o.code, json.get_string(av_name.value) nm
+from data.object_objects oo
+  left join data.objects o on o.id = oo.object_id
+  left join data.attribute_values av_name on av_name.object_id = o.id and av_name.attribute_id = v_attribute_name_id and av_name.value_object_id is null
+  left join data.attribute_values av_date on av_date.object_id = o.id and av_date.attribute_id = v_attribute_news_time_id and av_date.value_object_id is null
+  where parent_object_id = v_object_id
+   and intermediate_object_ids is not null
+   order by av_date.value desc) src;
+ 
+  perform data.set_attribute_value_if_changed(
+    v_object_id,
+    v_attribute_id,
+    null,
+    v_content,
+    v_object_id);
+end;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+
+insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
+(data.get_attribute_id('content'), 'fill_object_attribute_if', '{"attribute_code": "type", "attribute_value": "news_hub", "function": "news_hub_content"}', 'Получение списка новостей');
+
+
   -- TODO и другие:
   -- news_hub: object_objects[intermediate is null] -> content
   -- person: system_balance -> balance[player]
@@ -519,9 +562,26 @@ select data.set_attribute_value(data.get_object_id('news_hub'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('news_hub'), data.get_attribute_id('type'), null, jsonb '"news_hub"');
 select data.set_attribute_value(data.get_object_id('news_hub'), data.get_attribute_id('name'), null, jsonb '"Новости"');
 
--- media{1,3}
--- race{1,20}
--- state{1,10}
+select
+  data.set_attribute_value(data.get_object_id('media' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('media' || o.value), data.get_attribute_id('type'), null, jsonb '"media"'),
+  data.set_attribute_value(data.get_object_id('media' || o.value), data.get_attribute_id('name'), null, ('"Media ' || o.value || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('media' || o.value), data.get_attribute_id('description'), null, ('"Самая оперативная, честная и скромная из всех газет во всей вселенной. Читайте только нас! Мы - Media ' || o.value || '!"')::jsonb)
+from generate_series(1, 3) o(value);
+
+select
+  data.set_attribute_value(data.get_object_id('race' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('race' || o.value), data.get_attribute_id('type'), null, jsonb '"race"'),
+  data.set_attribute_value(data.get_object_id('race' || o.value), data.get_attribute_id('name'), null, ('"race' || o.value || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('race' || o.value), data.get_attribute_id('description'), null, ('"Синие и ми-ми-мишные, а может быть зелёные и чешуйчатые, а может быть с костяным наростом, или они все Кош. Кто их знает этих представителей рассы №' || o.value || '!"')::jsonb)
+from generate_series(1, 20) o(value);
+
+select
+  data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('type'), null, jsonb '"state"'),
+  data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('name'), null, ('"state' || o.value || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('description'), null, ('"Их адрес не дом и не улица, их адрес -  state ' || o.value || '!"')::jsonb)s
+from generate_series(1, 10) o(value);
 
 select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('type'), null, jsonb '"person"');
@@ -585,6 +645,18 @@ group by o.pn;
 
 select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('notifications'), data.get_object_id('anonymous'), jsonb_agg('global_notification' || o.value))
 from generate_series(1, 3) o(value);
+
+
+select
+  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('type'), null, jsonb '"news"'),
+  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('news_title'), null, ('"Заголовок новости news' || o1.value || o2.value || '!"')::jsonb),
+  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('name'), null, ('"media'||o1.value||': Заголовок страницы новости news' || o1.value || o2.value || '!"')::jsonb),
+  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('news_media'), null, ('"media' || o1.value ||'"')::jsonb),
+  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('news_time'), null, ('"2258.02.23 ' || 10 + trunc(o2.value / 10) || ':' || 10 + o1.value * 5 || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('content'), null, ('"Текст новости news' || o1.value || o2.value || '. <br>После активного культурного взаимонасыщения таких, казалось бы разных цивилизаций, как Драззи и Минбари их общества кардинально изменились. Ввиду закрытости последних, стороннему наблюдателю, скорей всего не суждено узнать, как же повлияли воинственные Драззи на высокодуховных Минбарцев, однако у первых изменения, так сказать, на лицо. <br>Почти сразу после первых визитов, спрос на минбарскую культуру взлетел до небес! Ткани, одежда, предметы мебели и прочие диковинные товары заполонили рынки. Активно стали ввозиться всевозможные составы целительного свойства. Например, ставший знаменитым порошок, под названием “Минбарский гребень” завоевал популярность у молодых Драззи. Препарат, якобы, сделан на основе тертого костного образования на черепе минбарца. Многие потребители уверяют, что с его помощью, смогли одержать победу на любовном фронте, однако, ученые уверяют, что тонизирующий эффект, как и происхождение самого препарата не вызывают особого доверия. "')::jsonb)
+from generate_series(1, 3) o1(value)
+ join generate_series(1, 100) o2(value) on 1=1;
 
   -- TODO: Всё прочее
 /*
