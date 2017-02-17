@@ -308,8 +308,6 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('news_media', 'Источник новости', 'NORMAL', null),
 ('news_time', 'Время публикации новости', 'NORMAL', null);
 
-
-
 -- Функции для создания связей
 insert into data.attribute_value_change_functions(attribute_id, function, params) values
 (data.get_attribute_id('type'), 'string_value_to_object', jsonb '{"params": {"person": "persons", "corporation": "corporations", "ship": "ships", "media": "news_hub", "library_category": "library"}}'),
@@ -447,18 +445,29 @@ declare
   v_attribute_name_id integer := data.get_attribute_id('name');
   v_attribute_news_time_id integer := data.get_attribute_id('news_time');
 begin
-
-select to_jsonb(string_agg(src.dt || ' <a href="babcom:' || src.code || '">' || src.nm || '</a>', E'<br>\n'::text))
-into v_content
-from
-(select json.get_string(av_date.value) dt, o.code, json.get_string(av_name.value) nm
-from data.object_objects oo
-  left join data.objects o on o.id = oo.object_id
-  left join data.attribute_values av_name on av_name.object_id = o.id and av_name.attribute_id = v_attribute_name_id and av_name.value_object_id is null
-  left join data.attribute_values av_date on av_date.object_id = o.id and av_date.attribute_id = v_attribute_news_time_id and av_date.value_object_id is null
-  where parent_object_id = v_object_id
-   and intermediate_object_ids is not null
-   order by av_date.value desc) src;
+  select to_jsonb(string_agg(src.dt || ' <a href="babcom:' || src.code || '">' || src.nm || '</a>', E'<br>\n'::text))
+  into v_content
+  from (
+    select
+      json.get_string(av_date.value) dt,
+      o.code,
+      json.get_string(av_name.value) nm
+    from data.object_objects oo
+    left join data.objects o on
+      o.id = oo.object_id
+    left join data.attribute_values av_name on
+      av_name.object_id = o.id and
+      av_name.attribute_id = v_attribute_name_id and
+      av_name.value_object_id is null
+    left join data.attribute_values av_date on
+      av_date.object_id = o.id and
+      av_date.attribute_id = v_attribute_news_time_id and
+      av_date.value_object_id is null
+    where
+      oo.parent_object_id = v_object_id and
+      oo.intermediate_object_ids is not null
+    order by av_date.value desc
+  ) src;
  
   perform data.set_attribute_value_if_changed(
     v_object_id,
@@ -657,9 +666,9 @@ select
   data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('name'), null, ('"media'||o1.value||': Заголовок страницы новости news' || o1.value || o2.value || '!"')::jsonb),
   data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('news_media'), null, ('"media' || o1.value ||'"')::jsonb),
   data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('news_time'), null, ('"2258.02.23 ' || 10 + trunc(o2.value / 10) || ':' || 10 + o1.value * 5 || '"')::jsonb),
-  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('content'), null, ('"Текст новости news' || o1.value || o2.value || '. <br>После активного культурного взаимонасыщения таких, казалось бы разных цивилизаций, как Драззи и Минбари их общества кардинально изменились. Ввиду закрытости последних, стороннему наблюдателю, скорей всего не суждено узнать, как же повлияли воинственные Драззи на высокодуховных Минбарцев, однако у первых изменения, так сказать, на лицо. <br>Почти сразу после первых визитов, спрос на минбарскую культуру взлетел до небес! Ткани, одежда, предметы мебели и прочие диковинные товары заполонили рынки. Активно стали ввозиться всевозможные составы целительного свойства. Например, ставший знаменитым порошок, под названием “Минбарский гребень” завоевал популярность у молодых Драззи. Препарат, якобы, сделан на основе тертого костного образования на черепе минбарца. Многие потребители уверяют, что с его помощью, смогли одержать победу на любовном фронте, однако, ученые уверяют, что тонизирующий эффект, как и происхождение самого препарата не вызывают особого доверия. "')::jsonb)
+  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('content'), null, ('"Текст новости news' || o1.value || o2.value || '. <br>После активного культурного взаимонасыщения таких, казалось бы разных цивилизаций, как Драззи и Минбари их общества кардинально изменились. Ввиду закрытости последних, стороннему наблюдателю, скорей всего не суждено узнать, как же повлияли воинственные Драззи на высокодуховных Минбарцев, однако у первых изменения, так сказать, на лицо. <br>Почти сразу после первых визитов, спрос на минбарскую культуру взлетел до небес! Ткани, одежда, предметы мебели и прочие диковинные товары заполонили рынки. Активно стали ввозиться всевозможные составы целительного свойства. Например, ставший знаменитым порошок, под названием “Минбарский гребень” завоевал популярность у молодых Драззи. Препарат, якобы, сделан на основе тертого костного образования на черепе минбарца. Многие потребители уверяют, что с его помощью, смогли одержать победу на любовном фронте, однако, ученые уверяют, что тонизирующий эффект, как и происхождение самого препарата не вызывают особого доверия."')::jsonb)
 from generate_series(1, 3) o1(value)
- join generate_series(1, 100) o2(value) on 1=1;
+join generate_series(1, 100) o2(value) on 1=1;
 
   -- TODO: Всё прочее
 /*
