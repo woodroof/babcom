@@ -483,9 +483,7 @@ $BODY$
 insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
 (data.get_attribute_id('content'), 'fill_object_attribute_if', '{"attribute_code": "type", "attribute_value": "news_hub", "function": "news_hub_content"}', 'Получение списка новостей');
 
-
   -- TODO и другие:
-  -- news_hub: object_objects[intermediate is null] -> content
   -- person: system_balance -> balance[player]
   -- media{1,3}: object_objects -> content
   -- personal_document_storage: system_value[player] -> content[player]
@@ -663,7 +661,7 @@ select
   data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
   data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('type'), null, jsonb '"news"'),
   data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('news_title'), null, ('"Заголовок новости news' || o1.value || o2.value || '!"')::jsonb),
-  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('name'), null, ('"media'||o1.value||': Заголовок страницы новости news' || o1.value || o2.value || '!"')::jsonb),
+  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('name'), null, ('"media'||o1.value||': Заголовок новости news' || o1.value || o2.value || '!"')::jsonb),
   data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('news_media'), null, ('"media' || o1.value ||'"')::jsonb),
   data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('news_time'), null, ('"2258.02.23 ' || 10 + trunc(o2.value / 10) || ':' || 10 + o1.value * 5 || '"')::jsonb),
   data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('content'), null, ('"Текст новости news' || o1.value || o2.value || '. <br>После активного культурного взаимонасыщения таких, казалось бы разных цивилизаций, как Драззи и Минбари их общества кардинально изменились. Ввиду закрытости последних, стороннему наблюдателю, скорей всего не суждено узнать, как же повлияли воинственные Драззи на высокодуховных Минбарцев, однако у первых изменения, так сказать, на лицо. <br>Почти сразу после первых визитов, спрос на минбарскую культуру взлетел до небес! Ткани, одежда, предметы мебели и прочие диковинные товары заполонили рынки. Активно стали ввозиться всевозможные составы целительного свойства. Например, ставший знаменитым порошок, под названием “Минбарский гребень” завоевал популярность у молодых Драззи. Препарат, якобы, сделан на основе тертого костного образования на черепе минбарца. Многие потребители уверяют, что с его помощью, смогли одержать победу на любовном фронте, однако, ученые уверяют, что тонизирующий эффект, как и происхождение самого препарата не вызывают особого доверия."')::jsonb)
@@ -743,7 +741,6 @@ ship_weapon{1,2}
 ship_reactor{1,2}
 corporation{1,9}
 asset{1,9}{1,50}
-news{1,3}{1,100}
 library_category{1,9}
 library_document{1,9}{1,20}
 personal_document{1,100}
