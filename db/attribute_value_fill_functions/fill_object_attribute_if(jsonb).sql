@@ -32,6 +32,7 @@ begin
   v_params :=
     json.get_opt_object(in_params, jsonb '{}', 'params') ||
     jsonb_build_object(
+      'user_object_id', json.get_integer(in_params, 'user_object_id'),
       'object_id', v_object_id,
       'attribute_id', json.get_integer(in_params, 'attribute_id'));
   execute format('select attribute_value_fill_functions.%s($1)', v_function)

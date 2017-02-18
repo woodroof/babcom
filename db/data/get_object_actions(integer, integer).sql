@@ -24,7 +24,7 @@ begin
     from data.action_generators
   loop
     execute format('select action_generators.%s($1)', v_generator_info.function)
-    using v_base_params || v_generator_info.params
+    using v_base_params || coalesce(v_generator_info.params, jsonb '{}')
     into v_generator_actions;
 
     if v_generator_actions is not null then

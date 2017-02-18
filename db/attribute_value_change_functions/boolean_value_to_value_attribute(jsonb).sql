@@ -37,7 +37,7 @@ begin
     v_dest_attribute_value := jsonb_build_array(data.get_object_code(v_object_id)) || coalesce(v_dest_attribute_value, jsonb '[]');
   end if;
 
-  perform data.set_attribute_value(v_dest_object_id, v_dest_attribute_id, v_value_object_id, v_dest_attribute_value);
+  perform data.set_attribute_value(v_dest_object_id, v_dest_attribute_id, v_value_object_id, v_dest_attribute_value, json.get_opt_integer(in_params, null, 'user_object_id'));
 end;
 $BODY$
   LANGUAGE plpgsql VOLATILE

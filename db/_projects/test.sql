@@ -267,6 +267,7 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('notification_description', 'Описание уведомления', 'NORMAL', null),
 ('notification_object_code', 'Объект, привязанный к уведомлению', 'HIDDEN', null),
 ('notification_time', 'Время отправки уведомления', 'NORMAL', null),
+('notification_status', 'Статус уведомления', 'INVISIBLE', null),
 ('system_meta', 'Маркер мета-объекта', 'SYSTEM', null),
 ('system_mail_contact', 'Маркер объекта, которому можно отправлять письма', 'SYSTEM', null),
 ('person_race', 'Раса', 'NORMAL', 'person_race'),
@@ -634,6 +635,7 @@ select
   data.set_attribute_value(data.get_object_id('global_notification' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
   data.set_attribute_value(data.get_object_id('global_notification' || o.value), data.get_attribute_id('notification_description'), null, ('"Global notification ' || o.value || '"')::jsonb),
   data.set_attribute_value(data.get_object_id('global_notification' || o.value), data.get_attribute_id('notification_time'), null, ('"15.02.2258 17:2' || o.value || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('global_notification' || o.value), data.get_attribute_id('notification_status'), null, jsonb '"unread"'),
   data.set_attribute_value(data.get_object_id('global_notification' || o.value), data.get_attribute_id('type'), null, jsonb '"notification"')
 from generate_series(1, 3) o(value);
 
@@ -642,6 +644,7 @@ select
   data.set_attribute_value(data.get_object_id('personal_notification' || o.value), data.get_attribute_id('notification_description'), null, ('"Personal notification ' || o.value || '"')::jsonb),
   data.set_attribute_value(data.get_object_id('personal_notification' || o.value), data.get_attribute_id('notification_object_code'), null, ('"person' || o.value || '"')::jsonb),
   data.set_attribute_value(data.get_object_id('personal_notification' || o.value), data.get_attribute_id('notification_time'), null, jsonb '"15.02.2258 17:30"'),
+  data.set_attribute_value(data.get_object_id('personal_notification' || o.value), data.get_attribute_id('notification_status'), null, jsonb '"unread"'),
   data.set_attribute_value(data.get_object_id('personal_notification' || o.value), data.get_attribute_id('type'), null, jsonb '"notification"')
 from generate_series(1, 60) o(value);
 
@@ -658,7 +661,6 @@ group by o.pn;
 
 select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('notifications'), data.get_object_id('anonymous'), jsonb_agg('global_notification' || o.value))
 from generate_series(1, 3) o(value);
-
 
 select
   data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
@@ -857,5 +859,50 @@ $BODY$
 
 insert into data.action_generators(function, params, description)
 values('login', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция входа в систему');
+
+-- Действие для изменения статуса уведомления на "прочитано"
+CREATE OR REPLACE FUNCTION action_generators.read_notification(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+begin
+  return jsonb_build_object(
+    'read_notification',
+    jsonb_build_object(
+      'code', 'read_notification',
+      'name', 'Отметить как прочитанное',
+      'type', 'notifications.read',
+      'params', jsonb_build_object('notification_code', data.get_object_code(json.get_integer(in_params, 'object_id')))));
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.read_notification(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_notification_id integer := data.get_object_id(json.get_string(in_user_params, 'notification_code'));
+  v_notification_status_attribute_id integer := data.get_attribute_id('notification_status');
+begin
+  perform data.set_attribute_value_if_changed(
+    v_notification_id,
+    v_notification_status_attribute_id,
+    in_user_object_id,
+    jsonb '"read"',
+    in_user_object_id);
+
+  return api_utils.create_ok_result(null);
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+insert into data.action_generators(function, params, description)
+values('generate_if_attribute', jsonb_build_object('attribute_code', 'notification_status', 'attribute_value', 'unread', 'function', 'read_notification'), 'Функция для пометки уведомления как прочтённого');
 
 -- TODO: deferred_functions (периодическое начисление денег)
