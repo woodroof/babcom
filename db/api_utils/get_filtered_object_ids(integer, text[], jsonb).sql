@@ -109,7 +109,9 @@ begin
 
   v_attribute_ids := v_attribute_ids || v_system_is_visibile_attribute_id;
 
-  perform data.fill_attribute_values(in_user_object_id, v_filtered_object_ids, v_attribute_ids);
+  if v_attribute_ids is not null then
+    perform data.fill_attribute_values(in_user_object_id, v_filtered_object_ids, v_attribute_ids);
+  end if;
 
   declare
     v_query text;

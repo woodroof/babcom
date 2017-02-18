@@ -10,7 +10,7 @@ CREATE OR REPLACE FUNCTION data.add_object_to_login(
   RETURNS void AS
 $BODY$
 declare
-  v_exists boolean := false;
+  v_exists boolean;
 begin
   assert in_login_id is not null;
   assert in_object_id is not null;
@@ -26,7 +26,7 @@ begin
     login_id = in_login_id and
     object_id = in_object_id;
 
-  if v_exists then
+  if v_exists is not null then
     raise exception 'Object % is already accessible for login %', in_object_id, in_login_id;
   end if;
 

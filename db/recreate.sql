@@ -483,7 +483,9 @@ begin
 
   v_attribute_ids := v_attribute_ids || v_system_is_visibile_attribute_id;
 
-  perform data.fill_attribute_values(in_user_object_id, v_filtered_object_ids, v_attribute_ids);
+  if v_attribute_ids is not null then
+    perform data.fill_attribute_values(in_user_object_id, v_filtered_object_ids, v_attribute_ids);
+  end if;
 
   declare
     v_query text;
@@ -719,7 +721,7 @@ begin
 
     if not v_ordered_by_code then
       v_attributes := v_attributes || ('utils.integer_array_idx($1, o.id) a' || v_sort_params_len);
-        v_order_conditions := v_order_conditions || ('a' || v_sort_params_len || ' asc');
+      v_order_conditions := v_order_conditions || ('a' || v_sort_params_len || ' asc');
     end if;
 
     if v_attribute_ids is not null then
@@ -792,6 +794,10 @@ begin
   assert in_params is not null;
 
   v_limit := json.get_opt_integer(in_params, null, 'limit');
+  if v_limit <= 0 then
+    perform utils.raise_invalid_input_param_value('Limit should be greater than zero');
+  end if;
+
   if v_limit is not null then
     v_object_ids := intarray.subarray(in_object_ids, 1, v_limit);
   else
@@ -1077,7 +1083,7 @@ $BODY$
 declare
   v_attribute_name_id integer := data.get_attribute_id('name');
   v_object_codes text[] := json.get_string_array(in_value);
-  v_object_code text;
+  v_ret_val text;
 begin
   select
     string_agg(
@@ -1086,8 +1092,11 @@ begin
           data.get_attribute_value(in_user_object_id, o.id, v_attribute_name_id)),
         'Инкогнито'),
       ', ')
+  into v_ret_val
   from data.objects
   where o.code = any(v_object_codes);
+
+  return v_ret_val;
 end;
 $BODY$
   LANGUAGE plpgsql STABLE
@@ -1104,7 +1113,7 @@ declare
 
   v_check_attribute_id integer := data.get_attribute_id(json.get_string(in_params, 'attribute_code'));
   v_check_attribute_value jsonb := in_params->'attribute_value';
-  v_condition boolean := false;
+  v_condition boolean;
 
   v_function text;
   v_params jsonb;
@@ -1118,7 +1127,7 @@ begin
     value_object_id is null and
     value = v_check_attribute_value;
 
-  if not v_condition then
+  if v_condition is null then
     return;
   end if;
 
@@ -1147,7 +1156,7 @@ declare
 
   v_check_attribute_id integer := data.get_attribute_id(json.get_string(in_params, 'attribute_code'));
   v_check_attribute_value jsonb := in_params->'attribute_value';
-  v_condition boolean := false;
+  v_condition boolean;
 
   v_function text;
   v_params jsonb;
@@ -1165,7 +1174,7 @@ begin
     value_object_id is null and
     value = v_check_attribute_value;
 
-  if not v_condition then
+  if v_condition is null then
     return;
   end if;
 
@@ -1194,7 +1203,7 @@ CREATE OR REPLACE FUNCTION data.add_object_to_login(
   RETURNS void AS
 $BODY$
 declare
-  v_exists boolean := false;
+  v_exists boolean;
 begin
   assert in_login_id is not null;
   assert in_object_id is not null;
@@ -1210,7 +1219,7 @@ begin
     login_id = in_login_id and
     object_id = in_object_id;
 
-  if v_exists then
+  if v_exists is not null then
     raise exception 'Object % is already accessible for login %', in_object_id, in_login_id;
   end if;
 
@@ -1230,8 +1239,8 @@ CREATE OR REPLACE FUNCTION data.add_object_to_object(
   RETURNS void AS
 $BODY$
 declare
-  v_exists boolean := false;
-  v_cycle boolean := false;
+  v_exists boolean;
+  v_cycle boolean;
   v_row record;
 begin
   assert in_object_id is not null;
@@ -1262,7 +1271,7 @@ begin
     object_id = in_object_id and
     intermediate_object_ids is null;
 
-  if v_exists then
+  if v_exists is not null then
     raise exception 'Attempt to add already existed connection from object % to object %!', in_object_id, in_parent_object_id;
   end if;
 
@@ -1273,7 +1282,7 @@ begin
     parent_object_id = in_object_id and
     object_id = in_parent_object_id;
 
-  if v_cycle then
+  if v_cycle is not null then
     raise exception 'Attempt to add object % to object %, cycle detected!', in_object_id, in_parent_object_id;
   end if;
 
@@ -1411,6 +1420,92 @@ begin
 
   if v_attribute_value is null then
     raise exception 'Value not found (object_id: %, attribute_id: %, value_object_id: %)', in_object_id, in_attribute_id, in_value_object_id;
+  end if;
+
+  insert into data.attribute_values_journal(
+    object_id,
+    attribute_id,
+    value_object_id,
+    value,
+    start_time,
+    start_reason,
+    start_object_id,
+    end_time,
+    end_reason,
+    end_object_id)
+  values (
+    in_object_id,
+    in_attribute_id,
+    in_value_object_id,
+    v_attribute_value.value,
+    v_attribute_value.start_time,
+    v_attribute_value.start_reason,
+    v_attribute_value.start_object_id,
+    now(),
+    in_reason,
+    in_user_object_id);
+
+  delete from data.attribute_values
+  where id = v_attribute_value.id;
+
+  for v_change_function_info in
+    select
+      function,
+      params
+    from data.attribute_value_change_functions
+    where attribute_id = in_attribute_id
+  loop
+    execute format('select attribute_value_change_functions.%s($1)', v_change_function_info.function)
+    using
+      coalesce(v_change_function_info.params, jsonb '{}') ||
+      jsonb_build_object(
+        'user_object_id', in_user_object_id,
+        'object_id', in_object_id,
+        'attribute_id', in_attribute_id,
+        'value_object_id', in_value_object_id,
+        'old_value', v_attribute_value.value,
+        'new_value', null);
+  end loop;
+end;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+-- Function: data.delete_attribute_value_if_exists(integer, integer, integer, integer, text)
+
+-- DROP FUNCTION data.delete_attribute_value_if_exists(integer, integer, integer, integer, text);
+
+CREATE OR REPLACE FUNCTION data.delete_attribute_value_if_exists(
+    in_object_id integer,
+    in_attribute_id integer,
+    in_value_object_id integer,
+    in_user_object_id integer DEFAULT NULL::integer,
+    in_reason text DEFAULT NULL::text)
+  RETURNS void AS
+$BODY$
+declare
+  v_attribute_value record;
+  v_change_function_info record;
+begin
+  assert in_object_id is not null;
+  assert in_attribute_id is not null;
+
+  select id, value, start_time, start_reason, start_object_id
+  into v_attribute_value
+  from data.attribute_values
+  where
+    object_id = in_object_id and
+    attribute_id = in_attribute_id and
+    (
+      (
+        value_object_id is null and
+        in_value_object_id is null
+      ) or
+      value_object_id = in_value_object_id
+    )
+  for update;
+
+  if v_attribute_value is null then
+    return;
   end if;
 
   insert into data.attribute_values_journal(
@@ -1907,11 +2002,11 @@ declare
 begin
   assert in_user_object_id is not null;
   assert in_object_ids is not null;
-  assert in_attribute_ids is not null;
   assert in_get_actions is not null;
   assert in_get_templates is not null;
 
   select array_agg(value)
+  into v_ret_val
   from
   (
     select row(o.id, o.code, oi.attribute_codes, oi.attribute_names, oi.attribute_values, data.get_attribute_values_descriptions(in_user_object_id, oi.attribute_ids, oi.attribute_values, oi.attribute_value_description_functions), oi.attribute_types)::data.object_info as value
@@ -1925,7 +2020,6 @@ begin
         array_agg(oi.value) attribute_values,
         array_agg(a.type) attribute_types,
         array_agg(a.value_description_function) attribute_value_description_functions
-      into v_ret_val
       from (
         select
           object_id,
@@ -6540,7 +6634,9 @@ begin
       id != any(v_sort_result.filled_attributes_ids);
   end if;
 
-  perform data.fill_attribute_values(v_user_object_id, v_sort_result.object_ids, v_attributes_to_fill_ids);
+  if v_attributes_to_fill_ids is not null then
+    perform data.fill_attribute_values(v_user_object_id, v_sort_result.object_ids, v_attributes_to_fill_ids);
+  end if;
 
   v_objects :=
     api_utils.get_objects_infos(
@@ -6626,7 +6722,7 @@ begin
     order by value, code
   ) v;
 
-  v_etag := encode(pgcrypto.digest(v_objects::text, 'sha256'), 'base64');
+  v_etag := encode(pgcrypto.digest(coalesce(v_objects::text, ''), 'sha256'), 'base64');
 
   v_if_non_match := json.get_opt_string(in_params, null, 'if_non_match');
   if

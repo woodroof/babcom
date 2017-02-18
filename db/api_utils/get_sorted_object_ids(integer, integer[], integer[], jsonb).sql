@@ -73,7 +73,7 @@ begin
 
     if not v_ordered_by_code then
       v_attributes := v_attributes || ('utils.integer_array_idx($1, o.id) a' || v_sort_params_len);
-        v_order_conditions := v_order_conditions || ('a' || v_sort_params_len || ' asc');
+      v_order_conditions := v_order_conditions || ('a' || v_sort_params_len || ' asc');
     end if;
 
     if v_attribute_ids is not null then

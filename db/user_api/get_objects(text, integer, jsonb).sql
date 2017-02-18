@@ -70,7 +70,9 @@ begin
       id != any(v_sort_result.filled_attributes_ids);
   end if;
 
-  perform data.fill_attribute_values(v_user_object_id, v_sort_result.object_ids, v_attributes_to_fill_ids);
+  if v_attributes_to_fill_ids is not null then
+    perform data.fill_attribute_values(v_user_object_id, v_sort_result.object_ids, v_attributes_to_fill_ids);
+  end if;
 
   v_objects :=
     api_utils.get_objects_infos(

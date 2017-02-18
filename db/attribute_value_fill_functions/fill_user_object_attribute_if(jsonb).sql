@@ -11,7 +11,7 @@ declare
 
   v_check_attribute_id integer := data.get_attribute_id(json.get_string(in_params, 'attribute_code'));
   v_check_attribute_value jsonb := in_params->'attribute_value';
-  v_condition boolean := false;
+  v_condition boolean;
 
   v_function text;
   v_params jsonb;
@@ -29,7 +29,7 @@ begin
     value_object_id is null and
     value = v_check_attribute_value;
 
-  if not v_condition then
+  if v_condition is null then
     return;
   end if;
 

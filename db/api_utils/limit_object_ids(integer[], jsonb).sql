@@ -15,6 +15,10 @@ begin
   assert in_params is not null;
 
   v_limit := json.get_opt_integer(in_params, null, 'limit');
+  if v_limit <= 0 then
+    perform utils.raise_invalid_input_param_value('Limit should be greater than zero');
+  end if;
+
   if v_limit is not null then
     v_object_ids := intarray.subarray(in_object_ids, 1, v_limit);
   else

@@ -56,7 +56,7 @@ begin
     order by value, code
   ) v;
 
-  v_etag := encode(pgcrypto.digest(v_objects::text, 'sha256'), 'base64');
+  v_etag := encode(pgcrypto.digest(coalesce(v_objects::text, ''), 'sha256'), 'base64');
 
   v_if_non_match := json.get_opt_string(in_params, null, 'if_non_match');
   if

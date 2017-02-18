@@ -468,13 +468,16 @@ begin
       oo.intermediate_object_ids is not null
     order by av_date.value desc
   ) src;
- 
-  perform data.set_attribute_value_if_changed(
-    v_object_id,
-    v_attribute_id,
-    null,
-    v_content,
-    v_object_id);
+
+  if v_content is null then
+    perform data.delete_attribute_if_exists(v_object_id, v_attribute_id, null, v_object_id);
+  else
+    perform data.set_attribute_value_if_changed(
+      v_object_id,
+      v_attribute_id,
+      null,
+      v_content);
+  end if;
 end;
 $BODY$
   LANGUAGE plpgsql VOLATILE

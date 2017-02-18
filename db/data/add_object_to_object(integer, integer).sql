@@ -8,8 +8,8 @@ CREATE OR REPLACE FUNCTION data.add_object_to_object(
   RETURNS void AS
 $BODY$
 declare
-  v_exists boolean := false;
-  v_cycle boolean := false;
+  v_exists boolean;
+  v_cycle boolean;
   v_row record;
 begin
   assert in_object_id is not null;
@@ -40,7 +40,7 @@ begin
     object_id = in_object_id and
     intermediate_object_ids is null;
 
-  if v_exists then
+  if v_exists is not null then
     raise exception 'Attempt to add already existed connection from object % to object %!', in_object_id, in_parent_object_id;
   end if;
 
@@ -51,7 +51,7 @@ begin
     parent_object_id = in_object_id and
     object_id = in_parent_object_id;
 
-  if v_cycle then
+  if v_cycle is not null then
     raise exception 'Attempt to add object % to object %, cycle detected!', in_object_id, in_parent_object_id;
   end if;
 

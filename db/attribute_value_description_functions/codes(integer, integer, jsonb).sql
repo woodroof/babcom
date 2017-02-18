@@ -11,7 +11,7 @@ $BODY$
 declare
   v_attribute_name_id integer := data.get_attribute_id('name');
   v_object_codes text[] := json.get_string_array(in_value);
-  v_object_code text;
+  v_ret_val text;
 begin
   select
     string_agg(
@@ -20,8 +20,11 @@ begin
           data.get_attribute_value(in_user_object_id, o.id, v_attribute_name_id)),
         'Инкогнито'),
       ', ')
+  into v_ret_val
   from data.objects
   where o.code = any(v_object_codes);
+
+  return v_ret_val;
 end;
 $BODY$
   LANGUAGE plpgsql STABLE

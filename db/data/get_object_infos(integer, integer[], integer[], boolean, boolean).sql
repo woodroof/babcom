@@ -16,11 +16,11 @@ declare
 begin
   assert in_user_object_id is not null;
   assert in_object_ids is not null;
-  assert in_attribute_ids is not null;
   assert in_get_actions is not null;
   assert in_get_templates is not null;
 
   select array_agg(value)
+  into v_ret_val
   from
   (
     select row(o.id, o.code, oi.attribute_codes, oi.attribute_names, oi.attribute_values, data.get_attribute_values_descriptions(in_user_object_id, oi.attribute_ids, oi.attribute_values, oi.attribute_value_description_functions), oi.attribute_types)::data.object_info as value
@@ -34,7 +34,6 @@ begin
         array_agg(oi.value) attribute_values,
         array_agg(a.type) attribute_types,
         array_agg(a.value_description_function) attribute_value_description_functions
-      into v_ret_val
       from (
         select
           object_id,
