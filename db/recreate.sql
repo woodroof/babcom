@@ -148,6 +148,53 @@ end;
 $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
+-- Function: action_generators.generate_if_user_attribute(jsonb)
+
+-- DROP FUNCTION action_generators.generate_if_user_attribute(jsonb);
+
+CREATE OR REPLACE FUNCTION action_generators.generate_if_user_attribute(in_params jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+
+  v_check_attribute_id integer := data.get_attribute_id(json.get_string(in_params, 'attribute_code'));
+  v_check_attribute_value jsonb := in_params->'attribute_value';
+  v_condition boolean;
+
+  v_function text;
+  v_params jsonb;
+  v_ret_val jsonb;
+begin
+  select true
+  into v_condition
+  from data.attribute_values
+  where
+    object_id = v_user_object_id and
+    attribute_id = v_check_attribute_id and
+    value_object_id is null and
+    value = v_check_attribute_value;
+
+  if v_condition is null then
+    return null;
+  end if;
+
+  v_function := json.get_string(in_params, 'function');
+  v_params :=
+    json.get_opt_object(in_params, jsonb '{}', 'params') ||
+    jsonb_build_object(
+      'user_object_id', v_user_object_id,
+      'object_id', json.get_opt_integer(in_params, null, 'object_id'));
+
+  execute format('select action_generators.%s($1)', v_function)
+  using v_params
+  into v_ret_val;
+
+  return v_ret_val;
+end;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
 -- Function: action_generators.generate_if_value_attribute(jsonb)
 
 -- DROP FUNCTION action_generators.generate_if_value_attribute(jsonb);
@@ -346,36 +393,38 @@ declare
   v_size integer := array_length(in_attribute_codes, 1);
   v_ret_val jsonb := '{}';
 begin
-  if v_size is not null then
-    assert array_length(in_attribute_names, 1) = v_size;
-    assert array_length(in_attribute_values, 1) = v_size;
-    assert array_length(in_attribute_value_descriptions, 1) = v_size;
-    assert array_length(in_attribute_types, 1) = v_size;
-
-    for i in 1..v_size loop
-      assert in_attribute_codes[i] is not null;
-      assert in_attribute_types[i] != 'SYSTEM';
-
-      v_ret_val := v_ret_val ||
-        jsonb_build_object(
-          in_attribute_codes[i],
-          jsonb_build_object(
-            'name', in_attribute_names[i],
-            'value', in_attribute_values[i]) ||
-          case when in_attribute_types[i] != 'NORMAL' then
-            jsonb_build_object(
-              'hidden', true)
-          else
-            jsonb '{}'
-          end ||
-          case when in_attribute_value_descriptions[i] is not null then
-            jsonb_build_object(
-              'value_description', in_attribute_value_descriptions[i])
-          else
-            jsonb '{}'
-          end);
-    end loop;
+  if v_size is null then
+    return null;
   end if;
+
+  assert array_length(in_attribute_names, 1) = v_size;
+  assert array_length(in_attribute_values, 1) = v_size;
+  assert array_length(in_attribute_value_descriptions, 1) = v_size;
+  assert array_length(in_attribute_types, 1) = v_size;
+
+  for i in 1..v_size loop
+    assert in_attribute_codes[i] is not null;
+    assert in_attribute_types[i] != 'SYSTEM';
+
+    v_ret_val := v_ret_val ||
+      jsonb_build_object(
+        in_attribute_codes[i],
+        jsonb_build_object(
+          'name', in_attribute_names[i],
+          'value', in_attribute_values[i]) ||
+        case when in_attribute_types[i] != 'NORMAL' then
+          jsonb_build_object(
+            'hidden', true)
+        else
+          jsonb '{}'
+        end ||
+        case when in_attribute_value_descriptions[i] is not null then
+          jsonb_build_object(
+            'value_description', in_attribute_value_descriptions[i])
+        else
+          jsonb '{}'
+        end);
+  end loop;
 
   return v_ret_val;
 end;
@@ -624,6 +673,107 @@ begin
   end;
 
   return row(v_filtered_object_ids, v_attribute_ids);
+end;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+-- Function: api_utils.get_objects(text, integer, jsonb)
+
+-- DROP FUNCTION api_utils.get_objects(text, integer, jsonb);
+
+CREATE OR REPLACE FUNCTION api_utils.get_objects(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_object_codes text[];
+
+  v_filter_result api_utils.objects_process_result;
+  v_sort_result api_utils.objects_process_result;
+
+  v_attributes text[];
+  v_attribute_ids integer[];
+  v_attributes_to_fill_ids integer[];
+
+  v_objects jsonb;
+  v_etag text;
+  v_if_non_match text;
+begin
+  assert in_client is not null;
+  assert in_user_object_id is not null;
+  assert in_params is not null;
+
+  if in_params ? 'object_codes' then
+    v_object_codes := json.get_string_array(in_params, 'object_codes');
+  else
+    v_object_codes := api_utils.get_object_codes_info_from_attribute(in_user_object_id, in_params);
+  end if;
+
+  v_filter_result := api_utils.get_filtered_object_ids(in_user_object_id, v_object_codes, in_params);
+  if v_filter_result is null or v_filter_result.object_ids is null then
+    return api_utils.create_not_found_result('There are no requested objects or user object don''t have enough privileges');
+  end if;
+
+  v_sort_result := api_utils.get_sorted_object_ids(in_user_object_id, v_filter_result.object_ids, v_filter_result.filled_attributes_ids, in_params);
+
+  v_sort_result.object_ids := api_utils.limit_object_ids(v_sort_result.object_ids, in_params);
+
+  if in_params ? 'attributes' then
+    v_attributes := json.get_string_array(in_params, 'attributes');
+
+    select array_agg(id)
+    into v_attribute_ids
+    from data.attributes
+    where code = any(v_attributes);
+
+    select array_agg(id)
+    into v_attributes_to_fill_ids
+    from data.attributes
+    where
+      id = any(v_attribute_ids) and
+      id != any(v_sort_result.filled_attributes_ids);
+  else
+    select array_agg(id)
+    into v_attribute_ids
+    from data.attributes
+    where type in ('NORMAL', 'HIDDEN');
+
+    select array_agg(id)
+    into v_attributes_to_fill_ids
+    from data.attributes
+    where
+      id = any(v_attribute_ids) and
+      id != any(v_sort_result.filled_attributes_ids);
+  end if;
+
+  if v_attributes_to_fill_ids is not null then
+    perform data.fill_attribute_values(in_user_object_id, v_sort_result.object_ids, v_attributes_to_fill_ids);
+  end if;
+
+  v_objects :=
+    api_utils.get_objects_infos(
+      in_user_object_id,
+      v_sort_result.object_ids,
+      v_attribute_ids,
+      json.get_opt_boolean(in_params, true, 'get_actions'),
+      json.get_opt_boolean(in_params, true, 'get_templates'));
+
+  v_etag := encode(pgcrypto.digest(v_objects::text, 'sha256'), 'base64');
+
+  v_if_non_match := json.get_opt_string(in_params, null, 'if_non_match');
+  if
+    v_if_non_match is not null and
+    v_if_non_match = v_etag
+  then
+    return api_utils.create_not_modified_result();
+  end if;
+
+  return api_utils.create_ok_result(
+    json_build_object(
+      'etag', v_etag,
+      'objects', v_objects));
 end;
 $BODY$
   LANGUAGE plpgsql VOLATILE
@@ -1109,6 +1259,90 @@ end;
 $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
+-- Function: attribute_value_change_functions.string_value_to_attribute(jsonb)
+
+-- DROP FUNCTION attribute_value_change_functions.string_value_to_attribute(jsonb);
+
+CREATE OR REPLACE FUNCTION attribute_value_change_functions.string_value_to_attribute(in_params jsonb)
+  RETURNS void AS
+$BODY$
+declare
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_value_object_id integer := json.get_opt_integer(in_params, null, 'value_object_id');
+  v_old_value text := json.get_opt_string(in_params, null, 'old_value');
+  v_new_value text := json.get_opt_string(in_params, null, 'new_value');
+  v_value_to_code_map jsonb := json.get_object(in_params, 'params');
+  v_map_entry jsonb;
+  v_old_object_code text;
+  v_old_attribute_code text;
+  v_new_object_code text;
+  v_new_attribute_code text;
+
+  v_object_code text;
+  v_user_object_id integer;
+
+  v_modified_object_id integer;
+  v_modified_attribute_id integer;
+  v_modified_attribute_value jsonb;
+begin
+  if v_value_object_id is not null then
+    return;
+  end if;
+
+  if v_old_value is not null then
+    v_map_entry := json.get_opt_object(v_value_to_code_map, null, v_old_value);
+    if v_map_entry is not null then
+      v_old_object_code := json.get_string(v_map_entry, 'object_code');
+      v_old_attribute_code := json.get_string(v_map_entry, 'attribute_code');
+    end if;
+  end if;
+  if v_new_value is not null then
+    v_map_entry := json.get_opt_object(v_value_to_code_map, null, v_new_value);
+    if v_map_entry is not null then
+      v_new_object_code := json.get_string(v_map_entry, 'object_code');
+      v_new_attribute_code := json.get_string(v_map_entry, 'attribute_code');
+    end if;
+  end if;
+
+  if
+    v_old_object_code is null and v_new_object_code is null or
+    v_old_object_code is not null and v_new_object_code is not null and v_old_object_code = v_new_object_code and v_old_attribute_code = v_new_attribute_code
+  then
+    return;
+  end if;
+
+  v_object_code := data.get_object_code(v_object_id);
+  v_user_object_id := json.get_opt_integer(in_params, null, 'user_object_id');
+
+  if v_old_object_code is not null then
+    v_modified_object_id := data.get_object_id(v_old_object_code);
+    v_modified_attribute_id := data.get_attribute_id(v_old_attribute_code);
+    v_modified_attribute_value :=
+      json.get_array(
+        data.get_attribute_value_for_update(
+          v_modified_object_id,
+          v_modified_attribute_id,
+          null));
+    v_modified_attribute_value := v_modified_attribute_value - v_object_code;
+    perform data.set_attribute_value(v_modified_object_id, v_modified_attribute_id, null, v_modified_attribute_value, v_user_object_id);
+  end if;
+
+  if v_new_object_code is not null then
+    v_modified_object_id := data.get_object_id(v_new_object_code);
+    v_modified_attribute_id := data.get_attribute_id(v_new_attribute_code);
+    v_modified_attribute_value :=
+      json.get_opt_array(
+        data.get_attribute_value_for_update(
+          v_modified_object_id,
+          v_modified_attribute_id,
+          null));
+    v_modified_attribute_value := coalesce(v_modified_attribute_value, jsonb '[]') || jsonb_build_array(v_object_code);
+    perform data.set_attribute_value(v_modified_object_id, v_modified_attribute_id, null, v_modified_attribute_value, v_user_object_id);
+  end if;
+end;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
 -- Function: attribute_value_change_functions.string_value_to_object(jsonb)
 
 -- DROP FUNCTION attribute_value_change_functions.string_value_to_object(jsonb);
@@ -1228,23 +1462,38 @@ $BODY$
 declare
   v_object_id integer := json.get_integer(in_params, 'object_id');
 
-  v_check_attribute_id integer := data.get_attribute_id(json.get_string(in_params, 'attribute_code'));
-  v_check_attribute_value jsonb := in_params->'attribute_value';
-  v_condition boolean;
+  v_conditions jsonb := json.get_object_array(in_params, 'conditions');
+  v_condition jsonb;
+
+  v_check_attribute_id integer;
+  v_check_attribute_value jsonb;
+  v_checked boolean;
 
   v_function text;
   v_params jsonb;
 begin
-  select true
-  into v_condition
-  from data.attribute_values
-  where
-    object_id = v_object_id and
-    attribute_id = v_check_attribute_id and
-    value_object_id is null and
-    value = v_check_attribute_value;
+  for v_condition in
+    select value
+    from jsonb_array_elements(v_conditions)
+  loop
+    v_check_attribute_id := data.get_attribute_id(json.get_string(v_condition, 'attribute_code'));
+    v_check_attribute_value := v_condition->'attribute_value';
 
-  if v_condition is null then
+    select true
+    into v_checked
+    from data.attribute_values
+    where
+      object_id = v_object_id and
+      attribute_id = v_check_attribute_id and
+      value_object_id is null and
+      value = v_check_attribute_value;
+
+    if v_checked is not null then
+      exit;
+    end if;
+  end loop;
+
+  if v_checked is null then
     return;
   end if;
 
@@ -1272,9 +1521,12 @@ declare
   v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
   v_object_id integer := json.get_integer(in_params, 'object_id');
 
-  v_check_attribute_id integer := data.get_attribute_id(json.get_string(in_params, 'attribute_code'));
-  v_check_attribute_value jsonb := in_params->'attribute_value';
-  v_condition boolean;
+  v_conditions jsonb := json.get_object_array(in_params, 'conditions');
+  v_condition jsonb;
+
+  v_check_attribute_id integer;
+  v_check_attribute_value jsonb;
+  v_checked boolean;
 
   v_function text;
   v_params jsonb;
@@ -1283,16 +1535,28 @@ begin
     return;
   end if;
 
-  select true
-  into v_condition
-  from data.attribute_values
-  where
-    object_id = v_user_object_id and
-    attribute_id = v_check_attribute_id and
-    value_object_id is null and
-    value = v_check_attribute_value;
+  for v_condition in
+    select value
+    from jsonb_array_elements(v_conditions)
+  loop
+    v_check_attribute_id := data.get_attribute_id(json.get_string(v_condition, 'attribute_code'));
+    v_check_attribute_value := v_condition->'attribute_value';
 
-  if v_condition is null then
+    select true
+    into v_checked
+    from data.attribute_values
+    where
+      object_id = v_object_id and
+      attribute_id = v_check_attribute_id and
+      value_object_id is null and
+      value = v_check_attribute_value;
+
+    if v_checked is not null then
+      exit;
+    end if;
+  end loop;
+
+  if v_checked is null then
     return;
   end if;
 
@@ -1870,12 +2134,7 @@ declare
   v_next_val text;
 begin
   assert in_user_object_id is not null;
-
-  if in_attribute_ids is null then
-    assert in_values is null;
-    assert in_functions is null;
-  end if;
-
+  assert in_attribute_ids is not null;
   assert array_length(in_attribute_ids, 1) = array_length(in_values, 1);
   assert array_length(in_attribute_ids, 1) = array_length(in_functions, 1);
 
@@ -2127,7 +2386,18 @@ begin
   into v_ret_val
   from
   (
-    select row(o.id, o.code, oi.attribute_codes, oi.attribute_names, oi.attribute_values, data.get_attribute_values_descriptions(in_user_object_id, oi.attribute_ids, oi.attribute_values, oi.attribute_value_description_functions), oi.attribute_types)::data.object_info as value
+    select row(
+      o.id,
+      o.code,
+      oi.attribute_codes,
+      oi.attribute_names,
+      oi.attribute_values,
+      case when oi.attribute_ids is not null then
+        data.get_attribute_values_descriptions(in_user_object_id, oi.attribute_ids, oi.attribute_values, oi.attribute_value_description_functions)
+      else
+        null
+      end,
+      oi.attribute_types)::data.object_info as value
     from data.objects o
     left join (
       select
@@ -6692,92 +6962,12 @@ CREATE OR REPLACE FUNCTION user_api.get_objects(
 $BODY$
 declare
   v_user_object_id integer := api_utils.get_user_object(in_login_id, in_params);
-  v_object_codes text[];
-
-  v_filter_result api_utils.objects_process_result;
-  v_sort_result api_utils.objects_process_result;
-
-  v_attributes text[];
-  v_attribute_ids integer[];
-  v_attributes_to_fill_ids integer[];
-
-  v_objects jsonb;
-  v_etag text;
-  v_if_non_match text;
 begin
   if v_user_object_id is null then
     return api_utils.create_forbidden_result('Invalid user object');
   end if;
 
-  if in_params ? 'object_codes' then
-    v_object_codes := json.get_string_array(in_params, 'object_codes');
-  else
-    v_object_codes := api_utils.get_object_codes_info_from_attribute(v_user_object_id, in_params);
-  end if;
-
-  v_filter_result := api_utils.get_filtered_object_ids(v_user_object_id, v_object_codes, in_params);
-  if v_filter_result is null or v_filter_result.object_ids is null then
-    return api_utils.create_not_found_result('There are no requested objects or user object don''t have enough privileges');
-  end if;
-
-  v_sort_result := api_utils.get_sorted_object_ids(v_user_object_id, v_filter_result.object_ids, v_filter_result.filled_attributes_ids, in_params);
-
-  v_sort_result.object_ids := api_utils.limit_object_ids(v_sort_result.object_ids, in_params);
-
-  if in_params ? 'attributes' then
-    v_attributes := json.get_string_array(in_params, 'attributes');
-
-    select array_agg(id)
-    into v_attribute_ids
-    from data.attributes
-    where code = any(v_attributes);
-
-    select array_agg(id)
-    into v_attributes_to_fill_ids
-    from data.attributes
-    where
-      id = any(v_attribute_ids) and
-      id != any(v_sort_result.filled_attributes_ids);
-  else
-    select array_agg(id)
-    into v_attribute_ids
-    from data.attributes
-    where type in ('NORMAL', 'HIDDEN');
-
-    select array_agg(id)
-    into v_attributes_to_fill_ids
-    from data.attributes
-    where
-      id = any(v_attribute_ids) and
-      id != any(v_sort_result.filled_attributes_ids);
-  end if;
-
-  if v_attributes_to_fill_ids is not null then
-    perform data.fill_attribute_values(v_user_object_id, v_sort_result.object_ids, v_attributes_to_fill_ids);
-  end if;
-
-  v_objects :=
-    api_utils.get_objects_infos(
-      v_user_object_id,
-      v_sort_result.object_ids,
-      v_attribute_ids,
-      json.get_opt_boolean(in_params, true, 'get_actions'),
-      json.get_opt_boolean(in_params, true, 'get_templates'));
-
-  v_etag := encode(pgcrypto.digest(v_objects::text, 'sha256'), 'base64');
-
-  v_if_non_match := json.get_opt_string(in_params, null, 'if_non_match');
-  if
-    v_if_non_match is not null and
-    v_if_non_match = v_etag
-  then
-    return api_utils.create_not_modified_result();
-  end if;
-
-  return api_utils.create_ok_result(
-    json_build_object(
-      'etag', v_etag,
-      'objects', v_objects));
+  return api_utils.get_objects(in_client, v_user_object_id, in_params);
 end;
 $BODY$
   LANGUAGE plpgsql VOLATILE

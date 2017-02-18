@@ -14,12 +14,7 @@ declare
   v_next_val text;
 begin
   assert in_user_object_id is not null;
-
-  if in_attribute_ids is null then
-    assert in_values is null;
-    assert in_functions is null;
-  end if;
-
+  assert in_attribute_ids is not null;
   assert array_length(in_attribute_ids, 1) = array_length(in_values, 1);
   assert array_length(in_attribute_ids, 1) = array_length(in_functions, 1);
 

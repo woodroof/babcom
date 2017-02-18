@@ -23,7 +23,18 @@ begin
   into v_ret_val
   from
   (
-    select row(o.id, o.code, oi.attribute_codes, oi.attribute_names, oi.attribute_values, data.get_attribute_values_descriptions(in_user_object_id, oi.attribute_ids, oi.attribute_values, oi.attribute_value_description_functions), oi.attribute_types)::data.object_info as value
+    select row(
+      o.id,
+      o.code,
+      oi.attribute_codes,
+      oi.attribute_names,
+      oi.attribute_values,
+      case when oi.attribute_ids is not null then
+        data.get_attribute_values_descriptions(in_user_object_id, oi.attribute_ids, oi.attribute_values, oi.attribute_value_description_functions)
+      else
+        null
+      end,
+      oi.attribute_types)::data.object_info as value
     from data.objects o
     left join (
       select

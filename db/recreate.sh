@@ -107,3 +107,5 @@ done
 echo "-- Initial data" >> "${output}"
 
 cat initial_data.sql >> "${output}"
+
+unix2dos -q "${output}" 2>/dev/null

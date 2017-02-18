@@ -8,23 +8,38 @@ $BODY$
 declare
   v_object_id integer := json.get_integer(in_params, 'object_id');
 
-  v_check_attribute_id integer := data.get_attribute_id(json.get_string(in_params, 'attribute_code'));
-  v_check_attribute_value jsonb := in_params->'attribute_value';
-  v_condition boolean;
+  v_conditions jsonb := json.get_object_array(in_params, 'conditions');
+  v_condition jsonb;
+
+  v_check_attribute_id integer;
+  v_check_attribute_value jsonb;
+  v_checked boolean;
 
   v_function text;
   v_params jsonb;
 begin
-  select true
-  into v_condition
-  from data.attribute_values
-  where
-    object_id = v_object_id and
-    attribute_id = v_check_attribute_id and
-    value_object_id is null and
-    value = v_check_attribute_value;
+  for v_condition in
+    select value
+    from jsonb_array_elements(v_conditions)
+  loop
+    v_check_attribute_id := data.get_attribute_id(json.get_string(v_condition, 'attribute_code'));
+    v_check_attribute_value := v_condition->'attribute_value';
 
-  if v_condition is null then
+    select true
+    into v_checked
+    from data.attribute_values
+    where
+      object_id = v_object_id and
+      attribute_id = v_check_attribute_id and
+      value_object_id is null and
+      value = v_check_attribute_value;
+
+    if v_checked is not null then
+      exit;
+    end if;
+  end loop;
+
+  if v_checked is null then
     return;
   end if;
 
