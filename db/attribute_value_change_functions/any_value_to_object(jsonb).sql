@@ -8,9 +8,9 @@ $BODY$
 declare
   v_object_id integer := json.get_integer(in_params, 'object_id');
   v_value_object_id integer := json.get_opt_integer(in_params, null, 'value_object_id');
-  v_old_value text := in_params->'old_value';
-  v_new_value text := in_params->'new_value';
-  v_object_code jsonb := json.get_string(in_params, 'object_code');
+  v_old_value jsonb := in_params->'old_value';
+  v_new_value jsonb := in_params->'new_value';
+  v_object_code text := json.get_string(in_params, 'object_code');
 begin
   if v_value_object_id is not null then
     return;

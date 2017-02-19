@@ -198,19 +198,7 @@ $BODY$
 declare
   v_int_value integer := json.get_integer(in_value);
 begin
-  if v_int_value <= 2 then
-    return 'очень слабый';
-  elsif v_int_value <= 5 then
-    return 'слабый';
-  elsif v_int_value <= 8 then
-    return 'средний';
-  elsif v_int_value <= 10 then
-    return 'сильный';
-  elsif v_int_value <= 12 then
-    return 'очень сильный';
-  end if;
-
-  return 'экстремально сильный';
+  return 'P' || v_int_value;
 end;
 $BODY$
   LANGUAGE plpgsql IMMUTABLE
@@ -279,7 +267,8 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('person_state', 'Государство', 'NORMAL', 'person_state'),
 ('person_job_position', 'Должность', 'NORMAL', null),
 ('person_biography', 'Биография', 'NORMAL', null),
-('person_psi_scale', 'Сила телепата', 'NORMAL', 'person_psi_scale'),
+('system_psi_scale', 'Рейтинг телепата', 'SYSTEM', null),
+('person_psi_scale', 'Рейтинг телепата', 'NORMAL', 'person_psi_scale'),
 ('mail_title', 'Заголовок', 'NORMAL', null),
 ('system_mail_send_time', 'Реальное время отправки письма', 'SYSTEM', null),
 ('mail_send_time', 'Время отправки письма', 'NORMAL', null),
@@ -316,7 +305,7 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('system_scientist', 'Маркер персонажа-учёного', 'SYSTEM', null),
 ('system_library_category', 'Категория документа', 'SYSTEM', null),
 ('news_title', 'Заголовок новости', 'NORMAL', null),
-('news_media', 'Источник новости', 'NORMAL', null),
+('news_media', 'Источник новости', 'NORMAL', 'code'),
 ('news_time', 'Время публикации новости', 'NORMAL', null);
 
 -- Функции для создания связей
@@ -324,7 +313,7 @@ insert into data.attribute_value_change_functions(attribute_id, function, params
 (data.get_attribute_id('type'), 'string_value_to_object', jsonb '{"params": {"person": "persons", "corporation": "corporations", "ship": "ships", "media": "news_hub", "library_category": "library"}}'),
 (data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"person": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}, "corporation": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}}}'),
 (data.get_attribute_id('system_master'), 'boolean_value_to_object', jsonb '{"object_code": "masters"}'),
-(data.get_attribute_id('person_psi_scale'), 'any_value_to_object', jsonb '{"object_code": "telepaths"}'),
+(data.get_attribute_id('system_psi_scale'), 'any_value_to_object', jsonb '{"object_code": "telepaths"}'),
 (data.get_attribute_id('system_security'), 'boolean_value_to_object', jsonb '{"object_code": "security"}'),
 (data.get_attribute_id('system_politician'), 'boolean_value_to_object', jsonb '{"object_code": "politicians"}'),
 (data.get_attribute_id('system_medic'), 'boolean_value_to_object', jsonb '{"object_code": "medics"}'),
@@ -607,8 +596,13 @@ $BODY$
 insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
 (data.get_attribute_id('name'), 'fill_if_object_attribute', '{"blocks": [{"conditions": [{"attribute_code": "type", "attribute_value": "transaction"}], "function": "fill_transaction_name"}]}', 'Получение имени транзакции');
 
+insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
+(data.get_attribute_id('balance'), 'fill_user_attribute_from_attribute', '{"attribute_code": "system_balance"}', 'Получение состояния счёта');
+
+insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
+(data.get_attribute_id('person_psi_scale'), 'fill_user_attribute_from_attribute', '{"attribute_code": "system_psi_scale"}', 'Получение рейтинга телепата');
+
   -- TODO и другие:
-  -- person: system_balance -> balance[player]
   -- personal_document_storage: system_value[player] -> content[player]
   -- library: object_objects[intermediate is null] -> content
   -- med_library: object_objects -> content
@@ -700,22 +694,22 @@ select data.set_attribute_value(data.get_object_id('news_hub'), data.get_attribu
 select
   data.set_attribute_value(data.get_object_id('media' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
   data.set_attribute_value(data.get_object_id('media' || o.value), data.get_attribute_id('type'), null, jsonb '"media"'),
-  data.set_attribute_value(data.get_object_id('media' || o.value), data.get_attribute_id('name'), null, ('"Media ' || o.value || '"')::jsonb),
-  data.set_attribute_value(data.get_object_id('media' || o.value), data.get_attribute_id('description'), null, ('"Самая оперативная, честная и скромная из всех газет во всей вселенной. Читайте только нас! Мы - Media ' || o.value || '!"')::jsonb)
+  data.set_attribute_value(data.get_object_id('media' || o.value), data.get_attribute_id('name'), null, to_jsonb('Media ' || o.value)),
+  data.set_attribute_value(data.get_object_id('media' || o.value), data.get_attribute_id('description'), null, to_jsonb('Самая оперативная, честная и скромная из всех газет во всей вселенной. Читайте только нас! Мы - Media ' || o.value || '!'))
 from generate_series(1, 3) o(value);
 
 select
   data.set_attribute_value(data.get_object_id('race' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
   data.set_attribute_value(data.get_object_id('race' || o.value), data.get_attribute_id('type'), null, jsonb '"race"'),
-  data.set_attribute_value(data.get_object_id('race' || o.value), data.get_attribute_id('name'), null, ('"race' || o.value || '"')::jsonb),
-  data.set_attribute_value(data.get_object_id('race' || o.value), data.get_attribute_id('description'), null, ('"Синие и ми-ми-мишные, а может быть зелёные и чешуйчатые, а может быть с костяным наростом, или они все Кош. Кто их знает этих представителей рассы №' || o.value || '!"')::jsonb)
+  data.set_attribute_value(data.get_object_id('race' || o.value), data.get_attribute_id('name'), null, to_jsonb('race' || o.value)),
+  data.set_attribute_value(data.get_object_id('race' || o.value), data.get_attribute_id('description'), null, to_jsonb('Синие и ми-ми-мишные, а может быть зелёные и чешуйчатые, а может быть с костяным наростом, или они все Кош. Кто их знает этих представителей рассы №' || o.value || '!'))
 from generate_series(1, 20) o(value);
 
 select
   data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
   data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('type'), null, jsonb '"state"'),
-  data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('name'), null, ('"state' || o.value || '"')::jsonb),
-  data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('description'), null, ('"Их адрес не дом и не улица, их адрес -  state ' || o.value || '!"')::jsonb)s
+  data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('name'), null, to_jsonb('state' || o.value)),
+  data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('description'), null, to_jsonb('Их адрес не дом и не улица, их адрес -  state ' || o.value || '!'))
 from generate_series(1, 10) o(value);
 
 select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('system_priority'), null, jsonb '200');
@@ -728,16 +722,20 @@ select
   data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_priority'), null, jsonb '200'),
   data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
   data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('type'), null, jsonb '"person"'),
-  data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('name'), null, ('"Person ' || o.value || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('name'), null, to_jsonb('Person ' || o.value)),
   data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_mail_contact'), null, jsonb 'true'),
-  data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('person_race'), null, ('"race' || (o.value % 20 + 1) || '"')::jsonb),
-  data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('person_state'), null, ('"state' || (o.value % 10 + 1) || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('person_race'), null, to_jsonb('race' || (o.value % 20 + 1))),
+  data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('person_state'), null, to_jsonb('state' || (o.value % 10 + 1))),
   data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('person_job_position'), null, jsonb '"Some job position"'),
   data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('person_biography'), null, jsonb '"Born before 2250, currently live & work on Babylon 5"'),
-  data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_balance'), null, utils.random_integer(100,10000000)::text::jsonb)
+  data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_balance'), null, to_jsonb(utils.random_integer(100,10000000))),
+  case when o.value % 10 = 0 then
+    data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_psi_scale'), null, to_jsonb(utils.random_integer(1,16)))
+  else
+    null
+  end
 from generate_series(1, 60) o(value);
 
---   case when o.value % 10 = 0 then data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('person_psi_scale'), , utils.random_integer(1,16)::text::jsonb) else null end,
 -- other person{1,60}
 /*
 system_master
@@ -754,16 +752,16 @@ system_scientist
 
 select
   data.set_attribute_value(data.get_object_id('global_notification' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
-  data.set_attribute_value(data.get_object_id('global_notification' || o.value), data.get_attribute_id('notification_description'), null, ('"Global notification ' || o.value || '"')::jsonb),
-  data.set_attribute_value(data.get_object_id('global_notification' || o.value), data.get_attribute_id('notification_time'), null, ('"15.02.2258 17:2' || o.value || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('global_notification' || o.value), data.get_attribute_id('notification_description'), null, to_jsonb('Global notification ' || o.value)),
+  data.set_attribute_value(data.get_object_id('global_notification' || o.value), data.get_attribute_id('notification_time'), null, to_jsonb('15.02.2258 17:2' || o.value)),
   data.set_attribute_value(data.get_object_id('global_notification' || o.value), data.get_attribute_id('notification_status'), null, jsonb '"unread"'),
   data.set_attribute_value(data.get_object_id('global_notification' || o.value), data.get_attribute_id('type'), null, jsonb '"notification"')
 from generate_series(1, 3) o(value);
 
 select
   data.set_attribute_value(data.get_object_id('personal_notification' || o.value), data.get_attribute_id('system_is_visible'), data.get_object_id('person' || o.value), jsonb 'true'),
-  data.set_attribute_value(data.get_object_id('personal_notification' || o.value), data.get_attribute_id('notification_description'), null, ('"Personal notification ' || o.value || '"')::jsonb),
-  data.set_attribute_value(data.get_object_id('personal_notification' || o.value), data.get_attribute_id('notification_object_code'), null, ('"person' || o.value || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('personal_notification' || o.value), data.get_attribute_id('notification_description'), null, to_jsonb('Personal notification ' || o.value)),
+  data.set_attribute_value(data.get_object_id('personal_notification' || o.value), data.get_attribute_id('notification_object_code'), null, to_jsonb('person' || o.value)),
   data.set_attribute_value(data.get_object_id('personal_notification' || o.value), data.get_attribute_id('notification_time'), null, jsonb '"15.02.2258 17:30"'),
   data.set_attribute_value(data.get_object_id('personal_notification' || o.value), data.get_attribute_id('notification_status'), null, jsonb '"unread"'),
   data.set_attribute_value(data.get_object_id('personal_notification' || o.value), data.get_attribute_id('type'), null, jsonb '"notification"')
@@ -786,11 +784,11 @@ from generate_series(1, 3) o(value);
 select
   data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
   data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('type'), null, jsonb '"news"'),
-  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('news_title'), null, ('"Заголовок новости news' || o1.value || o2.value || '!"')::jsonb),
-  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('name'), null, ('"media'||o1.value||': Заголовок новости news' || o1.value || o2.value || '!"')::jsonb),
-  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('news_media'), null, ('"media' || o1.value ||'"')::jsonb),
-  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('news_time'), null, ('"2258.02.23 ' || 10 + trunc(o2.value / 10) || ':' || 10 + o1.value * 5 || '"')::jsonb),
-  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('content'), null, ('"Текст новости news' || o1.value || o2.value || '. <br>После активного культурного взаимонасыщения таких, казалось бы разных цивилизаций, как Драззи и Минбари их общества кардинально изменились. Ввиду закрытости последних, стороннему наблюдателю, скорей всего не суждено узнать, как же повлияли воинственные Драззи на высокодуховных Минбарцев, однако у первых изменения, так сказать, на лицо. <br>Почти сразу после первых визитов, спрос на минбарскую культуру взлетел до небес! Ткани, одежда, предметы мебели и прочие диковинные товары заполонили рынки. Активно стали ввозиться всевозможные составы целительного свойства. Например, ставший знаменитым порошок, под названием “Минбарский гребень” завоевал популярность у молодых Драззи. Препарат, якобы, сделан на основе тертого костного образования на черепе минбарца. Многие потребители уверяют, что с его помощью, смогли одержать победу на любовном фронте, однако, ученые уверяют, что тонизирующий эффект, как и происхождение самого препарата не вызывают особого доверия."')::jsonb)
+  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('news_title'), null, to_jsonb('Заголовок новости news' || o1.value || o2.value || '!')),
+  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('name'), null, to_jsonb('media'||o1.value||': Заголовок новости news' || o1.value || o2.value || '!')),
+  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('news_media'), null, to_jsonb('media' || o1.value)),
+  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('news_time'), null, to_jsonb('2258.02.23 ' || 10 + trunc(o2.value / 10) || ':' || 10 + o1.value * 5)),
+  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('content'), null, to_jsonb('Текст новости news' || o1.value || o2.value || '. <br>После активного культурного взаимонасыщения таких, казалось бы разных цивилизаций, как Драззи и Минбари их общества кардинально изменились. Ввиду закрытости последних, стороннему наблюдателю, скорей всего не суждено узнать, как же повлияли воинственные Драззи на высокодуховных Минбарцев, однако у первых изменения, так сказать, на лицо. <br>Почти сразу после первых визитов, спрос на минбарскую культуру взлетел до небес! Ткани, одежда, предметы мебели и прочие диковинные товары заполонили рынки. Активно стали ввозиться всевозможные составы целительного свойства. Например, ставший знаменитым порошок, под названием “Минбарский гребень” завоевал популярность у молодых Драззи. Препарат, якобы, сделан на основе тертого костного образования на черепе минбарца. Многие потребители уверяют, что с его помощью, смогли одержать победу на любовном фронте, однако, ученые уверяют, что тонизирующий эффект, как и происхождение самого препарата не вызывают особого доверия.'))
 from generate_series(1, 3) o1(value)
 join generate_series(1, 100) o2(value) on 1=1;
 
