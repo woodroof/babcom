@@ -7,12 +7,12 @@ CREATE OR REPLACE FUNCTION attribute_value_change_functions.json_to_attribute_sy
 $BODY$
 declare
   v_object_id integer := json.get_integer(in_params, 'object_id');
-  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_user_object_id integer := json.get_opt_integer(in_params, null, 'user_object_id');
   v_attribute_id integer := json.get_integer(in_params, 'attribute_id');
   v_attribute_value jsonb;
   v_attribute_system_meta_id integer := data.get_attribute_id('system_meta');
 begin
-  v_attribute_value := data.get_attribute_value(v_user_object_id, v_object_id, v_attribute_id);
+  v_attribute_value := data.get_attribute_value(v_object_id, v_object_id, v_attribute_id);
 
   perform data.delete_attribute_value_if_exists(v_object_id, v_attribute_system_meta_id, av.value_object_id, v_user_object_id)
     from data.attribute_values av

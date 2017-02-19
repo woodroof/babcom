@@ -946,6 +946,79 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
     ]
   }', 'Получение списков (новости, транзакции, разные документы)');
 
+CREATE OR REPLACE FUNCTION attribute_value_fill_functions.value_codes_to_value_links_corporation_members(in_params jsonb)
+  RETURNS void AS
+$BODY$
+declare
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_attribute_id integer := json.get_integer(in_params, 'attribute_id');
+  v_source_attribute_id integer := data.get_attribute_id(json.get_string(in_params, 'attribute_code'));
+  v_placeholder text := json.get_opt_string(in_params, null, 'placeholder');
+  v_name_attribute_id integer := data.get_attribute_id('name');
+
+  v_codes jsonb;
+  v_ids integer[];
+  v_value jsonb;
+begin
+  select value
+  into v_codes
+  from data.attribute_values
+  where
+    object_id = v_object_id and
+    attribute_id = v_source_attribute_id and
+    value_object_id = v_user_object_id
+  for share;
+
+  if v_codes is not null then
+    select array_agg(id)
+    into v_ids
+    from data.objects
+    where
+      code in (
+        select member
+        from jsonb_to_recordset(v_codes) as c(member text, percent int)
+      );
+  end if;
+
+  if v_codes is not null then
+    perform data.fill_attribute_values(v_user_object_id, v_ids, array[v_name_attribute_id]);
+
+    select to_jsonb(string_agg('<a href="babcom:' || o.code || '">' || data.get_attribute_value(v_user_object_id, o.id, v_name_attribute_id) || '</a> ' || c.percent || '%', '<br>'))
+    into v_value
+    from jsonb_to_recordset(v_codes) as c(member text, percent int)
+    join data.objects o on
+      o.code = c.member;
+  else
+    if v_placeholder is not null then
+      v_value := to_jsonb(v_placeholder);
+    end if;
+  end if;
+
+  if v_value is null then
+    perform data.delete_attribute_value_if_exists(v_object_id, v_attribute_id, v_user_object_id, v_user_object_id);
+  else
+    perform data.set_attribute_value_if_changed(v_object_id, v_attribute_id, v_user_object_id, v_value, v_user_object_id);
+  end if;
+end;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+
+insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
+  (
+  data.get_attribute_id('corporation_members'),
+  'fill_if_object_attribute', '
+  {
+    "blocks": [
+    {
+        "conditions": [{"attribute_code": "type", "attribute_value": "corporation"}],
+        "function": "value_codes_to_value_links_corporation_members",
+        "params": {"attribute_code": "system_corporation_members", "placeholder": ""}
+      }]
+  }', 'Получение списка владельцев корпорации');
+
+
 insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
 (data.get_attribute_id('transaction_destinations'), 'fill_if_object_attribute', '{"blocks": [{"conditions": [{"attribute_code": "type", "attribute_value": "transaction_destinations"}], "function": "filter_user_object_code"}]}', 'Получение списка возможных получателей переводов');
 
@@ -1109,7 +1182,7 @@ select
   data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
   data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('type'), null, jsonb '"state"'),
   data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('name'), null, to_jsonb('state' || o.value)),
-  data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('description'), null, to_jsonb('Их адрес не дом и не улица, их адрес -  state ' || o.value || '!'))
+  data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('description'), null, to_jsonb('Их адрес не дом и не улица, их адрес -  state ' || o.value || '!')),
   data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('state_tax'), null, (o.value::text)::jsonb)
 from generate_series(1, 10) o(value);
 
