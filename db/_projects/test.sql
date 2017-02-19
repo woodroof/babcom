@@ -289,11 +289,11 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('mail_type', 'Тип письма', 'NORMAL', 'mail_type'),
 ('inbox', 'Входящие письма', 'INVISIBLE', null),
 ('outbox', 'Исходящие письма', 'INVISIBLE', null),
-('transaction_from', 'Кто перевёл', 'NORMAL', null),
-('transaction_to', 'Кому перевёл', 'NORMAL', null),
+('transaction_from', 'Отправитель', 'NORMAL', 'code'),
+('transaction_to', 'Получатель', 'NORMAL', 'code'),
 ('transaction_time', 'Время перевода', 'NORMAL', null),
-('transaction_description', 'Текст перевода', 'NORMAL', null),
-('transaction_sum', 'Сумма перевода', 'NORMAL', null),
+('transaction_description', 'Сообщение', 'NORMAL', null),
+('transaction_sum', 'Сумма', 'NORMAL', null),
 ('corporation_members', 'Члены корпораций', 'NORMAL', 'codes'),
 ('corporation_capitalization', 'Капитализация корпорации', 'NORMAL', null),
 ('corporation_asserts', 'Активы корпорации', 'NORMAL', null),
@@ -445,7 +445,7 @@ $BODY$
   COST 100;
 
 insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
-(data.get_attribute_id('meta_entities'), 'fill_user_object_attribute_if', '{"conditions": [{"attribute_code": "type", "attribute_value": "person"}, {"attribute_code": "type", "attribute_value": "anonymous"}], "function": "merge_metaobjects", "params": {"object_code": "meta_entities", "attribute_code": "meta_entities"}}', 'Заполнение списка метаобъектов игрока');
+(data.get_attribute_id('meta_entities'), 'fill_if_user_object_attribute', '{"blocks": [{"conditions": [{"attribute_code": "type", "attribute_value": "person"}, {"attribute_code": "type", "attribute_value": "anonymous"}], "function": "merge_metaobjects", "params": {"object_code": "meta_entities", "attribute_code": "meta_entities"}}]}', 'Заполнение списка метаобъектов игрока');
 
 CREATE OR REPLACE FUNCTION attribute_value_fill_functions.news_hub_content(in_params jsonb)
   RETURNS void AS
@@ -482,7 +482,56 @@ begin
   ) src;
 
   if v_content is null then
-    perform data.delete_attribute_if_exists(v_object_id, v_attribute_id, null, v_object_id);
+    perform data.delete_attribute_value_if_exists(v_object_id, v_attribute_id, null, v_object_id);
+  else
+    perform data.set_attribute_value_if_changed(
+      v_object_id,
+      v_attribute_id,
+      null,
+      v_content);
+  end if;
+end;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION attribute_value_fill_functions.media_content(in_params jsonb)
+  RETURNS void AS
+$BODY$
+declare
+  v_attribute_id integer := json.get_integer(in_params, 'attribute_id');
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_content jsonb;
+  v_attribute_name_id integer := data.get_attribute_id('name');
+  v_attribute_news_time_id integer := data.get_attribute_id('news_time');
+begin
+  select to_jsonb(string_agg(src.dt || ' <a href="babcom:' || src.code || '">' || src.nm || '</a>', E'<br>\n'::text))
+  into v_content
+  from (
+    select
+      json.get_string(av_date.value) dt,
+      o.code,
+      json.get_string(av_name.value) nm
+    from data.object_objects oo
+    left join data.objects o on
+      o.id = oo.object_id
+    left join data.attribute_values av_name on
+      av_name.object_id = o.id and
+      av_name.attribute_id = v_attribute_name_id and
+      av_name.value_object_id is null
+    left join data.attribute_values av_date on
+      av_date.object_id = o.id and
+      av_date.attribute_id = v_attribute_news_time_id and
+      av_date.value_object_id is null
+    where
+      oo.parent_object_id = v_object_id and
+      oo.intermediate_object_ids is null and
+      oo.parent_object_id <> oo.object_id
+    order by av_date.value desc
+  ) src;
+
+  if v_content is null then
+    perform data.delete_attribute_value_if_exists(v_object_id, v_attribute_id, null, v_object_id);
   else
     perform data.set_attribute_value_if_changed(
       v_object_id,
@@ -496,17 +545,73 @@ $BODY$
   COST 100;
 
 insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
-(data.get_attribute_id('content'), 'fill_object_attribute_if', '{"conditions": [{"attribute_code": "type", "attribute_value": "news_hub"}], "function": "news_hub_content"}', 'Получение списка новостей');
+(
+  data.get_attribute_id('content'),
+  'fill_if_object_attribute', '
+  {
+    "blocks": [
+      {"conditions": [{"attribute_code": "type", "attribute_value": "news_hub"}], "function": "news_hub_content"},
+      {"conditions": [{"attribute_code": "type", "attribute_value": "media"}], "function": "media_content"},
+      {"conditions": [{"attribute_code": "type", "attribute_value": "transactions"}], "function": "value_codes_to_value_links", "params": {"attribute_code": "system_value", "placeholder": "Транзакций нет"}}
+    ]
+  }', 'Получение списков (новости, транзакции)');
+
+insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
+(data.get_attribute_id('transaction_destinations'), 'fill_if_object_attribute', '{"blocks": [{"conditions": [{"attribute_code": "type", "attribute_value": "transaction_destinations"}], "function": "filter_user_object_code"}]}', 'Получение списка возможных получателей переводов');
+
+CREATE OR REPLACE FUNCTION attribute_value_fill_functions.fill_transaction_name(in_params jsonb)
+  RETURNS void AS
+$BODY$
+declare
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_attribute_id integer := json.get_integer(in_params, 'attribute_id');
+  v_from_id integer :=
+    data.get_object_id(
+      json.get_string(
+        data.get_attribute_value(
+          v_user_object_id,
+          v_object_id,
+          data.get_attribute_id('transaction_from'))));
+  v_to_id integer :=
+    data.get_object_id(
+      json.get_string(
+        data.get_attribute_value(
+          v_user_object_id,
+          v_object_id,
+          data.get_attribute_id('transaction_to'))));
+begin
+  assert v_from_id = v_user_object_id or v_to_id = v_user_object_id;
+
+  perform data.set_attribute_value_if_changed(
+    v_object_id,
+    v_attribute_id,
+    v_user_object_id,
+    to_jsonb(
+      json.get_string(data.get_attribute_value(v_user_object_id, v_object_id, data.get_attribute_id('transaction_time'))) || ', ' ||
+      case when v_from_id = v_user_object_id then 'исходящий' else 'входящий' end || ' перевод на сумму ' ||
+      json.get_integer(data.get_attribute_value(v_user_object_id, v_object_id, data.get_attribute_id('transaction_sum'))) || '. ' ||
+      case when v_from_id = v_user_object_id then 'Получатель' else 'Отправитель' end || ': ' ||
+      json.get_string(
+        data.get_attribute_value(
+          v_user_object_id,
+          case when v_from_id = v_user_object_id then v_to_id else v_from_id end,
+          v_attribute_id)) ||
+      '. Сообщение: ' ||
+      json.get_string(data.get_attribute_value(v_user_object_id, v_object_id, data.get_attribute_id('transaction_description')))));
+end;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+
+insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
+(data.get_attribute_id('name'), 'fill_if_object_attribute', '{"blocks": [{"conditions": [{"attribute_code": "type", "attribute_value": "transaction"}], "function": "fill_transaction_name"}]}', 'Получение имени транзакции');
 
   -- TODO и другие:
   -- person: system_balance -> balance[player]
-  -- media{1,3}: object_objects -> content
   -- personal_document_storage: system_value[player] -> content[player]
   -- library: object_objects[intermediate is null] -> content
   -- med_library: object_objects -> content
-  -- transactions: X[player] -> content[player]
-  -- transaction: XYZ[player] -> name[player]
-  -- news{1,3}{1,100}: media_name + title -> name
   -- library_category{1,9}: object_objects[intermediate is null] -> content
   -- mailX: system_mail_send_time -> mail_send_time (с использованием формата из параметров)
 
@@ -613,14 +718,14 @@ select
   data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('description'), null, ('"Их адрес не дом и не улица, их адрес -  state ' || o.value || '!"')::jsonb)s
 from generate_series(1, 10) o(value);
 
+select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('system_priority'), null, jsonb '200');
 select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('type'), null, jsonb '"anonymous"');
 select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('name'), null, jsonb '"Аноним"');
 select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('description'), null, jsonb '"Вы не вошли в систему и работаете в режиме чтения общедоступной информации."');
 
--- other anonymous
-
 select
+  data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_priority'), null, jsonb '200'),
   data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
   data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('type'), null, jsonb '"person"'),
   data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('name'), null, ('"Person ' || o.value || '"')::jsonb),
@@ -938,35 +1043,35 @@ declare
   v_notification_code text;
   v_object_id integer;
   v_notification_attribute_id integer := data.get_attribute_id('notifications');
-  v_old_notifications text[];
+  v_old_notifications jsonb;
 begin
   assert in_user_object_id is not null;
-  assert in_object_id is not null;
-  assert in_text is not null;
+  assert in_object_ids is not null;
+  assert in_description is not null;
 
   insert into data.objects(id) values(default)
   returning id, code into v_notification_id, v_notification_code;
 
   perform data.set_attribute_value(v_notification_id, data.get_attribute_id('system_is_visible'), null, jsonb 'true', in_user_object_id);
-  perform data.set_attribute_value(v_notification_id, data.get_attribute_id('notification_description'), null, in_description, in_user_object_id);
+  perform data.set_attribute_value(v_notification_id, data.get_attribute_id('notification_description'), null, to_jsonb(in_description), in_user_object_id);
   if in_notification_object_code is not null then
-    perform data.set_attribute_value(v_notification_id, data.get_attribute_id('notification_object_code'), null, in_notification_object_code, in_user_object_id);
+    perform data.set_attribute_value(v_notification_id, data.get_attribute_id('notification_object_code'), null, to_jsonb(in_notification_object_code), in_user_object_id);
   end if;
-  perform data.set_attribute_value(v_notification_id, data.get_attribute_id('notification_time'), null, to_char(now(), data.get_string_param('time_format')), in_user_object_id);
+  perform data.set_attribute_value(v_notification_id, data.get_attribute_id('notification_time'), null, to_jsonb(to_char(now(), data.get_string_param('time_format'))), in_user_object_id);
   perform data.set_attribute_value(v_notification_id, data.get_attribute_id('notification_status'), null, jsonb '"unread"', in_user_object_id);
   perform data.set_attribute_value(v_notification_id, data.get_attribute_id('type'), null, jsonb '"notification"', in_user_object_id);
 
   in_object_ids := intarray.uniq(intarray.sort(in_object_ids));
 
   foreach v_object_id in array in_object_ids loop
-    v_old_notifications :=
-      data.get_opt_string_array(
-        data.get_attribute_value_for_update(v_object_id, v_notification_attribute_id, v_object_id));
+    v_old_notifications := data.get_attribute_value_for_update(v_object_id, v_notification_attribute_id, v_object_id);
+    perform json.get_opt_string_array(v_old_notifications);
+
     perform data.set_attribute_value(
       v_object_id,
       v_notification_attribute_id,
       v_object_id,
-      v_old_notifications || array[v_notification_code],
+      coalesce(v_old_notifications, jsonb '[]') || jsonb_build_array(v_notification_code),
       in_user_object_id);
   end loop;
 end;
@@ -979,11 +1084,15 @@ CREATE OR REPLACE FUNCTION actions.create_transaction(
     in_user_object_id integer,
     in_object_id integer,
     in_description text,
-    in_sum text)
+    in_sum integer)
   RETURNS void AS
 $BODY$
 declare
   v_transaction_id integer;
+  v_transaction_code text;
+  v_transactions_value jsonb;
+  v_transactions_object_id integer := data.get_object_id('transactions');
+  v_transactions_system_value_attribute_id integer := data.get_attribute_id('system_value');
 begin
   assert in_user_object_id is not null;
   assert in_object_id is not null;
@@ -991,17 +1100,29 @@ begin
   assert in_sum > 0;
 
   insert into data.objects(id) values(default)
-  returning id into v_transaction_id;
+  returning id, code into v_transaction_id, v_transaction_code;
 
   perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('system_is_visible'), in_user_object_id, jsonb 'true', in_user_object_id);
   perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('system_is_visible'), in_object_id, jsonb 'true', in_user_object_id);
   perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true', in_user_object_id);
   perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('type'), null, jsonb '"transaction"', in_user_object_id);
-  perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('transaction_from'), null, data.get_object_code(in_user_object_id), in_user_object_id);
-  perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('transaction_to'), null, data.get_object_code(in_object_id), in_user_object_id);
-  perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('transaction_time'), null, to_char(now(), data.get_string_param('time_format')), in_user_object_id);
-  perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('transaction_description'), null, in_description, in_user_object_id);
-  perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('transaction_sum'), null, in_sum, in_user_object_id);
+  perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('transaction_from'), null, to_jsonb(data.get_object_code(in_user_object_id)), in_user_object_id);
+  perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('transaction_to'), null, to_jsonb(data.get_object_code(in_object_id)), in_user_object_id);
+  perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('transaction_time'), null, to_jsonb(to_char(now(), data.get_string_param('time_format'))), in_user_object_id);
+  perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('transaction_description'), null, to_jsonb(in_description), in_user_object_id);
+  perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('transaction_sum'), null, to_jsonb(in_sum), in_user_object_id);
+
+  v_transactions_value := data.get_attribute_value_for_update(v_transactions_object_id, v_transactions_system_value_attribute_id, in_user_object_id);
+  perform json.get_opt_string_array(v_transactions_value);
+
+  v_transactions_value := coalesce(v_transactions_value, jsonb '[]') || jsonb_build_array(v_transaction_code);
+  perform data.set_attribute_value(v_transactions_object_id, v_transactions_system_value_attribute_id, in_user_object_id, v_transactions_value, in_user_object_id);
+
+  v_transactions_value := data.get_attribute_value_for_update(v_transactions_object_id, v_transactions_system_value_attribute_id, in_object_id);
+  perform json.get_opt_string_array(v_transactions_value);
+
+  v_transactions_value := coalesce(v_transactions_value, jsonb '[]') || jsonb_build_array(v_transaction_code);
+  perform data.set_attribute_value(v_transactions_object_id, v_transactions_system_value_attribute_id, in_object_id, v_transactions_value, in_user_object_id);
 end;
 $BODY$
   LANGUAGE plpgsql volatile
@@ -1039,8 +1160,8 @@ begin
       api_utils.get_objects(
         in_client,
         in_user_object_id,
-        jsonb_create_object(
-          'object_codes', ('["' || data.get_object_code(in_user_object_id) || '"]')::jsonb,
+        jsonb_build_object(
+          'object_codes', jsonb_build_array(data.get_object_code(in_user_object_id)),
           'get_actions', true,
           'get_templates', true)) ||
       jsonb '{"message": "Недостаточно средств!"}';
@@ -1050,14 +1171,14 @@ begin
     in_user_object_id,
     v_system_balance_attribute_id,
     null,
-    v_user_balance - v_sum,
+    to_jsonb(v_user_balance - v_sum),
     in_user_object_id,
     'Перевод средств пользователю ' || v_receiver_id);
   perform data.set_attribute_value(
     v_receiver_id,
     v_system_balance_attribute_id,
     null,
-    v_receiver_balance + v_sum,
+    to_jsonb(v_receiver_balance + v_sum),
     in_user_object_id,
     'Перевод средств от пользователя ' || in_user_object_id);
 
@@ -1085,7 +1206,7 @@ begin
   return api_utils.get_objects(
     in_client,
     in_user_object_id,
-    jsonb_create_object(
+    jsonb_build_object(
       'object_codes', jsonb '["transactions"]',
       'get_actions', true,
       'get_templates', true));

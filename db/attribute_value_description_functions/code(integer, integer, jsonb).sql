@@ -16,7 +16,7 @@ begin
   return
     coalesce(
       json.get_opt_string(
-        data.get_attribute_value(in_user_object_id, v_object_id, in_attribute_id)),
+        data.get_attribute_value(in_user_object_id, v_object_id, data.get_attribute_id('name'))),
       'Инкогнито');
 end;
 $BODY$

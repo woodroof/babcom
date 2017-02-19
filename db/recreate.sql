@@ -1415,7 +1415,7 @@ begin
   return
     coalesce(
       json.get_opt_string(
-        data.get_attribute_value(in_user_object_id, v_object_id, in_attribute_id)),
+        data.get_attribute_value(in_user_object_id, v_object_id, data.get_attribute_id('name'))),
       'Инкогнито');
 end;
 $BODY$
@@ -1452,17 +1452,19 @@ end;
 $BODY$
   LANGUAGE plpgsql STABLE
   COST 100;
--- Function: attribute_value_fill_functions.fill_object_attribute_if(jsonb)
+-- Function: attribute_value_fill_functions.fill_if_object_attribute(jsonb)
 
--- DROP FUNCTION attribute_value_fill_functions.fill_object_attribute_if(jsonb);
+-- DROP FUNCTION attribute_value_fill_functions.fill_if_object_attribute(jsonb);
 
-CREATE OR REPLACE FUNCTION attribute_value_fill_functions.fill_object_attribute_if(in_params jsonb)
+CREATE OR REPLACE FUNCTION attribute_value_fill_functions.fill_if_object_attribute(in_params jsonb)
   RETURNS void AS
 $BODY$
 declare
   v_object_id integer := json.get_integer(in_params, 'object_id');
 
-  v_conditions jsonb := json.get_object_array(in_params, 'conditions');
+  v_blocks jsonb := json.get_object_array(in_params, 'blocks');
+  v_block jsonb;
+  v_conditions jsonb;
   v_condition jsonb;
 
   v_check_attribute_id integer;
@@ -1472,103 +1474,165 @@ declare
   v_function text;
   v_params jsonb;
 begin
-  for v_condition in
+  for v_block in
     select value
-    from jsonb_array_elements(v_conditions)
+    from jsonb_array_elements(v_blocks)
   loop
-    v_check_attribute_id := data.get_attribute_id(json.get_string(v_condition, 'attribute_code'));
-    v_check_attribute_value := v_condition->'attribute_value';
+    v_conditions := json.get_object_array(v_block, 'conditions');
 
-    select true
-    into v_checked
-    from data.attribute_values
-    where
-      object_id = v_object_id and
-      attribute_id = v_check_attribute_id and
-      value_object_id is null and
-      value = v_check_attribute_value;
+    for v_condition in
+      select value
+      from jsonb_array_elements(v_conditions)
+    loop
+      v_check_attribute_id := data.get_attribute_id(json.get_string(v_condition, 'attribute_code'));
+      v_check_attribute_value := v_condition->'attribute_value';
+
+      select true
+      into v_checked
+      from data.attribute_values
+      where
+        object_id = v_object_id and
+        attribute_id = v_check_attribute_id and
+        value_object_id is null and
+        value = v_check_attribute_value;
+
+      if v_checked is not null then
+        exit;
+      end if;
+    end loop;
 
     if v_checked is not null then
-      exit;
+      v_function := json.get_string(v_block, 'function');
+      v_params :=
+        json.get_opt_object(v_block, jsonb '{}', 'params') ||
+        jsonb_build_object(
+          'user_object_id', json.get_integer(in_params, 'user_object_id'),
+          'object_id', v_object_id,
+          'attribute_id', json.get_integer(in_params, 'attribute_id'));
+
+      execute format('select attribute_value_fill_functions.%s($1)', v_function)
+      using v_params;
+
+      return;
     end if;
   end loop;
-
-  if v_checked is null then
-    return;
-  end if;
-
-  v_function := json.get_string(in_params, 'function');
-  v_params :=
-    json.get_opt_object(in_params, jsonb '{}', 'params') ||
-    jsonb_build_object(
-      'user_object_id', json.get_integer(in_params, 'user_object_id'),
-      'object_id', v_object_id,
-      'attribute_id', json.get_integer(in_params, 'attribute_id'));
-  execute format('select attribute_value_fill_functions.%s($1)', v_function)
-  using v_params;
 end;
 $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
--- Function: attribute_value_fill_functions.fill_user_object_attribute_if(jsonb)
+-- Function: attribute_value_fill_functions.fill_if_user_object_attribute(jsonb)
 
--- DROP FUNCTION attribute_value_fill_functions.fill_user_object_attribute_if(jsonb);
+-- DROP FUNCTION attribute_value_fill_functions.fill_if_user_object_attribute(jsonb);
 
-CREATE OR REPLACE FUNCTION attribute_value_fill_functions.fill_user_object_attribute_if(in_params jsonb)
+CREATE OR REPLACE FUNCTION attribute_value_fill_functions.fill_if_user_object_attribute(in_params jsonb)
   RETURNS void AS
 $BODY$
 declare
   v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
   v_object_id integer := json.get_integer(in_params, 'object_id');
-
-  v_conditions jsonb := json.get_object_array(in_params, 'conditions');
-  v_condition jsonb;
-
-  v_check_attribute_id integer;
-  v_check_attribute_value jsonb;
-  v_checked boolean;
-
-  v_function text;
-  v_params jsonb;
 begin
   if v_user_object_id != v_object_id then
     return;
   end if;
 
-  for v_condition in
-    select value
-    from jsonb_array_elements(v_conditions)
-  loop
-    v_check_attribute_id := data.get_attribute_id(json.get_string(v_condition, 'attribute_code'));
-    v_check_attribute_value := v_condition->'attribute_value';
+  perform attribute_value_fill_functions.fill_if_object_attribute(in_params);
+end;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+-- Function: attribute_value_fill_functions.filter_user_object_code(jsonb)
 
-    select true
-    into v_checked
-    from data.attribute_values
-    where
-      object_id = v_object_id and
-      attribute_id = v_check_attribute_id and
-      value_object_id is null and
-      value = v_check_attribute_value;
+-- DROP FUNCTION attribute_value_fill_functions.filter_user_object_code(jsonb);
 
-    if v_checked is not null then
-      exit;
-    end if;
-  end loop;
+CREATE OR REPLACE FUNCTION attribute_value_fill_functions.filter_user_object_code(in_params jsonb)
+  RETURNS void AS
+$BODY$
+declare
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_attribute_id integer := json.get_integer(in_params, 'attribute_id');
+  v_attribute_value jsonb;
+begin
+  select value
+  into v_attribute_value
+  from data.attribute_values
+  where
+    object_id = v_object_id and
+    attribute_id = v_attribute_id and
+    value_object_id is null
+  for share;
 
-  if v_checked is null then
+  if v_attribute_value is null then
     return;
   end if;
 
-  v_function := json.get_string(in_params, 'function');
-  v_params :=
-    json.get_opt_object(in_params, jsonb '{}', 'params') ||
-    jsonb_build_object(
-      'user_object_id', v_user_object_id,
-      'object_id', v_object_id,
-      'attribute_id', json.get_integer(in_params, 'attribute_id'));
-  execute format('select attribute_value_fill_functions.%s($1)', v_function)
-  using v_params;
+  perform json.get_string_array(v_attribute_value);
+
+  v_attribute_value := v_attribute_value - data.get_object_code(v_user_object_id);
+
+  perform data.set_attribute_value_if_changed(v_object_id, v_attribute_id, v_user_object_id, v_attribute_value, v_user_object_id);
+end;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+-- Function: attribute_value_fill_functions.value_codes_to_value_links(jsonb)
+
+-- DROP FUNCTION attribute_value_fill_functions.value_codes_to_value_links(jsonb);
+
+CREATE OR REPLACE FUNCTION attribute_value_fill_functions.value_codes_to_value_links(in_params jsonb)
+  RETURNS void AS
+$BODY$
+declare
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_attribute_id integer := json.get_integer(in_params, 'attribute_id');
+  v_source_attribute_id integer := data.get_attribute_id(json.get_string(in_params, 'attribute_code'));
+  v_placeholder text := json.get_opt_string(in_params, null, 'placeholder');
+  v_name_attribute_id integer := data.get_attribute_id('name');
+
+  v_codes jsonb;
+  v_ids integer[];
+  v_value jsonb;
+begin
+  select value
+  into v_codes
+  from data.attribute_values
+  where
+    object_id = v_object_id and
+    attribute_id = v_source_attribute_id and
+    value_object_id = v_user_object_id
+  for share;
+
+  if v_codes is not null then
+    select array_agg(id)
+    into v_ids
+    from data.objects
+    where
+      code in (
+        select json.get_string(value)
+        from jsonb_array_elements(v_codes)
+      );
+  end if;
+
+  if v_codes is not null then
+    perform data.fill_attribute_values(v_user_object_id, v_ids, array[v_name_attribute_id]);
+
+    select to_jsonb(string_agg('<a href="babcom:' || o.code || '">' || data.get_attribute_value(v_user_object_id, o.id, v_name_attribute_id) || '</a>', '<br>'))
+    into v_value
+    from jsonb_array_elements(v_codes) c
+    join data.objects o on
+      o.code = json.get_string(c.value);
+  else
+    if v_placeholder is not null then
+      v_value := to_jsonb(v_placeholder);
+    end if;
+  end if;
+
+  if v_value is null then
+    perform data.delete_attribute_value_if_exists(v_object_id, v_attribute_id, v_user_object_id, v_user_object_id);
+  else
+    perform data.set_attribute_value_if_changed(v_object_id, v_attribute_id, v_user_object_id, v_value, v_user_object_id);
+  end if;
 end;
 $BODY$
   LANGUAGE plpgsql VOLATILE
