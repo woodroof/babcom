@@ -27,10 +27,10 @@ insert into data.params(code, value, description) values
       "attributes": ["mail_type", "mail_send_time", "mail_title", "mail_author", "mail_receivers"]
     },
     {
-      "attributes": ["news_time", "news_media", "news_title"]
+      "attributes": ["mail_body"]
     },
     {
-      "attributes": ["mail_body"]
+      "attributes": ["news_time", "news_media", "news_title"]
     },
     {
       "attributes": ["corporation_capitalization", "corporation_members", "corporation_asserts"]
@@ -40,6 +40,9 @@ insert into data.params(code, value, description) values
     },
     {
       "attributes": ["document_title", "document_time", "document_author"]
+    },
+    {
+      "attributes": ["med_document_patient"]
     },
     {
       "attributes": ["description", "content"]
@@ -302,6 +305,7 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('system_document_time', 'Реальное время создания документа', 'SYSTEM', null),
 ('document_time', 'Время создания', 'NORMAL', null),
 ('document_author', 'Автор', 'NORMAL', 'code'),
+('med_document_patient', 'Пациент', 'NORMAL', 'code'),
 ('market_volume', 'Объём рынка', 'NORMAL', null),
 ('system_balance', 'Остаток на счету', 'SYSTEM', null),
 ('balance', 'Остаток на счету', 'NORMAL', null),
@@ -703,7 +707,6 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
   -- personal_document_storage: system_value[player] -> content[player]
   -- library: object_objects[intermediate is null] -> content
   -- library_category{1,9}: object_objects[intermediate is null] -> content
-  -- mailX: system_mail_send_time -> mail_send_time (с использованием формата из параметров)
 
 -- Заполнение атрибутов
 select data.set_attribute_value(data.get_object_id('mail_contacts'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
@@ -927,7 +930,8 @@ select
   data.set_attribute_value(data.get_object_id('med_document' || o.value), data.get_attribute_id('system_document_time'), null, to_jsonb(case when o.value < 10 then '0' else '' end || o.value)),
   data.set_attribute_value(data.get_object_id('med_document' || o.value), data.get_attribute_id('document_time'), null, to_jsonb('19.02.2258 17:' || case when o.value < 10 then '0' else '' end || o.value)),
   data.set_attribute_value(data.get_object_id('med_document' || o.value), data.get_attribute_id('content'), null, to_jsonb('Содержимое медицинского отчёта ' || o.value)),
-  data.set_attribute_value(data.get_object_id('med_document' || o.value), data.get_attribute_id('document_author'), null, to_jsonb('person' || ((o.value % 5 + 1) * 11)))
+  data.set_attribute_value(data.get_object_id('med_document' || o.value), data.get_attribute_id('document_author'), null, to_jsonb('person' || ((o.value % 5 + 1) * 11))),
+  data.set_attribute_value(data.get_object_id('med_document' || o.value), data.get_attribute_id('med_document_patient'), null, to_jsonb('person' || (o.value + (o.value - 1) / 10)))
 from generate_series(1, 15) o(value);
 
   -- TODO: Всё прочее
@@ -1544,7 +1548,7 @@ CREATE OR REPLACE FUNCTION actions.create_med_document(
   RETURNS api.result AS
 $BODY$
 declare
-  v_password text := json.get_string(in_user_params, 'patient');
+  v_patient text := json.get_string(in_user_params, 'patient');
   v_title text := json.get_string(in_user_params, 'title');
   v_content text := json.get_string(in_user_params, 'content');
 
@@ -1563,6 +1567,7 @@ begin
   perform data.set_attribute_value(v_document_id, data.get_attribute_id('document_time'), null, to_jsonb(to_char(now(), data.get_string_param('time_format'))));
   perform data.set_attribute_value(v_document_id, data.get_attribute_id('content'), null, to_jsonb(v_title));
   perform data.set_attribute_value(v_document_id, data.get_attribute_id('document_author'), null, to_jsonb(data.get_object_code(in_user_object_id)));
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('med_document_patient'), null, to_jsonb(v_patient));
 
   return api_utils.get_objects(
     in_client,
@@ -1578,6 +1583,149 @@ $BODY$
 
 insert into data.action_generators(function, params, description)
 values('create_med_document', null, 'Функция создания медецинского отчёта');
+
+-- Действие для отправки письма
+CREATE OR REPLACE FUNCTION action_generators.send_mail(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
+  v_user_object_id integer;
+  v_persons_objects_id integer;
+  v_person boolean;
+begin
+  if v_object_id is not null then
+    return null;
+  end if;
+
+  v_user_object_id := json.get_integer(in_params, 'user_object_id');
+  v_persons_objects_id := data.get_object_id('persons');
+
+  select true
+  into v_person
+  from data.object_objects
+  where
+    parent_object_id = v_persons_objects_id and
+    object_id = v_user_object_id;
+
+  if v_person is null then
+    return null;
+  end if;
+  
+  return jsonb_build_object(
+    'send_mail',
+    jsonb_build_object(
+      'code', 'send_mail',
+      'name', 'Написать письмо',
+      'type', 'mail.send',
+      'params', jsonb '{}',
+      'user_params',
+        jsonb_build_array(
+          jsonb_build_object(
+            'code', 'receivers',
+            'type', 'objects',
+            'data', jsonb_build_object('object_code', 'mail_contacts', 'attribute_code', 'mail_contacts'),
+            'description', 'Получатели',
+            'min_value_count', 1),
+          jsonb_build_object(
+            'code', 'title',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1),
+            'description', 'Тема',
+            'min_value_count', 1,
+            'max_value_count', 1),
+          jsonb_build_object(
+            'code', 'body',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1, 'multiline', true),
+            'description', 'Сообщение',
+            'min_value_count', 1,
+            'max_value_count', 1))));
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.send_mail(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_receivers jsonb := in_user_params->'receivers';
+  v_title text := json.get_string(in_user_params, 'title');
+  v_body text := json.get_string(in_user_params, 'body');
+
+  v_time_format text := data.get_string_param('time_format');
+
+  v_name_attr_id integer := data.get_attribute_id('name');
+  v_inbox_attr_id integer := data.get_attribute_id('inbox');
+  v_outbox_attr_id integer := data.get_attribute_id('outbox');
+
+  v_receiver_id integer;
+
+  v_mail_id integer;
+  v_mail_code text;
+  v_mails jsonb;
+begin
+  assert jsonb_typeof(v_receivers) in ('array', 'string');
+
+  insert into data.objects(id) values(default)
+  returning id, code into v_mail_id, v_mail_code;
+
+  perform data.set_attribute_value(v_mail_id, data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+  perform data.set_attribute_value(v_mail_id, data.get_attribute_id('type'), null, jsonb '"mail"');
+  perform data.set_attribute_value(v_mail_id, v_name_attr_id, null, to_jsonb(v_title));
+  perform data.set_attribute_value(v_mail_id, data.get_attribute_id('mail_title'), null, to_jsonb(v_title));
+  perform data.set_attribute_value(v_mail_id, data.get_attribute_id('system_mail_send_time'), null, to_jsonb(to_char(now(), 'yyyy.dd.mm hh24:mi:ss.us')));
+  perform data.set_attribute_value(v_mail_id, data.get_attribute_id('mail_send_time'), null, to_jsonb(to_char(now(), data.get_string_param('time_format'))));
+  perform data.set_attribute_value(v_mail_id, data.get_attribute_id('mail_author'), null, to_jsonb(data.get_object_code(in_user_object_id)));
+  perform data.set_attribute_value(v_mail_id, data.get_attribute_id('mail_receivers'), null, jsonb '[]' || v_receivers);
+  perform data.set_attribute_value(v_mail_id, data.get_attribute_id('mail_body'), null, to_jsonb(v_body));
+  perform data.set_attribute_value(v_mail_id, data.get_attribute_id('mail_type'), null, jsonb '"outbox"');
+
+  v_mails := data.get_attribute_value_for_update(in_user_object_id, v_outbox_attr_id, in_user_object_id);
+
+  perform data.set_attribute_value(in_user_object_id, v_outbox_attr_id, in_user_object_id, coalesce(v_mails, jsonb '[]') || to_jsonb(v_mail_code), in_user_object_id);
+
+  insert into data.objects(id) values(default)
+  returning id, code into v_mail_id, v_mail_code;
+
+  perform data.set_attribute_value(v_mail_id, data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+  perform data.set_attribute_value(v_mail_id, data.get_attribute_id('type'), null, jsonb '"mail"');
+  perform data.set_attribute_value(v_mail_id, v_name_attr_id, null, to_jsonb(v_title));
+  perform data.set_attribute_value(v_mail_id, data.get_attribute_id('mail_title'), null, to_jsonb(v_title));
+  perform data.set_attribute_value(v_mail_id, data.get_attribute_id('system_mail_send_time'), null, to_jsonb(to_char(now(), 'yyyy.dd.mm hh24:mi:ss.us')));
+  perform data.set_attribute_value(v_mail_id, data.get_attribute_id('mail_send_time'), null, to_jsonb(to_char(now(), data.get_string_param('time_format'))));
+  perform data.set_attribute_value(v_mail_id, data.get_attribute_id('mail_author'), null, to_jsonb(data.get_object_code(in_user_object_id)));
+  perform data.set_attribute_value(v_mail_id, data.get_attribute_id('mail_receivers'), null, jsonb '[]' || v_receivers);
+  perform data.set_attribute_value(v_mail_id, data.get_attribute_id('mail_body'), null, to_jsonb(v_body));
+  perform data.set_attribute_value(v_mail_id, data.get_attribute_id('mail_type'), null, jsonb '"inbox"');
+
+  for v_receiver_id in
+    select data.get_object_id(json.get_string(value))
+    from jsonb_array_elements(jsonb '[]' || v_receivers)
+  loop
+    v_mails := data.get_attribute_value_for_update(v_receiver_id, v_inbox_attr_id, v_receiver_id);
+    perform data.set_attribute_value(v_receiver_id, v_inbox_attr_id, v_receiver_id, coalesce(v_mails, jsonb '[]') || to_jsonb(v_mail_code), in_user_object_id);
+    perform actions.create_notification(
+      in_user_object_id,
+      array[v_receiver_id],
+      'Новое письмо. Отправитель: ' || json.get_string(data.get_attribute_value(v_receiver_id, in_user_object_id, v_name_attr_id)) || '. Тема: ' || v_title,
+      v_mail_code);
+  end loop;
+
+  return api_utils.create_ok_result(null, 'Сообщение отправлено!');
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+insert into data.action_generators(function, params, description)
+values('send_mail', null, 'Функция отправки письма');
 
 -- TODO: нагенерировать транзакций и писем
 
