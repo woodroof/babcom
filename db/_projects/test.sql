@@ -463,6 +463,7 @@ declare
   v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
   v_object_id integer := json.get_integer(in_params, 'object_id');
   v_attribute_id integer := json.get_integer(in_params, 'attribute_id');
+  v_placeholder text := json.get_opt_string(in_params, null, 'placeholder');
 
   v_sort_attribute_id integer := data.get_attribute_id(json.get_string(in_params, 'sort_attribute_code'));
   v_sort_type text := json.get_string(in_params, 'sort_type');
@@ -518,6 +519,10 @@ begin
     v_content := coalesce(v_content, '') || v_content_entry;
   end loop;
 
+  if v_content is null and v_placeholder is not null then
+    v_content := v_placeholder;
+  end if;
+
   if v_content is null then
     perform data.delete_attribute_value_if_exists(
       v_object_id,
@@ -544,6 +549,7 @@ declare
   v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
   v_object_id integer := json.get_integer(in_params, 'object_id');
   v_attribute_id integer := json.get_integer(in_params, 'attribute_id');
+  v_placeholder text := json.get_opt_string(in_params, null, 'placeholder');
 
   v_sort_attribute_id integer := data.get_attribute_id(json.get_string(in_params, 'sort_attribute_code'));
   v_sort_type text := json.get_string(in_params, 'sort_type');
@@ -603,6 +609,198 @@ begin
     v_content := coalesce(v_content, '') || v_content_entry;
   end loop;
 
+  if v_content is null and v_placeholder is not null then
+    v_content := v_placeholder;
+  end if;
+
+  if v_content is null then
+    perform data.delete_attribute_value_if_exists(
+      v_object_id,
+      v_attribute_id,
+      null,
+      v_user_object_id);
+  else
+    perform data.set_attribute_value_if_changed(
+      v_object_id,
+      v_attribute_id,
+      null,
+      to_jsonb(v_content),
+      v_user_object_id);
+  end if;
+end;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION attribute_value_fill_functions.fill_user_content_from_attribute(in_params jsonb)
+  RETURNS void AS
+$BODY$
+declare
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_attribute_id integer := json.get_integer(in_params, 'attribute_id');
+  v_placeholder text := json.get_opt_string(in_params, null, 'placeholder');
+
+  v_source_attribute_id integer := data.get_attribute_id(json.get_string(in_params, 'source_attribute_code'));
+  v_sort_type text := json.get_string(in_params, 'sort_type');
+
+  v_output jsonb := json.get_object_array(in_params, 'output');
+
+  v_codes jsonb;
+
+  v_next_object_id integer;
+  v_output_entry jsonb;
+
+  v_content_entry text;
+  v_type text;
+  v_content text;
+begin
+  assert v_sort_type = 'asc' or v_sort_type = 'desc';
+
+  v_codes := json.get_opt_string_array(data.get_attribute_value(v_user_object_id, v_object_id, v_source_attribute_id));
+
+  if v_codes is not null then
+    for v_next_object_id in
+      execute '
+        select data.get_object_id(o.value)
+        from (
+          select value, row_number() over() as num
+          from jsonb_array_elements($1)
+          order by num ' || v_sort_type || '
+        ) o'
+      using v_codes
+    loop
+      v_content_entry := '';
+
+      for v_output_entry in
+        select value
+        from jsonb_array_elements(v_output)
+      loop
+        v_type := json.get_string(v_output_entry, 'type');
+        if v_type = 'attribute' then
+          v_content_entry :=
+            v_content_entry ||
+            json.get_string(
+              data.get_attribute_value(
+                v_user_object_id,
+                v_next_object_id,
+                data.get_attribute_id(json.get_string(v_output_entry, 'data'))));
+        elsif v_type = 'code' then
+          v_content_entry := v_content_entry || data.get_object_code(v_next_object_id);
+        else
+          assert v_type = 'string';
+          v_content_entry := v_content_entry || json.get_string(v_output_entry, 'data');
+        end if;
+      end loop;
+
+      if v_content is not null then
+        v_content := v_content || E'<br>\n';
+      end if;
+      v_content := coalesce(v_content, '') || v_content_entry;
+    end loop;
+  end if;
+
+  if v_content is null and v_placeholder is not null then
+    v_content := v_placeholder;
+  end if;
+
+  if v_content is null then
+    perform data.delete_attribute_value_if_exists(
+      v_object_id,
+      v_attribute_id,
+      v_user_object_id,
+      v_user_object_id);
+  else
+    perform data.set_attribute_value_if_changed(
+      v_object_id,
+      v_attribute_id,
+      v_user_object_id,
+      to_jsonb(v_content),
+      v_user_object_id);
+  end if;
+end;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION attribute_value_fill_functions.fill_content_from_attribute(in_params jsonb)
+  RETURNS void AS
+$BODY$
+declare
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_attribute_id integer := json.get_integer(in_params, 'attribute_id');
+  v_placeholder text := json.get_opt_string(in_params, null, 'placeholder');
+
+  v_source_attribute_id integer := data.get_attribute_id(json.get_string(in_params, 'source_attribute_code'));
+  v_sort_type text := json.get_string(in_params, 'sort_type');
+
+  v_output jsonb := json.get_object_array(in_params, 'output');
+
+  v_codes jsonb;
+
+  v_next_object_id integer;
+  v_output_entry jsonb;
+
+  v_content_entry text;
+  v_type text;
+  v_content text;
+begin
+  assert v_sort_type = 'asc' or v_sort_type = 'desc';
+
+  select value
+  into v_codes
+  from data.attribute_values
+  where
+    object_id = v_object_id and
+    attribute_id = v_source_attribute_id and
+    value_object_id is null;
+
+  if v_codes is not null then
+    for v_next_object_id in
+      execute '
+        select data.get_object_id(o.value)
+        from (
+          select value, row_number() over() as num
+          from jsonb_array_elements($1)
+          order by num ' || v_sort_type || '
+        ) o'
+      using v_codes
+    loop
+      v_content_entry := '';
+
+      for v_output_entry in
+        select value
+        from jsonb_array_elements(v_output)
+      loop
+        v_type := json.get_string(v_output_entry, 'type');
+        if v_type = 'attribute' then
+          select v_content_entry || json.get_string(value)
+          into v_content_entry
+          from data.attribute_values
+          where
+            object_id = v_next_object_id and
+            attribute_id = data.get_attribute_id(json.get_string(v_output_entry, 'data')) and
+            value_object_id is null;
+        elsif v_type = 'code' then
+          v_content_entry := v_content_entry || data.get_object_code(v_next_object_id);
+        else
+          assert v_type = 'string';
+          v_content_entry := v_content_entry || json.get_string(v_output_entry, 'data');
+        end if;
+      end loop;
+
+      if v_content is not null then
+        v_content := v_content || E'<br>\n';
+      end if;
+      v_content := coalesce(v_content, '') || v_content_entry;
+    end loop;
+  end if;
+
+  if v_content is null and v_placeholder is not null then
+    v_content := v_placeholder;
+  end if;
+
   if v_content is null then
     perform data.delete_attribute_value_if_exists(
       v_object_id,
@@ -640,11 +838,11 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
       },
       {
         "conditions": [{"attribute_code": "type", "attribute_value": "transactions"}],
-        "function": "value_codes_to_value_links",
-        "params": {"attribute_code": "system_value", "placeholder": "Транзакций нет"}
+        "function": "fill_user_content_from_attribute",
+        "params": {"placeholder": "Транзакций нет", "source_attribute_code": "system_value", "sort_type": "desc", "output": [{"type": "string", "data": " <a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
       }
     ]
-  }', 'Получение списков (новости, транзакции)');
+  }', 'Получение списков (новости, транзакции, разные документы)');
 
 insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
 (data.get_attribute_id('transaction_destinations'), 'fill_if_object_attribute', '{"blocks": [{"conditions": [{"attribute_code": "type", "attribute_value": "transaction_destinations"}], "function": "filter_user_object_code"}]}', 'Получение списка возможных получателей переводов');
