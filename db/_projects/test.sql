@@ -36,7 +36,10 @@ insert into data.params(code, value, description) values
       "attributes": ["state_tax"]
     },
     {
-      "attributes": ["corporation_state", "corporation_members", "corporation_capitalization", "corporation_sectors", "corporation_deals", "corporation_draft_deals", "corporation_canceled_deals", "dividend_vote"]
+      "attributes": ["corporation_state", "corporation_members", "corporation_capitalization", "corporation_sectors", "dividend_vote"]
+    },
+    {
+      "attributes": ["corporation_deals", "corporation_draft_deals", "corporation_canceled_deals"]
     },
     {
       "attributes": ["document_title", "document_time", "document_author"]
@@ -754,12 +757,13 @@ declare
 begin
   assert v_sort_type = 'asc' or v_sort_type = 'desc';
 
-  v_codes := json.get_opt_string_array(data.get_attribute_value(v_user_object_id, v_object_id, v_source_attribute_id));
+  v_codes := data.get_attribute_value(v_user_object_id, v_object_id, v_source_attribute_id);
+  perform json.get_opt_string_array(v_codes);
 
   if v_codes is not null then
     for v_next_object_id in
       execute '
-        select data.get_object_id(o.value)
+        select data.get_object_id(json.get_string(o.value))
         from (
           select value, row_number() over() as num
           from jsonb_array_elements($1)
@@ -856,7 +860,7 @@ begin
   if v_codes is not null then
     for v_next_object_id in
       execute '
-        select data.get_object_id(o.value)
+        select data.get_object_id(json.get_string(o.value))
         from (
           select value, row_number() over() as num
           from jsonb_array_elements($1)
@@ -945,6 +949,48 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
       }
     ]
   }', 'Получение списков (новости, транзакции, разные документы)');
+
+insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
+(
+  data.get_attribute_id('corporation_deals'),
+  'fill_if_object_attribute', '
+  {
+    "blocks": [
+      {
+        "conditions": [{"attribute_code": "type", "attribute_value": "corporation"}],
+        "function": "fill_content_from_attribute",
+        "params": {"placeholder": "Подтверждённых сделок нет", "source_attribute_code": "system_corporation_deals", "sort_type": "desc", "output": [{"type": "string", "data": " <a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+      }
+    ]
+  }', 'Получение списка подтверждённых сделок');
+
+insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
+(
+  data.get_attribute_id('corporation_draft_deals'),
+  'fill_if_object_attribute', '
+  {
+    "blocks": [
+      {
+        "conditions": [{"attribute_code": "type", "attribute_value": "corporation"}],
+        "function": "fill_content_from_attribute",
+        "params": {"placeholder": "Подготавливаемых сделок нет", "source_attribute_code": "system_corporation_draft_deals", "sort_type": "desc", "output": [{"type": "string", "data": " <a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+      }
+    ]
+  }', 'Получение списка подготавливаемых сделок');
+
+insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
+(
+  data.get_attribute_id('corporation_canceled_deals'),
+  'fill_if_object_attribute', '
+  {
+    "blocks": [
+      {
+        "conditions": [{"attribute_code": "type", "attribute_value": "corporation"}],
+        "function": "fill_content_from_attribute",
+        "params": {"placeholder": "Расторгнутых сделок нет", "source_attribute_code": "system_corporation_canceled_deals", "sort_type": "desc", "output": [{"type": "string", "data": " <a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+      }
+    ]
+  }', 'Получение списка расторгнутых сделок');
 
 CREATE OR REPLACE FUNCTION attribute_value_fill_functions.value_codes_to_value_links_corporation_members(in_params jsonb)
   RETURNS void AS
