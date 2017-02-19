@@ -33,10 +33,10 @@ insert into data.params(code, value, description) values
       "attributes": ["news_time", "news_media", "news_title"]
     },
     {
-      "attributes": ["corporation_capitalization", "corporation_members", "corporation_asserts"]
+      "attributes": ["state_tax"]
     },
     {
-      "attributes": ["asset_status", "asset_time", "asset_cost", "asset_corporations"]
+      "attributes": ["corporation_state", "corporation_members", "corporation_capitalization", "corporation_sectors", "corporation_deals", "corporation_draft_deals", "corporation_canceled_deals", "dividend_vote"]
     },
     {
       "attributes": ["document_title", "document_time", "document_author"]
@@ -45,13 +45,76 @@ insert into data.params(code, value, description) values
       "attributes": ["med_document_patient"]
     },
     {
+      "attributes": ["deal_time", "deal_cancel_time", "deal_status", "deal_sector", "asset_name", "asset_cost", "asset_amortization", "deal_income"]
+    },
+    {
+      "attributes": ["deal_participant1"]
+    },
+    {
+      "actions": ["delete_participant1"]
+    },
+    {
+      "attributes": ["deal_participant2"]
+    },
+    {
+      "actions": ["delete_participant2"]
+    },
+    {
+      "attributes": ["deal_participant3"]
+    },
+    {
+      "actions": ["delete_participant3"]
+    },
+    {
+      "attributes": ["deal_participant4"]
+    },
+    {
+      "actions": ["delete_participant4"]
+    },
+    {
+      "attributes": ["deal_participant5"]
+    },
+    {
+      "actions": ["delete_participant5"]
+    },
+    {
+      "attributes": ["deal_participant6"]
+    },
+    {
+      "actions": ["delete_participant6"]
+    },
+    {
+      "attributes": ["deal_participant7"]
+    },
+    {
+      "actions": ["delete_participant7"]
+    },
+    {
+      "attributes": ["deal_participant8"]
+    },
+    {
+      "actions": ["delete_participant8"]
+    },
+    {
+      "attributes": ["deal_participant9"]
+    },
+    {
+      "actions": ["delete_participant9"]
+    },
+    {
+      "attributes": ["deal_participant10"]
+    },
+    {
+      "actions": ["delete_participant10"]
+    },
+    {
       "attributes": ["description", "content"]
     },
     {
       "actions": ["login"]
     },
     {
-      "attributes": ["market_volume"]
+      "attributes": ["sector_volume", "sector_volume_changes"]
     }
   ]
 }
@@ -133,11 +196,7 @@ insert into data.objects(code)
 select 'ship_reactor' || o.* from generate_series(1, 2) o;
 
 insert into data.objects(code)
-select 'corporation' || o.* from generate_series(1, 9) o;
-
-insert into data.objects(code)
-select 'asset' || o1.* || o2.* from generate_series(1, 9) o1(value)
-join generate_series(1, 50) o2(value) on 1=1;
+select 'corporation' || o.* from generate_series(1, 11) o;
 
 insert into data.objects(code)
 select 'news' || o1.* || o2.* from generate_series(1, 3) o1(value)
@@ -155,6 +214,12 @@ select 'personal_document' || o1.* from generate_series(1, 100) o1(value);
 
 insert into data.objects(code)
 select 'med_document' || o1.* from generate_series(1, 15) o1(value);
+
+insert into data.objects(code)
+select 'sector' || o1.* from generate_series(1, 4) o1(value);
+
+insert into data.objects(code)
+select 'deal' || o1.* from generate_series(1, 30) o1(value);
 
 -- Функции для получения значений атрибутов
 CREATE OR REPLACE FUNCTION attribute_value_description_functions.person_race(
@@ -235,7 +300,7 @@ $BODY$
   LANGUAGE plpgsql IMMUTABLE
   COST 100;
 
-CREATE OR REPLACE FUNCTION attribute_value_description_functions.asset_status(
+CREATE OR REPLACE FUNCTION attribute_value_description_functions.deal_status(
     in_user_object_id integer,
     in_attribute_id integer,
     in_value jsonb)
@@ -244,10 +309,12 @@ $BODY$
 declare
   v_text_value text := json.get_string(in_value);
 begin
-  case when v_text_value = 'review' then
-    return 'На согласовании';
+  case when v_text_value = 'draft' then
+    return 'Подготавливается';
   when v_text_value = 'normal' then
-    return 'Работает';
+    return 'Утверждена';
+  when v_text_value = 'canceled' then
+    return 'Расторгнута';
   end case;
 
   return null;
@@ -294,12 +361,25 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('transaction_time', 'Время перевода', 'NORMAL', null),
 ('transaction_description', 'Сообщение', 'NORMAL', null),
 ('transaction_sum', 'Сумма', 'NORMAL', null),
-('corporation_members', 'Члены корпораций', 'NORMAL', 'codes'),
+('corporation_state', 'Государство корпорации', 'NORMAL', 'code'),
+('system_corporation_members', 'Члены корпорации', 'SYSTEM', null),
+('corporation_members', 'Члены корпорации', 'NORMAL', null),
+('system_corporation_capitalization', 'Капитализация корпорации', 'SYSTEM', null),
 ('corporation_capitalization', 'Капитализация корпорации', 'NORMAL', null),
-('corporation_asserts', 'Активы корпорации', 'NORMAL', null),
-('asset_corporations', 'Корпорации актива', 'NORMAL', 'codes'),
-('asset_time', 'Время создания актива', 'NORMAL', null),
-('asset_status', 'Состояние актива', 'NORMAL', 'asset_status'),
+('corporation_sectors', 'Рынки корпорации', 'NORMAL', 'codes'),
+('system_corporation_deals', 'Активные сделки корпорации', 'SYSTEM', null),
+('corporation_deals', 'Активные сделки корпорации', 'NORMAL', null),
+('system_corporation_draft_deals', 'Подготавливаемые сделки корпорации', 'SYSTEM', null),
+('corporation_draft_deals', 'Подготавливаемые сделки корпорации', 'NORMAL', null),
+('system_corporation_canceled_deals', 'Расторгнутые сделки корпорации', 'SYSTEM', null),
+('corporation_canceled_deals', 'Расторгнутые сделки корпорации', 'NORMAL', null),
+('dividend_vote', 'Согласие на выплату дивидендов', 'NORMAL', null),
+('deal_time', 'Дата утверждения сделки', 'NORMAL', null),
+('deal_cancel_time', 'Дата расторжения сделки', 'NORMAL', null),
+('deal_status', 'Статус сделки', 'NORMAL', 'deal_status'),
+('deal_author', 'Автор сделки', 'SYSTEM', null),
+('deal_sector', 'Рынок сделки', 'NORMAL', 'code'),
+('asset_name', 'Имя актива', 'NORMAL', null),
 ('asset_cost', 'Стоимость актива', 'NORMAL', null),
 ('document_title', 'Заголовок документа', 'NORMAL', null),
 ('system_document_time', 'Реальное время создания документа', 'SYSTEM', null),
@@ -307,6 +387,22 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('document_author', 'Автор', 'NORMAL', 'code'),
 ('med_document_patient', 'Пациент', 'NORMAL', 'code'),
 ('market_volume', 'Объём рынка', 'NORMAL', null),
+('asset_amortization', 'Расходность актива', 'NORMAL', null),
+('deal_income', 'Доходность сделки', 'NORMAL', null),
+('deal_participant1', 'Участник сделки 1', 'NORMAL', null),
+('deal_participant2', 'Участник сделки 2', 'NORMAL', null),
+('deal_participant3', 'Участник сделки 3', 'NORMAL', null),
+('deal_participant4', 'Участник сделки 4', 'NORMAL', null),
+('deal_participant5', 'Участник сделки 5', 'NORMAL', null),
+('deal_participant6', 'Участник сделки 6', 'NORMAL', null),
+('deal_participant7', 'Участник сделки 7', 'NORMAL', null),
+('deal_participant8', 'Участник сделки 8', 'NORMAL', null),
+('deal_participant9', 'Участник сделки 9', 'NORMAL', null),
+('deal_participant10', 'Участник сделки 10', 'NORMAL', null),
+('transactions', 'Транзакции', 'SYSTEM', null),
+('sector_volume', 'Объём отрасли', 'NORMAL',null),
+('sector_volume_changes', 'Изменение объёма отрасли', 'NORMAL',null),
+('state_tax', 'Ставка налога в стране', 'NORMAL', null),
 ('system_balance', 'Остаток на счету', 'SYSTEM', null),
 ('balance', 'Остаток на счету', 'NORMAL', null),
 ('system_master', 'Маркер мастерского персонажа', 'SYSTEM', null),
@@ -328,7 +424,7 @@ insert into data.attributes(code, name, type, value_description_function) values
 
 -- Функции для создания связей
 insert into data.attribute_value_change_functions(attribute_id, function, params) values
-(data.get_attribute_id('type'), 'string_value_to_object', jsonb '{"params": {"person": "persons", "corporation": "corporations", "ship": "ships", "news": "news_hub", "library_category": "library", "med_document": "med_library"}}'),
+(data.get_attribute_id('type'), 'string_value_to_object', jsonb '{"params": {"person": "persons", "corporation": "corporations", "ship": "ships", "news": "news_hub", "library_category": "library", "med_document": "med_library", "sector": "market"}}'),
 (data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"person": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}, "corporation": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}}}'),
 (data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"person": {"object_code": "persons", "attribute_code": "persons"}}}'),
 (data.get_attribute_id('system_master'), 'boolean_value_to_object', jsonb '{"object_code": "masters"}'),
@@ -344,7 +440,8 @@ insert into data.attribute_value_change_functions(attribute_id, function, params
 (data.get_attribute_id('system_hacker'), 'boolean_value_to_object', jsonb '{"object_code": "hackers"}'),
 (data.get_attribute_id('system_scientist'), 'boolean_value_to_object', jsonb '{"object_code": "scientists"}'),
 (data.get_attribute_id('system_mail_contact'), 'boolean_value_to_attribute', jsonb '{"object_code": "mail_contacts", "attribute_code": "mail_contacts"}'),
-(data.get_attribute_id('system_meta'), 'boolean_value_to_value_attribute', jsonb '{"object_code": "meta_entities", "attribute_code": "meta_entities"}');
+(data.get_attribute_id('system_meta'), 'boolean_value_to_value_attribute', jsonb '{"object_code": "meta_entities", "attribute_code": "meta_entities"}'),
+(data.get_attribute_id('system_corporation_members'), 'json_to_attribute_system_meta', null);
 
 insert into data.attribute_value_change_functions(attribute_id, function, params)
 select data.get_attribute_id('system_library_category'), 'string_value_to_object', ('{"params": {' || string_agg(s.value, ',') || '}}')::jsonb
@@ -837,6 +934,11 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
         "params": {"sort_attribute_code": "system_document_time", "sort_type": "desc", "output": [{"type": "string", "data": " <a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
       },
       {
+        "conditions": [{"attribute_code": "type", "attribute_value": "corporations"}],
+        "function": "fill_content",
+        "params": {"sort_attribute_code": "name", "sort_type": "asc", "output": [{"type": "string", "data": " <a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+      },
+      {
         "conditions": [{"attribute_code": "type", "attribute_value": "transactions"}],
         "function": "fill_user_content_from_attribute",
         "params": {"placeholder": "Транзакций нет", "source_attribute_code": "system_value", "sort_type": "desc", "output": [{"type": "string", "data": " <a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
@@ -973,8 +1075,9 @@ select data.set_attribute_value(data.get_object_id('scientists'), data.get_attri
 select data.set_attribute_value(data.get_object_id('scientists'), data.get_attribute_id('type'), null, jsonb '"group"');
 select data.set_attribute_value(data.get_object_id('scientists'), data.get_attribute_id('name'), null, jsonb '"Учёные"');
 
-select data.set_attribute_value(data.get_object_id('corporations'), data.get_attribute_id('system_is_visible'), data.get_object_id('traders'), jsonb 'true');
-select data.set_attribute_value(data.get_object_id('corporations'), data.get_attribute_id('type'), null, jsonb '"group"');
+select data.set_attribute_value(data.get_object_id('corporations'), data.get_attribute_id('system_is_visible'), /*data.get_object_id('masters')*/null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporations'), data.get_attribute_id('system_meta'), /*data.get_object_id('masters')*/ null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporations'), data.get_attribute_id('type'), null, jsonb '"corporations"');
 select data.set_attribute_value(data.get_object_id('corporations'), data.get_attribute_id('name'), null, jsonb '"Корпорации"');
 
 select data.set_attribute_value(data.get_object_id('ships'), data.get_attribute_id('system_is_visible'), data.get_object_id('hackers'), jsonb 'true');
@@ -1007,6 +1110,7 @@ select
   data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('type'), null, jsonb '"state"'),
   data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('name'), null, to_jsonb('state' || o.value)),
   data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('description'), null, to_jsonb('Их адрес не дом и не улица, их адрес -  state ' || o.value || '!'))
+  data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('state_tax'), null, (o.value::text)::jsonb)
 from generate_series(1, 10) o(value);
 
 select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('system_priority'), null, jsonb '200');
@@ -1052,6 +1156,68 @@ select
     null
   end
 from generate_series(1, 60) o(value);
+
+select data.set_attribute_value(data.get_object_id('market'), data.get_attribute_id('system_meta'), data.get_object_id('masters'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('market'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('market'), data.get_attribute_id('type'), null, jsonb '"market"');
+select data.set_attribute_value(data.get_object_id('market'), data.get_attribute_id('name'), null, jsonb '"Рынок"');
+
+select
+  data.set_attribute_value(data.get_object_id('sector' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('sector' || o.value), data.get_attribute_id('type'), null, jsonb '"sector"'),
+  data.set_attribute_value(data.get_object_id('sector' || o.value), data.get_attribute_id('name'), null, ('"sector' || o.value || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('sector' || o.value), data.get_attribute_id('description'), null, ('"Описание рынка sector ' || o.value || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('sector' || o.value), data.get_attribute_id('sector_volume'), null, ((100000 * o.value)::text)::jsonb),
+  data.set_attribute_value(data.get_object_id('sector' || o.value), data.get_attribute_id('sector_volume_changes'), null, ('"2259.02.23 15:34 было 1000 стало 2000000000 - лучше стали жить <br> 2259.02.23 19:34 было 2000000000 стало 100000 - хуже стали жить"')::jsonb)
+from generate_series(1, 4) o(value);
+
+select
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_meta'), data.get_object_id('person' || o.value ), jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_meta'), data.get_object_id('person' || (o.value * 2)::text ), jsonb 'true'), 
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('type'), null, jsonb '"corporation"'),
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('name'), null, ('"corporation' || o.value || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('description'), null, ('"Описание корпорации corporation ' || o.value || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('corporation_state'), null, ('"state' || o.value%10 + 1 || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_balance'), null, utils.random_integer(100, 10000000)::text::jsonb),
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('corporation_sectors'), null, ('["sector' || o.value%3 + 1 || '","sector' || (o.value%3 + 2)::text || '"]')::jsonb),
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('corporation_capitalization'), null, (10000000 + o.value)::text::jsonb),
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_corporation_members'), null, ('[{"member" : "person' || o.value || '","percent" : 80},{"member" : "person' || (o.value * 2)::text || '","percent" : 20}]')::jsonb),
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_corporation_deals'), null, ('["deal' || o.value || '","deal' || (o.value + 1)::text || '"]')::jsonb),
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_corporation_draft_deals'), null, ('["deal' || (10 + o.value)::text || '","deal' || (10 + o.value + 1)::text || '"]')::jsonb),
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_corporation_canceled_deals'), null, ('["deal' || (10 + o.value)::text || '","deal' || (10 + o.value + 1)::text || '"]')::jsonb),
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('dividend_vote'), null, '"Нет"'::jsonb)
+from generate_series(1, 11) o(value);
+
+select
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('name'), null, ('"deal' || o.value || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('description'), null, ('"Описание сделки deal ' || o.value || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_sector'), null, ('"sector'|| o.value%4 + 1 ||'"')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('asset_name'), null, ('"Актив сделки deal'|| o.value ||'"')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('asset_cost'), null, ('"'|| o.value * 1000 ||'"')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('asset_amortization'), null, ('"'|| o.value * 100 ||'"')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_income'), null, ('"'|| o.value * 10 ||'"')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_participant1'), null, ('{"member" : "corporation' || o.value%10 + 1 || '","percent_asset" : 80, "percent_income" : 30, "deal_cost": 10000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_participant2'), null, ('{"member" : "corporation' || (o.value%10 + 2)::text || '","percent_asset" : 20, "percent_income" : 70, "deal_cost": 50000}')::jsonb)
+
+from generate_series(1, 30) o(value);
+
+select 
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_time'), null, ('"2259.02.23 15:' || o.value || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_status'), null, ('"normal"')::jsonb)
+from generate_series(1, 10) o(value);
+
+select 
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_status'), null, ('"draft"')::jsonb)
+from generate_series(11, 20) o(value);
+
+select 
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_time'), null, ('"2259.02.23 15:' || o.value || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_cancel_time'), null, ('"2259.02.23 18:' || o.value || '"')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_status'), null, ('"canceled"')::jsonb)
+from generate_series(21, 30) o(value);
 
 -- other person{1,60}
 /*

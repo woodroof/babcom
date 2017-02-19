@@ -21,7 +21,7 @@ begin
         'Инкогнито'),
       ', ')
   into v_ret_val
-  from data.objects
+  from data.objects o
   where o.code = any(v_object_codes);
 
   return v_ret_val;
