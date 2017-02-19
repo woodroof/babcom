@@ -1116,6 +1116,52 @@ $BODY$
 insert into data.action_generators(function, params, description)
 values('login', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция входа в систему');
 
+-- "Выход"
+CREATE OR REPLACE FUNCTION action_generators.logout(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
+  v_test_object_id integer := json.get_integer(in_params, 'test_object_id');
+begin
+  if v_user_object_id = v_test_object_id or v_object_id is not null then
+    return null;
+  end if;
+
+  return jsonb_build_object(
+    'logout',
+    jsonb_build_object(
+      'code', 'logout',
+      'name', 'Выйти',
+      'type', 'security.logout',
+      'params', jsonb '{}',
+      'warning', jsonb '"Вы действительно хотите выйти?"'));
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.logout(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+begin
+  perform data.set_client_login(in_client, null, in_user_object_id);
+
+  return api_utils.create_ok_result(null);
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+insert into data.action_generators(function, params, description)
+values('logout', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция выхода из системы');
+
 -- Действие для изменения статуса уведомления на "прочитано"
 CREATE OR REPLACE FUNCTION action_generators.read_notification(
     in_params in jsonb)
