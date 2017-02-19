@@ -39,6 +39,9 @@ insert into data.params(code, value, description) values
       "attributes": ["asset_status", "asset_time", "asset_cost", "asset_corporations"]
     },
     {
+      "attributes": ["document_title", "document_time", "document_author"]
+    },
+    {
       "attributes": ["description", "content"]
     },
     {
@@ -59,6 +62,7 @@ insert into data.objects(code) values
 ('security'),
 ('politicians'),
 ('medics'),
+('med_documents'),
 ('technicians'),
 ('pilots'),
 ('officers'),
@@ -145,6 +149,9 @@ join generate_series(1, 20) o2(value) on 1=1;
 
 insert into data.objects(code)
 select 'personal_document' || o1.* from generate_series(1, 100) o1(value);
+
+insert into data.objects(code)
+select 'med_document' || o1.* from generate_series(1, 15) o1(value);
 
 -- Функции для получения значений атрибутов
 CREATE OR REPLACE FUNCTION attribute_value_description_functions.person_race(
@@ -248,6 +255,7 @@ $BODY$
 
 -- Атрибуты
 insert into data.attributes(code, name, type, value_description_function) values
+('persons', 'Список доступных персонажей', 'INVISIBLE', null),
 ('mail_contacts', 'Список доступных контактов', 'INVISIBLE', null),
 ('transaction_destinations', 'Список доступных назначений переводов', 'INVISIBLE', null),
 ('type', 'Тип', 'HIDDEN', null),
@@ -290,6 +298,10 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('asset_time', 'Время создания актива', 'NORMAL', null),
 ('asset_status', 'Состояние актива', 'NORMAL', 'asset_status'),
 ('asset_cost', 'Стоимость актива', 'NORMAL', null),
+('document_title', 'Заголовок документа', 'NORMAL', null),
+('system_document_time', 'Реальное время создания документа', 'SYSTEM', null),
+('document_time', 'Время создания', 'NORMAL', null),
+('document_author', 'Автор', 'NORMAL', 'code'),
 ('market_volume', 'Объём рынка', 'NORMAL', null),
 ('system_balance', 'Остаток на счету', 'SYSTEM', null),
 ('balance', 'Остаток на счету', 'NORMAL', null),
@@ -297,6 +309,7 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('system_security', 'Маркер персонажа, имеющего доступ к системе безопасности', 'SYSTEM', null),
 ('system_politician', 'Маркер персонажа-политика', 'SYSTEM', null),
 ('system_medic', 'Маркер персонажа-медика', 'SYSTEM', null),
+('system_med_documents', 'Маркер персонажа, имеющего доступ к медицинским документам', 'SYSTEM', null),
 ('system_technician', 'Маркер персонажа-техника', 'SYSTEM', null),
 ('system_pilot', 'Маркер персонажа-пилота', 'SYSTEM', null),
 ('system_officer', 'Маркер персонажа-офицера', 'SYSTEM', null),
@@ -306,17 +319,20 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('system_library_category', 'Категория документа', 'SYSTEM', null),
 ('news_title', 'Заголовок новости', 'NORMAL', null),
 ('news_media', 'Источник новости', 'NORMAL', 'code'),
+('system_news_time', 'Реальное время публикации новости', 'SYSTEM', null),
 ('news_time', 'Время публикации новости', 'NORMAL', null);
 
 -- Функции для создания связей
 insert into data.attribute_value_change_functions(attribute_id, function, params) values
-(data.get_attribute_id('type'), 'string_value_to_object', jsonb '{"params": {"person": "persons", "corporation": "corporations", "ship": "ships", "media": "news_hub", "library_category": "library"}}'),
+(data.get_attribute_id('type'), 'string_value_to_object', jsonb '{"params": {"person": "persons", "corporation": "corporations", "ship": "ships", "news": "news_hub", "library_category": "library", "med_document": "med_library"}}'),
 (data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"person": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}, "corporation": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}}}'),
+(data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"person": {"object_code": "persons", "attribute_code": "persons"}}}'),
 (data.get_attribute_id('system_master'), 'boolean_value_to_object', jsonb '{"object_code": "masters"}'),
 (data.get_attribute_id('system_psi_scale'), 'any_value_to_object', jsonb '{"object_code": "telepaths"}'),
 (data.get_attribute_id('system_security'), 'boolean_value_to_object', jsonb '{"object_code": "security"}'),
 (data.get_attribute_id('system_politician'), 'boolean_value_to_object', jsonb '{"object_code": "politicians"}'),
 (data.get_attribute_id('system_medic'), 'boolean_value_to_object', jsonb '{"object_code": "medics"}'),
+(data.get_attribute_id('system_med_documents'), 'boolean_value_to_object', jsonb '{"object_code": "med_documents"}'),
 (data.get_attribute_id('system_technician'), 'boolean_value_to_object', jsonb '{"object_code": "technicians"}'),
 (data.get_attribute_id('system_pilot'), 'boolean_value_to_object', jsonb '{"object_code": "pilots"}'),
 (data.get_attribute_id('system_officer'), 'boolean_value_to_object', jsonb '{"object_code": "officers"}'),
@@ -436,97 +452,166 @@ $BODY$
 insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
 (data.get_attribute_id('meta_entities'), 'fill_if_user_object_attribute', '{"blocks": [{"conditions": [{"attribute_code": "type", "attribute_value": "person"}, {"attribute_code": "type", "attribute_value": "anonymous"}], "function": "merge_metaobjects", "params": {"object_code": "meta_entities", "attribute_code": "meta_entities"}}]}', 'Заполнение списка метаобъектов игрока');
 
-CREATE OR REPLACE FUNCTION attribute_value_fill_functions.news_hub_content(in_params jsonb)
+CREATE OR REPLACE FUNCTION attribute_value_fill_functions.fill_user_content(in_params jsonb)
   RETURNS void AS
 $BODY$
 declare
-  v_attribute_id integer := json.get_integer(in_params, 'attribute_id');
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
   v_object_id integer := json.get_integer(in_params, 'object_id');
-  v_content jsonb;
-  v_attribute_name_id integer := data.get_attribute_id('name');
-  v_attribute_news_time_id integer := data.get_attribute_id('news_time');
+  v_attribute_id integer := json.get_integer(in_params, 'attribute_id');
+
+  v_sort_attribute_id integer := data.get_attribute_id(json.get_string(in_params, 'sort_attribute_code'));
+  v_sort_type text := json.get_string(in_params, 'sort_type');
+
+  v_output jsonb := json.get_object_array(in_params, 'output');
+
+  v_next_object_id integer;
+  v_output_entry jsonb;
+
+  v_content_entry text;
+  v_type text;
+  v_content text;
 begin
-  select to_jsonb(string_agg(src.dt || ' <a href="babcom:' || src.code || '">' || src.nm || '</a>', E'<br>\n'::text))
-  into v_content
-  from (
-    select
-      json.get_string(av_date.value) dt,
-      o.code,
-      json.get_string(av_name.value) nm
-    from data.object_objects oo
-    left join data.objects o on
-      o.id = oo.object_id
-    left join data.attribute_values av_name on
-      av_name.object_id = o.id and
-      av_name.attribute_id = v_attribute_name_id and
-      av_name.value_object_id is null
-    left join data.attribute_values av_date on
-      av_date.object_id = o.id and
-      av_date.attribute_id = v_attribute_news_time_id and
-      av_date.value_object_id is null
-    where
-      oo.parent_object_id = v_object_id and
-      oo.intermediate_object_ids is not null
-    order by av_date.value desc
-  ) src;
+  assert v_sort_type = 'asc' or v_sort_type = 'desc';
+
+  for v_next_object_id in
+    execute '
+      select object_id
+      from data.object_objects
+      where
+        parent_object_id = $1 and
+        intermediate_object_ids is null and
+        parent_object_id != object_id
+      order by data.get_attribute_value($2, object_id, $3) ' || v_sort_type
+    using v_object_id, v_user_object_id, v_sort_attribute_id
+  loop
+    v_content_entry := '';
+
+    for v_output_entry in
+      select value
+      from jsonb_array_elements(v_output)
+    loop
+      v_type := json.get_string(v_output_entry, 'type');
+      if v_type = 'attribute' then
+        v_content_entry :=
+          v_content_entry ||
+          json.get_string(
+            data.get_attribute_value(
+              v_user_object_id,
+              v_next_object_id,
+              data.get_attribute_id(json.get_string(v_output_entry, 'data'))));
+      elsif v_type = 'code' then
+        v_content_entry := v_content_entry || data.get_object_code(v_next_object_id);
+      else
+        assert v_type = 'string';
+        v_content_entry := v_content_entry || json.get_string(v_output_entry, 'data');
+      end if;
+    end loop;
+
+    if v_content is not null then
+      v_content := v_content || E'<br>\n';
+    end if;
+    v_content := coalesce(v_content, '') || v_content_entry;
+  end loop;
 
   if v_content is null then
-    perform data.delete_attribute_value_if_exists(v_object_id, v_attribute_id, null, v_object_id);
+    perform data.delete_attribute_value_if_exists(
+      v_object_id,
+      v_attribute_id,
+      v_user_object_id,
+      v_user_object_id);
   else
     perform data.set_attribute_value_if_changed(
       v_object_id,
       v_attribute_id,
-      null,
-      v_content);
+      v_user_object_id,
+      to_jsonb(v_content),
+      v_user_object_id);
   end if;
 end;
 $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
 
-CREATE OR REPLACE FUNCTION attribute_value_fill_functions.media_content(in_params jsonb)
+CREATE OR REPLACE FUNCTION attribute_value_fill_functions.fill_content(in_params jsonb)
   RETURNS void AS
 $BODY$
 declare
-  v_attribute_id integer := json.get_integer(in_params, 'attribute_id');
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
   v_object_id integer := json.get_integer(in_params, 'object_id');
-  v_content jsonb;
-  v_attribute_name_id integer := data.get_attribute_id('name');
-  v_attribute_news_time_id integer := data.get_attribute_id('news_time');
+  v_attribute_id integer := json.get_integer(in_params, 'attribute_id');
+
+  v_sort_attribute_id integer := data.get_attribute_id(json.get_string(in_params, 'sort_attribute_code'));
+  v_sort_type text := json.get_string(in_params, 'sort_type');
+
+  v_output jsonb := json.get_object_array(in_params, 'output');
+
+  v_next_object_id integer;
+  v_output_entry jsonb;
+
+  v_content_entry text;
+  v_type text;
+  v_content text;
 begin
-  select to_jsonb(string_agg(src.dt || ' <a href="babcom:' || src.code || '">' || src.nm || '</a>', E'<br>\n'::text))
-  into v_content
-  from (
-    select
-      json.get_string(av_date.value) dt,
-      o.code,
-      json.get_string(av_name.value) nm
-    from data.object_objects oo
-    left join data.objects o on
-      o.id = oo.object_id
-    left join data.attribute_values av_name on
-      av_name.object_id = o.id and
-      av_name.attribute_id = v_attribute_name_id and
-      av_name.value_object_id is null
-    left join data.attribute_values av_date on
-      av_date.object_id = o.id and
-      av_date.attribute_id = v_attribute_news_time_id and
-      av_date.value_object_id is null
-    where
-      oo.parent_object_id = v_object_id and
-      oo.intermediate_object_ids is null and
-      oo.parent_object_id <> oo.object_id
-    order by av_date.value desc
-  ) src;
+  assert v_sort_type = 'asc' or v_sort_type = 'desc';
+
+  for v_next_object_id in
+    execute '
+      select oo.object_id
+      from data.object_objects oo
+      join data.attribute_values av on
+        av.object_id = oo.object_id and
+        av.attribute_id = $1 and
+        av.value_object_id is null
+      where
+        oo.parent_object_id = $2 and
+        oo.intermediate_object_ids is null and
+        oo.parent_object_id != oo.object_id
+      order by av.value ' || v_sort_type
+    using v_sort_attribute_id, v_object_id
+  loop
+    v_content_entry := '';
+
+    for v_output_entry in
+      select value
+      from jsonb_array_elements(v_output)
+    loop
+      v_type := json.get_string(v_output_entry, 'type');
+      if v_type = 'attribute' then
+        select v_content_entry || json.get_string(value)
+        into v_content_entry
+        from data.attribute_values
+        where
+          object_id = v_next_object_id and
+          attribute_id = data.get_attribute_id(json.get_string(v_output_entry, 'data')) and
+          value_object_id is null;
+      elsif v_type = 'code' then
+        v_content_entry := v_content_entry || data.get_object_code(v_next_object_id);
+      else
+        assert v_type = 'string';
+        v_content_entry := v_content_entry || json.get_string(v_output_entry, 'data');
+      end if;
+    end loop;
+
+    if v_content is not null then
+      v_content := v_content || E'<br>\n';
+    end if;
+    v_content := coalesce(v_content, '') || v_content_entry;
+  end loop;
 
   if v_content is null then
-    perform data.delete_attribute_value_if_exists(v_object_id, v_attribute_id, null, v_object_id);
+    perform data.delete_attribute_value_if_exists(
+      v_object_id,
+      v_attribute_id,
+      null,
+      v_user_object_id);
   else
     perform data.set_attribute_value_if_changed(
       v_object_id,
       v_attribute_id,
       null,
-      v_content);
+      to_jsonb(v_content),
+      v_user_object_id);
   end if;
 end;
 $BODY$
@@ -539,9 +624,21 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
   'fill_if_object_attribute', '
   {
     "blocks": [
-      {"conditions": [{"attribute_code": "type", "attribute_value": "news_hub"}], "function": "news_hub_content"},
-      {"conditions": [{"attribute_code": "type", "attribute_value": "media"}], "function": "media_content"},
-      {"conditions": [{"attribute_code": "type", "attribute_value": "transactions"}], "function": "value_codes_to_value_links", "params": {"attribute_code": "system_value", "placeholder": "Транзакций нет"}}
+      {
+        "conditions": [{"attribute_code": "type", "attribute_value": "news_hub"}, {"attribute_code": "type", "attribute_value": "media"}],
+        "function": "fill_content",
+        "params": {"sort_attribute_code": "system_news_time", "sort_type": "desc", "output": [{"type": "attribute", "data": "news_time"}, {"type": "string", "data": " <a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+      },
+      {
+        "conditions": [{"attribute_code": "type", "attribute_value": "med_library"}],
+        "function": "fill_user_content",
+        "params": {"sort_attribute_code": "system_document_time", "sort_type": "desc", "output": [{"type": "string", "data": " <a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+      },
+      {
+        "conditions": [{"attribute_code": "type", "attribute_value": "transactions"}],
+        "function": "value_codes_to_value_links",
+        "params": {"attribute_code": "system_value", "placeholder": "Транзакций нет"}
+      }
     ]
   }', 'Получение списков (новости, транзакции)');
 
@@ -605,7 +702,6 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
   -- TODO и другие:
   -- personal_document_storage: system_value[player] -> content[player]
   -- library: object_objects[intermediate is null] -> content
-  -- med_library: object_objects -> content
   -- library_category{1,9}: object_objects[intermediate is null] -> content
   -- mailX: system_mail_send_time -> mail_send_time (с использованием формата из параметров)
 
@@ -733,15 +829,32 @@ select
     data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_psi_scale'), null, to_jsonb(utils.random_integer(1,16)))
   else
     null
+  end,
+  case when o.value > 51 then
+    data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_master'), null, jsonb 'true')
+  else
+    null
+  end,
+  case when o.value % 11 = 0 then
+    data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_medic'), null, jsonb 'true')
+  else
+    null
+  end,
+  case when o.value % 11 = 0 or o.value % 13 = 0 then
+    data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_med_documents'), null, jsonb 'true')
+  else
+    null
+  end,
+  case when o.value % 13 = 0 then
+    data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_security'), null, jsonb 'true')
+  else
+    null
   end
 from generate_series(1, 60) o(value);
 
 -- other person{1,60}
 /*
-system_master
-system_security
 system_politician
-system_medic
 system_technician
 system_pilot
 system_officer
@@ -787,7 +900,8 @@ select
   data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('news_title'), null, to_jsonb('Заголовок новости news' || o1.value || o2.value || '!')),
   data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('name'), null, to_jsonb('media'||o1.value||': Заголовок новости news' || o1.value || o2.value || '!')),
   data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('news_media'), null, to_jsonb('media' || o1.value)),
-  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('news_time'), null, to_jsonb('2258.02.23 ' || 10 + trunc(o2.value / 10) || ':' || 10 + o1.value * 5)),
+  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('system_news_time'), null, to_jsonb('2258.02.23 ' || 10 + trunc(o2.value / 10) || ':' || 10 + o1.value * 5)),
+  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('news_time'), null, to_jsonb('23.02.2258 ' || 10 + trunc(o2.value / 10) || ':' || 10 + o1.value * 5)),
   data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('content'), null, to_jsonb('Текст новости news' || o1.value || o2.value || '. <br>После активного культурного взаимонасыщения таких, казалось бы разных цивилизаций, как Драззи и Минбари их общества кардинально изменились. Ввиду закрытости последних, стороннему наблюдателю, скорей всего не суждено узнать, как же повлияли воинственные Драззи на высокодуховных Минбарцев, однако у первых изменения, так сказать, на лицо. <br>Почти сразу после первых визитов, спрос на минбарскую культуру взлетел до небес! Ткани, одежда, предметы мебели и прочие диковинные товары заполонили рынки. Активно стали ввозиться всевозможные составы целительного свойства. Например, ставший знаменитым порошок, под названием “Минбарский гребень” завоевал популярность у молодых Драззи. Препарат, якобы, сделан на основе тертого костного образования на черепе минбарца. Многие потребители уверяют, что с его помощью, смогли одержать победу на любовном фронте, однако, ученые уверяют, что тонизирующий эффект, как и происхождение самого препарата не вызывают особого доверия.'))
 from generate_series(1, 3) o1(value)
 join generate_series(1, 100) o2(value) on 1=1;
@@ -796,6 +910,25 @@ select data.set_attribute_value(data.get_object_id('transactions'), data.get_att
 select data.set_attribute_value(data.get_object_id('transactions'), data.get_attribute_id('type'), null, jsonb '"transactions"');
 select data.set_attribute_value(data.get_object_id('transactions'), data.get_attribute_id('name'), null, jsonb '"История операций"');
 select data.set_attribute_value(data.get_object_id('transactions'), data.get_attribute_id('system_meta'), data.get_object_id('persons'), jsonb 'true');
+
+select data.set_attribute_value(data.get_object_id('med_library'), data.get_attribute_id('system_is_visible'), data.get_object_id('med_documents'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('med_library'), data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('med_library'), data.get_attribute_id('type'), null, jsonb '"med_library"');
+select data.set_attribute_value(data.get_object_id('med_library'), data.get_attribute_id('name'), null, jsonb '"Медицинские отчёты"');
+select data.set_attribute_value(data.get_object_id('med_library'), data.get_attribute_id('system_meta'), data.get_object_id('med_documents'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('med_library'), data.get_attribute_id('system_meta'), data.get_object_id('masters'), jsonb 'true');
+
+select
+  data.set_attribute_value(data.get_object_id('med_document' || o.value), data.get_attribute_id('system_is_visible'), data.get_object_id('med_documents'), jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('med_document' || o.value), data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('med_document' || o.value), data.get_attribute_id('type'), null, jsonb '"med_document"'),
+  data.set_attribute_value(data.get_object_id('med_document' || o.value), data.get_attribute_id('name'), null, to_jsonb('Медицинский отчёт ' || o.value)),
+  data.set_attribute_value(data.get_object_id('med_document' || o.value), data.get_attribute_id('document_title'), null, to_jsonb('Медицинский отчёт ' || o.value)),
+  data.set_attribute_value(data.get_object_id('med_document' || o.value), data.get_attribute_id('system_document_time'), null, to_jsonb(case when o.value < 10 then '0' else '' end || o.value)),
+  data.set_attribute_value(data.get_object_id('med_document' || o.value), data.get_attribute_id('document_time'), null, to_jsonb('19.02.2258 17:' || case when o.value < 10 then '0' else '' end || o.value)),
+  data.set_attribute_value(data.get_object_id('med_document' || o.value), data.get_attribute_id('content'), null, to_jsonb('Содержимое медицинского отчёта ' || o.value)),
+  data.set_attribute_value(data.get_object_id('med_document' || o.value), data.get_attribute_id('document_author'), null, to_jsonb('person' || ((o.value % 5 + 1) * 11)))
+from generate_series(1, 15) o(value);
 
   -- TODO: Всё прочее
 /*
@@ -1143,6 +1276,8 @@ declare
   v_user_balance integer;
   v_receiver_balance integer;
 begin
+  assert in_user_object_id is not null;
+  assert in_user_object_id != v_receiver_id;
   assert v_sum > 0;
 
   if in_user_object_id < v_receiver_id then
@@ -1290,6 +1425,113 @@ $BODY$
 
 insert into data.action_generators(function, params, description)
 values('generate_if_user_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'person', 'function', 'transfer'), 'Функция для перевода средств');
+
+-- Действие для создания медицинского отчёта
+CREATE OR REPLACE FUNCTION action_generators.create_med_document(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
+  v_user_object_id integer;
+  v_medics_objects_id integer;
+  v_medic boolean;
+begin
+  if v_object_id is not null then
+    return null;
+  end if;
+
+  v_user_object_id := json.get_integer(in_params, 'user_object_id');
+  v_medics_objects_id := data.get_object_id('medics');
+
+  select true
+  into v_medic
+  from data.object_objects
+  where
+    parent_object_id = v_medics_objects_id and
+    object_id = v_user_object_id;
+
+  if v_medic is null then
+    return null;
+  end if;
+  
+  return jsonb_build_object(
+    'create_med_document',
+    jsonb_build_object(
+      'code', 'create_med_document',
+      'name', 'Создать медицинский отчёт',
+      'type', 'documents.create',
+      'params', jsonb '{}',
+      'user_params',
+        jsonb_build_array(
+          jsonb_build_object(
+            'code', 'patient',
+            'type', 'objects',
+            'data', jsonb_build_object('object_code', 'persons', 'attribute_code', 'persons'),
+            'description', 'Пациент',
+            'min_value_count', 1,
+            'max_value_count', 1),
+          jsonb_build_object(
+            'code', 'title',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1),
+            'description', 'Заголовок',
+            'min_value_count', 1,
+            'max_value_count', 1),
+          jsonb_build_object(
+            'code', 'content',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1, 'multiline', true),
+            'description', 'Содержимое',
+            'min_value_count', 1,
+            'max_value_count', 1))));
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.create_med_document(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_password text := json.get_string(in_user_params, 'patient');
+  v_title text := json.get_string(in_user_params, 'title');
+  v_content text := json.get_string(in_user_params, 'content');
+
+  v_document_id integer;
+  v_document_code text;
+begin
+  insert into data.objects(id) values(default)
+  returning id, code into v_document_id, v_document_code;
+
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('system_is_visible'), data.get_object_id('med_documents'), jsonb 'true');
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true');
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('type'), null, jsonb '"med_document"');
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('name'), null, to_jsonb(v_title));
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('document_title'), null, to_jsonb(v_title));
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('system_document_time'), null, to_jsonb(to_char(now(), 'yyyy.dd.mm hh24:mi:ss.us')));
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('document_time'), null, to_jsonb(to_char(now(), data.get_string_param('time_format'))));
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('content'), null, to_jsonb(v_title));
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('document_author'), null, to_jsonb(data.get_object_code(in_user_object_id)));
+
+  return api_utils.get_objects(
+    in_client,
+    in_user_object_id,
+    jsonb_build_object(
+      'object_codes', jsonb_build_array(v_document_code),
+      'get_actions', true,
+      'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+insert into data.action_generators(function, params, description)
+values('create_med_document', null, 'Функция создания медецинского отчёта');
 
 -- TODO: нагенерировать транзакций и писем
 
