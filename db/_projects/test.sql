@@ -18,6 +18,9 @@ insert into data.params(code, value, description) values
       "attributes": ["transaction_time", "transaction_sum", "transaction_from", "transaction_to", "transaction_description"]
     },
     {
+      "actions": ["generate_money", "state_money_transfer", "transfer"]
+    },
+    {
       "attributes": ["person_race", "person_state", "person_psi_scale", "person_job_position"]
     },
     {
@@ -33,7 +36,7 @@ insert into data.params(code, value, description) values
       "attributes": ["news_time", "news_media", "news_title"]
     },
     {
-      "attributes": ["state_tax"], 
+      "attributes": ["state_tax"],
       "actions": ["change_state_tax"]
     },
     {
@@ -1508,11 +1511,11 @@ select data.set_attribute_value(data.get_object_id('states'), data.get_attribute
 select
   data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
   data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('type'), null, jsonb '"state"'),
-  data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('name'), null, to_jsonb('state' || o.value)),
+  data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('name'), null, to_jsonb('State ' || o.value)),
   data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('system_balance'), null, to_jsonb(utils.random_integer(10000000,100000000))),
   data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('description'), null, to_jsonb('Их адрес не дом и не улица, их адрес -  state ' || o.value || '!')),
   data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('system_balance'), null, to_jsonb(utils.random_integer(100,100000000))),
-  data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('state_tax'), null, (o.value::text)::jsonb)
+  data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('state_tax'), null, to_jsonb(o.value))
 from generate_series(1, 10) o(value);
 
 select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('system_priority'), null, jsonb '200');
@@ -1567,27 +1570,27 @@ select data.set_attribute_value(data.get_object_id('market'), data.get_attribute
 select
   data.set_attribute_value(data.get_object_id('sector' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
   data.set_attribute_value(data.get_object_id('sector' || o.value), data.get_attribute_id('type'), null, jsonb '"sector"'),
-  data.set_attribute_value(data.get_object_id('sector' || o.value), data.get_attribute_id('name'), null, ('"sector' || o.value || '"')::jsonb),
-  data.set_attribute_value(data.get_object_id('sector' || o.value), data.get_attribute_id('description'), null, ('"Описание рынка sector ' || o.value || '"')::jsonb),
-  data.set_attribute_value(data.get_object_id('sector' || o.value), data.get_attribute_id('sector_volume'), null, ((100000 * o.value)::text)::jsonb),
-  data.set_attribute_value(data.get_object_id('sector' || o.value), data.get_attribute_id('sector_volume_changes'), null, ('"2259.02.23 15:34 было 1000 стало 2000000000 - лучше стали жить <br> 2259.02.23 19:34 было 2000000000 стало 100000 - хуже стали жить"')::jsonb)
+  data.set_attribute_value(data.get_object_id('sector' || o.value), data.get_attribute_id('name'), null, to_jsonb('Sector ' || o.value)),
+  data.set_attribute_value(data.get_object_id('sector' || o.value), data.get_attribute_id('description'), null, to_jsonb('Описание рынка sector ' || o.value)),
+  data.set_attribute_value(data.get_object_id('sector' || o.value), data.get_attribute_id('sector_volume'), null, to_jsonb(100000 * o.value)),
+  data.set_attribute_value(data.get_object_id('sector' || o.value), data.get_attribute_id('sector_volume_changes'), null, jsonb '"2259.02.23 15:34 было 1000 стало 2000000000 - лучше стали жить<br> 2259.02.23 19:34 было 2000000000 стало 100000 - хуже стали жить"')
 from generate_series(1, 4) o(value);
 
 select
   data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
   data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_meta'), data.get_object_id('corporation' || o.value ), jsonb 'true'),
   data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('type'), null, jsonb '"corporation"'),
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('name'), null, ('"corporation' || o.value || '"')::jsonb),
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('description'), null, ('"Описание корпорации corporation ' || o.value || '"')::jsonb),
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('corporation_state'), null, ('"state' || o.value%10 + 1 || '"')::jsonb),
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_balance'), null, utils.random_integer(100, 10000000)::text::jsonb),
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('corporation_sectors'), null, ('["sector' || o.value%3 + 1 || '","sector' || (o.value%3 + 2)::text || '"]')::jsonb),
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('corporation_capitalization'), null, (10000000 + o.value)::text::jsonb),
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_corporation_members'), null, ('[{"member" : "person' || o.value || '","percent" : 80},{"member" : "person' || (o.value * 2)::text || '","percent" : 20}]')::jsonb),
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_corporation_deals'), null, ('["deal' || o.value || '","deal' || (o.value + 1)::text || '"]')::jsonb),
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_corporation_draft_deals'), null, ('["deal' || (10 + o.value)::text || '","deal' || (10 + o.value + 1)::text || '"]')::jsonb),
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_corporation_canceled_deals'), null, ('["deal' || (10 + o.value)::text || '","deal' || (10 + o.value + 1)::text || '"]')::jsonb),
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('dividend_vote'), null, '"Нет"'::jsonb)
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('name'), null, to_jsonb('Corporation ' || o.value)),
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('description'), null, to_jsonb('Описание корпорации corporation ' || o.value)),
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('corporation_state'), null, to_jsonb('state' || (o.value % 10 + 1))),
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_balance'), null, to_jsonb(utils.random_integer(100, 10000000))),
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('corporation_sectors'), null, ('["sector' || (o.value % 3 + 1) || '", "sector' || (o.value % 3 + 2) || '"]')::jsonb),
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('corporation_capitalization'), null, to_jsonb(10000000 + o.value)),
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_corporation_members'), null, ('[{"member": "person' || o.value || '", "percent": 80}, {"member": "person' || (o.value * 2)::text || '", "percent": 20}]')::jsonb),
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_corporation_deals'), null, ('["deal' || o.value || '", "deal' || (o.value + 1) || '"]')::jsonb),
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_corporation_draft_deals'), null, ('["deal' || (10 + o.value) || '", "deal' || (10 + o.value + 1) || '"]')::jsonb),
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_corporation_canceled_deals'), null, ('["deal' || (10 + o.value) || '", "deal' || (10 + o.value + 1) || '"]')::jsonb),
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"')
 from generate_series(1, 11) o(value);
 
 select data.set_attribute_value(data.get_object_id('normal_deals'), data.get_attribute_id('system_meta'), data.get_object_id('masters'), jsonb 'true');
@@ -1608,34 +1611,33 @@ select data.set_attribute_value(data.get_object_id('canceled_deals'), data.get_a
 select
   data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
   data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
-  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('name'), null, ('"deal' || o.value || '"')::jsonb),
-  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('description'), null, ('"Описание сделки deal ' || o.value || '"')::jsonb),
-  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_sector'), null, ('"sector'|| o.value%4 + 1 ||'"')::jsonb),
-  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('asset_name'), null, ('"Актив сделки deal'|| o.value ||'"')::jsonb),
-  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('asset_cost'), null, ('"'|| o.value * 1000 ||'"')::jsonb),
-  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('asset_amortization'), null, ('"'|| o.value * 100 ||'"')::jsonb),
-  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_income'), null, ('"'|| o.value * 10 ||'"')::jsonb),
-  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation' || o.value%10 + 1 || '","percent_asset" : 80, "percent_income" : 30, "deal_cost": 10000}')::jsonb),
-  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('system_deal_participant2'), null, ('{"member" : "corporation' || (o.value%10 + 2)::text || '","percent_asset" : 20, "percent_income" : 70, "deal_cost": 50000}')::jsonb)
-
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('name'), null, to_jsonb('Deal ' || o.value)),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('description'), null, to_jsonb('Описание сделки deal ' || o.value)),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_sector'), null, to_jsonb('sector' || (o.value % 4 + 1))),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('asset_name'), null, to_jsonb('Актив сделки deal' || o.value)),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(o.value * 1000)),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(o.value * 100)),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(o.value * 10)),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation' || (o.value % 10 + 1) || '", "percent_asset": 80, "percent_income": 30, "deal_cost": 10000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('system_deal_participant2'), null, ('{"member" : "corporation' || (o.value % 10 + 2) || '", "percent_asset": 20, "percent_income": 70, "deal_cost": 50000}')::jsonb)
 from generate_series(1, 30) o(value);
 
-select 
-  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('system_deal_time'), null, ('"2259.02.23 15:' || o.value + 10 || '"')::jsonb),
-  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_time'), null, ('"2259.02.23 15:' || o.value + 10 || '"')::jsonb),
-  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_status'), null, ('"normal"')::jsonb)
+select
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('2259.02.23 15:' || (o.value + 10))),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_time'), null, to_jsonb('2259.02.23 15:' || (o.value + 10))),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"')
 from generate_series(1, 10) o(value);
 
 select
-  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('system_deal_time'), null, ('"2259.02.23 12:' || o.value + 10 || '"')::jsonb),
-  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_status'), null, ('"draft"')::jsonb)
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('2259.02.23 12:' || (o.value + 10))),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"draft"')
 from generate_series(11, 20) o(value);
 
-select 
-  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('system_deal_time'), null, ('"2259.02.23 18:' || o.value + 10 || '"')::jsonb),
-  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_time'), null, ('"2259.02.23 15:' || o.value + 10 || '"')::jsonb),
-  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_cancel_time'), null, ('"2259.02.23 18:' || o.value + 10 || '"')::jsonb),
-  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_status'), null, ('"canceled"')::jsonb)
+select
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('2259.02.23 18:' || (o.value + 10))),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_time'), null, to_jsonb('2259.02.23 15:' || (o.value + 10))),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_cancel_time'), null, to_jsonb('2259.02.23 18:' || (o.value + 10))),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"canceled"')
 from generate_series(21, 30) o(value);
 
 -- other person{1,60}
@@ -2046,7 +2048,8 @@ CREATE OR REPLACE FUNCTION actions.create_transaction(
     in_sender_id integer,
     in_object_id integer,
     in_description text,
-    in_sum integer)
+    in_sum integer,
+    add_sender_to_transation boolean)
   RETURNS void AS
 $BODY$
 declare
@@ -2060,15 +2063,16 @@ begin
   assert in_object_id is not null;
   assert in_description is not null;
   assert in_sum > 0;
+  assert add_sender_to_transation is not null;
 
   insert into data.objects(id) values(default)
   returning id, code into v_transaction_id, v_transaction_code;
 
-  perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('system_is_visible'), in_user_object_id, jsonb 'true', in_user_object_id);
+  perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('system_is_visible'), in_sender_id, jsonb 'true', in_user_object_id);
   perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('system_is_visible'), in_object_id, jsonb 'true', in_user_object_id);
   perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true', in_user_object_id);
   perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('type'), null, jsonb '"transaction"', in_user_object_id);
-  if in_sender_id is not null then
+  if add_sender_to_transation then
     perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('transaction_from'), null, to_jsonb(data.get_object_code(in_sender_id)), in_user_object_id);
   end if;
   perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('transaction_to'), null, to_jsonb(data.get_object_code(in_object_id)), in_user_object_id);
@@ -2076,11 +2080,11 @@ begin
   perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('transaction_description'), null, to_jsonb(in_description), in_user_object_id);
   perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('transaction_sum'), null, to_jsonb(in_sum), in_user_object_id);
 
-  v_transactions_value := data.get_attribute_value_for_update(v_transactions_object_id, v_transactions_system_value_attribute_id, in_user_object_id);
+  v_transactions_value := data.get_attribute_value_for_update(v_transactions_object_id, v_transactions_system_value_attribute_id, in_sender_id);
   perform json.get_opt_string_array(v_transactions_value);
 
   v_transactions_value := coalesce(v_transactions_value, jsonb '[]') || jsonb_build_array(v_transaction_code);
-  perform data.set_attribute_value(v_transactions_object_id, v_transactions_system_value_attribute_id, in_user_object_id, v_transactions_value, in_user_object_id);
+  perform data.set_attribute_value(v_transactions_object_id, v_transactions_system_value_attribute_id, in_sender_id, v_transactions_value, in_user_object_id);
 
   v_transactions_value := data.get_attribute_value_for_update(v_transactions_object_id, v_transactions_system_value_attribute_id, in_object_id);
   perform json.get_opt_string_array(v_transactions_value);
@@ -2108,6 +2112,8 @@ declare
   v_system_balance_attribute_id integer := data.get_attribute_id('system_balance');
   v_user_balance integer;
   v_receiver_balance integer;
+
+  v_ret_val api.result;
 begin
   assert in_user_object_id is not null;
   assert in_user_object_id != v_receiver_id;
@@ -2122,15 +2128,15 @@ begin
   end if;
 
   if coalesce(v_user_balance, 0) < v_sum then
-    return
-      api_utils.get_objects(
-        in_client,
-        in_user_object_id,
-        jsonb_build_object(
-          'object_codes', jsonb_build_array(data.get_object_code(in_user_object_id)),
-          'get_actions', true,
-          'get_templates', true)) ||
-      jsonb '{"message": "Недостаточно средств!"}';
+    v_ret_val := api_utils.get_objects(
+      in_client,
+      in_user_object_id,
+      jsonb_build_object(
+        'object_codes', jsonb_build_array(data.get_object_code(in_user_object_id)),
+        'get_actions', true,
+        'get_templates', true));
+    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Недостаточно средств!"}';
+    return v_ret_val;
   end if;
 
   perform data.set_attribute_value(
@@ -2153,7 +2159,8 @@ begin
     in_user_object_id,
     v_receiver_id,
     v_description,
-    v_sum);
+    v_sum,
+    true);
 
   perform actions.create_notification(
     in_user_object_id,
@@ -2240,7 +2247,16 @@ begin
     'transfer',
     jsonb_build_object(
       'code', 'transfer',
-      'name', 'Денежный перевод',
+      'name',
+      case when v_object_id is null then
+        'Денежный перевод'
+      when v_type = 'state' then
+        'Перевести средства на счёт государства'
+      when v_type = 'corporation' then
+        'Перевести средства на счёт корпорации'
+      else
+        'Денежный перевод'
+      end,
       'type', 'finances.transfer',
       'user_params',
       jsonb_build_array(
@@ -2278,6 +2294,205 @@ $BODY$
 insert into data.action_generators(function, params, description)
 values('generate_if_user_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'person', 'function', 'transfer'), 'Функция для перевода средств');
 
+-- Действие для перевода денег государства
+CREATE OR REPLACE FUNCTION actions.state_money_transfer(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_receiver_id integer := data.get_object_id(json.get_string(in_user_params, 'receiver'));
+  v_description text := json.get_string(in_user_params, 'description');
+  v_sum integer := json.get_integer(in_user_params, 'sum');
+  v_state_code text := json.get_string(in_params, 'state_code');
+  v_state_id integer := data.get_object_id(v_state_code);
+
+  v_is_in_state boolean;
+
+  v_system_balance_attribute_id integer := data.get_attribute_id('system_balance');
+  v_state_balance integer;
+  v_receiver_balance integer;
+
+  v_ret_val api.result;
+begin
+  assert in_user_object_id is not null;
+  assert in_user_object_id != v_receiver_id;
+  assert v_sum > 0;
+
+  select true
+  into v_is_in_state
+  where exists(
+    select 1
+    from data.object_objects
+    where
+      parent_object_id = v_state_id and
+      object_id = in_user_object_id);
+
+  if v_is_in_state is null then
+    v_ret_val := api_utils.get_objects(
+      in_client,
+      in_user_object_id,
+      jsonb_build_object(
+        'object_codes', jsonb_build_array(v_state_code),
+        'get_actions', true,
+        'get_templates', true));
+    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Вы не можете распоряжаться средствами данного государства!"}';
+    return v_ret_val;
+  end if;
+
+  if v_state_id < v_receiver_id then
+    v_state_balance := data.get_attribute_value_for_update(v_state_id, v_system_balance_attribute_id, null);
+    v_receiver_balance := data.get_attribute_value_for_update(v_receiver_id, v_system_balance_attribute_id, null);
+  else
+    v_receiver_balance := data.get_attribute_value_for_update(v_receiver_id, v_system_balance_attribute_id, null);
+    v_state_balance := data.get_attribute_value_for_update(v_state_id, v_system_balance_attribute_id, null);
+  end if;
+
+  if coalesce(v_state_balance, 0) < v_sum then
+    v_ret_val := api_utils.get_objects(
+      in_client,
+      in_user_object_id,
+      jsonb_build_object(
+        'object_codes', jsonb_build_array(v_state_code),
+        'get_actions', true,
+        'get_templates', true));
+    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Недостаточно средств!"}';
+    return v_ret_val;
+  end if;
+
+  perform data.set_attribute_value(
+    v_state_id,
+    v_system_balance_attribute_id,
+    null,
+    to_jsonb(v_state_balance - v_sum),
+    in_user_object_id,
+    'Перевод средств пользователю ' || v_receiver_id);
+  perform data.set_attribute_value(
+    v_receiver_id,
+    v_system_balance_attribute_id,
+    null,
+    to_jsonb(v_receiver_balance + v_sum),
+    in_user_object_id,
+    'Перевод средств от государства ' || v_state_id);
+
+  perform actions.create_transaction(
+    in_user_object_id,
+    v_state_id,
+    v_receiver_id,
+    v_description,
+    v_sum,
+    true);
+
+  perform actions.create_notification(
+    in_user_object_id,
+    array[v_receiver_id],
+    (
+      'Входящий перевод на сумму ' ||
+      v_sum ||
+      '.<br>Отправитель: ' ||
+      coalesce(
+        json.get_opt_string(data.get_attribute_value(v_receiver_id, v_state_id, data.get_attribute_id('name'))),
+        'Неизвестный') ||
+      '.<br>Сообщение: ' ||
+      v_description
+    ),
+    'transactions');
+
+  return api_utils.get_objects(
+    in_client,
+    in_user_object_id,
+    jsonb_build_object(
+      'object_codes', jsonb_build_array(v_state_code),
+      'get_actions', true,
+      'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+CREATE OR REPLACE FUNCTION action_generators.state_money_transfer(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_system_balance_attribute_id integer := data.get_attribute_id('system_balance');
+  v_balance jsonb;
+  v_balance_value integer;
+begin
+  select value
+  into v_balance
+  from data.attribute_values
+  where
+    object_id = v_object_id and
+    attribute_id = v_system_balance_attribute_id and
+    value_object_id is null;
+
+  if v_balance is not null then
+    v_balance_value := json.get_integer(v_balance);
+  end if;
+
+  if v_balance is null or v_balance_value <= 0 then
+    return jsonb_build_object(
+      'state_money_transfer',
+      jsonb_build_object(
+        'code', 'state_money_transfer',
+        'name', 'Перевести средства со счёта государства',
+        'type', 'finances.transfer',
+        'disabled', true));
+  end if;
+
+  return jsonb_build_object(
+    'state_money_transfer',
+    jsonb_build_object(
+      'code', 'state_money_transfer',
+      'name', 'Перевести средства со счёта государства',
+      'type', 'finances.transfer',
+      'params', jsonb_build_object('state_code', data.get_object_code(v_object_id)),
+      'user_params',
+      jsonb_build_array(
+        jsonb_build_object(
+          'code', 'receiver',
+          'type', 'objects',
+          'data', jsonb_build_object('object_code', 'transaction_destinations', 'attribute_code', 'transaction_destinations'),
+          'description', 'Получатель',
+          'min_value_count', 1,
+          'max_value_count', 1),
+        jsonb_build_object(
+          'code', 'description',
+          'type', 'string',
+          'data', jsonb_build_object('min_length', '1'),
+          'description', 'Назначение перевода',
+          'min_value_count', 1,
+          'max_value_count', 1),
+        jsonb_build_object(
+          'code', 'sum',
+          'type', 'integer',
+          'data', jsonb_build_object('min_value', 1, 'max_value', v_balance_value),
+          'description', 'Сумма',
+          'min_value_count', 1,
+          'max_value_count', 1))));
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
+insert into data.action_generators(function, params, description)
+values(
+  'generate_if_attribute',
+  jsonb '{
+    "attribute_code": "type",
+    "attribute_value": "state",
+    "function": "generate_if_in_object",
+    "params": {
+      "function": "state_money_transfer"
+    }
+  }',
+  'Функция для перевода средств');
+
 -- Действие для добавления денег
 CREATE OR REPLACE FUNCTION actions.generate_money(
     in_client text,
@@ -2309,10 +2524,11 @@ begin
 
   perform actions.create_transaction(
     in_user_object_id,
-    null,
+    in_user_object_id,
     v_receiver_id,
     v_description,
-    v_sum);
+    v_sum,
+    false);
 
   perform actions.create_notification(
     in_user_object_id,
@@ -2719,7 +2935,6 @@ $BODY$
 
 insert into data.action_generators(function, params, description)
 values('generate_if_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'state', 'function', 'change_state_tax'), 'Функция для изменения процента налога для страны');
-
 
 -- TODO: нагенерировать транзакций и писем
 
