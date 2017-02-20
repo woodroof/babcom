@@ -57,7 +57,7 @@ insert into data.params(code, value, description) values
       "attributes": ["transaction_time", "transaction_sum", "balance_rest", "transaction_from", "transaction_to", "transaction_description"]
     },
     {
-      "actions": ["generate_money", "state_money_transfer", "transfer", "send_mail", "send_mail_from_future"]
+      "actions": ["generate_money", "state_money_transfer", "transfer", "send_mail", "send_mail_from_future", "send_notification"]
     },
     {
       "attributes": ["person_race", "person_state", "person_psi_scale", "person_job_position"]
@@ -158,6 +158,8 @@ insert into data.params(code, value, description) values
 -- Группы
 insert into data.objects(code) values
 ('persons'),
+('offline'),
+('online'),
 ('masters'),
 ('telepaths'),
 ('security'),
@@ -463,6 +465,8 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('state_tax', 'Ставка налога в стране, %', 'NORMAL', null),
 ('system_balance', 'Остаток на счету', 'SYSTEM', null),
 ('balance', 'Остаток на счету', 'NORMAL', null),
+('system_offline', 'Маркер персонажа offline-игрока', 'SYSTEM', null),
+('system_online', 'Маркер персонажа online-игрока', 'SYSTEM', null),
 ('system_master', 'Маркер мастерского персонажа', 'SYSTEM', null),
 ('system_security', 'Маркер персонажа, имеющего доступ к системе безопасности', 'SYSTEM', null),
 ('system_politician', 'Маркер персонажа-политика', 'SYSTEM', null),
@@ -508,6 +512,8 @@ insert into data.attribute_value_change_functions(attribute_id, function, params
 (data.get_attribute_id('type'), 'string_value_to_object', jsonb '{"params": {"person": "persons", "corporation": "corporations", "ship": "ships", "news": "news_hub", "library_category": "library", "med_document": "med_library", "sector": "market", "state": "states", "mail_folder": "mailbox"}}'),
 (data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"person": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}, "state": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}, "corporation": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}}}'),
 (data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"person": {"object_code": "persons", "attribute_code": "persons"}, "sector": {"object_code": "market", "attribute_code": "sectors"}, "corporation": {"object_code": "corporations", "attribute_code": "corporations"}}}'),
+(data.get_attribute_id('system_offline'), 'boolean_value_to_object', jsonb '{"object_code": "offline"}'),
+(data.get_attribute_id('system_online'), 'boolean_value_to_object', jsonb '{"object_code": "online"}'),
 (data.get_attribute_id('system_master'), 'boolean_value_to_object', jsonb '{"object_code": "masters"}'),
 (data.get_attribute_id('system_psi_scale'), 'any_value_to_object', jsonb '{"object_code": "telepaths"}'),
 (data.get_attribute_id('system_security'), 'boolean_value_to_object', jsonb '{"object_code": "security"}'),
@@ -1586,6 +1592,18 @@ select data.set_attribute_value(data.get_object_id('persons'), data.get_attribut
 select data.set_attribute_value(data.get_object_id('persons'), data.get_attribute_id('name'), null, jsonb '"Все"');
 select data.set_attribute_value(data.get_object_id('persons'), data.get_attribute_id('system_mail_contact'), null, jsonb 'true');
 
+select data.set_attribute_value(data.get_object_id('offline'), data.get_attribute_id('system_priority'), null, jsonb '15');
+select data.set_attribute_value(data.get_object_id('offline'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('offline'), data.get_attribute_id('type'), null, jsonb '"group"');
+select data.set_attribute_value(data.get_object_id('offline'), data.get_attribute_id('name'), null, jsonb '"Присутствующие на станции"');
+select data.set_attribute_value(data.get_object_id('offline'), data.get_attribute_id('system_mail_contact'), null, jsonb 'true');
+
+select data.set_attribute_value(data.get_object_id('online'), data.get_attribute_id('system_priority'), null, jsonb '15');
+select data.set_attribute_value(data.get_object_id('online'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('online'), data.get_attribute_id('type'), null, jsonb '"group"');
+select data.set_attribute_value(data.get_object_id('online'), data.get_attribute_id('name'), null, jsonb '"Внешние контакты"');
+select data.set_attribute_value(data.get_object_id('online'), data.get_attribute_id('system_mail_contact'), null, jsonb 'true');
+
 select data.set_attribute_value(data.get_object_id('masters'), data.get_attribute_id('system_priority'), null, jsonb '100');
 select data.set_attribute_value(data.get_object_id('masters'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('masters'), data.get_attribute_id('type'), null, jsonb '"group"');
@@ -1705,6 +1723,11 @@ select
     data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_master'), null, jsonb 'true')
   else
     null
+  end,
+  case when o.value between 45 and 51 then
+    data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_online'), null, jsonb 'true')
+  else
+    data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_offline'), null, jsonb 'true')
   end,
   case when o.value % 11 = 0 then
     data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_medic'), null, jsonb 'true')
@@ -2186,7 +2209,7 @@ CREATE OR REPLACE FUNCTION actions.create_notification(
     in_user_object_id integer,
     in_object_ids integer[],
     in_description text,
-    in_notification_object_code text,
+    in_notification_object_code text DEFAULT NULL::text,
     in_days_shift integer DEFAULT NULL::integer)
   RETURNS void AS
 $BODY$
@@ -3299,12 +3322,16 @@ CREATE OR REPLACE FUNCTION action_generators.send_mail_from_future(
 $BODY$
 declare
   v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
   v_type_attr_id integer;
   v_type text;
-  v_user_object_id integer;
 begin
   if v_object_id is not null then
     v_type_attr_id := data.get_attribute_id('type');
+
+    if v_object_id = v_user_object_id then
+      return null;
+    end if;
 
     select json.get_string(value)
     into v_type
@@ -3318,8 +3345,6 @@ begin
       return null;
     end if;
   end if;
-
-  v_user_object_id := json.get_integer(in_params, 'user_object_id');
 
   return jsonb_build_object(
     'send_mail_from_future',
@@ -3452,6 +3477,117 @@ $BODY$
 
 insert into data.action_generators(function, params, description)
 values('generate_if_user_attribute', jsonb_build_object('attribute_code', 'system_master', 'attribute_value', true, 'function', 'send_mail_from_future'), 'Функция отправки письма из будущего');
+
+-- Отправка уведомлений
+CREATE OR REPLACE FUNCTION action_generators.send_notification(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_type_attr_id integer;
+  v_type text;
+begin
+  if v_object_id is not null then
+    v_type_attr_id := data.get_attribute_id('type');
+
+    if v_object_id = v_user_object_id then
+      return null;
+    end if;
+
+    select json.get_string(value)
+    into v_type
+    from data.attribute_values
+    where
+      object_id = v_object_id and
+      attribute_id = v_type_attr_id and
+      value_object_id is null;
+
+    if v_type != 'person' then
+      return null;
+    end if;
+  end if;
+
+  return jsonb_build_object(
+    'send_notification',
+    jsonb_build_object(
+      'code', 'send_notification',
+      'name', 'Написать уведомление',
+      'type', 'notification.send',
+      'params', jsonb '{}',
+      'user_params',
+        jsonb_build_array(
+          jsonb_build_object(
+            'code', 'receivers',
+            'type', 'objects',
+            'data', jsonb_build_object('object_code', 'mail_contacts', 'attribute_code', 'mail_contacts'),
+            'description', 'Получатели',
+            'min_value_count', 1) ||
+          case when v_object_id is null then
+            jsonb '{}'
+          else
+            jsonb_build_object('default_value', data.get_object_code(v_object_id))
+          end,
+          jsonb_build_object(
+            'code', 'message',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1, 'multiline', true),
+            'description', 'Сообщение',
+            'min_value_count', 1,
+            'max_value_count', 1))));
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.send_notification(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_receivers jsonb := in_user_params->'receivers';
+  v_message text := replace(json.get_string(in_user_params, 'message'), E'\n', '<br>');
+  v_type_attr_id integer := data.get_attribute_id('type');
+
+  v_receiver_id integer;
+
+  v_notification_id integer;
+  v_notification_code text;
+
+  v_receiver_ids integer[];
+begin
+  assert jsonb_typeof(v_receivers) in ('array', 'string');
+
+  select array_agg(distinct(av.object_id))
+  into v_receiver_ids
+  from jsonb_array_elements(jsonb '[]' || v_receivers) r
+  join data.objects o on
+    o.code = json.get_string(r.value)
+  join data.object_objects oo on
+    oo.parent_object_id = o.id
+  join data.attribute_values av on
+    av.object_id = oo.object_id and
+    av.attribute_id = v_type_attr_id and
+    av.value_object_id is null and
+    av.value = jsonb '"person"';
+
+  perform actions.create_notification(
+    in_user_object_id,
+    v_receiver_ids,
+    v_message);
+
+  return api_utils.create_ok_result(null, 'Уведомление отправлено!');
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+insert into data.action_generators(function, params, description)
+values('generate_if_user_attribute', jsonb_build_object('attribute_code', 'system_master', 'attribute_value', true, 'function', 'send_notification'), 'Функция отправки уведомления');
 
 -- Удаление писем
 CREATE OR REPLACE FUNCTION action_generators.delete_outbox_mail(
