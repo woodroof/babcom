@@ -3320,7 +3320,7 @@ begin
   end if;
 
   v_user_object_id := json.get_integer(in_params, 'user_object_id');
-  
+
   return jsonb_build_object(
     'send_mail_from_future',
     jsonb_build_object(
@@ -3333,7 +3333,7 @@ begin
           jsonb_build_object(
             'code', 'author',
             'type', 'objects',
-            'data', jsonb_build_object('object_code', 'mail_contacts', 'attribute_code', 'mail_contacts'),
+            'data', jsonb_build_object('object_code', 'persons', 'attribute_code', 'persons'),
             'description', 'Отправитель',
             'min_value_count', 1,
             'max_value_count', 1) ||
