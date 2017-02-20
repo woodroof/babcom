@@ -196,6 +196,8 @@ insert into data.objects(code) values
 ('personal_document_storage'),
 ('library'),
 ('mailbox'),
+('inbox'),
+('outbox'),
 ('med_library'),
 ('transactions'),
 ('station'),
@@ -382,6 +384,7 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('person_biography', 'Биография', 'NORMAL', null),
 ('system_psi_scale', 'Рейтинг телепата', 'SYSTEM', null),
 ('person_psi_scale', 'Рейтинг телепата', 'NORMAL', 'person_psi_scale'),
+('system_mail_folder_type', 'Тип папки писем', 'SYSTEM', null),
 ('mail_title', 'Заголовок', 'NORMAL', null),
 ('system_mail_send_time', 'Реальное время отправки письма', 'SYSTEM', null),
 ('mail_send_time', 'Время отправки письма', 'NORMAL', null),
@@ -495,7 +498,7 @@ $BODY$
 
 -- Функции для создания связей
 insert into data.attribute_value_change_functions(attribute_id, function, params) values
-(data.get_attribute_id('type'), 'string_value_to_object', jsonb '{"params": {"person": "persons", "corporation": "corporations", "ship": "ships", "news": "news_hub", "library_category": "library", "med_document": "med_library", "sector": "market", "state": "states"}}'),
+(data.get_attribute_id('type'), 'string_value_to_object', jsonb '{"params": {"person": "persons", "corporation": "corporations", "ship": "ships", "news": "news_hub", "library_category": "library", "med_document": "med_library", "sector": "market", "state": "states", "mail_folder": "mailbox"}}'),
 (data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"person": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}, "state": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}, "corporation": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}}}'),
 (data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"person": {"object_code": "persons", "attribute_code": "persons"}, "sector": {"object_code": "market", "attribute_code": "sectors"}, "corporation": {"object_code": "corporations", "attribute_code": "corporations"}}}'),
 (data.get_attribute_id('system_master'), 'boolean_value_to_object', jsonb '{"object_code": "masters"}'),
@@ -923,6 +926,103 @@ $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
 
+CREATE OR REPLACE FUNCTION attribute_value_fill_functions.fill_user_content_from_user_value_attribute(in_params jsonb)
+  RETURNS void AS
+$BODY$
+declare
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_attribute_id integer := json.get_integer(in_params, 'attribute_id');
+  v_placeholder text := json.get_opt_string(in_params, null, 'placeholder');
+
+  v_source_attribute_id integer := data.get_attribute_id(json.get_string(in_params, 'source_attribute_code'));
+  v_sort_type text := json.get_string(in_params, 'sort_type');
+
+  v_output jsonb := json.get_object_array(in_params, 'output');
+
+  v_codes jsonb;
+
+  v_next_object_id integer;
+  v_output_entry jsonb;
+
+  v_content_entry text;
+  v_type text;
+  v_output_attribute_id integer;
+  v_content text;
+begin
+  assert v_sort_type = 'asc' or v_sort_type = 'desc';
+
+  v_codes := data.get_attribute_value(v_user_object_id, v_user_object_id, v_source_attribute_id);
+  perform json.get_opt_string_array(v_codes);
+
+  if v_codes is not null then
+    for v_next_object_id in
+      execute '
+        select data.get_object_id(json.get_string(o.value))
+        from (
+          select value, row_number() over() as num
+          from jsonb_array_elements($1)
+          order by num ' || v_sort_type || '
+        ) o'
+      using v_codes
+    loop
+      v_content_entry := '';
+
+      for v_output_entry in
+        select value
+        from jsonb_array_elements(v_output)
+      loop
+        v_type := json.get_string(v_output_entry, 'type');
+        if v_type = 'attribute' then
+          v_output_attribute_id := data.get_attribute_id(json.get_string(v_output_entry, 'data'));
+
+          perform data.fill_attribute_values(v_user_object_id, array[v_next_object_id], array[v_output_attribute_id]);
+
+          v_content_entry :=
+            v_content_entry ||
+            json.get_string(
+              data.get_attribute_value(
+                v_user_object_id,
+                v_next_object_id,
+                v_output_attribute_id));
+        elsif v_type = 'code' then
+          v_content_entry := v_content_entry || data.get_object_code(v_next_object_id);
+        else
+          assert v_type = 'string';
+          v_content_entry := v_content_entry || json.get_string(v_output_entry, 'data');
+        end if;
+      end loop;
+
+      if v_content is not null then
+        v_content := v_content || E'<br>\n';
+      end if;
+      v_content := coalesce(v_content, '') || v_content_entry;
+    end loop;
+  end if;
+
+  if v_content is null and v_placeholder is not null then
+    v_content := v_placeholder;
+  end if;
+
+  if v_content is null then
+    perform data.delete_attribute_value_if_exists(
+      v_object_id,
+      v_attribute_id,
+      v_user_object_id,
+      v_user_object_id);
+  else
+    perform data.set_attribute_value_if_changed(
+      v_object_id,
+      v_attribute_id,
+      v_user_object_id,
+      to_jsonb(v_content),
+      v_user_object_id);
+  end if;
+end;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+
 CREATE OR REPLACE FUNCTION attribute_value_fill_functions.fill_content_from_attribute(in_params jsonb)
   RETURNS void AS
 $BODY$
@@ -1036,17 +1136,32 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
       {
         "conditions": [{"attribute_code": "type", "attribute_value": "med_library"}],
         "function": "fill_user_content",
-        "params": {"placeholder": "Отчётов нет", "sort_attribute_code": "system_document_time", "sort_type": "desc", "output": [{"type": "string", "data": " <a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+        "params": {"placeholder": "Отчётов нет", "sort_attribute_code": "system_document_time", "sort_type": "desc", "output": [{"type": "string", "data": "<a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+      },
+      {
+        "conditions": [{"attribute_code": "type", "attribute_value": "mailbox"}],
+        "function": "fill_content",
+        "params": {"sort_attribute_code": "name", "sort_type": "asc", "output": [{"type": "string", "data": "<a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+      },
+      {
+        "conditions": [{"attribute_code": "system_mail_folder_type", "attribute_value": "inbox"}],
+        "function": "fill_user_content_from_user_value_attribute",
+        "params": {"source_attribute_code": "inbox", "placeholder": "Писем нет", "sort_attribute_code": "system_mail_send_time", "sort_type": "desc", "output": [{"type": "attribute", "data": "mail_send_time"}, {"type": "string", "data": " <a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+      },
+      {
+        "conditions": [{"attribute_code": "system_mail_folder_type", "attribute_value": "outbox"}],
+        "function": "fill_user_content_from_user_value_attribute",
+        "params": {"source_attribute_code": "outbox", "placeholder": "Писем нет", "sort_attribute_code": "system_mail_send_time", "sort_type": "desc", "output": [{"type": "attribute", "data": "mail_send_time"}, {"type": "string", "data": " <a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
       },
       {
         "conditions": [{"attribute_code": "type", "attribute_value": "corporations"}, {"attribute_code": "type", "attribute_value": "market"}, {"attribute_code": "type", "attribute_value": "states"}],
         "function": "fill_content",
-        "params": {"sort_attribute_code": "name", "sort_type": "asc", "output": [{"type": "string", "data": " <a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+        "params": {"sort_attribute_code": "name", "sort_type": "asc", "output": [{"type": "string", "data": "<a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
       },
       {
         "conditions": [{"attribute_code": "type", "attribute_value": "transactions"}],
         "function": "fill_user_content_from_attribute",
-        "params": {"placeholder": "Транзакций нет", "source_attribute_code": "system_value", "sort_type": "desc", "output": [{"type": "string", "data": " <a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+        "params": {"placeholder": "Транзакций нет", "source_attribute_code": "system_value", "sort_type": "desc", "output": [{"type": "string", "data": "<a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
       },
       {
         "conditions": [{"attribute_code": "type", "attribute_value": "normal_deals"}],
@@ -1061,7 +1176,7 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
       {
         "conditions": [{"attribute_code": "type", "attribute_value": "draft_deals"}],
         "function": "fill_content",
-        "params": {"sort_attribute_code": "system_deal_time", "sort_type": "desc", "output": [{"type": "string", "data": " <a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+        "params": {"sort_attribute_code": "system_deal_time", "sort_type": "desc", "output": [{"type": "string", "data": "<a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
       }
     ]
   }', 'Получение списков (новости, транзакции, разные документы)');
@@ -1742,6 +1857,16 @@ select data.set_attribute_value(data.get_object_id('mailbox'), data.get_attribut
 select data.set_attribute_value(data.get_object_id('mailbox'), data.get_attribute_id('type'), null, jsonb '"mailbox"');
 select data.set_attribute_value(data.get_object_id('mailbox'), data.get_attribute_id('name'), null, jsonb '"Почта"');
 select data.set_attribute_value(data.get_object_id('mailbox'), data.get_attribute_id('system_meta'), data.get_object_id('persons'), jsonb 'true');
+
+select data.set_attribute_value(data.get_object_id('inbox'), data.get_attribute_id('system_is_visible'), data.get_object_id('persons'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('inbox'), data.get_attribute_id('system_mail_folder_type'), null, jsonb '"inbox"');
+select data.set_attribute_value(data.get_object_id('inbox'), data.get_attribute_id('type'), null, jsonb '"mail_folder"');
+select data.set_attribute_value(data.get_object_id('inbox'), data.get_attribute_id('name'), null, jsonb '"Входящие"');
+
+select data.set_attribute_value(data.get_object_id('outbox'), data.get_attribute_id('system_is_visible'), data.get_object_id('persons'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('outbox'), data.get_attribute_id('system_mail_folder_type'), null, jsonb '"outbox"');
+select data.set_attribute_value(data.get_object_id('outbox'), data.get_attribute_id('type'), null, jsonb '"mail_folder"');
+select data.set_attribute_value(data.get_object_id('outbox'), data.get_attribute_id('name'), null, jsonb '"Исходящие"');
 
 select data.set_attribute_value(data.get_object_id('med_library'), data.get_attribute_id('system_is_visible'), data.get_object_id('med_documents'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('med_library'), data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true');
@@ -3022,7 +3147,7 @@ begin
             'type', 'string',
             'data', jsonb_build_object('min_length', 1, 'multiline', true),
             'description', 'Сообщение',
-            'default_value', E'\n%gt; ' || replace(v_title, '<br>', '\n&gt; '),
+            'default_value', E'\n> ' || replace(v_title, '<br>', '\n> '),
             'min_value_count', 1,
             'max_value_count', 1))));
 end;
@@ -3099,7 +3224,7 @@ begin
     'reply_all',
     jsonb_build_object(
       'code', 'send_mail',
-      'name', 'Ответить',
+      'name', 'Ответить всем',
       'type', 'mail.reply_all',
       'params', jsonb '{}',
       'user_params',
@@ -3124,7 +3249,7 @@ begin
             'type', 'string',
             'data', jsonb_build_object('min_length', 1, 'multiline', true),
             'description', 'Сообщение',
-            'default_value', E'\n%gt; ' || replace(v_title, '<br>', '\n&gt; '),
+            'default_value', E'\n> ' || replace(v_title, '<br>', '\n> '),
             'min_value_count', 1,
             'max_value_count', 1))));
 end;
@@ -3386,7 +3511,7 @@ begin
     if jsonb_array_length(v_value) = 0 then
       perform data.delete_attribute_value(in_user_object_id, v_outbox_attr_id, in_user_object_id);
     else
-      perform data.set_attribute_value(in_user_object_id, v_outbox_attr_id, v_value, in_user_object_id);
+      perform data.set_attribute_value(in_user_object_id, v_outbox_attr_id, in_user_object_id, v_value, in_user_object_id);
     end if;
   end if;
 
@@ -3481,7 +3606,7 @@ begin
     if jsonb_array_length(v_value) = 0 then
       perform data.delete_attribute_value(in_user_object_id, v_inbox_attr_id, in_user_object_id);
     else
-      perform data.set_attribute_value(in_user_object_id, v_inbox_attr_id, v_value, in_user_object_id);
+      perform data.set_attribute_value(in_user_object_id, v_inbox_attr_id, in_user_object_id, v_value, in_user_object_id);
     end if;
   end if;
 
