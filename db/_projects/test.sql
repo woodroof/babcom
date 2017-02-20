@@ -81,7 +81,7 @@ insert into data.params(code, value, description) values
     },
     {
       "attributes": ["corporation_state", "corporation_members", "corporation_capitalization", "corporation_sectors", "dividend_vote"],
-      "actions": ["set_dividend_vote", "create_deal"]
+      "actions": ["set_dividend_vote"]
     },
     {
       "actions": ["create_deal"]
@@ -96,47 +96,51 @@ insert into data.params(code, value, description) values
       "attributes": ["med_document_patient"]
     },
     {
-      "attributes": ["deal_time", "deal_cancel_time", "deal_status", "deal_sector", "asset_name", "asset_cost", "asset_amortization", "deal_income"]
+      "attributes": ["deal_time", "deal_cancel_time", "deal_status", "deal_sector", "asset_name", "asset_cost", "asset_amortization", "deal_income"],
+      "actions": ["edit_deal", "delete_deal"]
     },
     {
       "attributes": ["deal_participant1"],
-      "actions": ["delete_participant1"]
+      "actions": ["edit_deal_member1", "delete_deal_member1"]
     },
     {
       "attributes": ["deal_participant2"],
-      "actions": ["delete_participant2"]
+      "actions": ["edit_deal_member2", "delete_deal_member2"]
     },
     {
       "attributes": ["deal_participant3"],
-      "actions": ["delete_participant3"]
+      "actions": ["edit_deal_member3", "delete_deal_member3"]
     },
     {
       "attributes": ["deal_participant4"],
-      "actions": ["delete_participant4"]
+      "actions": ["edit_deal_member4", "delete_deal_member4"]
     },
     {
       "attributes": ["deal_participant5"],
-      "actions": ["delete_participant5"]
+      "actions": ["edit_deal_member5", "delete_deal_member5"]
     },
     {
       "attributes": ["deal_participant6"],
-      "actions": ["delete_participant6"]
+      "actions": ["edit_deal_member6", "delete_deal_member6"]
     },
     {
       "attributes": ["deal_participant7"],
-      "actions": ["delete_participant7"]
+      "actions": ["edit_deal_member7", "delete_deal_member7"]
     },
     {
       "attributes": ["deal_participant8"],
-      "actions": ["delete_participant8"]
+      "actions": ["edit_deal_member8", "delete_deal_member8"]
     },
     {
       "attributes": ["deal_participant9"],
-      "actions": ["delete_participant9"]
+      "actions": ["edit_deal_member9", "delete_deal_member9"]
     },
     {
       "attributes": ["deal_participant10"],
-      "actions": ["delete_participant10"]
+      "actions": ["edit_deal_member10", "delete_deal_member10"]
+    },
+    {
+      "actions": ["add_deal_member"]
     },
     {
       "attributes": ["description", "content"]
@@ -352,6 +356,8 @@ begin
     return 'Утверждена';
   when v_text_value = 'canceled' then
     return 'Расторгнута';
+  when v_text_value = 'deleted' then
+    return 'Удалена';
   end case;
 
   return null;
@@ -1744,7 +1750,7 @@ select
   data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_corporation_members'), null, ('[{"member": "person' || o.value || '", "percent": 80}, {"member": "person' || (o.value * 2)::text || '", "percent": 20}]')::jsonb),
   data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_corporation_deals'), null, ('["deal' || o.value || '", "deal' || (o.value + 1) || '"]')::jsonb),
   data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_corporation_draft_deals'), null, ('["deal' || (10 + o.value) || '", "deal' || (10 + o.value + 1) || '"]')::jsonb),
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_corporation_canceled_deals'), null, ('["deal' || (10 + o.value) || '", "deal' || (10 + o.value + 1) || '"]')::jsonb),
+  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_corporation_canceled_deals'), null, ('["deal' || (20 + o.value) || '", "deal' || (20 + o.value + 1) || '"]')::jsonb),
   data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"')
 from generate_series(1, 11) o(value);
 
@@ -1785,7 +1791,8 @@ from generate_series(1, 10) o(value);
 
 select
   data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('2259.02.23 12:' || (o.value + 10))),
-  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"draft"')
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"draft"'),
+  data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_author'), null, to_jsonb(data.get_object_id('person1')))
 from generate_series(11, 20) o(value);
 
 select
@@ -3673,7 +3680,7 @@ begin
             'type', 'integer',
             'data', jsonb_build_object('min_value', 0, 'max_value', 100),
             'description', 'Процентная ставка',
-            'default_value', data.get_attribute_value(json.get_opt_integer(in_params, json.get_integer(in_params, 'object_id'), 'user_object_id'),json.get_integer(in_params, 'object_id'), data.get_attribute_id('state_tax')),
+            'default_value', data.get_attribute_value(json.get_integer(in_params, 'user_object_id'),json.get_integer(in_params, 'object_id'), data.get_attribute_id('state_tax')),
             'min_value_count', 1,
             'max_value_count', 1))));
 end;
@@ -3715,7 +3722,7 @@ $BODY$
 insert into data.action_generators(function, params, description)
 values('generate_if_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'state', 'function', 'change_state_tax'), 'Функция для изменения процента налога для страны');
 
--- Действие для голосование за выплату дивидендов
+-- Действие для голосования за выплату дивидендов
 CREATE OR REPLACE FUNCTION action_generators.set_dividend_vote(
     in_params in jsonb)
   RETURNS jsonb AS
@@ -3728,7 +3735,7 @@ begin
    where oo.parent_object_id = json.get_integer(in_params, 'object_id')
    and oo.object_id = json.get_opt_integer(in_params, null, 'user_object_id');
 
-  if v_is_in_group = 0 or json.get_opt_string(data.get_attribute_value(json.get_opt_integer(in_params, json.get_integer(in_params, 'object_id'), 'user_object_id'),
+  if v_is_in_group = 0 or json.get_opt_string(data.get_attribute_value(json.get_integer(in_params, 'user_object_id'),
 								       json.get_integer(in_params, 'object_id'), 
 								       data.get_attribute_id('dividend_vote'))) = 'Да' then
     return null;
@@ -3787,15 +3794,17 @@ CREATE OR REPLACE FUNCTION action_generators.create_deal(
 $BODY$
 declare
   v_is_in_group integer; 
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
 begin
   select count(1) into v_is_in_group 
   from data.object_objects oo
    where oo.parent_object_id = json.get_integer(in_params, 'object_id')
-   and oo.object_id = json.get_opt_integer(in_params, null, 'user_object_id');
+   and oo.object_id = v_user_object_id;
 
-  if v_is_in_group = 0 or json.get_opt_string(data.get_attribute_value(json.get_opt_integer(in_params, json.get_integer(in_params, 'object_id'), 'user_object_id'),
-								       json.get_integer(in_params, 'object_id'), 
-								       data.get_attribute_id('dividend_vote'))) = 'Да' then
+  if v_is_in_group = 0 and
+    not json.get_opt_boolean(data.get_attribute_value(v_user_object_id,
+					       v_user_object_id, 
+					       data.get_attribute_id('system_master')), false) then
     return null;
   end if;
   
@@ -3897,19 +3906,19 @@ begin
 insert into data.objects(id) values(default)
   returning id, code into v_deal_id, v_deal_code;
 
-  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('system_is_visible'), null, jsonb 'true');
-  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('type'), null, jsonb '"deal"');
-  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('name'), null, to_jsonb(v_deal_name));
-  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('deal_author'), null, to_jsonb(in_user_object_id));
-  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('description'), null, to_jsonb(v_description));
-  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('deal_sector'), null, to_jsonb(v_deal_sector));
-  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('asset_name'), null, to_jsonb(v_asset_name));
-  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('deal_income'), null, to_jsonb(v_deal_income));
-  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('system_deal_time'), null, to_jsonb(utils.system_time()));
-  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('deal_status'), null, jsonb '"draft"');
-  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('asset_cost'), null, to_jsonb(trunc(v_deal_cost * 0.7)));
-  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('asset_amortization'), null, to_jsonb(trunc(v_deal_cost * 0.07)));
-  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "' || v_corporation_code || '","percent_asset" : ' || v_percent_asset || ', "percent_income" : ' || v_percent_income || ', "deal_cost": ' || v_deal_cost || '}')::jsonb);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('system_is_visible'), null, jsonb 'true', in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('type'), null, jsonb '"deal"', in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('name'), null, to_jsonb(v_deal_name), in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('deal_author'), null, to_jsonb(in_user_object_id), in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('description'), null, to_jsonb(v_description), in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('deal_sector'), null, to_jsonb(v_deal_sector), in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('asset_name'), null, to_jsonb(v_asset_name), in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('deal_income'), null, to_jsonb(v_deal_income), in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('system_deal_time'), null, to_jsonb(utils.system_time()), in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('deal_status'), null, jsonb '"draft"', in_user_object_id, in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('asset_cost'), null, to_jsonb(round(v_deal_cost * 0.7)), in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('asset_amortization'), null, to_jsonb(round(v_deal_cost * 0.07)), in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "' || v_corporation_code || '","percent_asset" : ' || v_percent_asset || ', "percent_income" : ' || v_percent_income || ', "deal_cost": ' || v_deal_cost || '}')::jsonb, in_user_object_id);
 
 -- Вставим сделку в подготавливаемые для этой корпорации
     v_value := json.get_opt_array(
@@ -3933,6 +3942,730 @@ $BODY$
 
 insert into data.action_generators(function, params, description)
 values('generate_if_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'corporation', 'function', 'create_deal'), 'Функция для добавления сделки');
+
+-- Действие для добавления участника сделки
+CREATE OR REPLACE FUNCTION action_generators.add_deal_member(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_i integer;
+  v_j integer;
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  
+begin
+ -- Показываем только для автора сделки или мастера, и если она ещё черновик
+  if json.get_opt_integer(data.get_attribute_value(v_user_object_id,
+					       v_object_id, 
+					       data.get_attribute_id('deal_author')),0) <> v_user_object_id and
+    not json.get_opt_boolean(data.get_attribute_value(v_user_object_id,
+					       v_user_object_id, 
+					       data.get_attribute_id('system_master')), false)  or 
+     json.get_opt_string(data.get_attribute_value(v_user_object_id,
+					          v_object_id, 
+					          data.get_attribute_id('deal_status')),'~') <> 'draft' then
+    return null;
+  end if;
+
+  -- Проверка, что остались свободные ячейки под участников сделки
+  for v_i in 1..10 loop
+    if data.get_attribute_value(v_user_object_id, v_object_id, data.get_attribute_id('system_deal_participant' || v_i)) is null then
+      v_j := v_i;
+      exit;
+    end if;
+  end loop;
+  
+  if v_j is null then
+    return null;
+  end if;
+  
+  return jsonb_build_object(
+    'add_deal_member',
+    jsonb_build_object(
+      'code', 'add_deal_member',
+      'name', 'Добавить участника сделки',
+      'type', 'financial.deal',
+      'params', jsonb_build_object('deal_code', data.get_object_code(json.get_integer(in_params, 'object_id'))),
+      'user_params', 
+       jsonb_build_array(
+         jsonb_build_object(
+            'code', 'member',
+            'type', 'objects',
+            'description', 'Добавляемый участник',
+            'data', jsonb_build_object('object_code', 'corporations', 'attribute_code', 'corporations'),
+            'min_value_count', 1,
+            'max_value_count', 1),
+        jsonb_build_object(
+            'code', 'percent_asset',
+            'type', 'integer',
+            'data', jsonb_build_object('min_value', 0, 'max_value', 100),
+            'description', '% владения активом',
+            'min_value_count', 1,
+            'max_value_count', 1),
+        jsonb_build_object(
+            'code', 'percent_income',
+            'type', 'integer',
+            'data', jsonb_build_object('min_value', 0, 'max_value', 100),
+            'description', '% дохода от сделки',
+            'min_value_count', 1,
+            'max_value_count', 1),
+        jsonb_build_object(
+            'code', 'deal_cost',
+            'type', 'integer',
+            'data', jsonb_build_object('min_value', 0, 'max_value', 100000000000),
+            'description', 'Вложения в сделку',
+            'min_value_count', 1,
+            'max_value_count', 1)))
+      );
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.add_deal_member(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_deal_code text := json.get_string(in_params, 'deal_code');
+  v_deal_id integer := data.get_object_id(v_deal_code);
+  v_member text := json.get_string(in_user_params, 'member');
+  v_corporation_id integer := data.get_object_id(v_member);
+  v_percent_asset integer := json.get_integer(in_user_params, 'percent_asset');
+  v_percent_income integer := json.get_integer(in_user_params, 'percent_income');
+  v_deal_cost integer := json.get_integer(in_user_params, 'deal_cost');
+
+  v_i integer;
+  v_j integer;
+
+  v_system_corporation_draft_deals_attribute_id integer := data.get_attribute_id('system_corporation_draft_deals');
+  v_value jsonb;
+  v_sum_percent_asset integer := 0;
+  v_sum_percent_income integer := 0;
+  v_sum_deal_cost integer := 0;
+  v_curent_member text;
+  v_ret_val api.result;
+begin
+  v_ret_val := api_utils.get_objects(in_client,
+				     in_user_object_id,
+				     jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_deal_code),
+			    'get_actions', true,
+			    'get_templates', true));
+  if json.get_opt_string(data.get_attribute_value(in_user_object_id,
+					          v_deal_id, 
+					          data.get_attribute_id('deal_status')),'~') <> 'draft' then
+    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Статус сделки изменился!"}';
+    return v_ret_val;
+   end if;
+  for v_i in 1..10 loop
+    v_value := data.get_attribute_value(in_user_object_id, v_deal_id, data.get_attribute_id('system_deal_participant' || v_i));
+    if v_j is null and v_value is null then
+      v_j := v_i;
+    end if;
+    if v_value is not null then
+      select c.member,
+             v_sum_percent_asset + coalesce(c.percent_asset, 0),
+             v_sum_percent_income + coalesce(c.percent_income, 0),
+             v_sum_deal_cost + coalesce(c.deal_cost, 0)
+      into v_curent_member,
+           v_sum_percent_asset,
+           v_sum_percent_income,
+           v_sum_deal_cost
+      from jsonb_to_record(v_value) as c (member text, percent_asset int, percent_income int, deal_cost int);
+      if v_curent_member = v_member then
+        v_ret_val.data := v_ret_val.data || jsonb '{"message": "Эта корпорация уже участвует в данной сделке!"}';
+    return v_ret_val;
+      end if;
+    end if;    
+  end loop;
+
+  if v_j is null then
+    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Достигнуто максимальное количество участников сделки!"}';
+    return v_ret_val;
+  elsif v_sum_percent_asset + v_percent_asset > 100 then
+    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Сумарный процент владения активом превысил 100!"}';
+    return v_ret_val;
+  elsif v_sum_percent_income + v_percent_income > 100 then
+    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Сумарный процент распределения доходов сделки превысил 100!"}';
+    return v_ret_val;
+  end if;
+
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('asset_cost'), null, to_jsonb(round((v_sum_deal_cost + v_deal_cost) * 0.7)), in_user_object_id);
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('asset_amortization'), null, to_jsonb(round((v_sum_deal_cost + v_deal_cost) * 0.07)), in_user_object_id);
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('system_deal_participant' || v_j), null, ('{"member" : "' || v_member || '","percent_asset" : ' || v_percent_asset || ', "percent_income" : ' || v_percent_income || ', "deal_cost": ' || v_deal_cost || '}')::jsonb, in_user_object_id);
+
+  -- Вставим сделку в подготавливаемые для этой корпорации
+  v_value := json.get_opt_array(
+        data.get_attribute_value_for_update(
+          v_corporation_id,
+          v_system_corporation_draft_deals_attribute_id,
+          null));
+  v_value := coalesce(v_value, jsonb '[]') || jsonb_build_array(v_deal_code);
+  perform data.set_attribute_value(v_corporation_id, v_system_corporation_draft_deals_attribute_id, null, v_value, in_user_object_id);
+
+
+  return api_utils.get_objects(in_client,
+			  in_user_object_id,
+			  jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_deal_code),
+			    'get_actions', true,
+			    'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+insert into data.action_generators(function, params, description)
+values('generate_if_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'deal', 'function', 'add_deal_member'), 'Функция для добавления участника сделки');
+
+-- Действие для изменения участника сделки 
+CREATE OR REPLACE FUNCTION action_generators.edit_deal_member(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_row_num integer := json.get_integer(in_params, 'row_num');
+  v_value jsonb;
+  v_member text;
+begin
+  -- Показываем, если соответствующий участник уже добавлен
+  v_value := data.get_attribute_value(v_user_object_id,
+				       v_object_id, 
+			               data.get_attribute_id('system_deal_participant' || v_row_num));
+  if v_value is null then
+    return null;
+  else
+   v_member := json.get_opt_string(v_value -> 'member');
+  end if;
+ -- Показываем только для автора сделки или мастера, и если она ещё черновик 
+  if json.get_opt_integer(data.get_attribute_value(v_user_object_id,
+					       v_object_id, 
+					       data.get_attribute_id('deal_author')), 0) <> v_user_object_id and
+    not json.get_opt_boolean(data.get_attribute_value(v_user_object_id,
+					       v_user_object_id, 
+					       data.get_attribute_id('system_master')), false) or 
+     json.get_opt_string(data.get_attribute_value(v_user_object_id,
+					          v_object_id, 
+					          data.get_attribute_id('deal_status')),'~') <> 'draft' or
+     v_member is null then
+    return null;
+  end if;
+
+  return jsonb_build_object(
+    'edit_deal_member' || v_row_num,
+    jsonb_build_object(
+      'code', 'edit_deal_member',
+      'name', 'Изменить параметры участника сделки',
+      'type', 'financial.deal',
+      'params', jsonb_build_object('deal_code', data.get_object_code(v_object_id), 'corporation_code' , v_member),
+      'user_params', 
+       jsonb_build_array(
+        jsonb_build_object(
+            'code', 'percent_asset',
+            'type', 'integer',
+            'data', jsonb_build_object('min_value', 0, 'max_value', 100),
+            'description', '% владения активом',
+            'default_value', json.get_opt_integer(v_value -> 'percent_asset'),
+            'min_value_count', 1,
+            'max_value_count', 1),
+        jsonb_build_object(
+            'code', 'percent_income',
+            'type', 'integer',
+            'data', jsonb_build_object('min_value', 0, 'max_value', 100),
+            'description', '% дохода от сделки',
+             'default_value', json.get_opt_integer(v_value -> 'percent_income'),
+            'min_value_count', 1,
+            'max_value_count', 1),
+        jsonb_build_object(
+            'code', 'deal_cost',
+            'type', 'integer',
+            'data', jsonb_build_object('min_value', 0, 'max_value', 100000000000),
+            'description', 'Вложения в сделку',
+            'default_value', json.get_opt_integer(v_value -> 'deal_cost'),
+            'min_value_count', 1,
+            'max_value_count', 1)))
+      );
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.edit_deal_member(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_deal_code text := json.get_string(in_params, 'deal_code');
+  v_deal_id integer := data.get_object_id(v_deal_code);
+  v_member text := json.get_string(in_params, 'corporation_code');
+  v_corporation_id integer := data.get_object_id(v_member);
+  v_percent_asset integer := json.get_integer(in_user_params, 'percent_asset');
+  v_percent_income integer := json.get_integer(in_user_params, 'percent_income');
+  v_deal_cost integer := json.get_integer(in_user_params, 'deal_cost');
+
+  v_i integer;
+  v_j integer;
+
+  v_value jsonb;
+  v_sum_percent_asset integer := 0;
+  v_sum_percent_income integer := 0;
+  v_sum_deal_cost integer := 0;
+  v_curent_member text;
+  v_ret_val api.result;
+begin
+  v_ret_val := api_utils.get_objects(in_client,
+				     in_user_object_id,
+				     jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_deal_code),
+			    'get_actions', true,
+			    'get_templates', true));
+  if json.get_opt_string(data.get_attribute_value(in_user_object_id,
+					          v_deal_id, 
+					          data.get_attribute_id('deal_status')),'~') <> 'draft' then
+    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Статус сделки изменился!"}';
+    return v_ret_val;
+  end if;
+  for v_i in 1..10 loop
+    v_value := data.get_attribute_value(in_user_object_id, v_deal_id, data.get_attribute_id('system_deal_participant' || v_i));
+    if v_value is not null then
+      if json.get_opt_string(v_value -> 'member') = v_member then
+        v_j := v_i;
+      else
+        select v_sum_percent_asset + coalesce(c.percent_asset, 0),
+               v_sum_percent_income + coalesce(c.percent_income, 0),
+               v_sum_deal_cost + coalesce(c.deal_cost, 0)
+        into v_sum_percent_asset,
+             v_sum_percent_income,
+             v_sum_deal_cost
+        from jsonb_to_record(v_value) as c (percent_asset int, percent_income int, deal_cost int);
+      end if;
+    end if;    
+  end loop;
+
+  if v_sum_percent_asset + v_percent_asset > 100 then
+    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Сумарный процент владения активом превысил 100!"}';
+    return v_ret_val;
+  elsif v_sum_percent_income + v_percent_income > 100 then
+    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Сумарный процент распределения доходов сделки превысил 100!"}';
+    return v_ret_val;
+  end if;
+
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('asset_cost'), null, to_jsonb(round((v_sum_deal_cost + v_deal_cost) * 0.7)), in_user_object_id);
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('asset_amortization'), null, to_jsonb(round((v_sum_deal_cost + v_deal_cost) * 0.07)), in_user_object_id);
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('system_deal_participant' || v_j), null, ('{"member" : "' || v_member || '","percent_asset" : ' || v_percent_asset || ', "percent_income" : ' || v_percent_income || ', "deal_cost": ' || v_deal_cost || '}')::jsonb, in_user_object_id);
+
+  return api_utils.get_objects(in_client,
+			  in_user_object_id,
+			  jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_deal_code),
+			    'get_actions', true,
+			    'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+insert into data.action_generators(function, params, description)
+select
+  'generate_if_attribute', 
+  jsonb_build_object('attribute_code', 
+		     'type', 
+		     'attribute_value', 
+		     'deal', 
+		     'function', 
+		     'edit_deal_member', 
+		     'params',
+		     jsonb_build_object('row_num', o.value)), 
+  'Функция для изменения участника сделки'
+ from generate_series(1, 10) o(value);
+
+ -- Действие для удаления участника сделки 
+CREATE OR REPLACE FUNCTION action_generators.delete_deal_member(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_row_num integer := json.get_integer(in_params, 'row_num');
+  v_value jsonb;
+  v_member text;
+begin
+  -- Показываем, если соответствующий участник уже добавлен
+  v_value := data.get_attribute_value(v_user_object_id,
+				       v_object_id, 
+			               data.get_attribute_id('system_deal_participant' || v_row_num));
+  if v_value is null then
+    return null;
+  else
+   v_member := json.get_opt_string(v_value -> 'member');
+  end if;
+ -- Показываем только для автора сделки или мастера, и если она ещё черновик 
+  if json.get_opt_integer(data.get_attribute_value(v_user_object_id,
+					       v_object_id, 
+					       data.get_attribute_id('deal_author')),0) <> v_user_object_id and
+    not json.get_opt_boolean(data.get_attribute_value(v_user_object_id,
+					       v_user_object_id, 
+					       data.get_attribute_id('system_master')), false) or 
+     json.get_opt_string(data.get_attribute_value(v_user_object_id,
+					          v_object_id, 
+					          data.get_attribute_id('deal_status')),'~') <> 'draft' or
+     v_member is null then
+    return null;
+  end if;
+
+  return jsonb_build_object(
+    'delete_deal_member' || v_row_num,
+    jsonb_build_object(
+      'code', 'delete_deal_member',
+      'name', 'Удалить участника сделки',
+      'type', 'financial.deal',
+      'warning', 'Вы действительно хотите удалить ' || json.get_string(data.get_attribute_value(v_user_object_id, data.get_object_id(v_member), data.get_attribute_id('name'))) || ' из участников сделки?',
+      'params', jsonb_build_object('deal_code', data.get_object_code(v_object_id), 'corporation_code' , v_member))
+      );
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.delete_deal_member(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_deal_code text := json.get_string(in_params, 'deal_code');
+  v_deal_id integer := data.get_object_id(v_deal_code);
+  v_member text := json.get_string(in_params, 'corporation_code');
+  v_corporation_id integer := data.get_object_id(v_member);
+
+  v_i integer;
+  v_j integer := 1;
+
+  v_value jsonb;
+  v_sum_deal_cost integer := 0;
+  v_system_corporation_draft_deals_attribute_id integer := data.get_attribute_id('system_corporation_draft_deals');
+  v_ret_val api.result;
+begin
+  v_ret_val := api_utils.get_objects(in_client,
+				     in_user_object_id,
+				     jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_deal_code),
+			    'get_actions', true,
+			    'get_templates', true));
+  if json.get_opt_string(data.get_attribute_value(in_user_object_id,
+					          v_deal_id, 
+					          data.get_attribute_id('deal_status')),'~') <> 'draft' then
+    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Статус сделки изменился!"}';
+    return v_ret_val;
+   end if;
+  for v_i in 1..10 loop
+    v_value := data.get_attribute_value(in_user_object_id, v_deal_id, data.get_attribute_id('system_deal_participant' || v_i));
+    if v_value is not null then
+      if json.get_opt_string(v_value -> 'member') = v_member then
+        v_j := v_j - 1;
+      else
+        if v_j < v_i then
+          perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('system_deal_participant' || v_j), null, v_value, in_user_object_id);
+        end if;
+        v_sum_deal_cost := v_sum_deal_cost + json.get_opt_integer(v_value -> 'deal_cost', 0);
+      end if;
+    elsif v_j < v_i then
+      perform data.delete_attribute_value_if_exists(v_deal_id, data.get_attribute_id('system_deal_participant' || v_j), null, in_user_object_id);
+    end if; 
+    v_j := v_j + 1; 
+  end loop;
+
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('asset_cost'), null, to_jsonb(round(v_sum_deal_cost  * 0.7)), in_user_object_id);
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('asset_amortization'), null, to_jsonb(round(v_sum_deal_cost * 0.07)), in_user_object_id);
+
+  -- Удалим сделку из подготавливаемых для этой корпорации
+  v_value := json.get_opt_array(
+        data.get_attribute_value_for_update(
+          v_corporation_id,
+          v_system_corporation_draft_deals_attribute_id,
+          null));
+  v_value := coalesce(v_value, jsonb '[]') - v_deal_code;
+  perform data.set_attribute_value(v_corporation_id, v_system_corporation_draft_deals_attribute_id, null, v_value, in_user_object_id);
+
+  return api_utils.get_objects(in_client,
+			  in_user_object_id,
+			  jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_deal_code),
+			    'get_actions', true,
+			    'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+insert into data.action_generators(function, params, description)
+select
+  'generate_if_attribute', 
+  jsonb_build_object('attribute_code', 
+		     'type', 
+		     'attribute_value', 
+		     'deal', 
+		     'function', 
+		     'delete_deal_member', 
+		     'params',
+		     jsonb_build_object('row_num', o.value)), 
+  'Функция для удаления участника сделки'
+ from generate_series(1, 10) o(value);
+
+ -- Действие для редактирования сделки
+CREATE OR REPLACE FUNCTION action_generators.edit_deal(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_is_in_group integer; 
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+begin
+   -- Показываем только для автора сделки или мастера, и если она ещё черновик 
+  if json.get_opt_integer(data.get_attribute_value(v_user_object_id,
+					       v_object_id, 
+					       data.get_attribute_id('deal_author')),0) <> v_user_object_id and
+    not json.get_opt_boolean(data.get_attribute_value(v_user_object_id,
+					       v_user_object_id, 
+					       data.get_attribute_id('system_master')), false) or 
+     json.get_opt_string(data.get_attribute_value(v_user_object_id,
+					          v_object_id, 
+					          data.get_attribute_id('deal_status')),'~') <> 'draft' then
+     return null;
+   end if;
+  
+  return jsonb_build_object(
+    'edit_deal',
+    jsonb_build_object(
+      'code', 'edit_deal',
+      'name', 'Редактировать сделку',
+      'type', 'financial.deal',
+      'params', jsonb_build_object('deal_code', data.get_object_code(v_object_id)),
+      'user_params', 
+       jsonb_build_array(
+         jsonb_build_object(
+            'code', 'deal_name',
+            'type', 'string',
+            'description', 'Название сделки',
+            'data', jsonb_build_object('min_length', 1),
+            'default_value', json.get_opt_string(data.get_attribute_value(v_user_object_id,
+					          v_object_id, 
+					          data.get_attribute_id('name'))),
+            'min_value_count', 1,
+            'max_value_count', 1),
+         jsonb_build_object(
+            'code', 'description',
+            'type', 'string',
+            'description', 'Описание сделки',
+            'data', jsonb_build_object('min_length', 1, 'multiline', true),
+            'default_value', json.get_opt_string(data.get_attribute_value(v_user_object_id,
+					          v_object_id, 
+					          data.get_attribute_id('description'))),
+            'min_value_count', 1,
+            'max_value_count', 1),
+         jsonb_build_object(
+            'code', 'deal_sector',
+            'type', 'objects',
+            'description', 'Рынок сделки',
+            'data', jsonb_build_object('object_code', 'market', 'attribute_code', 'sectors'),
+            'default_value', json.get_opt_string(data.get_attribute_value(v_user_object_id,
+					          v_object_id, 
+					          data.get_attribute_id('deal_sector'))),
+            'min_value_count', 1,
+            'max_value_count', 1),
+         jsonb_build_object(
+            'code', 'asset_name',
+            'type', 'string',
+            'description', 'Название актива',
+            'data', jsonb_build_object('min_length', 1),
+            'default_value', json.get_opt_string(data.get_attribute_value(v_user_object_id,
+					          v_object_id, 
+					          data.get_attribute_id('asset_name'))),
+            'min_value_count', 1,
+            'max_value_count', 1),
+         jsonb_build_object(
+            'code', 'deal_income',
+            'type', 'integer',
+            'data', jsonb_build_object('min_value', 0, 'max_value', 1000000000000),
+            'description', 'Доходность сделки',
+            'default_value', json.get_opt_integer(data.get_attribute_value(v_user_object_id,
+					          v_object_id, 
+					          data.get_attribute_id('deal_income'))),
+            'min_value_count', 1,
+            'max_value_count', 1)))
+      );
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.edit_deal(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_deal_code text := json.get_string(in_params, 'deal_code');
+  v_deal_id integer := data.get_object_id(v_deal_code);
+  v_deal_name text := json.get_string(in_user_params, 'deal_name');
+  v_description text := json.get_string(in_user_params, 'description');
+  v_asset_name text := json.get_string(in_user_params, 'asset_name');
+  v_deal_income integer := json.get_integer(in_user_params, 'deal_income');
+  v_deal_sector text := json.get_string(in_user_params, 'deal_sector');
+
+  v_ret_val api.result;
+begin
+  v_ret_val := api_utils.get_objects(in_client,
+				     in_user_object_id,
+				     jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_deal_code),
+			    'get_actions', true,
+			    'get_templates', true));
+  if json.get_opt_string(data.get_attribute_value(in_user_object_id,
+					          v_deal_id, 
+					          data.get_attribute_id('deal_status')),'~') <> 'draft' then
+    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Статус сделки изменился!"}';
+    return v_ret_val;
+   end if;
+
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('name'), null, to_jsonb(v_deal_name), in_user_object_id);
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('deal_author'), null, to_jsonb(in_user_object_id), in_user_object_id);
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('description'), null, to_jsonb(v_description), in_user_object_id);
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('deal_sector'), null, to_jsonb(v_deal_sector), in_user_object_id);
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('asset_name'), null, to_jsonb(v_asset_name), in_user_object_id);
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('deal_income'), null, to_jsonb(v_deal_income), in_user_object_id);
+
+
+  return api_utils.get_objects(in_client,
+			  in_user_object_id,
+			  jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_deal_code),
+			    'get_actions', true,
+			    'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+insert into data.action_generators(function, params, description)
+values('generate_if_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'deal', 'function', 'edit_deal'), 'Функция для изменения сделки');
+
+-- Действие для удаления сделки
+CREATE OR REPLACE FUNCTION action_generators.delete_deal(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_is_in_group integer; 
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+begin
+   -- Показываем только для автора сделки или мастера, и если она ещё черновик 
+  if json.get_opt_integer(data.get_attribute_value(v_user_object_id,
+					       v_object_id, 
+					       data.get_attribute_id('deal_author')),0) <> v_user_object_id and
+    not json.get_opt_boolean(data.get_attribute_value(v_user_object_id,
+					       v_user_object_id, 
+					       data.get_attribute_id('system_master')), false) or 
+     json.get_opt_string(data.get_attribute_value(v_user_object_id,
+					          v_object_id, 
+					          data.get_attribute_id('deal_status')),'~') <> 'draft' then
+     return null;
+   end if;
+  
+  return jsonb_build_object(
+    'delete_deal',
+    jsonb_build_object(
+      'code', 'delete_deal',
+      'name', 'Удалить сделку',
+      'type', 'financial.deal',
+      'params', jsonb_build_object('deal_code', data.get_object_code(v_object_id)),
+      'warning', 'Вы действительно хотите удалить сделку ' || json.get_string(data.get_attribute_value(v_user_object_id, v_object_id, data.get_attribute_id('name'))) || ' ?'
+      )
+      );
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.delete_deal(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_deal_code text := json.get_string(in_params, 'deal_code');
+  v_deal_id integer := data.get_object_id(v_deal_code);
+  v_corporation_id integer;
+
+  v_system_corporation_draft_deals_attribute_id integer := data.get_attribute_id('system_corporation_draft_deals');
+  v_value jsonb;
+  v_value_draft_deals jsonb;
+  v_i integer;
+  v_ret_val api.result;
+begin
+  v_ret_val := api_utils.get_objects(in_client,
+				     in_user_object_id,
+				     jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_deal_code),
+			    'get_actions', true,
+			    'get_templates', true));
+  if json.get_opt_string(data.get_attribute_value(in_user_object_id,
+					          v_deal_id, 
+					          data.get_attribute_id('deal_status')),'~') <> 'draft' then
+    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Статус сделки изменился!"}';
+    return v_ret_val;
+   end if;
+
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('deal_status'), null, jsonb '"deleted"', in_user_object_id);
+
+  -- Удалим сделку из подготавливаемых для всех корпораций
+  for v_i in 1..10 loop
+    v_value := data.get_attribute_value(in_user_object_id, v_deal_id, data.get_attribute_id('system_deal_participant' || v_i));
+    if v_value is not null then
+      v_corporation_id := data.get_object_id(json.get_opt_string(v_value -> 'member'));
+      v_value_draft_deals := json.get_opt_array(
+        data.get_attribute_value_for_update(
+          v_corporation_id,
+          v_system_corporation_draft_deals_attribute_id,
+          null));
+      v_value_draft_deals := coalesce(v_value_draft_deals, jsonb '[]') - v_deal_code;
+      perform data.set_attribute_value(v_corporation_id, v_system_corporation_draft_deals_attribute_id, null, v_value_draft_deals, in_user_object_id);
+    end if;    
+  end loop;
+
+  return api_utils.get_objects(in_client,
+			  in_user_object_id,
+			  jsonb_build_object(
+			    'object_codes', jsonb_build_array(data.get_object_code(in_user_object_id)),
+			    'get_actions', true,
+			    'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+insert into data.action_generators(function, params, description)
+values('generate_if_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'deal', 'function', 'delete_deal'), 'Функция для удаления сделки');
+
 
 -- TODO: нагенерировать транзакций и писем
 
