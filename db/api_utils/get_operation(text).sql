@@ -14,6 +14,10 @@ begin
     return '>';
   when in_operation_name = 'ge' then
     return '>=';
+  when in_operation_name = 'eq' then
+    return '=';
+  when in_operation_name = 'ne' then
+    return '!=';
   end case;
 
   perform utils.raise_invalid_input_param_value('Invalid operation "%s"', in_operation_name);
