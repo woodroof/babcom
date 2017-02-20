@@ -33,7 +33,8 @@ insert into data.params(code, value, description) values
       "attributes": ["news_time", "news_media", "news_title"]
     },
     {
-      "attributes": ["state_tax"]
+      "attributes": ["state_tax"], 
+      "actions": ["change_state_tax"]
     },
     {
       "attributes": ["corporation_state", "corporation_members", "corporation_capitalization", "corporation_sectors", "dividend_vote"]
@@ -1780,14 +1781,11 @@ ship_radar
 ship_power_computer
 ship_hacker_computer
 assembly
-market
 meta_entities
 station_weapon{1,4}
 station_reactor{1,4}
 ship_weapon{1,2}
 ship_reactor{1,2}
-corporation{1,9}
-asset{1,9}{1,50}
 library_category{1,9}
 library_document{1,9}{1,20}
 personal_document{1,100}
@@ -2659,6 +2657,69 @@ $BODY$
 
 insert into data.action_generators(function, params, description)
 values('send_mail', null, 'Функция отправки письма');
+
+-- Действие для изменения процента налога для страны
+CREATE OR REPLACE FUNCTION action_generators.change_state_tax(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+begin
+  return jsonb_build_object(
+    'change_state_tax',
+    jsonb_build_object(
+      'code', 'change_state_tax',
+      'name', 'Изменить процентную ставку налога',
+      'type', 'financial.tax.change',
+      'params', jsonb_build_object('state_code', data.get_object_code(json.get_integer(in_params, 'object_id'))),
+      'user_params', 
+        jsonb_build_array(
+          jsonb_build_object(
+            'code', 'tax',
+            'type', 'integer',
+            'data', jsonb_build_object('min_value', 0, 'max_value', 100),
+            'description', 'Процентная ставка',
+            'default_value', data.get_attribute_value(json.get_opt_integer(in_params, json.get_integer(in_params, 'object_id'), 'user_object_id'),json.get_integer(in_params, 'object_id'), data.get_attribute_id('state_tax')),
+            'min_value_count', 1,
+            'max_value_count', 1))));
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.change_state_tax(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_state_code text := json.get_string(in_params, 'state_code');
+  v_state_id integer := data.get_object_id(v_state_code);
+  v_state_tax_attribute_id integer := data.get_attribute_id('state_tax');
+  v_tax integer := json.get_integer(in_user_params, 'tax');
+begin
+  perform data.set_attribute_value_if_changed(
+    v_state_id,
+    v_state_tax_attribute_id,
+    null,
+    v_tax::text::jsonb,
+    in_user_object_id);
+
+  return api_utils.get_objects(in_client,
+			  in_user_object_id,
+			  jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_state_code),
+			    'get_actions', true,
+			    'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+insert into data.action_generators(function, params, description)
+values('generate_if_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'state', 'function', 'change_state_tax'), 'Функция для изменения процента налога для страны');
+
 
 -- TODO: нагенерировать транзакций и писем
 
