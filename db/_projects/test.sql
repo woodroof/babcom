@@ -3915,7 +3915,7 @@ insert into data.objects(id) values(default)
   perform data.set_attribute_value(v_deal_id, data.get_attribute_id('asset_name'), null, to_jsonb(v_asset_name), in_user_object_id);
   perform data.set_attribute_value(v_deal_id, data.get_attribute_id('deal_income'), null, to_jsonb(v_deal_income), in_user_object_id);
   perform data.set_attribute_value(v_deal_id, data.get_attribute_id('system_deal_time'), null, to_jsonb(utils.system_time()), in_user_object_id);
-  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('deal_status'), null, jsonb '"draft"', in_user_object_id, in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('deal_status'), null, jsonb '"draft"', in_user_object_id);
   perform data.set_attribute_value(v_deal_id, data.get_attribute_id('asset_cost'), null, to_jsonb(round(v_deal_cost * 0.7)), in_user_object_id);
   perform data.set_attribute_value(v_deal_id, data.get_attribute_id('asset_amortization'), null, to_jsonb(round(v_deal_cost * 0.07)), in_user_object_id);
   perform data.set_attribute_value(v_deal_id, data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "' || v_corporation_code || '","percent_asset" : ' || v_percent_asset || ', "percent_income" : ' || v_percent_income || ', "deal_cost": ' || v_deal_cost || '}')::jsonb, in_user_object_id);
