@@ -119,7 +119,6 @@ insert into data.objects(code) values
 ('technicians'),
 ('pilots'),
 ('officers'),
-('traders'),
 ('hackers'),
 ('scientists'),
 ('corporations'),
@@ -415,7 +414,6 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('system_technician', 'Маркер персонажа-техника', 'SYSTEM', null),
 ('system_pilot', 'Маркер персонажа-пилота', 'SYSTEM', null),
 ('system_officer', 'Маркер персонажа-офицера', 'SYSTEM', null),
-('system_trader', 'Маркер персонажа-корпората', 'SYSTEM', null),
 ('system_hacker', 'Маркер персонажа-хакера', 'SYSTEM', null),
 ('system_scientist', 'Маркер персонажа-учёного', 'SYSTEM', null),
 ('system_library_category', 'Категория документа', 'SYSTEM', null),
@@ -462,7 +460,6 @@ insert into data.attribute_value_change_functions(attribute_id, function, params
 (data.get_attribute_id('system_technician'), 'boolean_value_to_object', jsonb '{"object_code": "technicians"}'),
 (data.get_attribute_id('system_pilot'), 'boolean_value_to_object', jsonb '{"object_code": "pilots"}'),
 (data.get_attribute_id('system_officer'), 'boolean_value_to_object', jsonb '{"object_code": "officers"}'),
-(data.get_attribute_id('system_trader'), 'boolean_value_to_object', jsonb '{"object_code": "traders"}'),
 (data.get_attribute_id('system_hacker'), 'boolean_value_to_object', jsonb '{"object_code": "hackers"}'),
 (data.get_attribute_id('system_scientist'), 'boolean_value_to_object', jsonb '{"object_code": "scientists"}'),
 (data.get_attribute_id('system_mail_contact'), 'boolean_value_to_attribute', jsonb '{"object_code": "mail_contacts", "attribute_code": "mail_contacts"}'),
@@ -1461,10 +1458,6 @@ select data.set_attribute_value(data.get_object_id('officers'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('officers'), data.get_attribute_id('type'), null, jsonb '"group"');
 select data.set_attribute_value(data.get_object_id('officers'), data.get_attribute_id('name'), null, jsonb '"Офицеры"');
 
-select data.set_attribute_value(data.get_object_id('traders'), data.get_attribute_id('system_priority'), null, jsonb '40');
-select data.set_attribute_value(data.get_object_id('traders'), data.get_attribute_id('type'), null, jsonb '"group"');
-select data.set_attribute_value(data.get_object_id('traders'), data.get_attribute_id('name'), null, jsonb '"Корпораты"');
-
 select data.set_attribute_value(data.get_object_id('hackers'), data.get_attribute_id('system_priority'), null, jsonb '80');
 select data.set_attribute_value(data.get_object_id('hackers'), data.get_attribute_id('type'), null, jsonb '"group"');
 select data.set_attribute_value(data.get_object_id('hackers'), data.get_attribute_id('name'), null, jsonb '"Хакеры"');
@@ -1646,7 +1639,6 @@ system_politician
 system_technician
 system_pilot
 system_officer
-system_trader
 system_hacker
 system_scientist
 */
@@ -1762,7 +1754,6 @@ system_medic
 system_technician
 system_pilot
 system_officer
-system_trader
 system_hacker
 system_scientist
 system_library_category
@@ -2804,7 +2795,7 @@ $BODY$
 declare
   v_receivers jsonb := in_user_params->'receivers';
   v_title text := json.get_string(in_user_params, 'title');
-  v_body text := json.get_string(in_user_params, 'body');
+  v_body text := replace(json.get_string(in_user_params, 'body'), E'\n', '<br>');
 
   v_time_format text := data.get_string_param('time_format');
 
@@ -2873,6 +2864,195 @@ $BODY$
 
 insert into data.action_generators(function, params, description)
 values('send_mail', null, 'Функция отправки письма');
+
+CREATE OR REPLACE FUNCTION action_generators.reply(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
+  v_user_object_id integer;
+  v_mail_author_attr_id integer;
+  v_title_attr_id integer;
+  v_body_attr_id integer;
+  v_author text;
+  v_title text;
+  v_body text;
+begin
+  if v_object_id is null then
+    return null;
+  end if;
+
+  v_user_object_id := json.get_integer(in_params, 'user_object_id');
+  v_mail_author_attr_id := data.get_attribute_id('mail_author');
+  v_title_attr_id := data.get_attribute_id('mail_title');
+  v_body_attr_id := data.get_attribute_id('mail_body');
+
+  select json.get_string(value)
+  into v_author
+  from data.attribute_values
+  where
+    object_id = v_object_id and
+    attribute_id = v_mail_author_attr_id and
+    value_object_id is null;
+
+  select json.get_string(value)
+  into v_body
+  from data.attribute_values
+  where
+    object_id = v_object_id and
+    attribute_id = v_body_attr_id and
+    value_object_id is null;
+
+  select json.get_string(value)
+  into v_title
+  from data.attribute_values
+  where
+    object_id = v_object_id and
+    attribute_id = v_title_attr_id and
+    value_object_id is null;
+
+  return jsonb_build_object(
+    'reply',
+    jsonb_build_object(
+      'code', 'send_mail',
+      'name', 'Ответить',
+      'type', 'mail.reply',
+      'params', jsonb '{}',
+      'user_params',
+        jsonb_build_array(
+          jsonb_build_object(
+            'code', 'receivers',
+            'type', 'objects',
+            'data', jsonb_build_object('object_code', 'mail_contacts', 'attribute_code', 'mail_contacts'),
+            'description', 'Получатели',
+            'default_value', v_author,
+            'min_value_count', 1),
+          jsonb_build_object(
+            'code', 'title',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1),
+            'description', 'Тема',
+            'default_value', 'Re: ' || v_title,
+            'min_value_count', 1,
+            'max_value_count', 1),
+          jsonb_build_object(
+            'code', 'body',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1, 'multiline', true),
+            'description', 'Сообщение',
+            'default_value', E'\n%gt; ' || replace(v_title, '<br>', '\n&gt; '),
+            'min_value_count', 1,
+            'max_value_count', 1))));
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
+insert into data.action_generators(function, params, description)
+values('generate_if_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'mail', 'function', 'reply'), 'Функция ответа на письмо');
+
+CREATE OR REPLACE FUNCTION action_generators.reply_all(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
+  v_user_object_id integer;
+  v_mail_author_attr_id integer;
+  v_mail_receivers_attr_id integer;
+  v_title_attr_id integer;
+  v_body_attr_id integer;
+  v_author jsonb;
+  v_receivers jsonb;
+  v_title text;
+  v_body text;
+begin
+  if v_object_id is null then
+    return null;
+  end if;
+
+  v_user_object_id := json.get_integer(in_params, 'user_object_id');
+  v_mail_author_attr_id := data.get_attribute_id('mail_author');
+  v_mail_receivers_attr_id := data.get_attribute_id('mail_receivers');
+  v_title_attr_id := data.get_attribute_id('mail_title');
+  v_body_attr_id := data.get_attribute_id('mail_body');
+
+  select value
+  into v_author
+  from data.attribute_values
+  where
+    object_id = v_object_id and
+    attribute_id = v_mail_author_attr_id and
+    value_object_id is null;
+
+  perform json.get_string(v_author);
+
+  select value
+  into v_receivers
+  from data.attribute_values
+  where
+    object_id = v_object_id and
+    attribute_id = v_mail_receivers_attr_id and
+    value_object_id is null;
+
+  perform json.get_string_array(v_receivers);
+
+  select json.get_string(value)
+  into v_body
+  from data.attribute_values
+  where
+    object_id = v_object_id and
+    attribute_id = v_body_attr_id and
+    value_object_id is null;
+
+  select json.get_string(value)
+  into v_title
+  from data.attribute_values
+  where
+    object_id = v_object_id and
+    attribute_id = v_title_attr_id and
+    value_object_id is null;
+
+  return jsonb_build_object(
+    'reply_all',
+    jsonb_build_object(
+      'code', 'send_mail',
+      'name', 'Ответить',
+      'type', 'mail.reply_all',
+      'params', jsonb '{}',
+      'user_params',
+        jsonb_build_array(
+          jsonb_build_object(
+            'code', 'receivers',
+            'type', 'objects',
+            'data', jsonb_build_object('object_code', 'mail_contacts', 'attribute_code', 'mail_contacts'),
+            'description', 'Получатели',
+            'default_value', v_author || (v_receivers - json.get_string(v_author)),
+            'min_value_count', 1),
+          jsonb_build_object(
+            'code', 'title',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1),
+            'description', 'Тема',
+            'default_value', 'Re: ' || v_title,
+            'min_value_count', 1,
+            'max_value_count', 1),
+          jsonb_build_object(
+            'code', 'body',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1, 'multiline', true),
+            'description', 'Сообщение',
+            'default_value', E'\n%gt; ' || replace(v_title, '<br>', '\n&gt; '),
+            'min_value_count', 1,
+            'max_value_count', 1))));
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
+insert into data.action_generators(function, params, description)
+values('generate_if_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'mail', 'function', 'reply_all'), 'Функция ответа на письмо всем отправителям');
 
 -- Действие для изменения процента налога для страны
 CREATE OR REPLACE FUNCTION action_generators.change_state_tax(
