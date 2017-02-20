@@ -40,7 +40,11 @@ insert into data.params(code, value, description) values
       "actions": ["change_state_tax"]
     },
     {
-      "attributes": ["corporation_state", "corporation_members", "corporation_capitalization", "corporation_sectors", "dividend_vote"]
+      "attributes": ["corporation_state", "corporation_members", "corporation_capitalization", "corporation_sectors", "dividend_vote"],
+      "actions": ["set_dividend_vote", "create_deal"]
+    },
+    {
+      "actions": ["create_deal"]
     },
     {
       "attributes": ["corporation_deals", "corporation_draft_deals", "corporation_canceled_deals"]
@@ -351,6 +355,7 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('transaction_time', 'Время перевода', 'NORMAL', null),
 ('transaction_description', 'Сообщение', 'NORMAL', null),
 ('transaction_sum', 'Сумма', 'NORMAL', null),
+('corporations', 'Все корпорации', 'INVISIBLE', null),
 ('corporation_state', 'Государство корпорации', 'NORMAL', 'code'),
 ('system_corporation_members', 'Члены корпорации', 'SYSTEM', null),
 ('corporation_members', 'Члены корпорации', 'NORMAL', null),
@@ -378,6 +383,7 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('document_author', 'Автор', 'NORMAL', 'code'),
 ('med_document_patient', 'Пациент', 'NORMAL', 'code'),
 ('market_volume', 'Объём рынка', 'NORMAL', null),
+('sectors', 'Отрасли', 'INVISIBLE', null),
 ('asset_amortization', 'Расходность актива', 'NORMAL', null),
 ('deal_income', 'Доходность сделки', 'NORMAL', null),
 ('system_deal_participant1', 'Участник сделки 1', 'SYSTEM', null),
@@ -403,7 +409,7 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('transactions', 'Транзакции', 'SYSTEM', null),
 ('sector_volume', 'Объём отрасли', 'NORMAL',null),
 ('sector_volume_changes', 'Изменение объёма отрасли', 'NORMAL',null),
-('state_tax', 'Ставка налога в стране', 'NORMAL', null),
+('state_tax', 'Ставка налога в стране, %', 'NORMAL', null),
 ('system_balance', 'Остаток на счету', 'SYSTEM', null),
 ('balance', 'Остаток на счету', 'NORMAL', null),
 ('system_master', 'Маркер мастерского персонажа', 'SYSTEM', null),
@@ -450,7 +456,7 @@ $BODY$
 insert into data.attribute_value_change_functions(attribute_id, function, params) values
 (data.get_attribute_id('type'), 'string_value_to_object', jsonb '{"params": {"person": "persons", "corporation": "corporations", "ship": "ships", "news": "news_hub", "library_category": "library", "med_document": "med_library", "sector": "market", "state": "states"}}'),
 (data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"person": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}, "state": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}, "corporation": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}}}'),
-(data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"person": {"object_code": "persons", "attribute_code": "persons"}}}'),
+(data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"person": {"object_code": "persons", "attribute_code": "persons"}, "sector": {"object_code": "market", "attribute_code": "sectors"}, "corporation": {"object_code": "corporations", "attribute_code": "corporations"}}}'),
 (data.get_attribute_id('system_master'), 'boolean_value_to_object', jsonb '{"object_code": "masters"}'),
 (data.get_attribute_id('system_psi_scale'), 'any_value_to_object', jsonb '{"object_code": "telepaths"}'),
 (data.get_attribute_id('system_security'), 'boolean_value_to_object', jsonb '{"object_code": "security"}'),
@@ -3115,6 +3121,227 @@ $BODY$
 
 insert into data.action_generators(function, params, description)
 values('generate_if_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'state', 'function', 'change_state_tax'), 'Функция для изменения процента налога для страны');
+
+-- Действие для голосование за выплату дивидендов
+CREATE OR REPLACE FUNCTION action_generators.set_dividend_vote(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_is_in_group integer; 
+begin
+  select count(1) into v_is_in_group 
+  from data.object_objects oo
+   where oo.parent_object_id = json.get_integer(in_params, 'object_id')
+   and oo.object_id = json.get_opt_integer(in_params, null, 'user_object_id');
+
+  if v_is_in_group = 0 or json.get_opt_string(data.get_attribute_value(json.get_opt_integer(in_params, json.get_integer(in_params, 'object_id'), 'user_object_id'),
+								       json.get_integer(in_params, 'object_id'), 
+								       data.get_attribute_id('dividend_vote'))) = 'Да' then
+    return null;
+  end if;
+  
+  return jsonb_build_object(
+    'set_dividend_vote',
+    jsonb_build_object(
+      'code', 'set_dividend_vote',
+      'name', 'Проголосовать за выплату дивидендов',
+      'type', 'vote.dividend',
+      'warning', 'Вы уверены, что хотите проголосовать за выплату дивидендов? Это решение нельзя будет изменить до конца цикла.',
+      'params', jsonb_build_object('corporation_code', data.get_object_code(json.get_integer(in_params, 'object_id')))));
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.set_dividend_vote(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_corporation_code text := json.get_string(in_params, 'corporation_code');
+  v_corporation_id integer := data.get_object_id(v_corporation_code);
+  v_dividend_vote_attribute_id integer := data.get_attribute_id('dividend_vote');
+begin
+  perform data.set_attribute_value_if_changed(
+    v_corporation_id,
+    v_dividend_vote_attribute_id,
+    in_user_object_id,
+    jsonb '"Да"',
+    in_user_object_id);
+
+  return api_utils.get_objects(in_client,
+			  in_user_object_id,
+			  jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_corporation_code),
+			    'get_actions', true,
+			    'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+insert into data.action_generators(function, params, description)
+values('generate_if_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'corporation', 'function', 'set_dividend_vote'), 'Функция для голосование за выплату дивидендов');
+
+-- Действие для создания сделки
+CREATE OR REPLACE FUNCTION action_generators.create_deal(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_is_in_group integer; 
+begin
+  select count(1) into v_is_in_group 
+  from data.object_objects oo
+   where oo.parent_object_id = json.get_integer(in_params, 'object_id')
+   and oo.object_id = json.get_opt_integer(in_params, null, 'user_object_id');
+
+  if v_is_in_group = 0 or json.get_opt_string(data.get_attribute_value(json.get_opt_integer(in_params, json.get_integer(in_params, 'object_id'), 'user_object_id'),
+								       json.get_integer(in_params, 'object_id'), 
+								       data.get_attribute_id('dividend_vote'))) = 'Да' then
+    return null;
+  end if;
+  
+  return jsonb_build_object(
+    'create_deal',
+    jsonb_build_object(
+      'code', 'create_deal',
+      'name', 'Создать сделку',
+      'type', 'financial.deal',
+      'params', jsonb_build_object('corporation_code', data.get_object_code(json.get_integer(in_params, 'object_id'))),
+      'user_params', 
+       jsonb_build_array(
+         jsonb_build_object(
+            'code', 'deal_name',
+            'type', 'string',
+            'description', 'Название сделки',
+             'data', jsonb_build_object('min_length', 1),
+            'min_value_count', 1,
+            'max_value_count', 1),
+         jsonb_build_object(
+            'code', 'description',
+            'type', 'string',
+            'description', 'Описание сделки',
+            'data', jsonb_build_object('min_length', 1, 'multiline', true),
+            'min_value_count', 1,
+            'max_value_count', 1),
+         jsonb_build_object(
+            'code', 'deal_sector',
+            'type', 'objects',
+            'description', 'Рынок сделки',
+            'data', jsonb_build_object('object_code', 'market', 'attribute_code', 'sectors'),
+            'min_value_count', 1,
+            'max_value_count', 1),
+         jsonb_build_object(
+            'code', 'asset_name',
+            'type', 'string',
+            'description', 'Название актива',
+            'data', jsonb_build_object('min_length', 1),
+            'min_value_count', 1,
+            'max_value_count', 1),
+         jsonb_build_object(
+            'code', 'deal_income',
+            'type', 'integer',
+            'data', jsonb_build_object('min_value', 0, 'max_value', 1000000000000),
+            'description', 'Доходность сделки',
+            'min_value_count', 1,
+            'max_value_count', 1),
+        jsonb_build_object(
+            'code', 'percent_asset',
+            'type', 'integer',
+            'data', jsonb_build_object('min_value', 0, 'max_value', 100),
+            'description', '% владения активом для вашей корпорации',
+            'min_value_count', 1,
+            'max_value_count', 1),
+        jsonb_build_object(
+            'code', 'percent_income',
+            'type', 'integer',
+            'data', jsonb_build_object('min_value', 0, 'max_value', 100),
+            'description', '% дохода от сделки для вашей корпорации',
+            'min_value_count', 1,
+            'max_value_count', 1),
+        jsonb_build_object(
+            'code', 'deal_cost',
+            'type', 'integer',
+            'data', jsonb_build_object('min_value', 0, 'max_value', 100000000000),
+            'description', 'Вложения в сделку для вашей корпорации',
+            'min_value_count', 1,
+            'max_value_count', 1)))
+      );
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.create_deal(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_corporation_code text := json.get_string(in_params, 'corporation_code');
+  v_corporation_id integer := data.get_object_id(v_corporation_code);
+  v_deal_id integer;
+  v_deal_code text;
+  v_deal_name text := json.get_string(in_user_params, 'deal_name');
+  v_description text := json.get_string(in_user_params, 'description');
+  v_asset_name text := json.get_string(in_user_params, 'asset_name');
+  v_deal_income integer := json.get_integer(in_user_params, 'deal_income');
+  v_deal_sector text := json.get_string(in_user_params, 'deal_sector');
+  v_percent_asset integer := json.get_integer(in_user_params, 'percent_asset');
+  v_percent_income integer := json.get_integer(in_user_params, 'percent_income');
+  v_deal_cost integer := json.get_integer(in_user_params, 'deal_cost');
+
+  v_system_corporation_draft_deals_attribute_id integer := data.get_attribute_id('system_corporation_draft_deals');
+  v_value jsonb;
+begin
+insert into data.objects(id) values(default)
+  returning id, code into v_deal_id, v_deal_code;
+
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('type'), null, jsonb '"deal"');
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('name'), null, to_jsonb(v_deal_name));
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('deal_author'), null, to_jsonb(in_user_object_id));
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('description'), null, to_jsonb(v_description));
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('deal_sector'), null, to_jsonb(v_deal_sector));
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('asset_name'), null, to_jsonb(v_asset_name));
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('deal_income'), null, to_jsonb(v_deal_income));
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('system_deal_time'), null, to_jsonb(to_char(now(), 'yyyy.dd.mm hh24:mi:ss.us')));
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('deal_status'), null, jsonb '"draft"');
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('asset_cost'), null, to_jsonb(trunc(v_deal_cost * 0.7)));
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('asset_amortization'), null, to_jsonb(trunc(v_deal_cost * 0.07)));
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "' || v_corporation_code || '","percent_asset" : ' || v_percent_asset || ', "percent_income" : ' || v_percent_income || ', "deal_cost": ' || v_deal_cost || '}')::jsonb);
+
+
+-- Вставим сделку в подготавливаемые для этой корпорации
+    v_value := json.get_opt_array(
+        data.get_attribute_value_for_update(
+          v_corporation_id,
+          v_system_corporation_draft_deals_attribute_id,
+          null));
+    v_value := coalesce(v_value, jsonb '[]') || jsonb_build_array(v_deal_code);
+    perform data.set_attribute_value(v_corporation_id, v_system_corporation_draft_deals_attribute_id, null, v_value, in_user_object_id);
+
+  return api_utils.get_objects(in_client,
+			  in_user_object_id,
+			  jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_deal_code),
+			    'get_actions', true,
+			    'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+insert into data.action_generators(function, params, description)
+values('generate_if_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'corporation', 'function', 'create_deal'), 'Функция для добавления сделки');
+
 
 -- TODO: нагенерировать транзакций и писем
 
