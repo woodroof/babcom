@@ -155,6 +155,7 @@ insert into data.objects(code) values
 ('transaction_destinations'),
 ('personal_document_storage'),
 ('library'),
+('mailbox'),
 ('med_library'),
 ('transactions'),
 ('station'),
@@ -1697,6 +1698,11 @@ select data.set_attribute_value(data.get_object_id('transactions'), data.get_att
 select data.set_attribute_value(data.get_object_id('transactions'), data.get_attribute_id('name'), null, jsonb '"История операций"');
 select data.set_attribute_value(data.get_object_id('transactions'), data.get_attribute_id('system_meta'), data.get_object_id('persons'), jsonb 'true');
 
+select data.set_attribute_value(data.get_object_id('mailbox'), data.get_attribute_id('system_is_visible'), data.get_object_id('persons'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('mailbox'), data.get_attribute_id('type'), null, jsonb '"mailbox"');
+select data.set_attribute_value(data.get_object_id('mailbox'), data.get_attribute_id('name'), null, jsonb '"Почта"');
+select data.set_attribute_value(data.get_object_id('mailbox'), data.get_attribute_id('system_meta'), data.get_object_id('persons'), jsonb 'true');
+
 select data.set_attribute_value(data.get_object_id('med_library'), data.get_attribute_id('system_is_visible'), data.get_object_id('med_documents'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('med_library'), data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('med_library'), data.get_attribute_id('type'), null, jsonb '"med_library"');
@@ -1767,7 +1773,6 @@ system_library_category
 /*
 personal_document_storage
 library
-med_library
 personal_library
 station
 station_medlab
@@ -2736,26 +2741,12 @@ $BODY$
 declare
   v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
   v_user_object_id integer;
-  v_persons_objects_id integer;
-  v_person boolean;
 begin
   if v_object_id is not null then
     return null;
   end if;
 
   v_user_object_id := json.get_integer(in_params, 'user_object_id');
-  v_persons_objects_id := data.get_object_id('persons');
-
-  select true
-  into v_person
-  from data.object_objects
-  where
-    parent_object_id = v_persons_objects_id and
-    object_id = v_user_object_id;
-
-  if v_person is null then
-    return null;
-  end if;
   
   return jsonb_build_object(
     'send_mail',
@@ -2806,6 +2797,7 @@ declare
   v_time_format text := data.get_string_param('time_format');
 
   v_name_attr_id integer := data.get_attribute_id('name');
+  v_type_attr_id integer := data.get_attribute_id('type');
   v_inbox_attr_id integer := data.get_attribute_id('inbox');
   v_outbox_attr_id integer := data.get_attribute_id('outbox');
 
@@ -2850,8 +2842,17 @@ begin
   perform data.set_attribute_value(v_mail_id, data.get_attribute_id('mail_type'), null, jsonb '"inbox"');
 
   for v_receiver_id in
-    select data.get_object_id(json.get_string(value))
-    from jsonb_array_elements(jsonb '[]' || v_receivers)
+    select distinct(av.object_id)
+    from jsonb_array_elements(jsonb '[]' || v_receivers) r
+    join data.objects o on
+      o.code = json.get_string(r.value)
+    join data.object_objects oo on
+      oo.parent_object_id = o.id
+    join data.attribute_values av on
+      av.object_id = oo.object_id and
+      av.attribute_id = v_type_attr_id and
+      av.value_object_id is null and
+      av.value = jsonb '"person"'
   loop
     v_mails := data.get_attribute_value_for_update(v_receiver_id, v_inbox_attr_id, v_receiver_id);
     perform data.set_attribute_value(v_receiver_id, v_inbox_attr_id, v_receiver_id, coalesce(v_mails, jsonb '[]') || to_jsonb(v_mail_code), in_user_object_id);
@@ -2869,7 +2870,7 @@ $BODY$
   COST 100;
 
 insert into data.action_generators(function, params, description)
-values('send_mail', null, 'Функция отправки письма');
+values('generate_if_user_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'person', 'function', 'send_mail'), 'Функция отправки письма');
 
 CREATE OR REPLACE FUNCTION action_generators.reply(
     in_params in jsonb)
@@ -3059,6 +3060,212 @@ $BODY$
 
 insert into data.action_generators(function, params, description)
 values('generate_if_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'mail', 'function', 'reply_all'), 'Функция ответа на письмо всем отправителям');
+
+CREATE OR REPLACE FUNCTION action_generators.delete_outbox_mail(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
+
+  v_user_object_id integer;
+  v_mail_author_attr_id integer;
+
+  v_person_id integer;
+
+  v_outbox_attr_id integer;
+
+  v_value jsonb;
+  v_mail_code text;
+begin
+  if v_object_id is null then
+    return null;
+  end if;
+
+  v_user_object_id := json.get_integer(in_params, 'user_object_id');
+  v_mail_author_attr_id := data.get_attribute_id('mail_author');
+
+  select data.get_object_id(json.get_string(value))
+  into v_person_id
+  from data.attribute_values
+  where
+    object_id = v_object_id and
+    attribute_id = v_mail_author_attr_id and
+    value_object_id is null;
+
+  if v_person_id != v_user_object_id then
+    return null;
+  end if;
+
+  v_outbox_attr_id := data.get_attribute_id('outbox');
+
+  select value
+  into v_value
+  from data.attribute_values
+  where
+    object_id = v_user_object_id and
+    attribute_id = v_outbox_attr_id and
+    value_object_id = v_user_object_id;
+
+  if v_value is null then
+    return null;
+  end if;
+
+  perform json.get_string_array(v_value);
+
+  v_mail_code := data.get_object_code(v_object_id);
+
+  if not v_value ? v_mail_code then
+    return null;
+  end if;
+
+  return jsonb_build_object(
+    'delete_mail',
+    jsonb_build_object(
+      'code', 'delete_outbox_mail',
+      'name', 'Удалить',
+      'type', 'mail.delete',
+      'params', jsonb_build_object('mail_code', v_mail_code),
+      'warning', 'Вы действительно хотите удалить письмо?'));
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.delete_outbox_mail(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_mail_code text := json.get_string(in_params, 'mail_code');
+  v_outbox_attr_id integer := data.get_attribute_id('outbox');
+  v_value jsonb;
+begin
+  v_value := data.get_attribute_value_for_update(in_user_object_id, v_outbox_attr_id, in_user_object_id);
+  if v_value is not null and v_value ? v_mail_code then
+    v_value := v_value - v_mail_code;
+    if jsonb_array_length(v_value) = 0 then
+      perform data.delete_attribute_value(in_user_object_id, v_outbox_attr_id, in_user_object_id);
+    else
+      perform data.set_attribute_value(in_user_object_id, v_outbox_attr_id, v_value, in_user_object_id);
+    end if;
+  end if;
+
+  return api_utils.get_objects(
+    in_client,
+    in_user_object_id,
+    jsonb_build_object(
+      'object_codes', jsonb '["mailbox"]',
+      'get_actions', true,
+      'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+insert into data.action_generators(function, params, description)
+values(
+  'generate_if_attribute',
+  jsonb_build_object('attribute_code', 'mail_type', 'attribute_value', 'outbox', 'function', 'delete_outbox_mail'),
+  'Функция удаления исходящего письма');
+
+CREATE OR REPLACE FUNCTION action_generators.delete_inbox_mail(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
+
+  v_user_object_id integer;
+
+  v_inbox_attr_id integer;
+
+  v_value jsonb;
+  v_mail_code text;
+begin
+  if v_object_id is null then
+    return null;
+  end if;
+
+  v_user_object_id := json.get_integer(in_params, 'user_object_id');
+
+  v_inbox_attr_id := data.get_attribute_id('inbox');
+
+  select value
+  into v_value
+  from data.attribute_values
+  where
+    object_id = v_user_object_id and
+    attribute_id = v_inbox_attr_id and
+    value_object_id = v_user_object_id;
+
+  if v_value is null then
+    return null;
+  end if;
+
+  perform json.get_string_array(v_value);
+
+  v_mail_code := data.get_object_code(v_object_id);
+
+  if not v_value ? v_mail_code then
+    return null;
+  end if;
+
+  return jsonb_build_object(
+    'delete_mail',
+    jsonb_build_object(
+      'code', 'delete_inbox_mail',
+      'name', 'Удалить',
+      'type', 'mail.delete',
+      'params', jsonb_build_object('mail_code', v_mail_code),
+      'warning', 'Вы действительно хотите удалить письмо?'));
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.delete_inbox_mail(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_mail_code text := json.get_string(in_params, 'mail_code');
+  v_inbox_attr_id integer := data.get_attribute_id('inbox');
+  v_value jsonb;
+begin
+  v_value := data.get_attribute_value_for_update(in_user_object_id, v_inbox_attr_id, in_user_object_id);
+  if v_value is not null and v_value ? v_mail_code then
+    v_value := v_value - v_mail_code;
+    if jsonb_array_length(v_value) = 0 then
+      perform data.delete_attribute_value(in_user_object_id, v_inbox_attr_id, in_user_object_id);
+    else
+      perform data.set_attribute_value(in_user_object_id, v_inbox_attr_id, v_value, in_user_object_id);
+    end if;
+  end if;
+
+  return api_utils.get_objects(
+    in_client,
+    in_user_object_id,
+    jsonb_build_object(
+      'object_codes', jsonb '["mailbox"]',
+      'get_actions', true,
+      'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+insert into data.action_generators(function, params, description)
+values(
+  'generate_if_attribute',
+  jsonb_build_object('attribute_code', 'mail_type', 'attribute_value', 'inbox', 'function', 'delete_inbox_mail'),
+  'Функция удаления входящего письма');
 
 -- Действие для изменения процента налога для страны
 CREATE OR REPLACE FUNCTION action_generators.change_state_tax(
