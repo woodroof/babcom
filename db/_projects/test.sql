@@ -54,7 +54,7 @@ insert into data.params(code, value, description) values
       "attributes": ["balance"]
     },
     {
-      "attributes": ["transaction_time", "transaction_sum", "transaction_from", "transaction_to", "transaction_description"]
+      "attributes": ["transaction_time", "transaction_sum", "balance_rest", "transaction_from", "transaction_to", "transaction_description"]
     },
     {
       "actions": ["generate_money", "state_money_transfer", "transfer", "send_mail", "send_mail_from_future"]
@@ -399,6 +399,7 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('transaction_time', 'Время перевода', 'NORMAL', null),
 ('transaction_description', 'Сообщение', 'NORMAL', null),
 ('transaction_sum', 'Сумма', 'NORMAL', null),
+('balance_rest', 'Остаток после операции', 'NORMAL', null),
 ('corporations', 'Все корпорации', 'INVISIBLE', null),
 ('corporation_state', 'Государство корпорации', 'NORMAL', 'code'),
 ('system_corporation_members', 'Члены корпорации', 'SYSTEM', null),
@@ -1496,25 +1497,24 @@ begin
     v_attribute_id,
     v_user_object_id,
     to_jsonb(
-      json.get_string(data.get_attribute_value(v_user_object_id, v_object_id, data.get_attribute_id('transaction_time'))) || ', ' ||
-      case when v_from_id = v_user_object_id then 'исходящий' else 'входящий' end || ' перевод на сумму ' ||
-      json.get_integer(data.get_attribute_value(v_user_object_id, v_object_id, data.get_attribute_id('transaction_sum'))) || '. ' ||
+      json.get_string(data.get_attribute_value(v_user_object_id, v_object_id, data.get_attribute_id('transaction_time'))) || ' ' ||
+      case when v_from_id = v_user_object_id then '−' else '+' end ||
+      json.get_integer(data.get_attribute_value(v_user_object_id, v_object_id, data.get_attribute_id('transaction_sum'))) || ' (' ||
+      json.get_integer(data.get_attribute_value(v_user_object_id, v_object_id, data.get_attribute_id('balance_rest'))) || ') ' ||
       case when v_to_id = v_user_object_id and v_from_id is not null then
-        'Отправитель' ||
         json.get_string(
           data.get_attribute_value(
             v_user_object_id,
             v_from_id,
             v_attribute_id))
       when v_to_id != v_user_object_id then
-        'Получатель' ||
         json.get_string(
           data.get_attribute_value(
             v_user_object_id,
             v_to_id,
             v_attribute_id))
       end ||
-      '. Сообщение: ' ||
+      ': ' ||
       json.get_string(data.get_attribute_value(v_user_object_id, v_object_id, data.get_attribute_id('transaction_description')))));
 end;
 $BODY$
@@ -2231,6 +2231,8 @@ CREATE OR REPLACE FUNCTION actions.create_transaction(
     in_object_id integer,
     in_description text,
     in_sum integer,
+    in_sender_rest integer,
+    in_receiver_rest integer,
     add_sender_to_transation boolean)
   RETURNS void AS
 $BODY$
@@ -2245,6 +2247,8 @@ begin
   assert in_object_id is not null;
   assert in_description is not null;
   assert in_sum > 0;
+  assert not add_sender_to_transation or in_sender_rest >= 0;
+  assert in_receiver_rest >= 0;
   assert add_sender_to_transation is not null;
 
   insert into data.objects(id) values(default)
@@ -2261,6 +2265,10 @@ begin
   perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('transaction_time'), null, to_jsonb(utils.current_time()), in_user_object_id);
   perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('transaction_description'), null, to_jsonb(in_description), in_user_object_id);
   perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('transaction_sum'), null, to_jsonb(in_sum), in_user_object_id);
+  if add_sender_to_transation then
+    perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('balance_rest'), in_sender_id, to_jsonb(in_sender_rest), in_user_object_id);
+  end if;
+  perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('balance_rest'), in_object_id, to_jsonb(in_receiver_rest), in_user_object_id);
 
   v_transactions_value := data.get_attribute_value_for_update(v_transactions_object_id, v_transactions_system_value_attribute_id, in_sender_id);
   perform json.get_opt_string_array(v_transactions_value);
@@ -2342,6 +2350,8 @@ begin
     v_receiver_id,
     v_description,
     v_sum,
+    v_user_balance - v_sum,
+    v_receiver_balance + v_sum,
     true);
 
   perform actions.create_notification(
@@ -2350,6 +2360,8 @@ begin
     (
       'Входящий перевод на сумму ' ||
       v_sum ||
+      '.<br>Остаток: ' ||
+      (v_receiver_balance + v_sum) ||
       '.<br>Отправитель: ' ||
       coalesce(
         json.get_opt_string(data.get_attribute_value(v_receiver_id, in_user_object_id, data.get_attribute_id('name'))),
@@ -2379,12 +2391,16 @@ declare
   v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
   v_type_attr_id integer;
   v_type text;
-  v_user_object_id integer;
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
   v_system_balance_attribute_id integer;
   v_balance jsonb;
   v_balance_value integer;
 begin
   if v_object_id is not null then
+    if v_object_id = v_user_object_id then
+      return null;
+    end if;
+
     v_type_attr_id := data.get_attribute_id('type');
 
     select json.get_string(value)
@@ -2400,7 +2416,6 @@ begin
     end if;
   end if;
 
-  v_user_object_id := json.get_integer(in_params, 'user_object_id');
   v_system_balance_attribute_id := data.get_attribute_id('system_balance');
 
   select value
@@ -2565,6 +2580,8 @@ begin
     v_receiver_id,
     v_description,
     v_sum,
+    v_state_balance - v_sum,
+    v_receiver_balance + v_sum,
     true);
 
   perform actions.create_notification(
@@ -2573,6 +2590,8 @@ begin
     (
       'Входящий перевод на сумму ' ||
       v_sum ||
+      '.<br>Остаток: ' ||
+      (v_receiver_balance + v_sum) ||
       '.<br>Отправитель: ' ||
       coalesce(
         json.get_opt_string(data.get_attribute_value(v_receiver_id, v_state_id, data.get_attribute_id('name'))),
@@ -2710,6 +2729,8 @@ begin
     v_receiver_id,
     v_description,
     v_sum,
+    null,
+    v_receiver_balance + v_sum,
     false);
 
   perform actions.create_notification(
@@ -2718,6 +2739,8 @@ begin
     (
       'Входящий перевод на сумму ' ||
       v_sum ||
+      '.<br>Остаток: ' ||
+      (v_receiver_balance + v_sum) ||
       '.<br>Сообщение: ' ||
       v_description
     ),
@@ -2922,11 +2945,15 @@ CREATE OR REPLACE FUNCTION action_generators.send_mail(
 $BODY$
 declare
   v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
   v_type_attr_id integer;
   v_type text;
-  v_user_object_id integer;
 begin
   if v_object_id is not null then
+    if v_object_id = v_user_object_id then
+      return null;
+    end if;
+
     v_type_attr_id := data.get_attribute_id('type');
 
     select json.get_string(value)
@@ -2942,8 +2969,6 @@ begin
     end if;
   end if;
 
-  v_user_object_id := json.get_integer(in_params, 'user_object_id');
-  
   return jsonb_build_object(
     'send_mail',
     jsonb_build_object(
