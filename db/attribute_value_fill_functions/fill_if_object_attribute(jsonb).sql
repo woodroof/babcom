@@ -24,28 +24,32 @@ begin
     select value
     from jsonb_array_elements(v_blocks)
   loop
-    v_conditions := json.get_object_array(v_block, 'conditions');
+    v_conditions := json.get_opt_object_array(v_block, null, 'conditions');
 
-    for v_condition in
-      select value
-      from jsonb_array_elements(v_conditions)
-    loop
-      v_check_attribute_id := data.get_attribute_id(json.get_string(v_condition, 'attribute_code'));
-      v_check_attribute_value := v_condition->'attribute_value';
+    if v_conditions is null then
+      v_checked := true;
+    else
+      for v_condition in
+        select value
+        from jsonb_array_elements(v_conditions)
+      loop
+        v_check_attribute_id := data.get_attribute_id(json.get_string(v_condition, 'attribute_code'));
+        v_check_attribute_value := v_condition->'attribute_value';
 
-      select true
-      into v_checked
-      from data.attribute_values
-      where
-        object_id = v_object_id and
-        attribute_id = v_check_attribute_id and
-        value_object_id is null and
-        value = v_check_attribute_value;
+        select true
+        into v_checked
+        from data.attribute_values
+        where
+          object_id = v_object_id and
+          attribute_id = v_check_attribute_id and
+          value_object_id is null and
+          value = v_check_attribute_value;
 
-      if v_checked is not null then
-        exit;
-      end if;
-    end loop;
+        if v_checked is not null then
+          exit;
+        end if;
+      end loop;
+    end if;
 
     if v_checked is not null then
       v_function := json.get_string(v_block, 'function');

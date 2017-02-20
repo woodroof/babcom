@@ -420,10 +420,6 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('system_news_time', 'Реальное время публикации новости', 'SYSTEM', null),
 ('news_time', 'Время публикации новости', 'NORMAL', null);
 
--- Function: attribute_value_change_functions.json_to_attribute_system_meta(jsonb)
-
--- DROP FUNCTION attribute_value_change_functions.json_to_attribute_system_meta(jsonb);
-
 CREATE OR REPLACE FUNCTION attribute_value_change_functions.json_member_to_object(in_params jsonb)
   RETURNS void AS
 $BODY$
@@ -447,12 +443,11 @@ end;
 $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
-  
 
 -- Функции для создания связей
 insert into data.attribute_value_change_functions(attribute_id, function, params) values
 (data.get_attribute_id('type'), 'string_value_to_object', jsonb '{"params": {"person": "persons", "corporation": "corporations", "ship": "ships", "news": "news_hub", "library_category": "library", "med_document": "med_library", "sector": "market", "state": "states"}}'),
-(data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"person": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}, "corporation": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}}}'),
+(data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"person": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}, "state": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}, "corporation": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}}}'),
 (data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"person": {"object_code": "persons", "attribute_code": "persons"}}}'),
 (data.get_attribute_id('system_master'), 'boolean_value_to_object', jsonb '{"object_code": "masters"}'),
 (data.get_attribute_id('system_psi_scale'), 'any_value_to_object', jsonb '{"object_code": "telepaths"}'),
@@ -579,7 +574,28 @@ $BODY$
   COST 100;
 
 insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
-(data.get_attribute_id('meta_entities'), 'fill_if_user_object_attribute', '{"blocks": [{"conditions": [{"attribute_code": "type", "attribute_value": "person"}, {"attribute_code": "type", "attribute_value": "anonymous"}], "function": "merge_metaobjects", "params": {"object_code": "meta_entities", "attribute_code": "meta_entities"}}]}', 'Заполнение списка метаобъектов игрока');
+(
+  data.get_attribute_id('meta_entities'),
+  'fill_if_user_object',
+  '{
+    "function": "fill_if_object_attribute",
+    "params": {
+      "blocks": [
+        {
+          "conditions": [
+            {"attribute_code": "type", "attribute_value": "person"},
+            {"attribute_code": "type", "attribute_value": "anonymous"}
+          ],
+          "function": "merge_metaobjects",
+          "params": {
+            "object_code": "meta_entities",
+            "attribute_code": "meta_entities"
+          }
+        }
+      ]
+    }
+  }',
+  'Заполнение списка метаобъектов игрока');
 
 CREATE OR REPLACE FUNCTION attribute_value_fill_functions.fill_user_content(in_params jsonb)
   RETURNS void AS
@@ -1176,7 +1192,7 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
   }', 'Получение списка владельцев корпорации');
 
 insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
-  (
+(
   data.get_attribute_id('deal_participant1'),
   'fill_if_object_attribute', '
   {
@@ -1187,7 +1203,7 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
         "params": {"attribute_code": "system_deal_participant1"}
       }]
   }', 'Получение участника сделки'),
-  (
+(
   data.get_attribute_id('deal_participant2'),
   'fill_if_object_attribute', '
   {
@@ -1198,7 +1214,7 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
         "params": {"attribute_code": "system_deal_participant2"}
       }]
   }', 'Получение участника сделки'),
-    (
+(
   data.get_attribute_id('deal_participant3'),
   'fill_if_object_attribute', '
   {
@@ -1209,7 +1225,7 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
         "params": {"attribute_code": "system_deal_participant3"}
       }]
   }', 'Получение участника сделки'),
-  (
+(
   data.get_attribute_id('deal_participant4'),
   'fill_if_object_attribute', '
   {
@@ -1220,7 +1236,7 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
         "params": {"attribute_code": "system_deal_participant4"}
       }]
   }', 'Получение участника сделки'),
-    (
+(
   data.get_attribute_id('deal_participant5'),
   'fill_if_object_attribute', '
   {
@@ -1231,7 +1247,7 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
         "params": {"attribute_code": "system_deal_participant5"}
       }]
   }', 'Получение участника сделки'),
-  (
+(
   data.get_attribute_id('deal_participant6'),
   'fill_if_object_attribute', '
   {
@@ -1242,7 +1258,7 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
         "params": {"attribute_code": "system_deal_participant6"}
       }]
   }', 'Получение участника сделки'),
-    (
+(
   data.get_attribute_id('deal_participant7'),
   'fill_if_object_attribute', '
   {
@@ -1253,7 +1269,7 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
         "params": {"attribute_code": "system_deal_participant7"}
       }]
   }', 'Получение участника сделки'),
-  (
+(
   data.get_attribute_id('deal_participant8'),
   'fill_if_object_attribute', '
   {
@@ -1264,7 +1280,7 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
         "params": {"attribute_code": "system_deal_participant8"}
       }]
   }', 'Получение участника сделки'),
-    (
+(
   data.get_attribute_id('deal_participant9'),
   'fill_if_object_attribute', '
   {
@@ -1275,7 +1291,7 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
         "params": {"attribute_code": "system_deal_participant9"}
       }]
   }', 'Получение участника сделки'),
-  (
+(
   data.get_attribute_id('deal_participant10'),
   'fill_if_object_attribute', '
   {
@@ -1286,7 +1302,6 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
         "params": {"attribute_code": "system_deal_participant10"}
       }]
   }', 'Получение участника сделки');
-
 
 insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
 (data.get_attribute_id('transaction_destinations'), 'fill_if_object_attribute', '{"blocks": [{"conditions": [{"attribute_code": "type", "attribute_value": "transaction_destinations"}], "function": "filter_user_object_code"}]}', 'Получение списка возможных получателей переводов');
@@ -1347,10 +1362,40 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
 (data.get_attribute_id('name'), 'fill_if_object_attribute', '{"blocks": [{"conditions": [{"attribute_code": "type", "attribute_value": "transaction"}], "function": "fill_transaction_name"}]}', 'Получение имени транзакции');
 
 insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
-(data.get_attribute_id('balance'), 'fill_object_attribute_from_attribute', '{"attribute_code": "system_balance"}', 'Получение состояния счёта');
+(
+  data.get_attribute_id('balance'),
+  'fill_if_user_object_attribute',
+  '{
+    "blocks": [
+      {
+        "conditions": [{"attribute_code": "system_master", "attribute_value": true}],
+        "function": "fill_value_object_attribute_from_attribute",
+        "params": {"value_object_code": "masters", "attribute_code": "system_balance"}
+      },
+      {
+        "function": "fill_object_attribute_from_attribute",
+        "params": {"attribute_code": "system_balance"}
+      }
+    ]
+  }', 'Получение состояния счёта');
 
 insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
-(data.get_attribute_id('person_psi_scale'), 'fill_object_attribute_from_attribute', '{"attribute_code": "system_psi_scale"}', 'Получение рейтинга телепата');
+(
+  data.get_attribute_id('person_psi_scale'),
+  'fill_if_user_object_attribute',
+  '{
+    "blocks": [
+      {
+        "conditions": [{"attribute_code": "system_master", "attribute_value": true}],
+        "function": "fill_value_object_attribute_from_attribute",
+        "params": {"value_object_code": "masters", "attribute_code": "system_psi_scale"}
+      },
+      {
+        "function": "fill_object_attribute_from_attribute",
+        "params": {"value_object_code": "masters", "attribute_code": "system_psi_scale"}
+      }
+    ]
+  }', 'Получение рейтинга телепата');
 
   -- TODO и другие:
   -- personal_document_storage: system_value[player] -> content[player]
