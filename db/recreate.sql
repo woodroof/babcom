@@ -1569,11 +1569,11 @@ end;
 $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
--- Function: attribute_value_fill_functions.fill_user_attribute_from_attribute(jsonb)
+-- Function: attribute_value_fill_functions.fill_object_attribute_from_attribute(jsonb)
 
--- DROP FUNCTION attribute_value_fill_functions.fill_user_attribute_from_attribute(jsonb);
+-- DROP FUNCTION attribute_value_fill_functions.fill_object_attribute_from_attribute(jsonb);
 
-CREATE OR REPLACE FUNCTION attribute_value_fill_functions.fill_user_attribute_from_attribute(in_params jsonb)
+CREATE OR REPLACE FUNCTION attribute_value_fill_functions.fill_object_attribute_from_attribute(in_params jsonb)
   RETURNS void AS
 $BODY$
 declare
@@ -1583,10 +1583,6 @@ declare
   v_source_attribute_id integer := data.get_attribute_id(json.get_string(in_params, 'attribute_code'));
   v_attribute_value jsonb;
 begin
-  if v_user_object_id != v_object_id then
-    return;
-  end if;
-
   select value
   into v_attribute_value
   from data.attribute_values
@@ -1597,11 +1593,11 @@ begin
   for share;
 
   if v_attribute_value is null then
-    perform data.delete_attribute_value_if_exists(v_object_id, v_attribute_id, v_user_object_id, v_user_object_id);
+    perform data.delete_attribute_value_if_exists(v_object_id, v_attribute_id, v_object_id, v_user_object_id);
     return;
   end if;
 
-  perform data.set_attribute_value_if_changed(v_object_id, v_attribute_id, v_user_object_id, v_attribute_value, v_user_object_id);
+  perform data.set_attribute_value_if_changed(v_object_id, v_attribute_id, v_object_id, v_attribute_value, v_user_object_id);
 end;
 $BODY$
   LANGUAGE plpgsql VOLATILE
