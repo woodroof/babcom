@@ -57,17 +57,17 @@ begin
 
           v_attribute_ids := v_attribute_ids || v_attribute_id;
 
-          v_condition := 'exists(select 1 from data.attribute_values where object_id = o.id and attribute_id = ' || v_attribute_id || ' and ';
+          v_condition := 'data.get_attribute_value($1, o.id, ' || v_attribute_id || ')';
 
           case when v_type = 'mask' then
-            v_condition := v_condition || 'json.get_if_string(value) like ''' || replace(json.get_string(v_filter, 'data'), '''', '''''') || ''')';
+            v_condition := 'json.get_if_string(' || v_condition || ') like ''' || replace(json.get_string(v_filter, 'data'), '''', '''''') || '''';
           when v_type = 'contains one of' then
-            v_condition := v_condition || 'exists(select 1 from jsonb_array_elements(json.get_if_array(value)) where ''' || to_json(json.get_array(v_filter, 'data')) || '''::jsonb @> value))';
+            v_condition := 'exists(select 1 from jsonb_array_elements(json.get_if_array(' || v_condition || ')) where jsonb ''' || to_json(json.get_array(v_filter, 'data')) || ''' @> value)';
           else
             if jsonb_typeof(v_filter->'data') = 'string' then
-              v_condition := v_condition || 'json.get_if_string(value) ' || api_utils.get_operation(v_type) || ' ''' || replace(json.get_string(v_filter, 'data'), '''', '''''') || ''')';
+              v_condition := 'json.get_if_string(' || v_condition || ') ' || api_utils.get_operation(v_type) || ' ''' || replace(json.get_string(v_filter, 'data'), '''', '''''') || '''';
             else
-              v_condition := v_condition || 'json.get_if_integer(value) ' || api_utils.get_operation(v_type) || ' ''' || json.get_integer(v_filter, 'data') || ''')';
+              v_condition := 'json.get_if_integer(' || v_condition || ') ' || api_utils.get_operation(v_type) || ' ' || json.get_integer(v_filter, 'data');
             end if;
           end case;
 
@@ -118,8 +118,8 @@ begin
     v_condition text;
   begin
     v_query :=
-      'select array_agg(o.id) from data.objects o where o.id = any($1) ' ||
-      'and exists(select 1 from data.attribute_values where object_id = o.id and attribute_id = $2 and json.get_if_boolean(value))';
+      'select array_agg(o.id) from data.objects o where o.id = any($2) ' ||
+      'and json.get_if_boolean(data.get_attribute_value($1, o.id, $3))';
 
     if v_conditions is not null then
       foreach v_condition in array v_conditions loop
@@ -128,7 +128,7 @@ begin
     end if;
 
     execute v_query
-    using v_filtered_object_ids, v_system_is_visibile_attribute_id
+    using in_user_object_id, v_filtered_object_ids, v_system_is_visibile_attribute_id
     into v_filtered_object_ids;
   end;
 

@@ -19,20 +19,25 @@ begin
   assert in_object_id is not null;
   assert in_attribute_id is not null;
 
-  select id, value, start_time, start_reason, start_object_id
-  into v_attribute_value_info
-  from data.attribute_values
-  where
-    object_id = in_object_id and
-    attribute_id = in_attribute_id and
-    (
-      (
-        value_object_id is null and
-        in_value_object_id is null
-      ) or
+  if in_value_object_id is null then
+    select id, value, start_time, start_reason, start_object_id
+    into v_attribute_value_info
+    from data.attribute_values
+    where
+      object_id = in_object_id and
+      attribute_id = in_attribute_id and
+      value_object_id is null
+    for update;
+  else
+    select id, value, start_time, start_reason, start_object_id
+    into v_attribute_value_info
+    from data.attribute_values
+    where
+      object_id = in_object_id and
+      attribute_id = in_attribute_id and
       value_object_id = in_value_object_id
-    )
-  for update;
+    for update;
+  end if;
 
   loop
     if v_inserted or not v_attribute_value_info is null then
@@ -59,20 +64,25 @@ begin
 
       v_inserted := true;
     exception when unique_violation then
-      select id, value, start_time, start_reason, start_object_id
-      into v_attribute_value_info
-      from data.attribute_values
-      where
-        object_id = in_object_id and
-        attribute_id = in_attribute_id and
-        (
-          (
-            value_object_id is null and
-            in_value_object_id is null
-          ) or
+      if in_value_object_id is null then
+        select id, value, start_time, start_reason, start_object_id
+        into v_attribute_value_info
+        from data.attribute_values
+        where
+          object_id = in_object_id and
+          attribute_id = in_attribute_id and
+          value_object_id is null
+        for update;
+      else
+        select id, value, start_time, start_reason, start_object_id
+        into v_attribute_value_info
+        from data.attribute_values
+        where
+          object_id = in_object_id and
+          attribute_id = in_attribute_id and
           value_object_id = in_value_object_id
-        )
-      for update;
+        for update;
+      end if;
     end;
   end loop;
 

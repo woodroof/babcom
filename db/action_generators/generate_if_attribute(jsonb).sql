@@ -22,7 +22,6 @@ begin
     return null;
   end if;
 
-  v_user_object_id := json.get_integer(in_params, 'user_object_id');
   v_check_attribute_id := data.get_attribute_id(json.get_string(in_params, 'attribute_code'));
   v_check_attribute_value := in_params->'attribute_value';
 
@@ -39,6 +38,7 @@ begin
     return null;
   end if;
 
+  v_user_object_id := json.get_integer(in_params, 'user_object_id');
   v_function := json.get_string(in_params, 'function');
   v_params :=
     json.get_opt_object(in_params, jsonb '{}', 'params') ||

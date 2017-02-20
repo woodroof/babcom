@@ -1883,11 +1883,18 @@ CREATE OR REPLACE FUNCTION action_generators.login(
   RETURNS jsonb AS
 $BODY$
 declare
-  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
   v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
-  v_test_object_id integer := json.get_integer(in_params, 'test_object_id');
+  v_user_object_id integer;
+  v_test_object_id integer;
 begin
-  if v_user_object_id != v_test_object_id or v_object_id is not null then
+  if v_object_id is not null then
+    return null;
+  end if;
+
+  v_user_object_id := json.get_integer(in_params, 'user_object_id');
+  v_test_object_id := json.get_integer(in_params, 'test_object_id');
+
+  if v_user_object_id != v_test_object_id then
     return null;
   end if;
 
@@ -1950,11 +1957,18 @@ CREATE OR REPLACE FUNCTION action_generators.logout(
   RETURNS jsonb AS
 $BODY$
 declare
-  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
   v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
-  v_test_object_id integer := json.get_integer(in_params, 'test_object_id');
+  v_user_object_id integer;
+  v_test_object_id integer;
 begin
-  if v_user_object_id = v_test_object_id or v_object_id is not null then
+  if v_object_id is not null then
+    return null;
+  end if;
+
+  v_user_object_id := json.get_integer(in_params, 'user_object_id');
+  v_test_object_id := json.get_integer(in_params, 'test_object_id');
+
+  if v_user_object_id = v_test_object_id then
     return null;
   end if;
 
@@ -2331,7 +2345,7 @@ begin
           'max_value_count', 1))));
 end;
 $BODY$
-  LANGUAGE plpgsql IMMUTABLE
+  LANGUAGE plpgsql STABLE
   COST 100;
 
 insert into data.action_generators(function, params, description)
@@ -2520,7 +2534,7 @@ begin
           'max_value_count', 1))));
 end;
 $BODY$
-  LANGUAGE plpgsql IMMUTABLE
+  LANGUAGE plpgsql STABLE
   COST 100;
 
 insert into data.action_generators(function, params, description)
@@ -2593,7 +2607,7 @@ begin
       'get_templates', true));
 end;
 $BODY$
-  LANGUAGE plpgsql volatile
+  LANGUAGE plpgsql VOLATILE
   COST 100;
 
 CREATE OR REPLACE FUNCTION action_generators.generate_money(
@@ -2660,7 +2674,7 @@ begin
           'max_value_count', 1))));
 end;
 $BODY$
-  LANGUAGE plpgsql IMMUTABLE
+  LANGUAGE plpgsql STABLE
   COST 100;
 
 insert into data.action_generators(function, params, description)
@@ -2686,15 +2700,17 @@ begin
 
   select true
   into v_medic
-  from data.object_objects
-  where
-    parent_object_id = v_medics_objects_id and
-    object_id = v_user_object_id;
+  where exists(
+    select 1
+    from data.object_objects
+    where
+      parent_object_id = v_medics_objects_id and
+      object_id = v_user_object_id);
 
   if v_medic is null then
     return null;
   end if;
-  
+
   return jsonb_build_object(
     'create_med_document',
     jsonb_build_object(
@@ -2727,7 +2743,7 @@ begin
             'max_value_count', 1))));
 end;
 $BODY$
-  LANGUAGE plpgsql IMMUTABLE
+  LANGUAGE plpgsql STABLE
   COST 100;
 
 CREATE OR REPLACE FUNCTION actions.create_med_document(
@@ -2839,7 +2855,7 @@ begin
             'max_value_count', 1))));
 end;
 $BODY$
-  LANGUAGE plpgsql IMMUTABLE
+  LANGUAGE plpgsql STABLE
   COST 100;
 
 CREATE OR REPLACE FUNCTION actions.send_mail(
@@ -3011,7 +3027,7 @@ begin
             'max_value_count', 1))));
 end;
 $BODY$
-  LANGUAGE plpgsql IMMUTABLE
+  LANGUAGE plpgsql STABLE
   COST 100;
 
 insert into data.action_generators(function, params, description)
@@ -3113,7 +3129,7 @@ begin
             'max_value_count', 1))));
 end;
 $BODY$
-  LANGUAGE plpgsql IMMUTABLE
+  LANGUAGE plpgsql STABLE
   COST 100;
 
 insert into data.action_generators(function, params, description)
@@ -3203,7 +3219,7 @@ begin
             'max_value_count', 1))));
 end;
 $BODY$
-  LANGUAGE plpgsql IMMUTABLE
+  LANGUAGE plpgsql STABLE
   COST 100;
 
 CREATE OR REPLACE FUNCTION actions.send_mail_from_future(
@@ -3349,7 +3365,7 @@ begin
       'warning', 'Вы действительно хотите удалить письмо?'));
 end;
 $BODY$
-  LANGUAGE plpgsql IMMUTABLE
+  LANGUAGE plpgsql STABLE
   COST 100;
 
 CREATE OR REPLACE FUNCTION actions.delete_outbox_mail(
@@ -3444,7 +3460,7 @@ begin
       'warning', 'Вы действительно хотите удалить письмо?'));
 end;
 $BODY$
-  LANGUAGE plpgsql IMMUTABLE
+  LANGUAGE plpgsql STABLE
   COST 100;
 
 CREATE OR REPLACE FUNCTION actions.delete_inbox_mail(
@@ -3512,7 +3528,7 @@ begin
             'max_value_count', 1))));
 end;
 $BODY$
-  LANGUAGE plpgsql IMMUTABLE
+  LANGUAGE plpgsql STABLE
   COST 100;
 
 CREATE OR REPLACE FUNCTION actions.change_state_tax(
@@ -3578,7 +3594,7 @@ begin
       'params', jsonb_build_object('corporation_code', data.get_object_code(json.get_integer(in_params, 'object_id')))));
 end;
 $BODY$
-  LANGUAGE plpgsql IMMUTABLE
+  LANGUAGE plpgsql STABLE
   COST 100;
 
 CREATE OR REPLACE FUNCTION actions.set_dividend_vote(
@@ -3701,7 +3717,7 @@ begin
       );
 end;
 $BODY$
-  LANGUAGE plpgsql IMMUTABLE
+  LANGUAGE plpgsql STABLE
   COST 100;
 
 CREATE OR REPLACE FUNCTION actions.create_deal(
@@ -3745,7 +3761,6 @@ insert into data.objects(id) values(default)
   perform data.set_attribute_value(v_deal_id, data.get_attribute_id('asset_amortization'), null, to_jsonb(trunc(v_deal_cost * 0.07)));
   perform data.set_attribute_value(v_deal_id, data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "' || v_corporation_code || '","percent_asset" : ' || v_percent_asset || ', "percent_income" : ' || v_percent_income || ', "deal_cost": ' || v_deal_cost || '}')::jsonb);
 
-
 -- Вставим сделку в подготавливаемые для этой корпорации
     v_value := json.get_opt_array(
         data.get_attribute_value_for_update(
@@ -3768,7 +3783,6 @@ $BODY$
 
 insert into data.action_generators(function, params, description)
 values('generate_if_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'corporation', 'function', 'create_deal'), 'Функция для добавления сделки');
-
 
 -- TODO: нагенерировать транзакций и писем
 

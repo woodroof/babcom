@@ -115,7 +115,6 @@ begin
     return null;
   end if;
 
-  v_user_object_id := json.get_integer(in_params, 'user_object_id');
   v_check_attribute_id := data.get_attribute_id(json.get_string(in_params, 'attribute_code'));
   v_check_attribute_value := in_params->'attribute_value';
 
@@ -132,6 +131,7 @@ begin
     return null;
   end if;
 
+  v_user_object_id := json.get_integer(in_params, 'user_object_id');
   v_function := json.get_string(in_params, 'function');
   v_params :=
     json.get_opt_object(in_params, jsonb '{}', 'params') ||
@@ -643,17 +643,17 @@ begin
 
           v_attribute_ids := v_attribute_ids || v_attribute_id;
 
-          v_condition := 'exists(select 1 from data.attribute_values where object_id = o.id and attribute_id = ' || v_attribute_id || ' and ';
+          v_condition := 'data.get_attribute_value($1, o.id, ' || v_attribute_id || ')';
 
           case when v_type = 'mask' then
-            v_condition := v_condition || 'json.get_if_string(value) like ''' || replace(json.get_string(v_filter, 'data'), '''', '''''') || ''')';
+            v_condition := 'json.get_if_string(' || v_condition || ') like ''' || replace(json.get_string(v_filter, 'data'), '''', '''''') || '''';
           when v_type = 'contains one of' then
-            v_condition := v_condition || 'exists(select 1 from jsonb_array_elements(json.get_if_array(value)) where ''' || to_json(json.get_array(v_filter, 'data')) || '''::jsonb @> value))';
+            v_condition := 'exists(select 1 from jsonb_array_elements(json.get_if_array(' || v_condition || ')) where jsonb ''' || to_json(json.get_array(v_filter, 'data')) || ''' @> value)';
           else
             if jsonb_typeof(v_filter->'data') = 'string' then
-              v_condition := v_condition || 'json.get_if_string(value) ' || api_utils.get_operation(v_type) || ' ''' || replace(json.get_string(v_filter, 'data'), '''', '''''') || ''')';
+              v_condition := 'json.get_if_string(' || v_condition || ') ' || api_utils.get_operation(v_type) || ' ''' || replace(json.get_string(v_filter, 'data'), '''', '''''') || '''';
             else
-              v_condition := v_condition || 'json.get_if_integer(value) ' || api_utils.get_operation(v_type) || ' ''' || json.get_integer(v_filter, 'data') || ''')';
+              v_condition := 'json.get_if_integer(' || v_condition || ') ' || api_utils.get_operation(v_type) || ' ' || json.get_integer(v_filter, 'data');
             end if;
           end case;
 
@@ -704,8 +704,8 @@ begin
     v_condition text;
   begin
     v_query :=
-      'select array_agg(o.id) from data.objects o where o.id = any($1) ' ||
-      'and exists(select 1 from data.attribute_values where object_id = o.id and attribute_id = $2 and json.get_if_boolean(value))';
+      'select array_agg(o.id) from data.objects o where o.id = any($2) ' ||
+      'and json.get_if_boolean(data.get_attribute_value($1, o.id, $3))';
 
     if v_conditions is not null then
       foreach v_condition in array v_conditions loop
@@ -714,7 +714,7 @@ begin
     end if;
 
     execute v_query
-    using v_filtered_object_ids, v_system_is_visibile_attribute_id
+    using in_user_object_id, v_filtered_object_ids, v_system_is_visibile_attribute_id
     into v_filtered_object_ids;
   end;
 
@@ -1970,20 +1970,25 @@ begin
   assert in_object_id is not null;
   assert in_attribute_id is not null;
 
-  select id, value, start_time, start_reason, start_object_id
-  into v_attribute_value
-  from data.attribute_values
-  where
-    object_id = in_object_id and
-    attribute_id = in_attribute_id and
-    (
-      (
-        value_object_id is null and
-        in_value_object_id is null
-      ) or
+  if in_value_object_id is null then
+    select id, value, start_time, start_reason, start_object_id
+    into v_attribute_value
+    from data.attribute_values
+    where
+      object_id = in_object_id and
+      attribute_id = in_attribute_id and
+      value_object_id is null
+    for update;
+  else
+    select id, value, start_time, start_reason, start_object_id
+    into v_attribute_value
+    from data.attribute_values
+    where
+      object_id = in_object_id and
+      attribute_id = in_attribute_id and
       value_object_id = in_value_object_id
-    )
-  for update;
+    for update;
+  end if;
 
   if v_attribute_value is null then
     raise exception 'Value not found (object_id: %, attribute_id: %, value_object_id: %)', in_object_id, in_attribute_id, in_value_object_id;
@@ -2056,20 +2061,25 @@ begin
   assert in_object_id is not null;
   assert in_attribute_id is not null;
 
-  select id, value, start_time, start_reason, start_object_id
-  into v_attribute_value
-  from data.attribute_values
-  where
-    object_id = in_object_id and
-    attribute_id = in_attribute_id and
-    (
-      (
-        value_object_id is null and
-        in_value_object_id is null
-      ) or
+  if in_value_object_id is null then
+    select id, value, start_time, start_reason, start_object_id
+    into v_attribute_value
+    from data.attribute_values
+    where
+      object_id = in_object_id and
+      attribute_id = in_attribute_id and
+      value_object_id is null
+    for update;
+  else
+    select id, value, start_time, start_reason, start_object_id
+    into v_attribute_value
+    from data.attribute_values
+    where
+      object_id = in_object_id and
+      attribute_id = in_attribute_id and
       value_object_id = in_value_object_id
-    )
-  for update;
+    for update;
+  end if;
 
   if v_attribute_value is null then
     return;
@@ -2355,20 +2365,25 @@ $BODY$
 declare
   v_ret_val jsonb;
 begin
-  select value
-  into v_ret_val
-  from data.attribute_values
-  where
-    object_id = in_object_id and
-    attribute_id = in_attribute_id and
-    (
-      value_object_id = in_value_object_id or
-      (
-        value_object_id is null and
-        in_value_object_id is null
-      )
-    )
-  for update;
+  if in_value_object_id is null then
+    select value
+    into v_ret_val
+    from data.attribute_values
+    where
+      object_id = in_object_id and
+      attribute_id = in_attribute_id and
+      value_object_id is null
+    for update;
+  else
+    select value
+    into v_ret_val
+    from data.attribute_values
+    where
+      object_id = in_object_id and
+      attribute_id = in_attribute_id and
+      value_object_id = in_value_object_id
+    for update;
+  end if;
 
   if v_ret_val is null then
     perform id
@@ -2376,20 +2391,25 @@ begin
     where id = in_object_id
     for update;
 
-    select value
-    into v_ret_val
-    from data.attribute_values
-    where
-      object_id = in_object_id and
-      attribute_id = in_attribute_id and
-      (
-        value_object_id = in_value_object_id or
-        (
-          value_object_id is null and
-          in_value_object_id is null
-        )
-      )
-    for update;
+    if in_value_object_id is null then
+      select value
+      into v_ret_val
+      from data.attribute_values
+      where
+        object_id = in_object_id and
+        attribute_id = in_attribute_id and
+        value_object_id is null
+      for update;
+    else
+      select value
+      into v_ret_val
+      from data.attribute_values
+      where
+        object_id = in_object_id and
+        attribute_id = in_attribute_id and
+        value_object_id = in_value_object_id
+      for update;
+    end if;
   end if;
 
   return v_ret_val;
@@ -3020,20 +3040,25 @@ begin
   assert in_object_id is not null;
   assert in_attribute_id is not null;
 
-  select id, value, start_time, start_reason, start_object_id
-  into v_attribute_value_info
-  from data.attribute_values
-  where
-    object_id = in_object_id and
-    attribute_id = in_attribute_id and
-    (
-      (
-        value_object_id is null and
-        in_value_object_id is null
-      ) or
+  if in_value_object_id is null then
+    select id, value, start_time, start_reason, start_object_id
+    into v_attribute_value_info
+    from data.attribute_values
+    where
+      object_id = in_object_id and
+      attribute_id = in_attribute_id and
+      value_object_id is null
+    for update;
+  else
+    select id, value, start_time, start_reason, start_object_id
+    into v_attribute_value_info
+    from data.attribute_values
+    where
+      object_id = in_object_id and
+      attribute_id = in_attribute_id and
       value_object_id = in_value_object_id
-    )
-  for update;
+    for update;
+  end if;
 
   loop
     if v_inserted or not v_attribute_value_info is null then
@@ -3060,20 +3085,25 @@ begin
 
       v_inserted := true;
     exception when unique_violation then
-      select id, value, start_time, start_reason, start_object_id
-      into v_attribute_value_info
-      from data.attribute_values
-      where
-        object_id = in_object_id and
-        attribute_id = in_attribute_id and
-        (
-          (
-            value_object_id is null and
-            in_value_object_id is null
-          ) or
+      if in_value_object_id is null then
+        select id, value, start_time, start_reason, start_object_id
+        into v_attribute_value_info
+        from data.attribute_values
+        where
+          object_id = in_object_id and
+          attribute_id = in_attribute_id and
+          value_object_id is null
+        for update;
+      else
+        select id, value, start_time, start_reason, start_object_id
+        into v_attribute_value_info
+        from data.attribute_values
+        where
+          object_id = in_object_id and
+          attribute_id = in_attribute_id and
           value_object_id = in_value_object_id
-        )
-      for update;
+        for update;
+      end if;
     end;
   end loop;
 
@@ -3153,20 +3183,25 @@ begin
   assert in_object_id is not null;
   assert in_attribute_id is not null;
 
-  select id, value, start_time, start_reason, start_object_id
-  into v_attribute_value_info
-  from data.attribute_values
-  where
-    object_id = in_object_id and
-    attribute_id = in_attribute_id and
-    (
-      (
-        value_object_id is null and
-        in_value_object_id is null
-      ) or
+  if in_value_object_id is null then
+    select id, value, start_time, start_reason, start_object_id
+    into v_attribute_value_info
+    from data.attribute_values
+    where
+      object_id = in_object_id and
+      attribute_id = in_attribute_id and
+      value_object_id is null
+    for update;
+  else
+    select id, value, start_time, start_reason, start_object_id
+    into v_attribute_value_info
+    from data.attribute_values
+    where
+      object_id = in_object_id and
+      attribute_id = in_attribute_id and
       value_object_id = in_value_object_id
-    )
-  for update;
+    for update;
+  end if;
 
   loop
     if v_inserted or not v_attribute_value_info is null then
@@ -3193,20 +3228,25 @@ begin
 
       v_inserted := true;
     exception when unique_violation then
-      select id, value, start_time, start_reason, start_object_id
-      into v_attribute_value_info
-      from data.attribute_values
-      where
-        object_id = in_object_id and
-        attribute_id = in_attribute_id and
-        (
-          (
-            value_object_id is null and
-            in_value_object_id is null
-          ) or
+      if in_value_object_id is null then
+        select id, value, start_time, start_reason, start_object_id
+        into v_attribute_value_info
+        from data.attribute_values
+        where
+          object_id = in_object_id and
+          attribute_id = in_attribute_id and
+          value_object_id is null
+        for update;
+      else
+        select id, value, start_time, start_reason, start_object_id
+        into v_attribute_value_info
+        from data.attribute_values
+        where
+          object_id = in_object_id and
+          attribute_id = in_attribute_id and
           value_object_id = in_value_object_id
-        )
-      for update;
+        for update;
+      end if;
     end;
   end loop;
 
@@ -7749,6 +7789,15 @@ CREATE UNIQUE INDEX attribute_values_idx_oi_ai_voi
   (object_id, attribute_id, value_object_id)
   WHERE value_object_id IS NOT NULL;
 
+-- Index: data.attribute_values_nuidx_oi_ai
+
+-- DROP INDEX data.attribute_values_nuidx_oi_ai;
+
+CREATE INDEX attribute_values_nuidx_oi_ai
+  ON data.attribute_values
+  USING btree
+  (object_id, attribute_id);
+
 -- Table: data.attribute_values_journal
 
 -- DROP TABLE data.attribute_values_journal;
@@ -7806,6 +7855,16 @@ WITH (
   OIDS=FALSE
 );
 COMMENT ON COLUMN data.attribute_value_change_functions.function IS 'coalesce(params, jsonb ''{}'') || jsonb_build_object(''user_object_id'', <user_obj_id>, ''object_id'', <obj_id>, ''attribute_id'', <attr_id>, ''value_object_id'', <value_obj_id>, ''old_value'', <old_value>, ''new_value'', <new_value>)';
+
+
+-- Index: data.attribute_value_change_functions_idx_attribute_id
+
+-- DROP INDEX data.attribute_value_change_functions_idx_attribute_id;
+
+CREATE INDEX attribute_value_change_functions_idx_attribute_id
+  ON data.attribute_value_change_functions
+  USING btree
+  (attribute_id);
 
 -- Table: data.attribute_value_fill_functions
 
@@ -7995,6 +8054,15 @@ CREATE UNIQUE INDEX object_objects_idx_loi_goi
   ((LEAST(parent_object_id, object_id)), (GREATEST(parent_object_id, object_id)))
   WHERE intermediate_object_ids IS NULL;
 
+-- Index: data.object_objects_idx_oi
+
+-- DROP INDEX data.object_objects_idx_oi;
+
+CREATE INDEX object_objects_idx_oi
+  ON data.object_objects
+  USING btree
+  (object_id);
+
 -- Index: data.object_objects_idx_poi_oi
 
 -- DROP INDEX data.object_objects_idx_poi_oi;
@@ -8014,6 +8082,15 @@ CREATE UNIQUE INDEX object_objects_idx_poi_oi_ioi
   USING btree
   (parent_object_id, object_id, intarray.uniq(intarray.sort(intermediate_object_ids)))
   WHERE intermediate_object_ids IS NOT NULL;
+
+-- Index: data.object_objects_nuidx_poi_oi
+
+-- DROP INDEX data.object_objects_nuidx_poi_oi;
+
+CREATE INDEX object_objects_nuidx_poi_oi
+  ON data.object_objects
+  USING btree
+  (parent_object_id, object_id);
 
 -- Table: data.object_objects_journal
 

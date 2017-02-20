@@ -11,20 +11,25 @@ $BODY$
 declare
   v_ret_val jsonb;
 begin
-  select value
-  into v_ret_val
-  from data.attribute_values
-  where
-    object_id = in_object_id and
-    attribute_id = in_attribute_id and
-    (
-      value_object_id = in_value_object_id or
-      (
-        value_object_id is null and
-        in_value_object_id is null
-      )
-    )
-  for update;
+  if in_value_object_id is null then
+    select value
+    into v_ret_val
+    from data.attribute_values
+    where
+      object_id = in_object_id and
+      attribute_id = in_attribute_id and
+      value_object_id is null
+    for update;
+  else
+    select value
+    into v_ret_val
+    from data.attribute_values
+    where
+      object_id = in_object_id and
+      attribute_id = in_attribute_id and
+      value_object_id = in_value_object_id
+    for update;
+  end if;
 
   if v_ret_val is null then
     perform id
@@ -32,20 +37,25 @@ begin
     where id = in_object_id
     for update;
 
-    select value
-    into v_ret_val
-    from data.attribute_values
-    where
-      object_id = in_object_id and
-      attribute_id = in_attribute_id and
-      (
-        value_object_id = in_value_object_id or
-        (
-          value_object_id is null and
-          in_value_object_id is null
-        )
-      )
-    for update;
+    if in_value_object_id is null then
+      select value
+      into v_ret_val
+      from data.attribute_values
+      where
+        object_id = in_object_id and
+        attribute_id = in_attribute_id and
+        value_object_id is null
+      for update;
+    else
+      select value
+      into v_ret_val
+      from data.attribute_values
+      where
+        object_id = in_object_id and
+        attribute_id = in_attribute_id and
+        value_object_id = in_value_object_id
+      for update;
+    end if;
   end if;
 
   return v_ret_val;

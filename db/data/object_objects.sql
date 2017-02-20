@@ -32,6 +32,15 @@ CREATE UNIQUE INDEX object_objects_idx_loi_goi
   ((LEAST(parent_object_id, object_id)), (GREATEST(parent_object_id, object_id)))
   WHERE intermediate_object_ids IS NULL;
 
+-- Index: data.object_objects_idx_oi
+
+-- DROP INDEX data.object_objects_idx_oi;
+
+CREATE INDEX object_objects_idx_oi
+  ON data.object_objects
+  USING btree
+  (object_id);
+
 -- Index: data.object_objects_idx_poi_oi
 
 -- DROP INDEX data.object_objects_idx_poi_oi;
@@ -51,4 +60,13 @@ CREATE UNIQUE INDEX object_objects_idx_poi_oi_ioi
   USING btree
   (parent_object_id, object_id, intarray.uniq(intarray.sort(intermediate_object_ids)))
   WHERE intermediate_object_ids IS NOT NULL;
+
+-- Index: data.object_objects_nuidx_poi_oi
+
+-- DROP INDEX data.object_objects_nuidx_poi_oi;
+
+CREATE INDEX object_objects_nuidx_poi_oi
+  ON data.object_objects
+  USING btree
+  (parent_object_id, object_id);
 

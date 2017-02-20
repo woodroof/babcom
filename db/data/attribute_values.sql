@@ -50,3 +50,12 @@ CREATE UNIQUE INDEX attribute_values_idx_oi_ai_voi
   (object_id, attribute_id, value_object_id)
   WHERE value_object_id IS NOT NULL;
 
+-- Index: data.attribute_values_nuidx_oi_ai
+
+-- DROP INDEX data.attribute_values_nuidx_oi_ai;
+
+CREATE INDEX attribute_values_nuidx_oi_ai
+  ON data.attribute_values
+  USING btree
+  (object_id, attribute_id);
+
