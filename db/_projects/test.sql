@@ -2190,13 +2190,27 @@ CREATE OR REPLACE FUNCTION action_generators.transfer(
 $BODY$
 declare
   v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
+  v_type_attr_id integer;
+  v_type text;
   v_user_object_id integer;
   v_system_balance_attribute_id integer;
   v_balance jsonb;
   v_balance_value integer;
 begin
   if v_object_id is not null then
-    return null;
+    v_type_attr_id := data.get_attribute_id('type');
+
+    select json.get_string(value)
+    into v_type
+    from data.attribute_values
+    where
+      object_id = v_object_id and
+      attribute_id = v_type_attr_id and
+      value_object_id is null;
+
+    if v_type not in ('person', 'state', 'corporation') then
+      return null;
+    end if;
   end if;
 
   v_user_object_id := json.get_integer(in_params, 'user_object_id');
@@ -2238,7 +2252,12 @@ begin
           'data', jsonb_build_object('object_code', 'transaction_destinations', 'attribute_code', 'transaction_destinations'),
           'description', 'Получатель',
           'min_value_count', 1,
-          'max_value_count', 1),
+          'max_value_count', 1) ||
+        case when v_object_id is not null then
+          jsonb_build_object('default_value', data.get_object_code(v_object_id))
+        else
+          jsonb '{}'
+        end,
         jsonb_build_object(
           'code', 'description',
           'type', 'string',
@@ -2326,10 +2345,24 @@ CREATE OR REPLACE FUNCTION action_generators.generate_money(
 $BODY$
 declare
   v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
+  v_type_attr_id integer;
+  v_type text;
   v_user_object_id integer;
 begin
   if v_object_id is not null then
-    return null;
+    v_type_attr_id := data.get_attribute_id('type');
+
+    select json.get_string(value)
+    into v_type
+    from data.attribute_values
+    where
+      object_id = v_object_id and
+      attribute_id = v_type_attr_id and
+      value_object_id is null;
+
+    if v_type not in ('person', 'state', 'corporation') then
+      return null;
+    end if;
   end if;
 
   v_user_object_id := json.get_integer(in_params, 'user_object_id');
@@ -2348,7 +2381,12 @@ begin
           'data', jsonb_build_object('object_code', 'transaction_destinations', 'attribute_code', 'transaction_destinations'),
           'description', 'Получатель',
           'min_value_count', 1,
-          'max_value_count', 1),
+          'max_value_count', 1) ||
+        case when v_object_id is not null then
+          jsonb_build_object('default_value', data.get_object_code(v_object_id))
+        else
+          jsonb '{}'
+        end,
         jsonb_build_object(
           'code', 'description',
           'type', 'string',
