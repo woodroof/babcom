@@ -2355,7 +2355,7 @@ begin
         'object_codes', jsonb_build_array(data.get_object_code(in_user_object_id)),
         'get_actions', true,
         'get_templates', true));
-    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Недостаточно средств!"}';
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Недостаточно средств!"}';
     return v_ret_val;
   end if;
 
@@ -2565,7 +2565,7 @@ begin
         'object_codes', jsonb_build_array(v_state_code),
         'get_actions', true,
         'get_templates', true));
-    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Вы не можете распоряжаться средствами данного государства!"}';
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Вы не можете распоряжаться средствами данного государства!"}';
     return v_ret_val;
   end if;
 
@@ -2585,7 +2585,7 @@ begin
         'object_codes', jsonb_build_array(v_state_code),
         'get_actions', true,
         'get_templates', true));
-    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Недостаточно средств!"}';
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Недостаточно средств!"}';
     return v_ret_val;
   end if;
 
@@ -4195,7 +4195,7 @@ begin
   if json.get_opt_string(data.get_attribute_value(in_user_object_id,
 					          v_deal_id, 
 					          data.get_attribute_id('deal_status')),'~') <> 'draft' then
-    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Статус сделки изменился!"}';
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Статус сделки изменился!"}';
     return v_ret_val;
    end if;
   for v_i in 1..10 loop
@@ -4214,20 +4214,20 @@ begin
            v_sum_deal_cost
       from jsonb_to_record(v_value) as c (member text, percent_asset int, percent_income int, deal_cost int);
       if v_curent_member = v_member then
-        v_ret_val.data := v_ret_val.data || jsonb '{"message": "Эта корпорация уже участвует в данной сделке!"}';
+        v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Эта корпорация уже участвует в данной сделке!"}';
     return v_ret_val;
       end if;
     end if;    
   end loop;
 
   if v_j is null then
-    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Достигнуто максимальное количество участников сделки!"}';
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Достигнуто максимальное количество участников сделки!"}';
     return v_ret_val;
   elsif v_sum_percent_asset + v_percent_asset > 100 then
-    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Сумарный процент владения активом превысил 100!"}';
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Сумарный процент владения активом превысил 100!"}';
     return v_ret_val;
   elsif v_sum_percent_income + v_percent_income > 100 then
-    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Сумарный процент распределения доходов сделки превысил 100!"}';
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Сумарный процент распределения доходов сделки превысил 100!"}';
     return v_ret_val;
   end if;
 
@@ -4368,7 +4368,7 @@ begin
   if json.get_opt_string(data.get_attribute_value(in_user_object_id,
 					          v_deal_id, 
 					          data.get_attribute_id('deal_status')),'~') <> 'draft' then
-    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Статус сделки изменился!"}';
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Статус сделки изменился!"}';
     return v_ret_val;
   end if;
   for v_i in 1..10 loop
@@ -4389,10 +4389,10 @@ begin
   end loop;
 
   if v_sum_percent_asset + v_percent_asset > 100 then
-    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Сумарный процент владения активом превысил 100!"}';
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Сумарный процент владения активом превысил 100!"}';
     return v_ret_val;
   elsif v_sum_percent_income + v_percent_income > 100 then
-    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Сумарный процент распределения доходов сделки превысил 100!"}';
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Сумарный процент распределения доходов сделки превысил 100!"}';
     return v_ret_val;
   end if;
 
@@ -4504,7 +4504,7 @@ begin
   if json.get_opt_string(data.get_attribute_value(in_user_object_id,
 					          v_deal_id, 
 					          data.get_attribute_id('deal_status')),'~') <> 'draft' then
-    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Статус сделки изменился!"}';
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Статус сделки изменился!"}';
     return v_ret_val;
    end if;
   for v_i in 1..10 loop
@@ -4676,7 +4676,7 @@ begin
   if json.get_opt_string(data.get_attribute_value(in_user_object_id,
 					          v_deal_id, 
 					          data.get_attribute_id('deal_status')),'~') <> 'draft' then
-    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Статус сделки изменился!"}';
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Статус сделки изменился!"}';
     return v_ret_val;
    end if;
 
@@ -4767,7 +4767,7 @@ begin
   if json.get_opt_string(data.get_attribute_value(in_user_object_id,
 					          v_deal_id, 
 					          data.get_attribute_id('deal_status')),'~') <> 'draft' then
-    v_ret_val.data := v_ret_val.data || jsonb '{"message": "Статус сделки изменился!"}';
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Статус сделки изменился!"}';
     return v_ret_val;
    end if;
 
