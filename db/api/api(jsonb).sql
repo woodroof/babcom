@@ -120,5 +120,3 @@ $BODY$
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
   COST 100;
 GRANT EXECUTE ON FUNCTION api.api(jsonb) TO public;
-GRANT EXECUTE ON FUNCTION api.api(jsonb) TO postgres;
-GRANT EXECUTE ON FUNCTION api.api(jsonb) TO http;
