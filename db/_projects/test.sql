@@ -97,7 +97,7 @@ insert into data.params(code, value, description) values
     },
     {
       "attributes": ["deal_time", "deal_cancel_time", "deal_status", "deal_sector", "asset_name", "asset_cost", "asset_amortization", "deal_income"],
-      "actions": ["edit_deal", "delete_deal", "check_deal", "confirm_deal"]
+      "actions": ["edit_deal", "delete_deal", "check_deal", "confirm_deal", "cancel_deal"]
     },
     {
       "attributes": ["deal_participant1"],
@@ -435,7 +435,6 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('document_time', 'Время создания', 'NORMAL', null),
 ('document_author', 'Автор', 'NORMAL', 'code'),
 ('med_document_patient', 'Пациент', 'NORMAL', 'code'),
-('market_volume', 'Объём рынка', 'NORMAL', null),
 ('sectors', 'Отрасли', 'INVISIBLE', null),
 ('asset_amortization', 'Расходность актива', 'NORMAL', null),
 ('deal_income', 'Доходность сделки', 'NORMAL', null),
@@ -1984,7 +1983,6 @@ asset_corporations
 asset_time
 asset_status
 asset_cost
-market_volume
 system_balance
 balance
 system_master
@@ -4959,96 +4957,7 @@ $BODY$
   LANGUAGE plpgsql STABLE
   COST 100;
 
-insert into data.action_generators(function, params, description) values
-('login', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция входа в систему'),
-('logout', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция выхода из системы'),
-('create_med_document', null, 'Функция создания медецинского отчёта'),
-(
-  'generate_if_string_attribute',
-  '{
-    "attributes": {
-      "notification_status": {
-        "unread": [
-          {"function": "read_notification"}
-        ]
-      },
-      "type": {
-        "mail": [
-          {"function": "reply"},
-          {"function": "reply_all"}
-        ],
-        "state": [
-          {"function": "change_state_tax"},
-          {"function": "generate_if_in_object", "params": {"function": "state_money_transfer"}}
-        ],
-        "corporation": [
-          {"function": "set_dividend_vote"},
-          {"function": "create_deal"}
-        ],
-        "deal": [
-          {"function": "add_deal_member"},
-          {"function": "edit_deal"},
-          {"function": "delete_deal"},
-          {"function": "check_deal"},
-          {"function": "edit_deal_member", "params": {"row_num": 1}},
-          {"function": "edit_deal_member", "params": {"row_num": 2}},
-          {"function": "edit_deal_member", "params": {"row_num": 3}},
-          {"function": "edit_deal_member", "params": {"row_num": 4}},
-          {"function": "edit_deal_member", "params": {"row_num": 5}},
-          {"function": "edit_deal_member", "params": {"row_num": 6}},
-          {"function": "edit_deal_member", "params": {"row_num": 7}},
-          {"function": "edit_deal_member", "params": {"row_num": 8}},
-          {"function": "edit_deal_member", "params": {"row_num": 9}},
-          {"function": "edit_deal_member", "params": {"row_num": 10}},
-          {"function": "delete_deal_member", "params": {"row_num": 1}},
-          {"function": "delete_deal_member", "params": {"row_num": 2}},
-          {"function": "delete_deal_member", "params": {"row_num": 3}},
-          {"function": "delete_deal_member", "params": {"row_num": 4}},
-          {"function": "delete_deal_member", "params": {"row_num": 5}},
-          {"function": "delete_deal_member", "params": {"row_num": 6}},
-          {"function": "delete_deal_member", "params": {"row_num": 7}},
-          {"function": "delete_deal_member", "params": {"row_num": 8}},
-          {"function": "delete_deal_member", "params": {"row_num": 9}},
-          {"function": "delete_deal_member", "params": {"row_num": 10}}
-        ]
-      },
-      "mail_type": {
-        "inbox": [
-          {"function": "delete_inbox_mail"}
-        ],
-        "outbox": [
-          {"function": "delete_outbox_mail"}
-        ]
-      }
-    }
-  }',
-  null
-),
-('generate_if_user_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'person', 'function', 'transfer'), 'Функция для перевода средств'),
-('generate_if_user_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'person', 'function', 'send_mail'), 'Функция отправки письма'),
-('generate_if_user_attribute', jsonb_build_object('attribute_code', 'system_master', 'attribute_value', true, 'function', 'generate_money'), 'Функция для добавления средств'),
-('generate_if_user_attribute', jsonb_build_object('attribute_code', 'system_master', 'attribute_value', true, 'function', 'send_mail_from_future'), 'Функция отправки письма из будущего'),
-(
-  'generate_if_user_attribute',
-  jsonb_build_object(
-    'attribute_code',
-    'system_master',
-    'attribute_value',
-    true,
-    'function',
-    'show_transaction_list'),
-  'Функция просмотра транзакций'
-),
-('generate_if_user_attribute', jsonb_build_object('attribute_code', 'system_master', 'attribute_value', true, 'function', 'send_notification'), 'Функция отправки уведомления'),
-(
-  'generate_if_in_object',
-  jsonb_build_object(
-    'function',
-    'show_transaction_list'),
-  'Функция просмотра транзакций'
-);
-
--- Действие для проверки сделки перед утверждением
+-- Действие для утверждения сделки
 CREATE OR REPLACE FUNCTION action_generators.confirm_deal(
     in_params in jsonb)
   RETURNS jsonb AS
@@ -5111,7 +5020,7 @@ declare
   v_sum_deals_income integer;
 
   v_balance integer;
-  v_market_volume integer;
+  v_sector_volume integer;
   v_coef decimal;
   v_percent_income integer;
   v_corporation_state text;
@@ -5123,7 +5032,7 @@ declare
   v_asset_cost_attribute_id integer := data.get_attribute_id('asset_cost');
   v_deal_sector_attribute_id integer := data.get_attribute_id('deal_sector');
   v_deal_income_attribute_id integer := data.get_attribute_id('deal_income');
-  v_market_volume_attribute_id integer := data.get_attribute_id('market_volume');
+  v_sector_volume_attribute_id integer := data.get_attribute_id('sector_volume');
   v_corporation_state_attribute_id integer := data.get_attribute_id('corporation_state');
   v_state_tax_attribute_id integer := data.get_attribute_id('state_tax');
   v_system_corporation_draft_deals_attribute_id integer := data.get_attribute_id('system_corporation_draft_deals');
@@ -5272,16 +5181,16 @@ begin
 
   -- объём рынка
   select json.get_opt_integer(av.value, 0)
-    into v_market_volume
+    into v_sector_volume
   from data.attribute_values av
       where av.object_id = data.get_object_id(v_deal_sector)
-        and av.attribute_id = v_market_volume_attribute_id
+        and av.attribute_id = v_sector_volume_attribute_id
         and av.value_object_id is null;
   -- Если рынка на всех не хватает, нужен коэффициент пропорционального уменьшения дохода
-  if v_market_volume >= v_sum_deals_income + v_deal_income then 
+  if v_sector_volume >= v_sum_deals_income + v_deal_income then 
     v_coef := 1;
   else
-    v_coef := v_market_volume / (v_sum_deals_income + v_deal_income);
+    v_coef := v_sector_volume / (v_sum_deals_income + v_deal_income);
   end if;
   
   for v_i in 1..10 loop
@@ -5290,7 +5199,7 @@ begin
         v_corporation_code := json.get_opt_string(v_value, null, 'member');
         v_corporation_id := data.get_object_id(v_corporation_code);
         v_percent_income := json.get_opt_integer(v_value, 0, 'percent_income');
-        v_corp_income :=  jsonb_set(v_corp_income, array_agg(v_corporation_code), to_jsonb(v_deal_income * v_coef * v_percent_income / 100));
+        v_corp_income :=  jsonb_set(v_corp_income, array_agg(v_corporation_code), to_jsonb(round(v_deal_income * v_coef * v_percent_income / 100)));
      end if;
   end loop; 
   
@@ -5359,9 +5268,227 @@ $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
 
-insert into data.action_generators(function, params, description)
-values('generate_if_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'deal', 'function', 'confirm_deal'), 'Функция для подтверждения сделки');
+-- Действие для утверждения сделки
+CREATE OR REPLACE FUNCTION action_generators.cancel_deal(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_is_in_group integer; 
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+begin
+   -- Показываем только для мастера, и если сделка утверждена 
+  if not json.get_opt_boolean(data.get_attribute_value(v_user_object_id,
+					       v_user_object_id, 
+					       data.get_attribute_id('system_master')), false) or 
+     json.get_opt_string(data.get_attribute_value(v_user_object_id,
+					          v_object_id, 
+					          data.get_attribute_id('deal_status')),'~') <> 'normal' then
+     return null;
+   end if;
+  
+  return jsonb_build_object(
+    'cancel_deal',
+    jsonb_build_object(
+      'code', 'cancel_deal',
+      'name', 'Расторгнуть сделку',
+      'type', 'financial.deal',
+      'warning', 'Проверьте, что достаточное количество акционеров всех корпораций-участников согласны с расторжением сделки!',
+      'params', jsonb_build_object('deal_code', data.get_object_code(v_object_id)))
+      );
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
 
+CREATE OR REPLACE FUNCTION actions.cancel_deal(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_deal_code text := json.get_string(in_params, 'deal_code');
+  v_deal_id integer := data.get_object_id(v_deal_code);
+  v_asset_cost integer;
+  
+  v_corporation_id integer;
+  v_capitalization integer;
+  v_value jsonb;
+  v_i integer;
+
+  v_corporation_capitalization_attribute_id integer := data.get_attribute_id('corporation_capitalization');
+  v_asset_cost_attribute_id integer := data.get_attribute_id('asset_cost');
+  v_system_corporation_canceled_deals_attribute_id integer := data.get_attribute_id('system_corporation_canceled_deals');
+  v_system_corporation_deals_attribute_id integer := data.get_attribute_id('system_corporation_deals');
+  
+  v_value_canceled_deals jsonb;
+  v_value_deals jsonb;
+    
+  v_ret_val api.result;
+begin
+  v_ret_val := api_utils.get_objects(in_client,
+				     in_user_object_id,
+				     jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_deal_code),
+			    'get_actions', true,
+			    'get_templates', true));
+  if json.get_opt_string(data.get_attribute_value(in_user_object_id,
+					          v_deal_id, 
+					          data.get_attribute_id('deal_status')),'~') <> 'normal' then
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Статус сделки изменился!"}';
+    return v_ret_val;
+   end if;
+
+   -- Вытащим нужную информацию про нашу сделку
+  select json.get_opt_integer(av.value, 0)
+    into v_asset_cost
+  from data.attribute_values av
+      where av.object_id = v_deal_id
+        and av.attribute_id = v_asset_cost_attribute_id
+        and av.value_object_id is null;
+       
+  -- пересчитать капитализацию всех корпораций участников
+  for v_i in 1..10 loop
+    v_value := data.get_attribute_value(in_user_object_id, v_deal_id, data.get_attribute_id('system_deal_participant' || v_i));
+    if v_value is not null then
+      v_corporation_id := data.get_object_id(json.get_opt_string(v_value, null, 'member'));
+      v_capitalization := json.get_opt_integer(data.get_attribute_value(in_user_object_id, v_corporation_id, v_corporation_capitalization_attribute_id), 0);
+      perform data.set_attribute_value_if_changed(v_corporation_id, v_corporation_capitalization_attribute_id, null, to_jsonb(v_capitalization - (v_asset_cost * json.get_opt_integer(v_value, 0, 'percent_asset') / 100)), in_user_object_id);
+    end if;    
+  end loop;  
+
+  -- поменять статус сделки и даты
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('deal_status'), null, jsonb '"canceled"', in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('system_deal_time'), null, to_jsonb(utils.system_time()), in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('deal_cancel_time'), null, to_jsonb(utils.current_time()), in_user_object_id);
+  
+  -- Удалим сделку из активных для всех корпораций
+  -- добавляем сделку в список расторгнутых для всех компаний
+  for v_i in 1..10 loop
+    v_value := data.get_attribute_value(in_user_object_id, v_deal_id, data.get_attribute_id('system_deal_participant' || v_i));
+    if v_value is not null then
+      v_corporation_id := data.get_object_id(json.get_opt_string(v_value -> 'member'));
+      v_value_deals := json.get_opt_array(
+        data.get_attribute_value_for_update(
+          v_corporation_id,
+          v_system_corporation_deals_attribute_id,
+          null));
+      v_value_canceled_deals := json.get_opt_array(
+        data.get_attribute_value_for_update(
+          v_corporation_id,
+          v_system_corporation_canceled_deals_attribute_id,
+          null));
+      v_value_deals := coalesce(v_value_deals, jsonb '[]') - v_deal_code;
+      perform data.set_attribute_value(v_corporation_id, v_system_corporation_deals_attribute_id, null, v_value_deals, in_user_object_id);
+      v_value_canceled_deals := coalesce(v_value_canceled_deals, jsonb '[]') || to_jsonb(v_deal_code);
+      perform data.set_attribute_value(v_corporation_id, v_system_corporation_canceled_deals_attribute_id, null, v_value_canceled_deals, in_user_object_id);
+    end if;    
+  end loop;
+
+  return api_utils.get_objects(in_client,
+				     in_user_object_id,
+				     jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_deal_code),
+			    'get_actions', true,
+			    'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+  
+insert into data.action_generators(function, params, description) values
+('login', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция входа в систему'),
+('logout', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция выхода из системы'),
+('create_med_document', null, 'Функция создания медецинского отчёта'),
+(
+  'generate_if_string_attribute',
+  '{
+    "attributes": {
+      "notification_status": {
+        "unread": [
+          {"function": "read_notification"}
+        ]
+      },
+      "type": {
+        "mail": [
+          {"function": "reply"},
+          {"function": "reply_all"}
+        ],
+        "state": [
+          {"function": "change_state_tax"},
+          {"function": "generate_if_in_object", "params": {"function": "state_money_transfer"}}
+        ],
+        "corporation": [
+          {"function": "set_dividend_vote"},
+          {"function": "create_deal"}
+        ],
+        "deal": [
+          {"function": "add_deal_member"},
+          {"function": "edit_deal"},
+          {"function": "delete_deal"},
+          {"function": "check_deal"},
+          {"function": "confirm_deal"},
+          {"function": "cancel_deal"},
+          {"function": "edit_deal_member", "params": {"row_num": 1}},
+          {"function": "edit_deal_member", "params": {"row_num": 2}},
+          {"function": "edit_deal_member", "params": {"row_num": 3}},
+          {"function": "edit_deal_member", "params": {"row_num": 4}},
+          {"function": "edit_deal_member", "params": {"row_num": 5}},
+          {"function": "edit_deal_member", "params": {"row_num": 6}},
+          {"function": "edit_deal_member", "params": {"row_num": 7}},
+          {"function": "edit_deal_member", "params": {"row_num": 8}},
+          {"function": "edit_deal_member", "params": {"row_num": 9}},
+          {"function": "edit_deal_member", "params": {"row_num": 10}},
+          {"function": "delete_deal_member", "params": {"row_num": 1}},
+          {"function": "delete_deal_member", "params": {"row_num": 2}},
+          {"function": "delete_deal_member", "params": {"row_num": 3}},
+          {"function": "delete_deal_member", "params": {"row_num": 4}},
+          {"function": "delete_deal_member", "params": {"row_num": 5}},
+          {"function": "delete_deal_member", "params": {"row_num": 6}},
+          {"function": "delete_deal_member", "params": {"row_num": 7}},
+          {"function": "delete_deal_member", "params": {"row_num": 8}},
+          {"function": "delete_deal_member", "params": {"row_num": 9}},
+          {"function": "delete_deal_member", "params": {"row_num": 10}}
+        ]
+      },
+      "mail_type": {
+        "inbox": [
+          {"function": "delete_inbox_mail"}
+        ],
+        "outbox": [
+          {"function": "delete_outbox_mail"}
+        ]
+      }
+    }
+  }',
+  null
+),
+('generate_if_user_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'person', 'function', 'transfer'), 'Функция для перевода средств'),
+('generate_if_user_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'person', 'function', 'send_mail'), 'Функция отправки письма'),
+('generate_if_user_attribute', jsonb_build_object('attribute_code', 'system_master', 'attribute_value', true, 'function', 'generate_money'), 'Функция для добавления средств'),
+('generate_if_user_attribute', jsonb_build_object('attribute_code', 'system_master', 'attribute_value', true, 'function', 'send_mail_from_future'), 'Функция отправки письма из будущего'),
+(
+  'generate_if_user_attribute',
+  jsonb_build_object(
+    'attribute_code',
+    'system_master',
+    'attribute_value',
+    true,
+    'function',
+    'show_transaction_list'),
+  'Функция просмотра транзакций'
+),
+('generate_if_user_attribute', jsonb_build_object('attribute_code', 'system_master', 'attribute_value', true, 'function', 'send_notification'), 'Функция отправки уведомления'),
+(
+  'generate_if_in_object',
+  jsonb_build_object(
+    'function',
+    'show_transaction_list'),
+  'Функция просмотра транзакций'
+);
 
 
 -- TODO: нагенерировать транзакций и писем
