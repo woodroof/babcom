@@ -57,7 +57,7 @@ insert into data.params(code, value, description) values
       "attributes": ["transaction_time", "transaction_sum", "balance_rest", "transaction_from", "transaction_to", "transaction_description"]
     },
     {
-      "actions": ["generate_money", "state_money_transfer", "transfer", "send_mail", "send_mail_from_future", "send_notification"]
+      "actions": ["generate_money", "state_money_transfer", "transfer", "send_mail", "send_mail_from_future", "send_notification", "show_transaction_list"]
     },
     {
       "attributes": ["person_race", "person_state", "person_psi_scale", "person_job_position"]
@@ -706,8 +706,6 @@ begin
       if v_type = 'attribute' then
         v_output_attribute_id := data.get_attribute_id(json.get_string(v_output_entry, 'data'));
 
-        perform data.fill_attribute_values(v_user_object_id, array[v_next_object_id], array[v_output_attribute_id]);
-
         v_content_entry :=
           v_content_entry ||
           json.get_string(
@@ -891,8 +889,6 @@ begin
         v_type := json.get_string(v_output_entry, 'type');
         if v_type = 'attribute' then
           v_output_attribute_id := data.get_attribute_id(json.get_string(v_output_entry, 'data'));
-
-          perform data.fill_attribute_values(v_user_object_id, array[v_next_object_id], array[v_output_attribute_id]);
 
           v_content_entry :=
             v_content_entry ||
@@ -1135,6 +1131,43 @@ $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
 
+CREATE OR REPLACE FUNCTION attribute_value_fill_functions.fill_transaction_list(in_params jsonb)
+  RETURNS void AS
+$BODY$
+declare
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_attribute_id integer := json.get_integer(in_params, 'attribute_id');
+  v_system_value_attr_id integer := data.get_attribute_id('system_value');
+  v_value text := json.get_string(data.get_raw_attribute_value(v_object_id, v_system_value_attr_id, null));
+  v_value_id integer := data.get_object_id(v_value);
+  v_transaction_list jsonb := data.get_raw_attribute_value(data.get_object_id('transactions'), v_system_value_attr_id, v_value_id);
+  v_name_attr_id integer := data.get_attribute_id('name');
+  v_content text;
+begin
+  perform json.get_opt_string_array(v_transaction_list);
+
+  select
+    coalesce(
+      string_agg(
+        '<a href="babcom:' || value || '">' ||
+        json.get_string(data.get_attribute_value(v_value_id, data.get_object_id(value), v_name_attr_id)) ||
+        '</a>',
+        E'<br>\n'),
+      'Транзакций нет')
+  into v_content
+  from (
+    select json.get_string(t.value) as value, row_number() over() as num
+    from jsonb_array_elements(v_transaction_list) t
+    order by num desc
+  ) o;
+
+  perform data.set_attribute_value_if_changed(v_object_id, v_attribute_id, null, to_jsonb(v_content), v_user_object_id);
+end;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+
 insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
 (
   data.get_attribute_id('content'),
@@ -1145,11 +1178,6 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
         "conditions": [{"attribute_code": "type", "attribute_value": "news_hub"}, {"attribute_code": "type", "attribute_value": "media"}],
         "function": "fill_content",
         "params": {"placeholder": "Новостей нет", "sort_attribute_code": "system_news_time", "sort_type": "desc", "output": [{"type": "attribute", "data": "news_time"}, {"type": "string", "data": " <a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
-      },
-      {
-        "conditions": [{"attribute_code": "type", "attribute_value": "med_library"}],
-        "function": "fill_user_content",
-        "params": {"placeholder": "Отчётов нет", "sort_attribute_code": "system_document_time", "sort_type": "desc", "output": [{"type": "string", "data": "<a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
       },
       {
         "conditions": [{"attribute_code": "type", "attribute_value": "mailbox"}],
@@ -1167,14 +1195,19 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
         "params": {"source_attribute_code": "outbox", "placeholder": "Писем нет", "sort_attribute_code": "system_mail_send_time", "sort_type": "desc", "output": [{"type": "attribute", "data": "mail_send_time"}, {"type": "string", "data": " <a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
       },
       {
-        "conditions": [{"attribute_code": "type", "attribute_value": "corporations"}, {"attribute_code": "type", "attribute_value": "market"}, {"attribute_code": "type", "attribute_value": "states"}],
-        "function": "fill_content",
-        "params": {"sort_attribute_code": "name", "sort_type": "asc", "output": [{"type": "string", "data": "<a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
-      },
-      {
         "conditions": [{"attribute_code": "type", "attribute_value": "transactions"}],
         "function": "fill_user_content_from_attribute",
         "params": {"placeholder": "Транзакций нет", "source_attribute_code": "system_value", "sort_type": "desc", "output": [{"type": "string", "data": "<a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+      },
+      {
+        "conditions": [{"attribute_code": "type", "attribute_value": "med_library"}],
+        "function": "fill_user_content",
+        "params": {"placeholder": "Отчётов нет", "sort_attribute_code": "system_document_time", "sort_type": "desc", "output": [{"type": "string", "data": "<a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+      },
+      {
+        "conditions": [{"attribute_code": "type", "attribute_value": "corporations"}, {"attribute_code": "type", "attribute_value": "market"}, {"attribute_code": "type", "attribute_value": "states"}],
+        "function": "fill_content",
+        "params": {"sort_attribute_code": "name", "sort_type": "asc", "output": [{"type": "string", "data": "<a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
       },
       {
         "conditions": [{"attribute_code": "type", "attribute_value": "normal_deals"}],
@@ -1190,6 +1223,10 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
         "conditions": [{"attribute_code": "type", "attribute_value": "draft_deals"}],
         "function": "fill_content",
         "params": {"sort_attribute_code": "system_deal_time", "sort_type": "desc", "output": [{"type": "string", "data": "<a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+      },
+      {
+        "conditions": [{"attribute_code": "type", "attribute_value": "transaction_list"}],
+        "function": "fill_transaction_list"
       }
     ]
   }', 'Получение списков (новости, транзакции, разные документы)');
@@ -1482,60 +1519,6 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
 insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
 (data.get_attribute_id('transaction_destinations'), 'fill_if_object_attribute', '{"blocks": [{"conditions": [{"attribute_code": "type", "attribute_value": "transaction_destinations"}], "function": "filter_user_object_code"}]}', 'Получение списка возможных получателей переводов');
 
-CREATE OR REPLACE FUNCTION attribute_value_fill_functions.fill_transaction_name(in_params jsonb)
-  RETURNS void AS
-$BODY$
-declare
-  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
-  v_object_id integer := json.get_integer(in_params, 'object_id');
-  v_attribute_id integer := json.get_integer(in_params, 'attribute_id');
-  v_from text :=
-    json.get_opt_string(
-      data.get_attribute_value(
-        v_user_object_id,
-        v_object_id,
-        data.get_attribute_id('transaction_from')));
-  v_from_id integer := case when v_from is not null then data.get_object_id(v_from) else null end;
-  v_to_id integer :=
-    data.get_object_id(
-      json.get_string(
-        data.get_attribute_value(
-          v_user_object_id,
-          v_object_id,
-          data.get_attribute_id('transaction_to'))));
-begin
-  perform data.set_attribute_value_if_changed(
-    v_object_id,
-    v_attribute_id,
-    v_user_object_id,
-    to_jsonb(
-      json.get_string(data.get_attribute_value(v_user_object_id, v_object_id, data.get_attribute_id('transaction_time'))) || ' ' ||
-      case when v_from_id = v_user_object_id then '−' else '+' end ||
-      json.get_integer(data.get_attribute_value(v_user_object_id, v_object_id, data.get_attribute_id('transaction_sum'))) || ' (' ||
-      json.get_integer(data.get_attribute_value(v_user_object_id, v_object_id, data.get_attribute_id('balance_rest'))) || ') ' ||
-      case when v_to_id = v_user_object_id and v_from_id is not null then
-        json.get_string(
-          data.get_attribute_value(
-            v_user_object_id,
-            v_from_id,
-            v_attribute_id))
-      when v_to_id != v_user_object_id then
-        json.get_string(
-          data.get_attribute_value(
-            v_user_object_id,
-            v_to_id,
-            v_attribute_id))
-      end ||
-      ': ' ||
-      json.get_string(data.get_attribute_value(v_user_object_id, v_object_id, data.get_attribute_id('transaction_description')))));
-end;
-$BODY$
-  LANGUAGE plpgsql VOLATILE
-  COST 100;
-
-insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
-(data.get_attribute_id('name'), 'fill_if_object_attribute', '{"blocks": [{"conditions": [{"attribute_code": "type", "attribute_value": "transaction"}], "function": "fill_transaction_name"}]}', 'Получение имени транзакции');
-
 insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
 (
   data.get_attribute_id('balance'),
@@ -1686,6 +1669,11 @@ select data.set_attribute_value(data.get_object_id('states'), data.get_attribute
 select data.set_attribute_value(data.get_object_id('states'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('states'), data.get_attribute_id('type'), null, jsonb '"states"');
 select data.set_attribute_value(data.get_object_id('states'), data.get_attribute_id('name'), null, jsonb '"Государства"');
+
+select data.set_attribute_value(data.get_object_id('assembly'), data.get_attribute_id('system_meta'), data.get_object_id('masters'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('assembly'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('assembly'), data.get_attribute_id('type'), null, jsonb '"assembly"');
+select data.set_attribute_value(data.get_object_id('assembly'), data.get_attribute_id('name'), null, jsonb '"Ассамблея"');
 
 select
   data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
@@ -1979,7 +1967,6 @@ ship
 ship_radar
 ship_power_computer
 ship_hacker_computer
-assembly
 meta_entities
 station_weapon{1,4}
 station_reactor{1,4}
@@ -2272,6 +2259,7 @@ declare
   v_transactions_value jsonb;
   v_transactions_object_id integer := data.get_object_id('transactions');
   v_transactions_system_value_attribute_id integer := data.get_attribute_id('system_value');
+  v_name_attr_id integer := data.get_attribute_id('name');
 begin
   assert in_user_object_id is not null;
   assert in_object_id is not null;
@@ -2286,8 +2274,28 @@ begin
 
   perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('system_is_visible'), in_sender_id, jsonb 'true', in_user_object_id);
   perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('system_is_visible'), in_object_id, jsonb 'true', in_user_object_id);
-  perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true', in_user_object_id);
   perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('type'), null, jsonb '"transaction"', in_user_object_id);
+  if in_sender_rest is null then
+    perform data.set_attribute_value(
+      v_transaction_id,
+      v_name_attr_id,
+      in_sender_id,
+      to_jsonb(utils.current_time() || ' добавление ' || in_sum || json.get_string(data.get_attribute_value(in_user_object_id, in_object_id, v_name_attr_id)) || ': ' || in_description),
+      in_user_object_id);
+  else
+    perform data.set_attribute_value(
+      v_transaction_id,
+      v_name_attr_id,
+      in_sender_id,
+      to_jsonb(utils.current_time() || ' -' || in_sum || '(=' || in_sender_rest || ') ' || json.get_string(data.get_attribute_value(in_user_object_id, in_object_id, v_name_attr_id)) || ': ' || in_description),
+      in_user_object_id);
+  end if;
+  perform data.set_attribute_value(
+    v_transaction_id,
+    v_name_attr_id,
+    in_object_id,
+    to_jsonb(utils.current_time() || ' +' || in_sum || '(=' || in_receiver_rest || ') ' || case when add_sender_to_transation then json.get_opt_string(data.get_attribute_value(in_object_id, in_sender_id, v_name_attr_id), 'Неизвестный отправитель') || ': ' else '' end || in_description),
+    in_user_object_id);
   if add_sender_to_transation then
     perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('transaction_from'), null, to_jsonb(data.get_object_code(in_sender_id)), in_user_object_id);
   end if;
@@ -2406,7 +2414,7 @@ begin
     in_user_object_id,
     jsonb_build_object(
       'object_codes', jsonb '["transactions"]',
-      'get_actions', true,
+      'get_actions', false,
       'get_templates', true));
 end;
 $BODY$
@@ -2781,7 +2789,7 @@ begin
     in_user_object_id,
     jsonb_build_object(
       'object_codes', jsonb '["transactions"]',
-      'get_actions', true,
+      'get_actions', false,
       'get_templates', true));
 end;
 $BODY$
@@ -3478,6 +3486,106 @@ $BODY$
 insert into data.action_generators(function, params, description)
 values('generate_if_user_attribute', jsonb_build_object('attribute_code', 'system_master', 'attribute_value', true, 'function', 'send_mail_from_future'), 'Функция отправки письма из будущего');
 
+-- Просмотр списков транзакций
+CREATE OR REPLACE FUNCTION action_generators.show_transaction_list(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
+  v_user_object_id integer;
+  v_type_attr_id integer;
+  v_type text;
+begin
+  if v_object_id is null then
+    return null;
+  end if;
+
+  v_user_object_id := json.get_integer(in_params, 'user_object_id');
+
+  if v_object_id = v_user_object_id then
+    return null;
+  end if;
+
+  v_type_attr_id := data.get_attribute_id('type');
+
+  select json.get_string(value)
+  into v_type
+  from data.attribute_values
+  where
+    object_id = v_object_id and
+    attribute_id = v_type_attr_id and
+    value_object_id is null;
+
+  if v_type not in ('person', 'state', 'corporation', 'assembly') then
+    return null;
+  end if;
+
+  return jsonb_build_object(
+    'show_transaction_list',
+    jsonb_build_object(
+      'code', 'show_transaction_list',
+      'name', 'Просмотреть транзакции',
+      'type', 'finances.transactions',
+      'params', jsonb_build_object('object_code', data.get_object_code(v_object_id))));
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.show_transaction_list(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_object_code text := json.get_string(in_params, 'object_code');
+  v_name_attr_id integer := data.get_attribute_id('name');
+  v_list_id integer;
+  v_list_code text;
+begin
+  insert into data.objects(id) values(default)
+  returning id, code into v_list_id, v_list_code;
+
+  perform data.set_attribute_value(v_list_id, data.get_attribute_id('system_is_visible'), in_user_object_id, jsonb 'true');
+  perform data.set_attribute_value(v_list_id, data.get_attribute_id('system_value'), null, to_jsonb(v_object_code));
+  perform data.set_attribute_value(v_list_id, data.get_attribute_id('type'), null, jsonb '"transaction_list"');
+  perform data.set_attribute_value(v_list_id, v_name_attr_id, null, to_jsonb(json.get_string(data.get_attribute_value(in_user_object_id, data.get_object_id(v_object_code), v_name_attr_id)) || ', список транзакций'));
+
+  return api_utils.get_objects(
+    in_client,
+    in_user_object_id,
+    jsonb_build_object(
+      'object_codes', jsonb_build_array(v_list_code),
+      'get_actions', false,
+      'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+insert into data.action_generators(function, params, description)
+values(
+  'generate_if_user_attribute',
+  jsonb_build_object(
+    'attribute_code',
+    'system_master',
+    'attribute_value',
+    true,
+    'function',
+    'show_transaction_list'),
+  'Функция просмотра транзакций');
+
+insert into data.action_generators(function, params, description)
+values(
+  'generate_if_in_object',
+  jsonb_build_object(
+    'function',
+    'show_transaction_list'),
+  'Функция просмотра транзакций');
+
 -- Отправка уведомлений
 CREATE OR REPLACE FUNCTION action_generators.send_notification(
     in_params in jsonb)
@@ -3688,7 +3796,7 @@ begin
     in_user_object_id,
     jsonb_build_object(
       'object_codes', jsonb '["mailbox"]',
-      'get_actions', true,
+      'get_actions', false,
       'get_templates', true));
 end;
 $BODY$
@@ -3783,7 +3891,7 @@ begin
     in_user_object_id,
     jsonb_build_object(
       'object_codes', jsonb '["mailbox"]',
-      'get_actions', true,
+      'get_actions', false,
       'get_templates', true));
 end;
 $BODY$
@@ -4835,7 +4943,7 @@ begin
       );
 end;
 $BODY$
-  LANGUAGE plpgsql IMMUTABLE
+  LANGUAGE plpgsql STABLE
   COST 100;
 
 CREATE OR REPLACE FUNCTION actions.check_deal(
@@ -4859,7 +4967,7 @@ declare
 
   v_sum_percent_asset integer := 0;
   v_sum_percent_income integer := 0;
-  
+
   v_ret_val api.result;
 begin
   v_ret_val := api_utils.get_objects(in_client,
@@ -4927,13 +5035,11 @@ begin
   return v_ret_val;
 end;
 $BODY$
-  LANGUAGE plpgsql volatile
+  LANGUAGE plpgsql STABLE
   COST 100;
 
 insert into data.action_generators(function, params, description)
 values('generate_if_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'deal', 'function', 'check_deal'), 'Функция для проверки сделки');
-
-
 
 -- TODO: нагенерировать транзакций и писем
 
