@@ -93,7 +93,8 @@ insert into data.params(code, value, description) values
       "attributes": ["corporation_deals", "corporation_draft_deals", "corporation_canceled_deals"]
     },
     {
-      "attributes": ["document_title", "document_time", "document_author"]
+      "attributes": ["document_title", "document_time", "document_author"],
+      "actions": ["delete_document"]
     },
     {
       "attributes": ["med_document_patient"]
@@ -3407,6 +3408,65 @@ $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
 
+-- Действие для удаления отчётов
+CREATE OR REPLACE FUNCTION action_generators.delete_document(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_return_object_code text := json.get_string(in_params, 'return_object_code');
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+begin
+  return jsonb_build_object(
+    'delete_document',
+    jsonb_build_object(
+      'code', 'delete_document',
+      'name', 'Удалить',
+      'type', 'documents.delete',
+      'params', jsonb_build_object('object_code', data.get_object_code(v_object_id), 'return_object_code', v_return_object_code),
+      'warning', 'Вы действительно хотите удалить документ?'));
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.delete_document(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_object_id integer := data.get_object_id(json.get_string(in_params, 'object_code'));
+  v_system_is_visible_attr_id integer := data.get_attribute_id('system_is_visible');
+  v_type_attr_id integer := data.get_attribute_id('type');
+  v_return_object_code text := json.get_string(in_params, 'return_object_code');
+begin
+  perform data.set_attribute_value(v_object_id, v_type_attr_id, null, jsonb '"deleted_document"');
+
+  perform data.delete_attribute_value_if_exists(v_object_id, v_system_is_visible_attr_id, value_object_id, in_user_object_id)
+  from (
+    select value_object_id
+    from data.attribute_values
+    where
+      object_id = v_object_id and
+      attribute_id = v_system_is_visible_attr_id
+  ) o;
+
+  return api_utils.get_objects(
+    in_client,
+    in_user_object_id,
+    jsonb_build_object(
+      'object_codes', jsonb_build_array(v_return_object_code),
+      'get_actions', true,
+      'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
 -- Действие для отправки письма
 CREATE OR REPLACE FUNCTION action_generators.send_mail(
     in_params in jsonb)
@@ -6427,6 +6487,15 @@ insert into data.action_generators(function, params, description) values
         ],
         "market": [
           {"function": "calc_money"}
+        ],
+        "med_document": [
+          {"function": "generate_if_user_attribute", "params": {"attribute_code": "system_master", "attribute_value": true, "function": "delete_document", "params": {"return_object_code": "med_library"}}}
+        ],
+        "research_document": [
+          {"function": "generate_if_user_attribute", "params": {"attribute_code": "system_master", "attribute_value": true, "function": "delete_document", "params": {"return_object_code": "research_library"}}}
+        ],
+        "crew_document": [
+          {"function": "generate_if_user_attribute", "params": {"attribute_code": "system_master", "attribute_value": true, "function": "delete_document", "params": {"return_object_code": "crew_library"}}}
         ]
       },
       "mail_type": {
