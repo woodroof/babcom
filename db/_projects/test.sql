@@ -3594,7 +3594,8 @@ begin
   into notification_receiver_ids
   from data.objects o
   join data.object_objects oo on
-    oo.parent_object_id = o.id
+    oo.parent_object_id = o.id and
+    oo.object_id != in_user_object_id
   join data.attribute_values av on
     av.object_id = oo.object_id and
     av.attribute_id = v_type_attr_id and
