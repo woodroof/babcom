@@ -202,6 +202,7 @@ insert into data.objects(code) values
 ('personal_document_storage'),
 ('library'),
 ('mailbox'),
+('notifications'),
 ('inbox'),
 ('outbox'),
 ('med_library'),
@@ -1654,6 +1655,7 @@ select data.set_attribute_value(data.get_object_id('news_hub'), data.get_attribu
 
 select
   data.set_attribute_value(data.get_object_id('media' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('media' || o.value), data.get_attribute_id('system_meta'), data.get_object_id('media' || o.value), jsonb 'true'),
   data.set_attribute_value(data.get_object_id('media' || o.value), data.get_attribute_id('type'), null, jsonb '"media"'),
   data.set_attribute_value(data.get_object_id('media' || o.value), data.get_attribute_id('name'), null, to_jsonb('Media ' || o.value)),
   data.set_attribute_value(data.get_object_id('media' || o.value), data.get_attribute_id('description'), null, to_jsonb('Самая оперативная, честная и скромная из всех газет во всей вселенной. Читайте только нас! Мы - Media ' || o.value || '!'))
@@ -1902,9 +1904,6 @@ from (
 ) o
 group by o.pn;
 
-select data.set_attribute_value(data.get_object_id('anonymous'), data.get_attribute_id('notifications'), data.get_object_id('anonymous'), jsonb_agg('global_notification' || o.value))
-from generate_series(1, 3) o(value);
-
 select
   data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
   data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('type'), null, jsonb '"news"'),
@@ -1926,6 +1925,11 @@ select data.set_attribute_value(data.get_object_id('mailbox'), data.get_attribut
 select data.set_attribute_value(data.get_object_id('mailbox'), data.get_attribute_id('type'), null, jsonb '"mailbox"');
 select data.set_attribute_value(data.get_object_id('mailbox'), data.get_attribute_id('name'), null, jsonb '"Почта"');
 select data.set_attribute_value(data.get_object_id('mailbox'), data.get_attribute_id('system_meta'), data.get_object_id('persons'), jsonb 'true');
+
+select data.set_attribute_value(data.get_object_id('notifications'), data.get_attribute_id('system_is_visible'), data.get_object_id('persons'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('notifications'), data.get_attribute_id('type'), null, jsonb '"notifications"');
+select data.set_attribute_value(data.get_object_id('notifications'), data.get_attribute_id('name'), null, jsonb '"Уведомления"');
+select data.set_attribute_value(data.get_object_id('notifications'), data.get_attribute_id('system_meta'), data.get_object_id('persons'), jsonb 'true');
 
 select data.set_attribute_value(data.get_object_id('inbox'), data.get_attribute_id('system_is_visible'), data.get_object_id('persons'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('inbox'), data.get_attribute_id('system_mail_folder_type'), null, jsonb '"inbox"');

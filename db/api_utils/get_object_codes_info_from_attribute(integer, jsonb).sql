@@ -34,10 +34,10 @@ begin
   v_attribute_value := data.get_attribute_value(in_user_object_id, v_object_id, v_attribute_id);
 
   if v_attribute_value is null then
-    perform utils.raise_invalid_input_param_value('Object "%s" has no attribute "%s"', v_object_code, v_attribute_code);
+    return null;
   end if;
 
-  return json.get_string_array(v_attribute_value);
+  return json.get_opt_string_array(v_attribute_value);
 end;
 $BODY$
   LANGUAGE plpgsql VOLATILE

@@ -32,7 +32,10 @@ begin
     v_object_codes := api_utils.get_object_codes_info_from_attribute(in_user_object_id, in_params);
   end if;
 
-  v_filter_result := api_utils.get_filtered_object_ids(in_user_object_id, v_object_codes, in_params);
+  if v_object_codes is not null then
+    v_filter_result := api_utils.get_filtered_object_ids(in_user_object_id, v_object_codes, in_params);
+  end if;
+
   if v_filter_result is null or v_filter_result.object_ids is null then
     v_etag := encode(pgcrypto.digest('', 'sha256'), 'base64');
 

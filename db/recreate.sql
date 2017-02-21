@@ -540,8 +540,6 @@ $BODY$
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
   COST 100;
 GRANT EXECUTE ON FUNCTION api.api(jsonb) TO public;
-GRANT EXECUTE ON FUNCTION api.api(jsonb) TO postgres;
-GRANT EXECUTE ON FUNCTION api.api(jsonb) TO http;
 -- Function: api_utils.build_attributes(text[], text[], jsonb[], text[], data.attribute_type[])
 
 -- DROP FUNCTION api_utils.build_attributes(text[], text[], jsonb[], text[], data.attribute_type[]);
@@ -861,7 +859,10 @@ begin
     v_object_codes := api_utils.get_object_codes_info_from_attribute(in_user_object_id, in_params);
   end if;
 
-  v_filter_result := api_utils.get_filtered_object_ids(in_user_object_id, v_object_codes, in_params);
+  if v_object_codes is not null then
+    v_filter_result := api_utils.get_filtered_object_ids(in_user_object_id, v_object_codes, in_params);
+  end if;
+
   if v_filter_result is null or v_filter_result.object_ids is null then
     v_etag := encode(pgcrypto.digest('', 'sha256'), 'base64');
 
@@ -1044,10 +1045,10 @@ begin
   v_attribute_value := data.get_attribute_value(in_user_object_id, v_object_id, v_attribute_id);
 
   if v_attribute_value is null then
-    perform utils.raise_invalid_input_param_value('Object "%s" has no attribute "%s"', v_object_code, v_attribute_code);
+    return null;
   end if;
 
-  return json.get_string_array(v_attribute_value);
+  return json.get_opt_string_array(v_attribute_value);
 end;
 $BODY$
   LANGUAGE plpgsql VOLATILE
