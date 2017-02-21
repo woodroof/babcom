@@ -3638,7 +3638,7 @@ begin
             'type', 'string',
             'data', jsonb_build_object('min_length', 1, 'multiline', true),
             'description', 'Сообщение',
-            'default_value', E'\n> ' || replace(v_title, '<br>', '\n> '),
+            'default_value', E'\n> ' || replace(v_body, '<br>', E'\n> '),
             'min_value_count', 1,
             'max_value_count', 1))));
 end;
@@ -3737,7 +3737,7 @@ begin
             'type', 'string',
             'data', jsonb_build_object('min_length', 1, 'multiline', true),
             'description', 'Сообщение',
-            'default_value', E'\n> ' || replace(v_title, '<br>', '\n> '),
+            'default_value', E'\n> ' || replace(v_body, '<br>', E'\n> '),
             'min_value_count', 1,
             'max_value_count', 1))));
 end;
