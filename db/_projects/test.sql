@@ -173,10 +173,13 @@ insert into data.objects(code) values
 ('security'),
 ('politicians'),
 ('medics'),
+('researchers'),
+('crew'),
 ('med_documents'),
+('research_documents'),
+('crew_documents'),
 ('technicians'),
 ('pilots'),
-('officers'),
 ('hackers'),
 ('scientists'),
 ('corporations'),
@@ -214,6 +217,8 @@ insert into data.objects(code) values
 ('inbox'),
 ('outbox'),
 ('med_library'),
+('research_library'),
+('crew_library'),
 ('transactions'),
 ('station'),
 ('station_medlab'),
@@ -266,6 +271,12 @@ select 'personal_document' || o1.* from generate_series(1, 100) o1(value);
 
 insert into data.objects(code)
 select 'med_document' || o1.* from generate_series(1, 15) o1(value);
+
+insert into data.objects(code)
+select 'research_document' || o1.* from generate_series(1, 15) o1(value);
+
+insert into data.objects(code)
+select 'crew_document' || o1.* from generate_series(1, 15) o1(value);
 
 insert into data.objects(code)
 select 'sector' || o1.* from generate_series(1, 4) o1(value);
@@ -480,10 +491,13 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('system_security', 'Маркер персонажа, имеющего доступ к системе безопасности', 'SYSTEM', null),
 ('system_politician', 'Маркер персонажа-политика', 'SYSTEM', null),
 ('system_medic', 'Маркер персонажа-медика', 'SYSTEM', null),
+('system_researcher', 'Маркер персонажа-исследователя', 'SYSTEM', null),
+('system_crew_member', 'Маркер члена экипажа', 'SYSTEM', null),
 ('system_med_documents', 'Маркер персонажа, имеющего доступ к медицинским документам', 'SYSTEM', null),
+('system_research_documents', 'Маркер персонажа, имеющего доступ к исследовательским отчётам', 'SYSTEM', null),
+('system_crew_documents', 'Маркер персонажа, имеющего доступ к отчётам команды', 'SYSTEM', null),
 ('system_technician', 'Маркер персонажа-техника', 'SYSTEM', null),
 ('system_pilot', 'Маркер персонажа-пилота', 'SYSTEM', null),
-('system_officer', 'Маркер персонажа-офицера', 'SYSTEM', null),
 ('system_hacker', 'Маркер персонажа-хакера', 'SYSTEM', null),
 ('system_scientist', 'Маркер персонажа-учёного', 'SYSTEM', null),
 ('system_library_category', 'Категория документа', 'SYSTEM', null),
@@ -521,7 +535,7 @@ $BODY$
 
 -- Функции для создания связей
 insert into data.attribute_value_change_functions(attribute_id, function, params) values
-(data.get_attribute_id('type'), 'string_value_to_object', jsonb '{"params": {"person": "persons", "corporation": "corporations", "ship": "ships", "news": "news_hub", "library_category": "library", "med_document": "med_library", "sector": "market", "state": "states", "mail_folder": "mailbox"}}'),
+(data.get_attribute_id('type'), 'string_value_to_object', jsonb '{"params": {"person": "persons", "corporation": "corporations", "ship": "ships", "news": "news_hub", "library_category": "library", "crew_document": "crew_library", "research_document": "research_library", "med_document": "med_library", "sector": "market", "state": "states", "mail_folder": "mailbox"}}'),
 (data.get_attribute_id('person_media'), 'string_value_to_object', jsonb '{"params": {"media1": "media1", "media2": "media2", "media3": "media3"}}'),
 (data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"person": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}, "state": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}, "corporation": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}}}'),
 (data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"person": {"object_code": "persons", "attribute_code": "persons"}, "sector": {"object_code": "market", "attribute_code": "sectors"}, "corporation": {"object_code": "corporations", "attribute_code": "corporations"}}}'),
@@ -532,10 +546,13 @@ insert into data.attribute_value_change_functions(attribute_id, function, params
 (data.get_attribute_id('system_security'), 'boolean_value_to_object', jsonb '{"object_code": "security"}'),
 (data.get_attribute_id('system_politician'), 'boolean_value_to_object', jsonb '{"object_code": "politicians"}'),
 (data.get_attribute_id('system_medic'), 'boolean_value_to_object', jsonb '{"object_code": "medics"}'),
+(data.get_attribute_id('system_researcher'), 'boolean_value_to_object', jsonb '{"object_code": "researchers"}'),
+(data.get_attribute_id('system_crew_member'), 'boolean_value_to_object', jsonb '{"object_code": "crew"}'),
 (data.get_attribute_id('system_med_documents'), 'boolean_value_to_object', jsonb '{"object_code": "med_documents"}'),
+(data.get_attribute_id('system_research_documents'), 'boolean_value_to_object', jsonb '{"object_code": "research_documents"}'),
+(data.get_attribute_id('system_crew_documents'), 'boolean_value_to_object', jsonb '{"object_code": "crew_documents"}'),
 (data.get_attribute_id('system_technician'), 'boolean_value_to_object', jsonb '{"object_code": "technicians"}'),
 (data.get_attribute_id('system_pilot'), 'boolean_value_to_object', jsonb '{"object_code": "pilots"}'),
-(data.get_attribute_id('system_officer'), 'boolean_value_to_object', jsonb '{"object_code": "officers"}'),
 (data.get_attribute_id('system_hacker'), 'boolean_value_to_object', jsonb '{"object_code": "hackers"}'),
 (data.get_attribute_id('system_scientist'), 'boolean_value_to_object', jsonb '{"object_code": "scientists"}'),
 (data.get_attribute_id('system_mail_contact'), 'boolean_value_to_attribute', jsonb '{"object_code": "mail_contacts", "attribute_code": "mail_contacts"}'),
@@ -1218,6 +1235,16 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
         "params": {"placeholder": "Отчётов нет", "sort_attribute_code": "system_document_time", "sort_type": "desc", "output": [{"type": "string", "data": "<a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
       },
       {
+        "conditions": [{"attribute_code": "type", "attribute_value": "research_library"}],
+        "function": "fill_user_content",
+        "params": {"placeholder": "Отчётов нет", "sort_attribute_code": "system_document_time", "sort_type": "desc", "output": [{"type": "string", "data": "<a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+      },
+      {
+        "conditions": [{"attribute_code": "type", "attribute_value": "crew_library"}],
+        "function": "fill_user_content",
+        "params": {"placeholder": "Отчётов нет", "sort_attribute_code": "system_document_time", "sort_type": "desc", "output": [{"type": "string", "data": "<a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+      },
+      {
         "conditions": [{"attribute_code": "type", "attribute_value": "corporations"}, {"attribute_code": "type", "attribute_value": "market"}, {"attribute_code": "type", "attribute_value": "states"}],
         "function": "fill_content",
         "params": {"sort_attribute_code": "name", "sort_type": "asc", "output": [{"type": "string", "data": "<a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
@@ -1642,6 +1669,18 @@ select data.set_attribute_value(data.get_object_id('medics'), data.get_attribute
 select data.set_attribute_value(data.get_object_id('medics'), data.get_attribute_id('name'), null, jsonb '"Медицинский персонал"');
 select data.set_attribute_value(data.get_object_id('medics'), data.get_attribute_id('system_mail_contact'), null, jsonb 'true');
 
+select data.set_attribute_value(data.get_object_id('researchers'), data.get_attribute_id('system_priority'), null, jsonb '50');
+select data.set_attribute_value(data.get_object_id('researchers'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('researchers'), data.get_attribute_id('type'), null, jsonb '"group"');
+select data.set_attribute_value(data.get_object_id('researchers'), data.get_attribute_id('name'), null, jsonb '"Исследователи"');
+select data.set_attribute_value(data.get_object_id('researchers'), data.get_attribute_id('system_mail_contact'), null, jsonb 'true');
+
+select data.set_attribute_value(data.get_object_id('crew'), data.get_attribute_id('system_priority'), null, jsonb '50');
+select data.set_attribute_value(data.get_object_id('crew'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('crew'), data.get_attribute_id('type'), null, jsonb '"group"');
+select data.set_attribute_value(data.get_object_id('crew'), data.get_attribute_id('name'), null, jsonb '"Экипаж станции"');
+select data.set_attribute_value(data.get_object_id('crew'), data.get_attribute_id('system_mail_contact'), null, jsonb 'true');
+
 select data.set_attribute_value(data.get_object_id('technicians'), data.get_attribute_id('system_priority'), null, jsonb '50');
 select data.set_attribute_value(data.get_object_id('technicians'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('technicians'), data.get_attribute_id('type'), null, jsonb '"group"');
@@ -1651,10 +1690,6 @@ select data.set_attribute_value(data.get_object_id('technicians'), data.get_attr
 select data.set_attribute_value(data.get_object_id('pilots'), data.get_attribute_id('system_priority'), null, jsonb '50');
 select data.set_attribute_value(data.get_object_id('pilots'), data.get_attribute_id('type'), null, jsonb '"group"');
 select data.set_attribute_value(data.get_object_id('pilots'), data.get_attribute_id('name'), null, jsonb '"Пилоты"');
-
-select data.set_attribute_value(data.get_object_id('officers'), data.get_attribute_id('system_priority'), null, jsonb '60');
-select data.set_attribute_value(data.get_object_id('officers'), data.get_attribute_id('type'), null, jsonb '"group"');
-select data.set_attribute_value(data.get_object_id('officers'), data.get_attribute_id('name'), null, jsonb '"Офицеры"');
 
 select data.set_attribute_value(data.get_object_id('hackers'), data.get_attribute_id('system_priority'), null, jsonb '80');
 select data.set_attribute_value(data.get_object_id('hackers'), data.get_attribute_id('type'), null, jsonb '"group"');
@@ -1757,8 +1792,28 @@ select
   else
     null
   end,
+  case when o.value % 17 = 0 then
+    data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_researcher'), null, jsonb 'true')
+  else
+    null
+  end,
+  case when o.value % 7 = 0 then
+    data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_crew_member'), null, jsonb 'true')
+  else
+    null
+  end,
   case when o.value % 11 = 0 or o.value % 13 = 0 then
     data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_med_documents'), null, jsonb 'true')
+  else
+    null
+  end,
+  case when o.value % 17 = 0 or o.value % 13 = 0 then
+    data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_research_documents'), null, jsonb 'true')
+  else
+    null
+  end,
+  case when o.value % 7 = 0 or o.value % 13 = 0 then
+    data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_crew_documents'), null, jsonb 'true')
   else
     null
   end,
@@ -1903,7 +1958,6 @@ select actions.calc_capitalizations();
 system_politician
 system_technician
 system_pilot
-system_officer
 system_hacker
 system_scientist
 */
@@ -1980,6 +2034,20 @@ select data.set_attribute_value(data.get_object_id('med_library'), data.get_attr
 select data.set_attribute_value(data.get_object_id('med_library'), data.get_attribute_id('system_meta'), data.get_object_id('med_documents'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('med_library'), data.get_attribute_id('system_meta'), data.get_object_id('masters'), jsonb 'true');
 
+select data.set_attribute_value(data.get_object_id('research_library'), data.get_attribute_id('system_is_visible'), data.get_object_id('research_documents'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('research_library'), data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('research_library'), data.get_attribute_id('type'), null, jsonb '"research_library"');
+select data.set_attribute_value(data.get_object_id('research_library'), data.get_attribute_id('name'), null, jsonb '"Исследовательские отчёты"');
+select data.set_attribute_value(data.get_object_id('research_library'), data.get_attribute_id('system_meta'), data.get_object_id('research_documents'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('research_library'), data.get_attribute_id('system_meta'), data.get_object_id('masters'), jsonb 'true');
+
+select data.set_attribute_value(data.get_object_id('crew_library'), data.get_attribute_id('system_is_visible'), data.get_object_id('crew_documents'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('crew_library'), data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('crew_library'), data.get_attribute_id('type'), null, jsonb '"crew_library"');
+select data.set_attribute_value(data.get_object_id('crew_library'), data.get_attribute_id('name'), null, jsonb '"Журнал экипажа"');
+select data.set_attribute_value(data.get_object_id('crew_library'), data.get_attribute_id('system_meta'), data.get_object_id('crew_documents'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('crew_library'), data.get_attribute_id('system_meta'), data.get_object_id('masters'), jsonb 'true');
+
 select
   data.set_attribute_value(data.get_object_id('med_document' || o.value), data.get_attribute_id('system_is_visible'), data.get_object_id('med_documents'), jsonb 'true'),
   data.set_attribute_value(data.get_object_id('med_document' || o.value), data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true'),
@@ -1991,6 +2059,30 @@ select
   data.set_attribute_value(data.get_object_id('med_document' || o.value), data.get_attribute_id('content'), null, to_jsonb('Содержимое медицинского отчёта ' || o.value)),
   data.set_attribute_value(data.get_object_id('med_document' || o.value), data.get_attribute_id('document_author'), null, to_jsonb('person' || ((o.value % 5 + 1) * 11))),
   data.set_attribute_value(data.get_object_id('med_document' || o.value), data.get_attribute_id('med_document_patient'), null, to_jsonb('person' || (o.value + (o.value - 1) / 10)))
+from generate_series(1, 15) o(value);
+
+select
+  data.set_attribute_value(data.get_object_id('research_document' || o.value), data.get_attribute_id('system_is_visible'), data.get_object_id('research_documents'), jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('research_document' || o.value), data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('research_document' || o.value), data.get_attribute_id('type'), null, jsonb '"research_document"'),
+  data.set_attribute_value(data.get_object_id('research_document' || o.value), data.get_attribute_id('name'), null, to_jsonb('Исследовательский отчёт ' || o.value)),
+  data.set_attribute_value(data.get_object_id('research_document' || o.value), data.get_attribute_id('document_title'), null, to_jsonb('Исследовательский отчёт ' || o.value)),
+  data.set_attribute_value(data.get_object_id('research_document' || o.value), data.get_attribute_id('system_document_time'), null, to_jsonb(case when o.value < 10 then '0' else '' end || o.value)),
+  data.set_attribute_value(data.get_object_id('research_document' || o.value), data.get_attribute_id('document_time'), null, to_jsonb('19.02.2258 17:' || case when o.value < 10 then '0' else '' end || o.value)),
+  data.set_attribute_value(data.get_object_id('research_document' || o.value), data.get_attribute_id('content'), null, to_jsonb('Содержимое исследовательского отчёта ' || o.value)),
+  data.set_attribute_value(data.get_object_id('research_document' || o.value), data.get_attribute_id('document_author'), null, to_jsonb('person' || ((o.value % 3 + 1) * 17)))
+from generate_series(1, 15) o(value);
+
+select
+  data.set_attribute_value(data.get_object_id('crew_document' || o.value), data.get_attribute_id('system_is_visible'), data.get_object_id('crew_documents'), jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('crew_document' || o.value), data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('crew_document' || o.value), data.get_attribute_id('type'), null, jsonb '"crew_document"'),
+  data.set_attribute_value(data.get_object_id('crew_document' || o.value), data.get_attribute_id('name'), null, to_jsonb('Отчёт экипажа ' || o.value)),
+  data.set_attribute_value(data.get_object_id('crew_document' || o.value), data.get_attribute_id('document_title'), null, to_jsonb('Отчёт экипажа ' || o.value)),
+  data.set_attribute_value(data.get_object_id('crew_document' || o.value), data.get_attribute_id('system_document_time'), null, to_jsonb(case when o.value < 10 then '0' else '' end || o.value)),
+  data.set_attribute_value(data.get_object_id('crew_document' || o.value), data.get_attribute_id('document_time'), null, to_jsonb('19.02.2258 17:' || case when o.value < 10 then '0' else '' end || o.value)),
+  data.set_attribute_value(data.get_object_id('crew_document' || o.value), data.get_attribute_id('content'), null, to_jsonb('Содержимое отчёта экипажа ' || o.value)),
+  data.set_attribute_value(data.get_object_id('crew_document' || o.value), data.get_attribute_id('document_author'), null, to_jsonb('person' || ((o.value % 8 + 1) * 7)))
 from generate_series(1, 15) o(value);
 
   -- TODO: Всё прочее
@@ -2034,7 +2126,6 @@ system_politician
 system_medic
 system_technician
 system_pilot
-system_officer
 system_hacker
 system_scientist
 system_library_category
@@ -3020,24 +3111,289 @@ $BODY$
 declare
   v_patient text := json.get_string(in_user_params, 'patient');
   v_title text := json.get_string(in_user_params, 'title');
-  v_content text := json.get_string(in_user_params, 'content');
+  v_content text := replace(json.get_string(in_user_params, 'content'), E'\n', '<br>');
 
   v_document_id integer;
   v_document_code text;
+
+  v_type_attr_id integer := data.get_attribute_id('type');
+  v_notification_receiver_ids integer[];
 begin
   insert into data.objects(id) values(default)
   returning id, code into v_document_id, v_document_code;
 
   perform data.set_attribute_value(v_document_id, data.get_attribute_id('system_is_visible'), data.get_object_id('med_documents'), jsonb 'true');
   perform data.set_attribute_value(v_document_id, data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true');
-  perform data.set_attribute_value(v_document_id, data.get_attribute_id('type'), null, jsonb '"med_document"');
+  perform data.set_attribute_value(v_document_id, v_type_attr_id, null, jsonb '"med_document"');
   perform data.set_attribute_value(v_document_id, data.get_attribute_id('name'), null, to_jsonb(v_title));
   perform data.set_attribute_value(v_document_id, data.get_attribute_id('document_title'), null, to_jsonb(v_title));
   perform data.set_attribute_value(v_document_id, data.get_attribute_id('system_document_time'), null, to_jsonb(utils.system_time()));
   perform data.set_attribute_value(v_document_id, data.get_attribute_id('document_time'), null, to_jsonb(utils.current_time()));
-  perform data.set_attribute_value(v_document_id, data.get_attribute_id('content'), null, to_jsonb(v_title));
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('content'), null, to_jsonb(v_content));
   perform data.set_attribute_value(v_document_id, data.get_attribute_id('document_author'), null, to_jsonb(data.get_object_code(in_user_object_id)));
   perform data.set_attribute_value(v_document_id, data.get_attribute_id('med_document_patient'), null, to_jsonb(v_patient));
+
+  select array_agg(distinct(av.object_id))
+  into v_notification_receiver_ids
+  from data.objects o
+  join data.object_objects oo on
+    oo.parent_object_id = o.id and
+    oo.object_id != in_user_object_id
+  join data.attribute_values av on
+    av.object_id = oo.object_id and
+    av.attribute_id = v_type_attr_id and
+    av.value_object_id is null and
+    av.value = jsonb '"person"'
+  where
+    o.code = 'med_documents';
+
+  perform actions.create_notification(
+    in_user_object_id,
+    v_notification_receiver_ids,
+    'Опубликован новый медицинский отчёт: ' || v_title,
+    v_document_code);
+
+  return api_utils.get_objects(
+    in_client,
+    in_user_object_id,
+    jsonb_build_object(
+      'object_codes', jsonb_build_array(v_document_code),
+      'get_actions', true,
+      'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+-- Действие для создания исследовательского отчёта
+CREATE OR REPLACE FUNCTION action_generators.create_research_document(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
+  v_user_object_id integer;
+  v_researchers_objects_id integer;
+  v_researcher boolean;
+begin
+  if v_object_id is not null then
+    return null;
+  end if;
+
+  v_user_object_id := json.get_integer(in_params, 'user_object_id');
+  v_researchers_objects_id := data.get_object_id('researchers');
+
+  select true
+  into v_researcher
+  where exists(
+    select 1
+    from data.object_objects
+    where
+      parent_object_id = v_researchers_objects_id and
+      object_id = v_user_object_id);
+
+  if v_researcher is null then
+    return null;
+  end if;
+
+  return jsonb_build_object(
+    'create_research_document',
+    jsonb_build_object(
+      'code', 'create_research_document',
+      'name', 'Создать исследовательский отчёт',
+      'type', 'documents.create',
+      'params', jsonb '{}',
+      'user_params',
+        jsonb_build_array(
+          jsonb_build_object(
+            'code', 'title',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1),
+            'description', 'Заголовок',
+            'min_value_count', 1,
+            'max_value_count', 1),
+          jsonb_build_object(
+            'code', 'content',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1, 'multiline', true),
+            'description', 'Содержимое',
+            'min_value_count', 1,
+            'max_value_count', 1))));
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.create_research_document(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_title text := json.get_string(in_user_params, 'title');
+  v_content text := replace(json.get_string(in_user_params, 'content'), E'\n', '<br>');
+
+  v_document_id integer;
+  v_document_code text;
+
+  v_type_attr_id integer := data.get_attribute_id('type');
+  v_notification_receiver_ids integer[];
+begin
+  insert into data.objects(id) values(default)
+  returning id, code into v_document_id, v_document_code;
+
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('system_is_visible'), data.get_object_id('research_documents'), jsonb 'true');
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true');
+  perform data.set_attribute_value(v_document_id, v_type_attr_id, null, jsonb '"research_document"');
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('name'), null, to_jsonb(v_title));
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('document_title'), null, to_jsonb(v_title));
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('system_document_time'), null, to_jsonb(utils.system_time()));
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('document_time'), null, to_jsonb(utils.current_time()));
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('content'), null, to_jsonb(v_content));
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('document_author'), null, to_jsonb(data.get_object_code(in_user_object_id)));
+
+  select array_agg(distinct(av.object_id))
+  into v_notification_receiver_ids
+  from data.objects o
+  join data.object_objects oo on
+    oo.parent_object_id = o.id and
+    oo.object_id != in_user_object_id
+  join data.attribute_values av on
+    av.object_id = oo.object_id and
+    av.attribute_id = v_type_attr_id and
+    av.value_object_id is null and
+    av.value = jsonb '"person"'
+  where
+    o.code = 'research_documents';
+
+  perform actions.create_notification(
+    in_user_object_id,
+    v_notification_receiver_ids,
+    'Опубликован новый исследовательский отчёт: ' || v_title,
+    v_document_code);
+
+  return api_utils.get_objects(
+    in_client,
+    in_user_object_id,
+    jsonb_build_object(
+      'object_codes', jsonb_build_array(v_document_code),
+      'get_actions', true,
+      'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+-- Действие для создания отчёта экипажа
+CREATE OR REPLACE FUNCTION action_generators.create_crew_document(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
+  v_user_object_id integer;
+  v_crew_objects_id integer;
+  v_crew boolean;
+begin
+  if v_object_id is not null then
+    return null;
+  end if;
+
+  v_user_object_id := json.get_integer(in_params, 'user_object_id');
+  v_crew_objects_id := data.get_object_id('crew');
+
+  select true
+  into v_crew
+  where exists(
+    select 1
+    from data.object_objects
+    where
+      parent_object_id = v_crew_objects_id and
+      object_id = v_user_object_id);
+
+  if v_crew is null then
+    return null;
+  end if;
+
+  return jsonb_build_object(
+    'create_crew_document',
+    jsonb_build_object(
+      'code', 'create_crew_document',
+      'name', 'Написать в журнал экипажа',
+      'type', 'documents.create',
+      'params', jsonb '{}',
+      'user_params',
+        jsonb_build_array(
+          jsonb_build_object(
+            'code', 'title',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1),
+            'description', 'Заголовок',
+            'min_value_count', 1,
+            'max_value_count', 1),
+          jsonb_build_object(
+            'code', 'content',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1, 'multiline', true),
+            'description', 'Содержимое',
+            'min_value_count', 1,
+            'max_value_count', 1))));
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.create_crew_document(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_title text := json.get_string(in_user_params, 'title');
+  v_content text := replace(json.get_string(in_user_params, 'content'), E'\n', '<br>');
+
+  v_document_id integer;
+  v_document_code text;
+
+  v_type_attr_id integer := data.get_attribute_id('type');
+  v_notification_receiver_ids integer[];
+begin
+  insert into data.objects(id) values(default)
+  returning id, code into v_document_id, v_document_code;
+
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('system_is_visible'), data.get_object_id('crew_documents'), jsonb 'true');
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true');
+  perform data.set_attribute_value(v_document_id, v_type_attr_id, null, jsonb '"crew_document"');
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('name'), null, to_jsonb(v_title));
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('document_title'), null, to_jsonb(v_title));
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('system_document_time'), null, to_jsonb(utils.system_time()));
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('document_time'), null, to_jsonb(utils.current_time()));
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('content'), null, to_jsonb(v_content));
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('document_author'), null, to_jsonb(data.get_object_code(in_user_object_id)));
+
+  select array_agg(distinct(av.object_id))
+  into v_notification_receiver_ids
+  from data.objects o
+  join data.object_objects oo on
+    oo.parent_object_id = o.id and
+    oo.object_id != in_user_object_id
+  join data.attribute_values av on
+    av.object_id = oo.object_id and
+    av.attribute_id = v_type_attr_id and
+    av.value_object_id is null and
+    av.value = jsonb '"person"'
+  where
+    o.code = 'crew_documents';
+
+  perform actions.create_notification(
+    in_user_object_id,
+    v_notification_receiver_ids,
+    'Опубликован новый отчёт экипажа: ' || v_title,
+    v_document_code);
 
   return api_utils.get_objects(
     in_client,
@@ -3612,7 +3968,7 @@ declare
   v_news_id integer;
   v_news_code text;
 
-  notification_receiver_ids integer[];
+  v_notification_receiver_ids integer[];
 begin
   insert into data.objects(id) values(default)
   returning id, code into v_news_id, v_news_code;
@@ -3627,7 +3983,7 @@ begin
   perform data.set_attribute_value(v_news_id, data.get_attribute_id('content'), null, to_jsonb(v_body));
 
   select array_agg(distinct(av.object_id))
-  into notification_receiver_ids
+  into v_notification_receiver_ids
   from data.objects o
   join data.object_objects oo on
     oo.parent_object_id = o.id and
@@ -3642,7 +3998,7 @@ begin
 
   perform actions.create_notification(
     in_user_object_id,
-    array[notification_receiver_ids],
+    v_notification_receiver_ids,
     v_media_name || 'сообщает: ' || v_title,
     v_news_code);
 
@@ -6016,6 +6372,8 @@ insert into data.action_generators(function, params, description) values
 ('login', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция входа в систему'),
 ('logout', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция выхода из системы'),
 ('create_med_document', null, 'Функция создания медецинского отчёта'),
+('create_research_document', null, 'Функция создания исследовательского отчёта'),
+('create_crew_document', null, 'Функция создания отчёта экипажа'),
 (
   'generate_if_string_attribute',
   '{
