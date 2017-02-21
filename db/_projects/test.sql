@@ -388,6 +388,7 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('system_mail_contact', 'Маркер объекта, которому можно отправлять письма', 'SYSTEM', null),
 ('person_race', 'Раса', 'NORMAL', 'person_race'),
 ('person_state', 'Государство', 'NORMAL', 'person_state'),
+('person_media', 'Журналист СМИ', 'NORMAL', 'code'),
 ('person_job_position', 'Должность', 'NORMAL', null),
 ('person_biography', 'Биография', 'NORMAL', null),
 ('system_psi_scale', 'Рейтинг телепата', 'SYSTEM', null),
@@ -509,6 +510,7 @@ $BODY$
 -- Функции для создания связей
 insert into data.attribute_value_change_functions(attribute_id, function, params) values
 (data.get_attribute_id('type'), 'string_value_to_object', jsonb '{"params": {"person": "persons", "corporation": "corporations", "ship": "ships", "news": "news_hub", "library_category": "library", "med_document": "med_library", "sector": "market", "state": "states", "mail_folder": "mailbox"}}'),
+(data.get_attribute_id('person_media'), 'string_value_to_object', jsonb '{"params": {"media1": "media1", "media2": "media2", "media3": "media3"}}'),
 (data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"person": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}, "state": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}, "corporation": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}}}'),
 (data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"person": {"object_code": "persons", "attribute_code": "persons"}, "sector": {"object_code": "market", "attribute_code": "sectors"}, "corporation": {"object_code": "corporations", "attribute_code": "corporations"}}}'),
 (data.get_attribute_id('system_offline'), 'boolean_value_to_object', jsonb '{"object_code": "offline"}'),
@@ -1699,6 +1701,11 @@ select
   data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('person_race'), null, to_jsonb('race' || (o.value % 20 + 1))),
   data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('person_state'), null, to_jsonb('state' || (o.value % 10 + 1))),
   data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('person_job_position'), null, jsonb '"Some job position"'),
+  case when o.value % 10 = 0 then
+    data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('person_media'), null, to_jsonb('media' || ((o.value / 10 - 1) % 3 + 1)))
+  else
+    null
+  end,
   data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('person_biography'), null, jsonb '"Born before 2250, currently live & work on Babylon 5"'),
   data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_balance'), null, to_jsonb(utils.random_integer(100,10000000))),
   case when o.value % 10 = 0 then
@@ -2279,12 +2286,13 @@ $BODY$
 CREATE OR REPLACE FUNCTION actions.create_transaction(
     in_user_object_id integer,
     in_sender_id integer,
-    in_object_id integer,
+    in_receiver_id integer,
     in_description text,
     in_sum integer,
     in_sender_rest integer,
     in_receiver_rest integer,
-    add_sender_to_transation boolean)
+    add_sender_to_transation boolean,
+    add_receiver_to_transaction boolean)
   RETURNS void AS
 $BODY$
 declare
@@ -2296,51 +2304,67 @@ declare
   v_name_attr_id integer := data.get_attribute_id('name');
 begin
   assert in_user_object_id is not null;
-  assert in_object_id is not null;
+  assert in_receiver_id is not null;
   assert in_description is not null;
   assert in_sum > 0;
   assert not add_sender_to_transation or in_sender_rest >= 0;
-  assert in_receiver_rest >= 0;
+  assert not add_receiver_to_transaction or in_receiver_rest >= 0;
   assert add_sender_to_transation is not null;
+  assert add_receiver_to_transaction is not null;
+  assert add_sender_to_transation or add_receiver_to_transaction;
 
   insert into data.objects(id) values(default)
   returning id, code into v_transaction_id, v_transaction_code;
 
   perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('system_is_visible'), in_sender_id, jsonb 'true', in_user_object_id);
-  perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('system_is_visible'), in_object_id, jsonb 'true', in_user_object_id);
+  perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('system_is_visible'), in_receiver_id, jsonb 'true', in_user_object_id);
+  perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true', in_user_object_id);
   perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('type'), null, jsonb '"transaction"', in_user_object_id);
   if in_sender_rest is null then
     perform data.set_attribute_value(
       v_transaction_id,
       v_name_attr_id,
       in_sender_id,
-      to_jsonb(utils.current_time() || ' добавление ' || in_sum || json.get_string(data.get_attribute_value(in_user_object_id, in_object_id, v_name_attr_id)) || ': ' || in_description),
+      to_jsonb(utils.current_time() || ' добавление ' || in_sum || json.get_string(data.get_attribute_value(in_user_object_id, in_receiver_id, v_name_attr_id)) || ': ' || in_description),
       in_user_object_id);
   else
     perform data.set_attribute_value(
       v_transaction_id,
       v_name_attr_id,
       in_sender_id,
-      to_jsonb(utils.current_time() || ' -' || in_sum || '(=' || in_sender_rest || ') ' || json.get_string(data.get_attribute_value(in_user_object_id, in_object_id, v_name_attr_id)) || ': ' || in_description),
+      to_jsonb(utils.current_time() || ' -' || in_sum || '(=' || in_sender_rest || ') ' || json.get_string(data.get_attribute_value(in_user_object_id, in_receiver_id, v_name_attr_id)) || ': ' || in_description),
       in_user_object_id);
   end if;
-  perform data.set_attribute_value(
-    v_transaction_id,
-    v_name_attr_id,
-    in_object_id,
-    to_jsonb(utils.current_time() || ' +' || in_sum || '(=' || in_receiver_rest || ') ' || case when add_sender_to_transation then json.get_opt_string(data.get_attribute_value(in_object_id, in_sender_id, v_name_attr_id), 'Неизвестный отправитель') || ': ' else '' end || in_description),
-    in_user_object_id);
+  if in_receiver_rest is null then
+    perform data.set_attribute_value(
+      v_transaction_id,
+      v_name_attr_id,
+      in_receiver_id,
+      to_jsonb(utils.current_time() || ' списание ' || in_sum || json.get_string(data.get_attribute_value(in_user_object_id, in_sender_id, v_name_attr_id)) || ': ' || in_description),
+      in_user_object_id);
+  else
+    perform data.set_attribute_value(
+      v_transaction_id,
+      v_name_attr_id,
+      in_receiver_id,
+      to_jsonb(utils.current_time() || ' +' || in_sum || '(=' || in_receiver_rest || ') ' || case when add_sender_to_transation then json.get_opt_string(data.get_attribute_value(in_receiver_id, in_sender_id, v_name_attr_id), 'Неизвестный отправитель') || ': ' else '' end || in_description),
+      in_user_object_id);
+  end if;
   if add_sender_to_transation then
     perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('transaction_from'), null, to_jsonb(data.get_object_code(in_sender_id)), in_user_object_id);
   end if;
-  perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('transaction_to'), null, to_jsonb(data.get_object_code(in_object_id)), in_user_object_id);
+  if add_receiver_to_transaction then
+    perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('transaction_to'), null, to_jsonb(data.get_object_code(in_receiver_id)), in_user_object_id);
+  end if;
   perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('transaction_time'), null, to_jsonb(utils.current_time()), in_user_object_id);
   perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('transaction_description'), null, to_jsonb(in_description), in_user_object_id);
   perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('transaction_sum'), null, to_jsonb(in_sum), in_user_object_id);
-  if add_sender_to_transation then
+  if in_sender_rest is not null then
     perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('balance_rest'), in_sender_id, to_jsonb(in_sender_rest), in_user_object_id);
   end if;
-  perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('balance_rest'), in_object_id, to_jsonb(in_receiver_rest), in_user_object_id);
+  if in_receiver_rest is not null then
+    perform data.set_attribute_value(v_transaction_id, data.get_attribute_id('balance_rest'), in_receiver_id, to_jsonb(in_receiver_rest), in_user_object_id);
+  end if;
 
   v_transactions_value := data.get_attribute_value_for_update(v_transactions_object_id, v_transactions_system_value_attribute_id, in_sender_id);
   perform json.get_opt_string_array(v_transactions_value);
@@ -2348,11 +2372,11 @@ begin
   v_transactions_value := coalesce(v_transactions_value, jsonb '[]') || jsonb_build_array(v_transaction_code);
   perform data.set_attribute_value(v_transactions_object_id, v_transactions_system_value_attribute_id, in_sender_id, v_transactions_value, in_user_object_id);
 
-  v_transactions_value := data.get_attribute_value_for_update(v_transactions_object_id, v_transactions_system_value_attribute_id, in_object_id);
+  v_transactions_value := data.get_attribute_value_for_update(v_transactions_object_id, v_transactions_system_value_attribute_id, in_receiver_id);
   perform json.get_opt_string_array(v_transactions_value);
 
   v_transactions_value := coalesce(v_transactions_value, jsonb '[]') || jsonb_build_array(v_transaction_code);
-  perform data.set_attribute_value(v_transactions_object_id, v_transactions_system_value_attribute_id, in_object_id, v_transactions_value, in_user_object_id);
+  perform data.set_attribute_value(v_transactions_object_id, v_transactions_system_value_attribute_id, in_receiver_id, v_transactions_value, in_user_object_id);
 end;
 $BODY$
   LANGUAGE plpgsql volatile
@@ -2424,6 +2448,7 @@ begin
     v_sum,
     v_user_balance - v_sum,
     v_receiver_balance + v_sum,
+    true,
     true);
 
   perform actions.create_notification(
@@ -2651,6 +2676,7 @@ begin
     v_sum,
     v_state_balance - v_sum,
     v_receiver_balance + v_sum,
+    true,
     true);
 
   perform actions.create_notification(
@@ -2787,7 +2813,8 @@ begin
     v_sum,
     null,
     v_receiver_balance + v_sum,
-    false);
+    false,
+    true);
 
   perform actions.create_notification(
     in_user_object_id,
@@ -3481,6 +3508,115 @@ begin
   end loop;
 
   return api_utils.create_ok_result(null, 'Сообщение отправлено!');
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+-- Написать новость
+CREATE OR REPLACE FUNCTION action_generators.write_news(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
+  v_user_object_id integer;
+begin
+  if v_object_id is not null then
+    return null;
+  end if;
+
+  v_user_object_id := json.get_integer(in_params, 'user_object_id');
+
+  return jsonb_build_object(
+    'write_news',
+    jsonb_build_object(
+      'code', 'write_news',
+      'name', 'Написать новость',
+      'type', 'news.write',
+      'params', jsonb '{}',
+      'user_params',
+        jsonb_build_array(
+          jsonb_build_object(
+            'code', 'title',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1),
+            'description', 'Заголовок',
+            'min_value_count', 1,
+            'max_value_count', 1),
+          jsonb_build_object(
+            'code', 'body',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1, 'multiline', true),
+            'description', 'Текст',
+            'min_value_count', 1,
+            'max_value_count', 1))));
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.write_news(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_title text := json.get_string(in_user_params, 'title');
+  v_body text := replace(json.get_string(in_user_params, 'body'), E'\n', '<br>');
+  v_media jsonb := data.get_raw_attribute_value(in_user_object_id, data.get_attribute_id('person_media'), null);
+
+  v_name_attr_id integer := data.get_attribute_id('name');
+  v_type_attr_id integer := data.get_attribute_id('type');
+
+  v_media_name text := json.get_string(data.get_raw_attribute_value(data.get_object_id(json.get_string(v_media)), v_name_attr_id, null));
+
+  v_news_id integer;
+  v_news_code text;
+
+  notification_receiver_ids integer[];
+begin
+  insert into data.objects(id) values(default)
+  returning id, code into v_news_id, v_news_code;
+
+  perform data.set_attribute_value(v_news_id, data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+  perform data.set_attribute_value(v_news_id, data.get_attribute_id('type'), null, jsonb '"news"');
+  perform data.set_attribute_value(v_news_id, data.get_attribute_id('news_title'), null, to_jsonb(v_title));
+  perform data.set_attribute_value(v_news_id, v_name_attr_id, null, to_jsonb(v_media_name || ': ' || v_title));
+  perform data.set_attribute_value(v_news_id, data.get_attribute_id('news_media'), null, v_media);
+  perform data.set_attribute_value(v_news_id, data.get_attribute_id('system_news_time'), null, to_jsonb(utils.system_time()));
+  perform data.set_attribute_value(v_news_id, data.get_attribute_id('news_time'), null, to_jsonb(utils.current_time()));
+  perform data.set_attribute_value(v_news_id, data.get_attribute_id('content'), null, to_jsonb(v_body));
+
+  select array_agg(distinct(av.object_id))
+  into notification_receiver_ids
+  from data.objects o
+  join data.object_objects oo on
+    oo.parent_object_id = o.id
+  join data.attribute_values av on
+    av.object_id = oo.object_id and
+    av.attribute_id = v_type_attr_id and
+    av.value_object_id is null and
+    av.value = jsonb '"person"'
+  where
+    o.code = 'persons';
+
+  perform actions.create_notification(
+    in_user_object_id,
+    array[notification_receiver_ids],
+    v_media_name || 'сообщает: ' || v_title,
+    v_news_code);
+
+  return
+    api_utils.get_objects(
+      in_client,
+			in_user_object_id,
+			jsonb_build_object(
+        'object_codes', jsonb_build_array(v_news_code),
+        'get_actions', true,
+        'get_templates', true));
 end;
 $BODY$
   LANGUAGE plpgsql volatile
@@ -5404,14 +5540,14 @@ insert into data.action_generators(function, params, description) values
 ('logout', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция выхода из системы'),
 ('create_med_document', null, 'Функция создания медецинского отчёта'),
 (
+  'generate_if_value_attribute',
+  '{"attribute_code": "notification_status", "attribute_value": "unread", "function": "read_notification"}',
+  'Функция отмечания уведомления как прочитанного'
+),
+(
   'generate_if_string_attribute',
   '{
     "attributes": {
-      "notification_status": {
-        "unread": [
-          {"function": "read_notification"}
-        ]
-      },
       "type": {
         "mail": [
           {"function": "reply"},
@@ -5470,6 +5606,7 @@ insert into data.action_generators(function, params, description) values
 ('generate_if_user_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'person', 'function', 'send_mail'), 'Функция отправки письма'),
 ('generate_if_user_attribute', jsonb_build_object('attribute_code', 'system_master', 'attribute_value', true, 'function', 'generate_money'), 'Функция для добавления средств'),
 ('generate_if_user_attribute', jsonb_build_object('attribute_code', 'system_master', 'attribute_value', true, 'function', 'send_mail_from_future'), 'Функция отправки письма из будущего'),
+('generate_if_any_user_attribute', jsonb_build_object('attribute_code', 'person_media', 'function', 'write_news'), 'Функция создания новости'),
 (
   'generate_if_user_attribute',
   jsonb_build_object(
@@ -5489,7 +5626,6 @@ insert into data.action_generators(function, params, description) values
     'show_transaction_list'),
   'Функция просмотра транзакций'
 );
-
 
 -- TODO: нагенерировать транзакций и писем
 
