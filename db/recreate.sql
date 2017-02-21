@@ -475,7 +475,7 @@ exception when invalid_parameter_value then
 
     return api_utils.create_bad_request_result(v_exception_message);
   end;
-when others then
+when others or assert_failure then
   declare
     v_exception_message text;
     v_exception_call_stack text;
@@ -496,6 +496,8 @@ end;
 $BODY$
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
   COST 100;
+GRANT EXECUTE ON FUNCTION api.api(jsonb) TO public;
+GRANT EXECUTE ON FUNCTION api.api(jsonb) TO postgres;
 GRANT EXECUTE ON FUNCTION api.api(jsonb) TO http;
 -- Function: api_utils.build_attributes(text[], text[], jsonb[], text[], data.attribute_type[])
 
