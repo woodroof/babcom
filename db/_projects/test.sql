@@ -6066,7 +6066,7 @@ insert into data.action_generators(function, params, description) values
         ],
         "sector": [
           {"function": "change_sector_volume"}
-        ]
+        ],
         "market": [
           {"function": "calc_money"}
         ]
