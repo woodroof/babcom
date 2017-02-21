@@ -2090,9 +2090,6 @@ $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
 
-insert into data.action_generators(function, params, description)
-values('login', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция входа в систему');
-
 -- "Выход"
 CREATE OR REPLACE FUNCTION action_generators.logout(
     in_params in jsonb)
@@ -2143,9 +2140,6 @@ $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
 
-insert into data.action_generators(function, params, description)
-values('logout', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция выхода из системы');
-
 -- Действие для изменения статуса уведомления на "прочитано"
 CREATE OR REPLACE FUNCTION action_generators.read_notification(
     in_params in jsonb)
@@ -2187,9 +2181,6 @@ end;
 $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
-
-insert into data.action_generators(function, params, description)
-values('generate_if_attribute', jsonb_build_object('attribute_code', 'notification_status', 'attribute_value', 'unread', 'function', 'read_notification'), 'Функция для пометки уведомления как прочтённого');
 
 -- Функция для создания уведомления
 CREATE OR REPLACE FUNCTION actions.create_notification(
@@ -2526,9 +2517,6 @@ $BODY$
   LANGUAGE plpgsql STABLE
   COST 100;
 
-insert into data.action_generators(function, params, description)
-values('generate_if_user_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'person', 'function', 'transfer'), 'Функция для перевода средств');
-
 -- Действие для перевода денег государства
 CREATE OR REPLACE FUNCTION actions.state_money_transfer(
     in_client text,
@@ -2719,19 +2707,6 @@ $BODY$
   LANGUAGE plpgsql STABLE
   COST 100;
 
-insert into data.action_generators(function, params, description)
-values(
-  'generate_if_attribute',
-  jsonb '{
-    "attribute_code": "type",
-    "attribute_value": "state",
-    "function": "generate_if_in_object",
-    "params": {
-      "function": "state_money_transfer"
-    }
-  }',
-  'Функция для перевода средств');
-
 -- Действие для добавления денег
 CREATE OR REPLACE FUNCTION actions.generate_money(
     in_client text,
@@ -2863,9 +2838,6 @@ $BODY$
   LANGUAGE plpgsql STABLE
   COST 100;
 
-insert into data.action_generators(function, params, description)
-values('generate_if_user_attribute', jsonb_build_object('attribute_code', 'system_master', 'attribute_value', true, 'function', 'generate_money'), 'Функция для добавления средств');
-
 -- Действие для создания медицинского отчёта
 CREATE OR REPLACE FUNCTION action_generators.create_med_document(
     in_params in jsonb)
@@ -2972,9 +2944,6 @@ end;
 $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
-
-insert into data.action_generators(function, params, description)
-values('create_med_document', null, 'Функция создания медецинского отчёта');
 
 -- Действие для отправки письма
 CREATE OR REPLACE FUNCTION action_generators.send_mail(
@@ -3131,9 +3100,6 @@ $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
 
-insert into data.action_generators(function, params, description)
-values('generate_if_user_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'person', 'function', 'send_mail'), 'Функция отправки письма');
-
 CREATE OR REPLACE FUNCTION action_generators.reply(
     in_params in jsonb)
   RETURNS jsonb AS
@@ -3217,9 +3183,6 @@ end;
 $BODY$
   LANGUAGE plpgsql STABLE
   COST 100;
-
-insert into data.action_generators(function, params, description)
-values('generate_if_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'mail', 'function', 'reply'), 'Функция ответа на письмо');
 
 CREATE OR REPLACE FUNCTION action_generators.reply_all(
     in_params in jsonb)
@@ -3319,9 +3282,6 @@ end;
 $BODY$
   LANGUAGE plpgsql STABLE
   COST 100;
-
-insert into data.action_generators(function, params, description)
-values('generate_if_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'mail', 'function', 'reply_all'), 'Функция ответа на письмо всем отправителям');
 
 -- Отправка писем из будущего
 CREATE OR REPLACE FUNCTION action_generators.send_mail_from_future(
@@ -3483,9 +3443,6 @@ $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
 
-insert into data.action_generators(function, params, description)
-values('generate_if_user_attribute', jsonb_build_object('attribute_code', 'system_master', 'attribute_value', true, 'function', 'send_mail_from_future'), 'Функция отправки письма из будущего');
-
 -- Просмотр списков транзакций
 CREATE OR REPLACE FUNCTION action_generators.show_transaction_list(
     in_params in jsonb)
@@ -3565,26 +3522,6 @@ end;
 $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
-
-insert into data.action_generators(function, params, description)
-values(
-  'generate_if_user_attribute',
-  jsonb_build_object(
-    'attribute_code',
-    'system_master',
-    'attribute_value',
-    true,
-    'function',
-    'show_transaction_list'),
-  'Функция просмотра транзакций');
-
-insert into data.action_generators(function, params, description)
-values(
-  'generate_if_in_object',
-  jsonb_build_object(
-    'function',
-    'show_transaction_list'),
-  'Функция просмотра транзакций');
 
 -- Отправка уведомлений
 CREATE OR REPLACE FUNCTION action_generators.send_notification(
@@ -3694,9 +3631,6 @@ $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
 
-insert into data.action_generators(function, params, description)
-values('generate_if_user_attribute', jsonb_build_object('attribute_code', 'system_master', 'attribute_value', true, 'function', 'send_notification'), 'Функция отправки уведомления');
-
 -- Удаление писем
 CREATE OR REPLACE FUNCTION action_generators.delete_outbox_mail(
     in_params in jsonb)
@@ -3803,12 +3737,6 @@ $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
 
-insert into data.action_generators(function, params, description)
-values(
-  'generate_if_attribute',
-  jsonb_build_object('attribute_code', 'mail_type', 'attribute_value', 'outbox', 'function', 'delete_outbox_mail'),
-  'Функция удаления исходящего письма');
-
 CREATE OR REPLACE FUNCTION action_generators.delete_inbox_mail(
     in_params in jsonb)
   RETURNS jsonb AS
@@ -3898,12 +3826,6 @@ $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
 
-insert into data.action_generators(function, params, description)
-values(
-  'generate_if_attribute',
-  jsonb_build_object('attribute_code', 'mail_type', 'attribute_value', 'inbox', 'function', 'delete_inbox_mail'),
-  'Функция удаления входящего письма');
-
 -- Действие для изменения процента налога для страны
 CREATE OR REPLACE FUNCTION action_generators.change_state_tax(
     in_params in jsonb)
@@ -3962,9 +3884,6 @@ end;
 $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
-
-insert into data.action_generators(function, params, description)
-values('generate_if_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'state', 'function', 'change_state_tax'), 'Функция для изменения процента налога для страны');
 
 -- Действие для голосования за выплату дивидендов
 CREATE OR REPLACE FUNCTION action_generators.set_dividend_vote(
@@ -4027,9 +3946,6 @@ end;
 $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
-
-insert into data.action_generators(function, params, description)
-values('generate_if_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'corporation', 'function', 'set_dividend_vote'), 'Функция для голосование за выплату дивидендов');
 
 -- Действие для создания сделки
 CREATE OR REPLACE FUNCTION action_generators.create_deal(
@@ -4183,9 +4099,6 @@ end;
 $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
-
-insert into data.action_generators(function, params, description)
-values('generate_if_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'corporation', 'function', 'create_deal'), 'Функция для добавления сделки');
 
 -- Действие для добавления участника сделки
 CREATE OR REPLACE FUNCTION action_generators.add_deal_member(
@@ -4364,9 +4277,6 @@ $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
 
-insert into data.action_generators(function, params, description)
-values('generate_if_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'deal', 'function', 'add_deal_member'), 'Функция для добавления участника сделки');
-
 -- Действие для изменения участника сделки 
 CREATE OR REPLACE FUNCTION action_generators.edit_deal_member(
     in_params in jsonb)
@@ -4519,20 +4429,6 @@ $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
 
-insert into data.action_generators(function, params, description)
-select
-  'generate_if_attribute', 
-  jsonb_build_object('attribute_code', 
-		     'type', 
-		     'attribute_value', 
-		     'deal', 
-		     'function', 
-		     'edit_deal_member', 
-		     'params',
-		     jsonb_build_object('row_num', o.value)), 
-  'Функция для изменения участника сделки'
- from generate_series(1, 10) o(value);
-
  -- Действие для удаления участника сделки 
 CREATE OR REPLACE FUNCTION action_generators.delete_deal_member(
     in_params in jsonb)
@@ -4654,20 +4550,6 @@ end;
 $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
-
-insert into data.action_generators(function, params, description)
-select
-  'generate_if_attribute', 
-  jsonb_build_object('attribute_code', 
-		     'type', 
-		     'attribute_value', 
-		     'deal', 
-		     'function', 
-		     'delete_deal_member', 
-		     'params',
-		     jsonb_build_object('row_num', o.value)), 
-  'Функция для удаления участника сделки'
- from generate_series(1, 10) o(value);
 
  -- Действие для редактирования сделки
 CREATE OR REPLACE FUNCTION action_generators.edit_deal(
@@ -4807,9 +4689,6 @@ $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
 
-insert into data.action_generators(function, params, description)
-values('generate_if_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'deal', 'function', 'edit_deal'), 'Функция для изменения сделки');
-
 -- Действие для удаления сделки
 CREATE OR REPLACE FUNCTION action_generators.delete_deal(
     in_params in jsonb)
@@ -4906,9 +4785,6 @@ end;
 $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
-
-insert into data.action_generators(function, params, description)
-values('generate_if_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'deal', 'function', 'delete_deal'), 'Функция для удаления сделки');
 
 -- Действие для проверка сделки перед утверждением
 CREATE OR REPLACE FUNCTION action_generators.check_deal(
@@ -5038,8 +4914,94 @@ $BODY$
   LANGUAGE plpgsql STABLE
   COST 100;
 
-insert into data.action_generators(function, params, description)
-values('generate_if_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'deal', 'function', 'check_deal'), 'Функция для проверки сделки');
+insert into data.action_generators(function, params, description) values
+('login', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция входа в систему'),
+('logout', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция выхода из системы'),
+('create_med_document', null, 'Функция создания медецинского отчёта'),
+(
+  'generate_if_string_attribute',
+  '{
+    "attributes": {
+      "notification_status": {
+        "unread": [
+          {"function": "read_notification"}
+        ]
+      },
+      "type": {
+        "mail": [
+          {"function": "reply"},
+          {"function": "reply_all"}
+        ],
+        "state": [
+          {"function": "change_state_tax"},
+          {"function": "generate_if_in_object", "params": {"function": "state_money_transfer"}}
+        ],
+        "corporation": [
+          {"function": "set_dividend_vote"},
+          {"function": "create_deal"}
+        ],
+        "deal": [
+          {"function": "add_deal_member"},
+          {"function": "edit_deal"},
+          {"function": "delete_deal"},
+          {"function": "check_deal"},
+          {"function": "edit_deal_member", "params": {"row_num": 1}},
+          {"function": "edit_deal_member", "params": {"row_num": 2}},
+          {"function": "edit_deal_member", "params": {"row_num": 3}},
+          {"function": "edit_deal_member", "params": {"row_num": 4}},
+          {"function": "edit_deal_member", "params": {"row_num": 5}},
+          {"function": "edit_deal_member", "params": {"row_num": 6}},
+          {"function": "edit_deal_member", "params": {"row_num": 7}},
+          {"function": "edit_deal_member", "params": {"row_num": 8}},
+          {"function": "edit_deal_member", "params": {"row_num": 9}},
+          {"function": "edit_deal_member", "params": {"row_num": 10}},
+          {"function": "delete_deal_member", "params": {"row_num": 1}},
+          {"function": "delete_deal_member", "params": {"row_num": 2}},
+          {"function": "delete_deal_member", "params": {"row_num": 3}},
+          {"function": "delete_deal_member", "params": {"row_num": 4}},
+          {"function": "delete_deal_member", "params": {"row_num": 5}},
+          {"function": "delete_deal_member", "params": {"row_num": 6}},
+          {"function": "delete_deal_member", "params": {"row_num": 7}},
+          {"function": "delete_deal_member", "params": {"row_num": 8}},
+          {"function": "delete_deal_member", "params": {"row_num": 9}},
+          {"function": "delete_deal_member", "params": {"row_num": 10}}
+        ]
+      },
+      "mail_type": {
+        "inbox": [
+          {"function": "delete_inbox_mail"}
+        ],
+        "outbox": [
+          {"function": "delete_outbox_mail"}
+        ]
+      }
+    }
+  }',
+  null
+),
+('generate_if_user_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'person', 'function', 'transfer'), 'Функция для перевода средств'),
+('generate_if_user_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'person', 'function', 'send_mail'), 'Функция отправки письма'),
+('generate_if_user_attribute', jsonb_build_object('attribute_code', 'system_master', 'attribute_value', true, 'function', 'generate_money'), 'Функция для добавления средств'),
+('generate_if_user_attribute', jsonb_build_object('attribute_code', 'system_master', 'attribute_value', true, 'function', 'send_mail_from_future'), 'Функция отправки письма из будущего'),
+(
+  'generate_if_user_attribute',
+  jsonb_build_object(
+    'attribute_code',
+    'system_master',
+    'attribute_value',
+    true,
+    'function',
+    'show_transaction_list'),
+  'Функция просмотра транзакций'
+),
+('generate_if_user_attribute', jsonb_build_object('attribute_code', 'system_master', 'attribute_value', true, 'function', 'send_notification'), 'Функция отправки уведомления'),
+(
+  'generate_if_in_object',
+  jsonb_build_object(
+    'function',
+    'show_transaction_list'),
+  'Функция просмотра транзакций'
+);
 
 -- TODO: нагенерировать транзакций и писем
 
