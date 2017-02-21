@@ -77,7 +77,7 @@ insert into data.params(code, value, description) values
     },
     {
       "attributes": ["news_time", "news_media", "news_title"],
-      "actions": ["delete_news"]
+      "actions": ["edit_news", "delete_news"]
     },
     {
       "attributes": ["state_tax"],
@@ -1936,7 +1936,7 @@ select
   data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
   data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('type'), null, jsonb '"news"'),
   data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('news_title'), null, to_jsonb('Заголовок новости news' || o1.value || o2.value || '!')),
-  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('name'), null, to_jsonb('media'||o1.value||': Заголовок новости news' || o1.value || o2.value || '!')),
+  data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('name'), null, to_jsonb('Media '||o1.value||': Заголовок новости news' || o1.value || o2.value || '!')),
   data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('news_media'), null, to_jsonb('media' || o1.value)),
   data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('system_news_time'), null, to_jsonb('2258.02.23 ' || 10 + trunc(o2.value / 10) || ':' || 10 + o1.value * 5)),
   data.set_attribute_value(data.get_object_id('news' || o1.value || o2.value ), data.get_attribute_id('news_time'), null, to_jsonb('23.02.2258 ' || 10 + trunc(o2.value / 10) || ':' || 10 + o1.value * 5)),
@@ -4139,6 +4139,98 @@ begin
         'object_codes', jsonb_build_array(v_news_code),
         'get_actions', true,
         'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+-- Действие для редактирования новостей
+CREATE OR REPLACE FUNCTION action_generators.edit_news(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_author_media text := json.get_opt_string(data.get_raw_attribute_value(v_user_object_id, data.get_attribute_id('person_media'), null));
+  v_media_code text := json.get_string(data.get_raw_attribute_value(v_object_id, data.get_attribute_id('news_media'), null));
+  v_masters_object_id integer;
+  v_master boolean;
+begin
+  if v_author_media is null or v_author_media != v_media_code then
+    v_masters_object_id := data.get_object_id('masters');
+
+    select true
+    into v_master
+    where exists(
+      select 1
+      from data.object_objects
+      where
+        parent_object_id = v_masters_object_id and
+        object_id = v_user_object_id);
+
+    if v_master is null then
+      return null;
+    end if;
+  end if;
+
+  return jsonb_build_object(
+    'edit_news',
+    jsonb_build_object(
+      'code', 'edit_news',
+      'name', 'Редактировать',
+      'type', 'documents.edit',
+      'params', jsonb_build_object('object_code', data.get_object_code(v_object_id)),
+      'user_params',
+        jsonb_build_array(
+          jsonb_build_object(
+            'code', 'title',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1),
+            'description', 'Заголовок',
+            'default_value', data.get_raw_attribute_value(v_object_id, data.get_attribute_id('news_title'), null),
+            'min_value_count', 1,
+            'max_value_count', 1),
+          jsonb_build_object(
+            'code', 'content',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1, 'multiline', true),
+            'description', 'Текст',
+            'default_value', to_jsonb(replace(json.get_string(data.get_raw_attribute_value(v_object_id, data.get_attribute_id('content'), null)), '<br>', E'\n')),
+            'min_value_count', 1,
+            'max_value_count', 1))));
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.edit_news(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_object_code text := json.get_string(in_params, 'object_code');
+  v_object_id integer := data.get_object_id(v_object_code);
+  v_media_code text := json.get_string(data.get_raw_attribute_value(v_object_id, data.get_attribute_id('news_media'), null));
+  v_name_attr_id integer := data.get_attribute_id('name');
+  v_media_name text := json.get_string(data.get_raw_attribute_value(data.get_object_id(v_media_code), v_name_attr_id, null));
+  v_title text := json.get_string(in_user_params, 'title');
+  v_content text := replace(json.get_string(in_user_params, 'content'), E'\n', '<br>');
+begin
+  perform data.set_attribute_value(v_object_id, v_name_attr_id, null, to_jsonb(v_media_name || ': ' || v_title));
+  perform data.set_attribute_value(v_object_id, data.get_attribute_id('document_title'), null, to_jsonb(v_title));
+  perform data.set_attribute_value(v_object_id, data.get_attribute_id('content'), null, to_jsonb(v_content));
+
+  return api_utils.get_objects(
+    in_client,
+    in_user_object_id,
+    jsonb_build_object(
+      'object_codes', jsonb_build_array(v_object_code),
+      'get_actions', true,
+      'get_templates', true));
 end;
 $BODY$
   LANGUAGE plpgsql volatile
@@ -6650,7 +6742,8 @@ insert into data.action_generators(function, params, description) values
           {"function": "edit_document"}
         ],
         "news": [
-          {"function": "delete_news"}
+          {"function": "delete_news"},
+          {"function": "edit_news"}
         ]
       },
       "mail_type": {
