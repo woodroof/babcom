@@ -208,12 +208,12 @@ select 'person' || o.* from generate_series(1, 60) o;
 insert into data.objects(code) values
 ('mail_contacts'),
 ('transaction_destinations'),
-('personal_document_storage'),
-('library'),
 ('mailbox'),
 ('notifications'),
 ('inbox'),
 ('outbox'),
+('library'),
+('personal_library'),
 ('med_library'),
 ('research_library'),
 ('crew_library'),
@@ -1175,6 +1175,11 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
         "params": {"placeholder": "Новостей нет", "sort_attribute_code": "system_news_time", "sort_type": "desc", "output": [{"type": "attribute", "data": "news_time"}, {"type": "string", "data": " <a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
       },
       {
+        "conditions": [{"attribute_code": "type", "attribute_value": "library"}, {"attribute_code": "type", "attribute_value": "library_category"}],
+        "function": "fill_content",
+        "params": {"placeholder": "Документов нет", "sort_attribute_code": "name", "sort_type": "asc", "output": [{"type": "string", "data": "<a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+      },
+      {
         "conditions": [{"attribute_code": "type", "attribute_value": "mailbox"}],
         "function": "fill_content",
         "params": {"sort_attribute_code": "name", "sort_type": "asc", "output": [{"type": "string", "data": "<a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
@@ -1577,9 +1582,7 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
   }', 'Получение рейтинга телепата');
 
   -- TODO и другие:
-  -- personal_document_storage: system_value[player] -> content[player]
-  -- library: object_objects[intermediate is null] -> content
-  -- library_category{1,9}: object_objects[intermediate is null] -> content
+  -- personal_library: system_value[player] -> content[player]
 
 -- Заполнение атрибутов
 select data.set_attribute_value(data.get_object_id('mail_contacts'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
@@ -2027,12 +2030,29 @@ select
   data.set_attribute_value(data.get_object_id('crew_document' || o.value), data.get_attribute_id('document_author'), null, to_jsonb('person' || ((o.value % 8 + 1) * 7)))
 from generate_series(1, 15) o(value);
 
+select data.set_attribute_value(data.get_object_id('library'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('library'), data.get_attribute_id('type'), null, jsonb '"library"');
+select data.set_attribute_value(data.get_object_id('library'), data.get_attribute_id('name'), null, jsonb '"Документы"');
+select data.set_attribute_value(data.get_object_id('library'), data.get_attribute_id('system_meta'), null, jsonb 'true');
+
+select
+  data.set_attribute_value(data.get_object_id('library_category' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('library_category' || o.value), data.get_attribute_id('type'), null, jsonb '"library_category"'),
+  data.set_attribute_value(data.get_object_id('library_category' || o.value), data.get_attribute_id('name'), null, to_jsonb('Документы ' || o.value))
+from generate_series(1, 9) o(value);
+
+select
+  data.set_attribute_value(data.get_object_id('library_document' || o1.value || o2.value ), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('library_document' || o1.value || o2.value ), data.get_attribute_id('type'), null, jsonb '"document"'),
+  data.set_attribute_value(data.get_object_id('library_document' || o1.value || o2.value ), data.get_attribute_id('name'), null, to_jsonb('Документ ' || o1.value || o2.value)),
+  data.set_attribute_value(data.get_object_id('library_document' || o1.value || o2.value ), data.get_attribute_id('system_library_category'), null, to_jsonb('library_category' || o1.value)),
+  data.set_attribute_value(data.get_object_id('library_document' || o1.value || o2.value ), data.get_attribute_id('content'), null, to_jsonb('Содержимое документа ' || o1.value || o2.value))
+from generate_series(1, 9) o1(value)
+join generate_series(1, 20) o2(value) on 1=1;
+
   -- TODO: Всё прочее
 /*
-personal_document_storage
-library
-library_category{1,9}
-library_document{1,9}{1,20}
+personal_library
 personal_document{1,100}
 */
 
