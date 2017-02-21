@@ -34,7 +34,19 @@ begin
 
   v_filter_result := api_utils.get_filtered_object_ids(in_user_object_id, v_object_codes, in_params);
   if v_filter_result is null or v_filter_result.object_ids is null then
-    return api_utils.create_not_found_result('There are no requested objects or user object don''t have enough privileges');
+    v_etag := encode(pgcrypto.digest('', 'sha256'), 'base64');
+
+    v_if_non_match := json.get_opt_string(in_params, null, 'if_non_match');
+    if
+      v_if_non_match is not null and
+      v_if_non_match = v_etag
+    then
+      return api_utils.create_not_modified_result();
+    end if;
+
+    return api_utils.create_ok_result(
+      json_build_object(
+        'etag', v_etag));
   end if;
 
   v_sort_result := api_utils.get_sorted_object_ids(in_user_object_id, v_filter_result.object_ids, v_filter_result.filled_attributes_ids, in_params);
