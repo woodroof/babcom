@@ -22,7 +22,7 @@ begin
   return to_char(v_time, 'yyyy.mm.dd hh24:mi:ss.us');
 end;
 $BODY$
-  LANGUAGE plpgsql IMMUTABLE
+  LANGUAGE plpgsql STABLE
   COST 100;
 
 CREATE OR REPLACE FUNCTION utils.current_time(in_days_shift integer DEFAULT NULL::integer)
@@ -41,7 +41,7 @@ begin
   return to_char(v_time, 'dd.mm.yyyy hh24:mi');
 end;
 $BODY$
-  LANGUAGE plpgsql IMMUTABLE
+  LANGUAGE plpgsql STABLE
   COST 100;
 
 -- Параметры
@@ -5545,11 +5545,6 @@ insert into data.action_generators(function, params, description) values
 ('logout', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция выхода из системы'),
 ('create_med_document', null, 'Функция создания медецинского отчёта'),
 (
-  'generate_if_value_attribute',
-  '{"attribute_code": "notification_status", "attribute_value": "unread", "function": "read_notification"}',
-  'Функция отмечания уведомления как прочитанного'
-),
-(
   'generate_if_string_attribute',
   '{
     "attributes": {
@@ -5593,6 +5588,9 @@ insert into data.action_generators(function, params, description) values
           {"function": "delete_deal_member", "params": {"row_num": 8}},
           {"function": "delete_deal_member", "params": {"row_num": 9}},
           {"function": "delete_deal_member", "params": {"row_num": 10}}
+        ],
+        "notification": [
+          {"function": "generate_if_attribute_for_user", "params": {"attribute_code": "notification_status", "attribute_value": "unread", "function": "read_notification"}}
         ]
       },
       "mail_type": {
