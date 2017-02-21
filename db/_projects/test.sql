@@ -494,7 +494,7 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('system_researcher', 'Маркер персонажа-исследователя', 'SYSTEM', null),
 ('system_crew_member', 'Маркер члена экипажа', 'SYSTEM', null),
 ('system_med_documents', 'Маркер персонажа, имеющего доступ к медицинским документам', 'SYSTEM', null),
-('system_research_documents', 'Маркер персонажа, имеющего доступ к исследовательским отчётам', 'SYSTEM', null),
+('system_research_documents', 'Маркер персонажа, имеющего доступ к научным отчётам', 'SYSTEM', null),
 ('system_crew_documents', 'Маркер персонажа, имеющего доступ к отчётам команды', 'SYSTEM', null),
 ('system_technician', 'Маркер персонажа-техника', 'SYSTEM', null),
 ('system_pilot', 'Маркер персонажа-пилота', 'SYSTEM', null),
@@ -2037,7 +2037,7 @@ select data.set_attribute_value(data.get_object_id('med_library'), data.get_attr
 select data.set_attribute_value(data.get_object_id('research_library'), data.get_attribute_id('system_is_visible'), data.get_object_id('research_documents'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('research_library'), data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('research_library'), data.get_attribute_id('type'), null, jsonb '"research_library"');
-select data.set_attribute_value(data.get_object_id('research_library'), data.get_attribute_id('name'), null, jsonb '"Исследовательские отчёты"');
+select data.set_attribute_value(data.get_object_id('research_library'), data.get_attribute_id('name'), null, jsonb '"Научные отчёты"');
 select data.set_attribute_value(data.get_object_id('research_library'), data.get_attribute_id('system_meta'), data.get_object_id('research_documents'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('research_library'), data.get_attribute_id('system_meta'), data.get_object_id('masters'), jsonb 'true');
 
@@ -2065,11 +2065,11 @@ select
   data.set_attribute_value(data.get_object_id('research_document' || o.value), data.get_attribute_id('system_is_visible'), data.get_object_id('research_documents'), jsonb 'true'),
   data.set_attribute_value(data.get_object_id('research_document' || o.value), data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true'),
   data.set_attribute_value(data.get_object_id('research_document' || o.value), data.get_attribute_id('type'), null, jsonb '"research_document"'),
-  data.set_attribute_value(data.get_object_id('research_document' || o.value), data.get_attribute_id('name'), null, to_jsonb('Исследовательский отчёт ' || o.value)),
-  data.set_attribute_value(data.get_object_id('research_document' || o.value), data.get_attribute_id('document_title'), null, to_jsonb('Исследовательский отчёт ' || o.value)),
+  data.set_attribute_value(data.get_object_id('research_document' || o.value), data.get_attribute_id('name'), null, to_jsonb('Научный отчёт ' || o.value)),
+  data.set_attribute_value(data.get_object_id('research_document' || o.value), data.get_attribute_id('document_title'), null, to_jsonb('Научный отчёт ' || o.value)),
   data.set_attribute_value(data.get_object_id('research_document' || o.value), data.get_attribute_id('system_document_time'), null, to_jsonb(case when o.value < 10 then '0' else '' end || o.value)),
   data.set_attribute_value(data.get_object_id('research_document' || o.value), data.get_attribute_id('document_time'), null, to_jsonb('19.02.2258 17:' || case when o.value < 10 then '0' else '' end || o.value)),
-  data.set_attribute_value(data.get_object_id('research_document' || o.value), data.get_attribute_id('content'), null, to_jsonb('Содержимое исследовательского отчёта ' || o.value)),
+  data.set_attribute_value(data.get_object_id('research_document' || o.value), data.get_attribute_id('content'), null, to_jsonb('Содержимое научного отчёта ' || o.value)),
   data.set_attribute_value(data.get_object_id('research_document' || o.value), data.get_attribute_id('document_author'), null, to_jsonb('person' || ((o.value % 3 + 1) * 17)))
 from generate_series(1, 15) o(value);
 
@@ -3165,7 +3165,7 @@ $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
 
--- Действие для создания исследовательского отчёта
+-- Действие для создания научного отчёта
 CREATE OR REPLACE FUNCTION action_generators.create_research_document(
     in_params in jsonb)
   RETURNS jsonb AS
@@ -3200,7 +3200,7 @@ begin
     'create_research_document',
     jsonb_build_object(
       'code', 'create_research_document',
-      'name', 'Создать исследовательский отчёт',
+      'name', 'Создать научный отчёт',
       'type', 'documents.create',
       'params', jsonb '{}',
       'user_params',
@@ -3271,7 +3271,7 @@ begin
   perform actions.create_notification(
     in_user_object_id,
     v_notification_receiver_ids,
-    'Опубликован новый исследовательский отчёт: ' || v_title,
+    'Опубликован новый научный отчёт: ' || v_title,
     v_document_code);
 
   return api_utils.get_objects(
@@ -6371,8 +6371,8 @@ $BODY$
 insert into data.action_generators(function, params, description) values
 ('login', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция входа в систему'),
 ('logout', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция выхода из системы'),
-('create_med_document', null, 'Функция создания медецинского отчёта'),
-('create_research_document', null, 'Функция создания исследовательского отчёта'),
+('create_med_document', null, 'Функция создания медицинского отчёта'),
+('create_research_document', null, 'Функция создания научного отчёта'),
 ('create_crew_document', null, 'Функция создания отчёта экипажа'),
 (
   'generate_if_string_attribute',
