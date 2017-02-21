@@ -76,7 +76,8 @@ insert into data.params(code, value, description) values
       "attributes": ["mail_body"]
     },
     {
-      "attributes": ["news_time", "news_media", "news_title"]
+      "attributes": ["news_time", "news_media", "news_title"],
+      "actions": ["delete_news"]
     },
     {
       "attributes": ["state_tax"],
@@ -509,6 +510,7 @@ $BODY$
 insert into data.attribute_value_change_functions(attribute_id, function, params) values
 (data.get_attribute_id('type'), 'string_value_to_object', jsonb '{"params": {"person": "persons", "corporation": "corporations", "news": "news_hub", "library_category": "library", "crew_document": "crew_library", "research_document": "research_library", "med_document": "med_library", "sector": "market", "state": "states", "mail_folder": "mailbox"}}'),
 (data.get_attribute_id('person_media'), 'string_value_to_object', jsonb '{"params": {"media1": "media1", "media2": "media2", "media3": "media3"}}'),
+(data.get_attribute_id('news_media'), 'string_value_to_object', jsonb '{"params": {"media1": "media1", "media2": "media2", "media3": "media3"}}'),
 (data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"person": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}, "state": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}, "corporation": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}}}'),
 (data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"person": {"object_code": "persons", "attribute_code": "persons"}, "sector": {"object_code": "market", "attribute_code": "sectors"}, "corporation": {"object_code": "corporations", "attribute_code": "corporations"}}}'),
 (data.get_attribute_id('system_offline'), 'boolean_value_to_object', jsonb '{"object_code": "offline"}'),
@@ -542,10 +544,6 @@ select data.get_attribute_id('person_state'), 'string_value_to_object', ('{"para
 from (select '"state' || o.value || '": "state' || o.value || '"' as value from generate_series(1, 10) o(value)) s;
 
 select data.add_object_to_object(data.get_object_id('personal_document' || o.value), data.get_object_id('person' || ((o.value - 1) % 50 + 1))) from generate_series(1, 100) o(value);
-
-select data.add_object_to_object(data.get_object_id('news' || o1.value || o2.value), data.get_object_id('media' || o1.value))
-from generate_series(1, 3) o1(value)
-join generate_series(1, 100) o2(value) on 1=1;
 
 -- Функции для вычисления атрибутов
 CREATE OR REPLACE FUNCTION attribute_value_fill_functions.merge_metaobjects(in_params jsonb)
@@ -4146,6 +4144,87 @@ $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
 
+-- Действие для удаления новостей
+CREATE OR REPLACE FUNCTION action_generators.delete_news(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_author_media text := json.get_opt_string(data.get_raw_attribute_value(v_user_object_id, data.get_attribute_id('person_media'), null));
+  v_media_code text := json.get_string(data.get_raw_attribute_value(v_object_id, data.get_attribute_id('news_media'), null));
+  v_masters_object_id integer;
+  v_master boolean;
+begin
+  if v_author_media is null or v_author_media != v_media_code then
+    v_masters_object_id := data.get_object_id('masters');
+
+    select true
+    into v_master
+    where exists(
+      select 1
+      from data.object_objects
+      where
+        parent_object_id = v_masters_object_id and
+        object_id = v_user_object_id);
+
+    if v_master is null then
+      return null;
+    end if;
+  end if;
+
+  return jsonb_build_object(
+    'delete_news',
+    jsonb_build_object(
+      'code', 'delete_news',
+      'name', 'Удалить',
+      'type', 'documents.delete',
+      'params', jsonb_build_object('object_code', data.get_object_code(v_object_id), 'return_object_code', 'news_hub'),
+      'warning', 'Вы действительно хотите удалить новость?'));
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.delete_news(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_object_id integer := data.get_object_id(json.get_string(in_params, 'object_code'));
+  v_system_is_visible_attr_id integer := data.get_attribute_id('system_is_visible');
+  v_type_attr_id integer := data.get_attribute_id('type');
+  v_news_media_attr_id integer := data.get_attribute_id('news_media');
+  v_return_object_code text := json.get_string(in_params, 'return_object_code');
+begin
+  perform data.set_attribute_value(v_object_id, v_type_attr_id, null, jsonb '"deleted_news"');
+  perform data.delete_attribute_value(v_object_id, v_news_media_attr_id, null);
+
+  perform data.delete_attribute_value_if_exists(v_object_id, v_system_is_visible_attr_id, value_object_id, in_user_object_id)
+  from (
+    select value_object_id
+    from data.attribute_values
+    where
+      object_id = v_object_id and
+      attribute_id = v_system_is_visible_attr_id
+  ) o;
+
+  return api_utils.get_objects(
+    in_client,
+    in_user_object_id,
+    jsonb_build_object(
+      'object_codes', jsonb_build_array(v_return_object_code),
+      'get_actions', true,
+      'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
 -- Просмотр списков транзакций
 CREATE OR REPLACE FUNCTION action_generators.show_transaction_list(
     in_params in jsonb)
@@ -6498,7 +6577,6 @@ $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
 
-
 insert into data.action_generators(function, params, description) values
 ('login', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция входа в систему'),
 ('logout', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция выхода из системы'),
@@ -6570,6 +6648,9 @@ insert into data.action_generators(function, params, description) values
         "crew_document": [
           {"function": "generate_if_user_attribute", "params": {"attribute_code": "system_master", "attribute_value": true, "function": "delete_document", "params": {"return_object_code": "crew_library"}}},
           {"function": "edit_document"}
+        ],
+        "news": [
+          {"function": "delete_news"}
         ]
       },
       "mail_type": {
