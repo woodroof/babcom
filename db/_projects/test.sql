@@ -149,7 +149,8 @@ insert into data.params(code, value, description) values
       "actions": ["login"]
     },
     {
-      "attributes": ["sector_volume", "sector_volume_changes"]
+      "attributes": ["sector_volume", "sector_volume_changes"],
+      "actions": ["change_sector_volume"]
     }
   ]
 }
@@ -5539,6 +5540,97 @@ end;
 $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
+
+-- Действие для изменения объёма рынка
+CREATE OR REPLACE FUNCTION action_generators.change_sector_volume(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+begin
+ -- Показываем только для мастера
+  if not json.get_opt_boolean(data.get_attribute_value(v_user_object_id,
+					       v_user_object_id, 
+					       data.get_attribute_id('system_master')), false) then
+     return null;
+   end if;
+
+  return jsonb_build_object(
+    'change_sector_volume',
+    jsonb_build_object(
+      'code', 'change_sector_volume',
+      'name', 'Изменить объём рынка',
+      'type', 'financial.sector_volume.change',
+      'params', jsonb_build_object('sector_code', data.get_object_code(json.get_integer(in_params, 'object_id'))),
+      'user_params', 
+        jsonb_build_array(
+          jsonb_build_object(
+            'code', 'sector_volume',
+            'type', 'integer',
+            'data', jsonb_build_object('min_value', 0),
+            'description', 'Объём рынка',
+            'default_value', data.get_attribute_value(json.get_integer(in_params, 'user_object_id'),json.get_integer(in_params, 'object_id'), data.get_attribute_id('sector_volume')),
+            'min_value_count', 1,
+            'max_value_count', 1),
+          jsonb_build_object(
+            'code', 'sector_volume_change',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1),
+            'description', 'Комментарий',
+            'min_value_count', 1,
+            'max_value_count', 1)
+            )));
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.change_sector_volume(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_sector_code text := json.get_string(in_params, 'sector_code');
+  v_sector_id integer := data.get_object_id(v_sector_code);
+  v_sector_volume_attribute_id integer := data.get_attribute_id('sector_volume');
+  v_sector_volume_changes_attribute_id integer := data.get_attribute_id('sector_volume_changes');
+  
+  v_sector_volume integer := json.get_integer(in_user_params, 'sector_volume');
+  v_sector_volume_change text := json.get_opt_string(in_user_params, null, 'sector_volume_change');
+  v_sector_volume_old integer;
+  v_sector_volume_changes_old text;
+begin
+
+  v_sector_volume_old := json.get_opt_integer(data.get_raw_attribute_value(v_sector_id, v_sector_volume_attribute_id, null), 0);
+  v_sector_volume_changes_old := json.get_opt_string(data.get_raw_attribute_value(v_sector_id, v_sector_volume_changes_attribute_id, null));
+  
+  perform data.set_attribute_value_if_changed(
+    v_sector_id,
+    v_sector_volume_attribute_id,
+    null,
+    to_jsonb(v_sector_volume),
+    in_user_object_id);
+  perform data.set_attribute_value_if_changed(
+    v_sector_id,
+    v_sector_volume_changes_attribute_id,
+    null,
+    to_jsonb(v_sector_volume_changes_old || '<br>' || utils.current_time() || ' было '|| v_sector_volume_old || ' стало ' || v_sector_volume || ' - ' || v_sector_volume_change),
+    in_user_object_id);
+    
+  return api_utils.get_objects(in_client,
+			  in_user_object_id,
+			  jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_sector_code),
+			    'get_actions', true,
+			    'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
   
 insert into data.action_generators(function, params, description) values
 ('login', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция входа в систему'),
@@ -5591,6 +5683,9 @@ insert into data.action_generators(function, params, description) values
         ],
         "notification": [
           {"function": "generate_if_attribute_for_user", "params": {"attribute_code": "notification_status", "attribute_value": "unread", "function": "read_notification"}}
+        ],
+        "sector": [
+          {"function": "change_sector_volume"}
         ]
       },
       "mail_type": {
