@@ -66,6 +66,9 @@ insert into data.params(code, value, description) values
       "attributes": ["person_biography"]
     },
     {
+      "attributes": ["person_salary"]
+    },
+    {
       "attributes": ["mail_type", "mail_send_time", "mail_title", "mail_author", "mail_receivers"],
       "actions": ["reply", "reply_all", "delete_mail"]
     },
@@ -151,6 +154,10 @@ insert into data.params(code, value, description) values
     {
       "attributes": ["sector_volume", "sector_volume_changes"],
       "actions": ["change_sector_volume"]
+    },
+    {
+      "attributes": ["market_last_time"],
+      "actions": ["calc_money"]
     }
   ]
 }
@@ -483,7 +490,10 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('news_title', 'Заголовок новости', 'NORMAL', null),
 ('news_media', 'Источник новости', 'NORMAL', 'code'),
 ('system_news_time', 'Реальное время публикации новости', 'SYSTEM', null),
-('news_time', 'Время публикации новости', 'NORMAL', null);
+('news_time', 'Время публикации новости', 'NORMAL', null),
+('market_last_time', 'Время последнего пересчёта рынка', 'NORMAL', null),
+('person_salary', 'Доход за цикл', 'NORMAL', null),
+('system_person_salary', 'Доход за цикл', 'SYSTEM', null);
 
 CREATE OR REPLACE FUNCTION attribute_value_change_functions.json_member_to_object(in_params jsonb)
   RETURNS void AS
@@ -1538,7 +1548,23 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
         "params": {"attribute_code": "system_balance"}
       }
     ]
-  }', 'Получение состояния счёта');
+  }', 'Получение состояния счёта'),
+  (
+  data.get_attribute_id('person_salary'),
+  'fill_if_user_object_attribute',
+  '{
+    "blocks": [
+      {
+        "conditions": [{"attribute_code": "system_master", "attribute_value": true}],
+        "function": "fill_value_object_attribute_from_attribute",
+        "params": {"value_object_code": "masters", "attribute_code": "system_person_salary"}
+      },
+      {
+        "function": "fill_object_attribute_from_attribute",
+        "params": {"attribute_code": "system_person_salary"}
+      }
+    ]
+  }', 'Получение дохода');
 
 insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
 (
@@ -1738,6 +1764,11 @@ select
   end,
   case when o.value % 13 = 0 then
     data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_security'), null, jsonb 'true')
+  else
+    null
+  end,
+  case when o.value % 5 = 0 then
+    data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_person_salary'), null, to_jsonb(500000))
   else
     null
   end
@@ -5099,6 +5130,86 @@ $BODY$
   LANGUAGE plpgsql STABLE
   COST 100;
 
+CREATE OR REPLACE FUNCTION actions.transfer_to_null(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_receiver_id integer := data.get_object_id(json.get_string(in_user_params, 'receiver'));
+  v_description text := json.get_string(in_user_params, 'description');
+  v_sum integer := json.get_integer(in_user_params, 'sum');
+
+  v_system_balance_attribute_id integer := data.get_attribute_id('system_balance');
+  v_user_balance integer;
+  v_receiver_balance integer;
+
+  v_ret_val api.result;
+begin
+  assert in_user_object_id is not null;
+  assert in_user_object_id != v_receiver_id;
+  assert v_sum > 0;
+
+  if in_user_object_id < v_receiver_id then
+    v_user_balance := data.get_attribute_value_for_update(in_user_object_id, v_system_balance_attribute_id, null);
+    v_receiver_balance := data.get_attribute_value_for_update(v_receiver_id, v_system_balance_attribute_id, null);
+  else
+    v_receiver_balance := data.get_attribute_value_for_update(v_receiver_id, v_system_balance_attribute_id, null);
+    v_user_balance := data.get_attribute_value_for_update(in_user_object_id, v_system_balance_attribute_id, null);
+  end if;
+
+  if coalesce(v_user_balance, 0) < v_sum then
+    v_ret_val := api_utils.get_objects(
+      in_client,
+      in_user_object_id,
+      jsonb_build_object(
+        'object_codes', jsonb_build_array(data.get_object_code(in_user_object_id)),
+        'get_actions', true,
+        'get_templates', true));
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Недостаточно средств!"}';
+    return v_ret_val;
+  end if;
+
+  perform data.set_attribute_value(
+    in_user_object_id,
+    v_system_balance_attribute_id,
+    null,
+    to_jsonb(v_user_balance - v_sum),
+    in_user_object_id,
+    'Перевод средств пользователю ' || v_receiver_id);
+  perform data.set_attribute_value(
+    v_receiver_id,
+    v_system_balance_attribute_id,
+    null,
+    to_jsonb(v_receiver_balance + v_sum),
+    in_user_object_id,
+    'Перевод средств от пользователя ' || in_user_object_id);
+
+  perform actions.create_transaction(
+    in_user_object_id,
+    in_user_object_id,
+    v_receiver_id,
+    v_description,
+    v_sum,
+    v_user_balance - v_sum,
+    v_receiver_balance + v_sum,
+    true,
+    false);
+
+  return api_utils.get_objects(
+    in_client,
+    in_user_object_id,
+    jsonb_build_object(
+      'object_codes', jsonb '["transactions"]',
+      'get_actions', false,
+      'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+
 -- Действие для утверждения сделки
 CREATE OR REPLACE FUNCTION action_generators.confirm_deal(
     in_params in jsonb)
@@ -5236,7 +5347,6 @@ begin
    return v_ret_val;
   end if;
 
-
   for v_i in 1..10 loop
     v_value := data.get_attribute_value(in_user_object_id, v_deal_id, data.get_attribute_id('system_deal_participant' || v_i));
     if v_value is not null then
@@ -5299,7 +5409,7 @@ begin
     if v_value is not null then
       v_corporation_id := data.get_object_id(json.get_opt_string(v_value, null, 'member'));
       if json.get_opt_integer(v_value, 0, 'deal_cost') > 0 then
-        null;--perform actions.transfer(in_client, v_corporation_id, null, jsonb_build_object('receiver', v_deal_code, 'description', 'Оплата сделки ' || v_deal_name, 'sum', json.get_integer(v_value, 'deal_cost')));
+        perform actions.transfer_to_null(in_client, v_corporation_id, null, jsonb_build_object('receiver', v_deal_code, 'description', 'Оплата сделки ' || v_deal_name, 'sum', json.get_integer(v_value, 'deal_cost')));
       end if;
       v_capitalization := json.get_opt_integer(data.get_attribute_value(in_user_object_id, v_corporation_id, v_corporation_capitalization_attribute_id), 0);
       perform data.set_attribute_value_if_changed(v_corporation_id, v_corporation_capitalization_attribute_id, null, to_jsonb(v_capitalization + (v_asset_cost * json.get_opt_integer(v_value, 0, 'percent_asset') / 100)), in_user_object_id);
@@ -5362,10 +5472,10 @@ begin
         into v_state_tax
         from data.attribute_values av
         where av.object_id = data.get_object_id(v_corporation_state)
-          and av.attribute_id = v_corporation_state_attribute_id
+          and av.attribute_id = v_state_tax_attribute_id
           and av.value_object_id is null;
         if v_state_tax > 0 then
-          null;--perform actions.transfer(in_client, data.get_object_id(v_corporation.key), null, jsonb_build_object('receiver', v_corporation_state, 'description', 'Налог на доход по сделке' || v_deal_name, 'sum', v_corporation.val * v_state_tax / 100));
+          perform actions.transfer(in_client, data.get_object_id(v_corporation.key), null, jsonb_build_object('receiver', v_corporation_state, 'description', 'Налог на доход по сделке ' || v_deal_name, 'sum', v_corporation.val * v_state_tax / 100));
         end if;
       end if;
     end if;
@@ -5410,7 +5520,7 @@ $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
 
--- Действие для утверждения сделки
+-- Действие для расторжения сделки
 CREATE OR REPLACE FUNCTION action_generators.cancel_deal(
     in_params in jsonb)
   RETURNS jsonb AS
@@ -5631,7 +5741,277 @@ end;
 $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
+
+-- Действие для рассчёта дохода за цикл
+CREATE OR REPLACE FUNCTION action_generators.calc_money(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_is_in_group integer; 
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_market_last_time_attribute_id integer := data.get_attribute_id('market_last_time');
+  v_market_last_time text;
+begin
+   -- Показываем только для мастера
+  if not json.get_opt_boolean(data.get_attribute_value(v_user_object_id,
+					       v_user_object_id, 
+					       data.get_attribute_id('system_master')), false) then
+     return null;
+   end if;
+
+  v_market_last_time := json.get_opt_string(data.get_raw_attribute_value(v_object_id, v_market_last_time_attribute_id, null));
   
+  return jsonb_build_object(
+    'calc_money',
+    jsonb_build_object(
+      'code', 'calc_money',
+      'name', 'Пересчитать доходы и расходы за цикл',
+      'type', 'financial.money',
+      'warning', 'Последний раз это расчёт вызывался в ' || coalesce(v_market_last_time, 'прошлом тысячелетии') || '. Вы уверены, что время пришло?',
+      'params', jsonb_build_object('last_time', v_market_last_time, 'market_code', data.get_object_code(json.get_integer(in_params, 'object_id'))))
+      );
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.calc_money(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_last_time text := json.get_opt_string(in_params, '~', 'last_time');
+  v_market_code text := json.get_string(in_params, 'market_code');
+  v_market_id integer := data.get_object_id(v_market_code);
+  
+  v_corporation_id integer;
+  v_corporation_code text;
+
+  v_value jsonb;
+  v_i integer;
+
+  v_sum_deals_income integer;
+
+  v_sector_volume integer;
+  v_coef decimal;
+  v_percent_income integer;
+  v_percent_asset integer;
+  v_corporation_state text;
+  v_state_tax integer;
+  v_money integer;
+  v_dividend_vote_percent integer;
+  v_sector_name text;
+  
+  v_name_attribute_id integer := data.get_attribute_id('name');
+  v_asset_cost_attribute_id integer := data.get_attribute_id('asset_cost');
+  v_deal_sector_attribute_id integer := data.get_attribute_id('deal_sector');
+  v_deal_income_attribute_id integer := data.get_attribute_id('deal_income');
+  v_sector_volume_attribute_id integer := data.get_attribute_id('sector_volume');
+  v_corporation_state_attribute_id integer := data.get_attribute_id('corporation_state');
+  v_state_tax_attribute_id integer := data.get_attribute_id('state_tax');
+  v_asset_amortization_attribute_id integer := data.get_attribute_id('asset_amortization');
+  v_corporation_capitalization_attribute_id integer := data.get_attribute_id('corporation_capitalization');
+  v_dividend_vote_attribute_id integer := data.get_attribute_id('dividend_vote');
+  v_system_corporation_members_attribute_id integer := data.get_attribute_id('system_corporation_members');
+  v_system_balance_attribute_id integer := data.get_attribute_id('system_balance');
+  v_system_person_salary_attribute_id integer := data.get_attribute_id('system_person_salary');
+  
+
+  v_corp_income jsonb := jsonb '{}';
+  v_corporation record;
+  v_deal_sector record;
+  v_deals record;
+  v_persons record;
+    
+  v_ret_val api.result;
+begin
+  v_ret_val := api_utils.get_objects(in_client,
+				     in_user_object_id,
+				     jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_market_code),
+			    'get_actions', true,
+			    'get_templates', true));
+  if json.get_opt_string(data.get_attribute_value_for_share( v_market_id, 
+					                    data.get_attribute_id('market_last_time'),
+					                    null),'~') <> v_last_time then
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Время последнего вызова команды поменялось! Перезагрузите рынок"}';
+    return v_ret_val;
+   end if;
+   perform data.set_attribute_value_if_changed(v_market_id, data.get_attribute_id('market_last_time'), null, to_jsonb(utils.current_time()), in_user_object_id);
+
+  -- Будем считать по очереди для каждого рынка
+  for v_deal_sector in (select oo.object_id id,
+			       data.get_object_code(oo.object_id) code 
+			 from data.object_objects oo 
+                        where oo.parent_object_id = v_market_id
+                          and oo.object_id <> oo.parent_object_id) loop
+
+     v_sector_name := json.get_string(data.get_raw_attribute_value(v_deal_sector.id, v_name_attribute_id, null));
+
+    -- вначале посчитаем суммарный доход всех активных сделок по рынку
+    select sum(json.get_opt_integer(av_income.value, 0))
+      into v_sum_deals_income
+      from data.object_objects oo
+      join data.attribute_values av on av.object_id = oo.object_id 
+				   and av.attribute_id = v_deal_sector_attribute_id 
+				   and av.value_object_id is null 
+				   and json.get_string(av.value) = v_deal_sector.code
+      join data.attribute_values av_income on av_income.object_id = oo.object_id 
+					  and av_income.attribute_id = v_deal_income_attribute_id 
+					  and av_income.value_object_id is null 
+     where oo.parent_object_id = data.get_object_id('normal_deals')
+       and oo.object_id <> oo.parent_object_id;
+     
+    -- объём рынка
+    v_sector_volume := json.get_opt_integer(data.get_raw_attribute_value(v_deal_sector.id, v_sector_volume_attribute_id, null), 0);
+
+    -- Если рынка на всех не хватает, нужен коэффициент пропорционального уменьшения дохода
+    if v_sector_volume >= v_sum_deals_income then 
+      v_coef := 1;
+    else
+      v_coef := v_sector_volume / v_sum_deals_income;
+    end if;
+
+    -- Для каждой активной сделки считаем доходы
+    for v_deals in (
+      select oo.object_id as id,
+             o.code as code,
+             json.get_opt_integer(av_income.value, 0) as income, 
+             json.get_opt_integer(av_amo.value, 0) as amo,
+             json.get_string(av_name.value) as name
+      from data.object_objects oo
+      join data.attribute_values av on av.object_id = oo.object_id 
+				   and av.attribute_id = v_deal_sector_attribute_id 
+				   and av.value_object_id is null 
+				   and json.get_string(av.value) = v_deal_sector.code
+      join data.attribute_values av_income on av_income.object_id = oo.object_id 
+					  and av_income.attribute_id = v_deal_income_attribute_id 
+					  and av_income.value_object_id is null 
+      join data.attribute_values av_amo on av_amo.object_id = oo.object_id 
+					and av_amo.attribute_id = v_asset_amortization_attribute_id 
+					and av_amo.value_object_id is null
+      join data.attribute_values av_name on av_name.object_id = oo.object_id 
+					and av_name.attribute_id = v_name_attribute_id 
+					and av_name.value_object_id is null
+      join data.objects o on o.id = oo.object_id	  
+     where oo.parent_object_id = data.get_object_id('normal_deals')
+       and oo.object_id <> oo.parent_object_id) loop
+      for v_i in 1..10 loop
+        v_value := data.get_raw_attribute_value(v_deals.id, data.get_attribute_id('system_deal_participant' || v_i), null);
+        if v_value is not null then
+	  v_corporation_code := json.get_opt_string(v_value, null, 'member');
+	  v_corporation_id := data.get_object_id(v_corporation_code);
+	  v_percent_income := json.get_opt_integer(v_value, 0, 'percent_income');
+	  v_percent_asset := json.get_opt_integer(v_value, 0, 'percent_asset');
+	  v_money := round(v_deals.income * v_coef * v_percent_income / 100);
+	  if v_money > 0 then
+	    v_corp_income :=  jsonb_set(v_corp_income, array_agg(v_corporation_code), to_jsonb(v_money));
+	    perform actions.generate_money(in_client, v_deals.id, null, jsonb_build_object('receiver', v_corporation_code, 'description', 'Доход от сделки ' || v_deals.name, 'sum', to_jsonb(v_money)));
+	  end if;
+	  if round(v_deals.amo * v_percent_asset / 100) > 0 then
+            perform actions.transfer_to_null(in_client, v_corporation_id, null, jsonb_build_object('receiver', v_deals.code, 'description', 'Расход за амортизацию актива по сделке ' || v_deals.name, 'sum', to_jsonb(round(v_deals.amo * v_percent_asset / 100))));
+          end if;
+        end if;
+      end loop; 
+    end loop;
+	  
+    -- перечисляем налог от каждой компании   
+    for v_corporation in (select key, json.get_opt_integer(value, 0) val from jsonb_each(v_corp_income)) loop
+      if v_corporation.val > 0 then
+	-- Страна для налога
+	v_corporation_state := json.get_opt_string(data.get_raw_attribute_value(data.get_object_id(v_corporation.key),v_corporation_state_attribute_id, null));
+	if v_corporation_state is not null then
+	  v_state_tax := json.get_opt_integer(data.get_raw_attribute_value(data.get_object_id(v_corporation_state), v_state_tax_attribute_id, null), 0);
+	  if round(v_corporation.val * v_state_tax / 100) > 0 then
+	    perform actions.transfer(in_client, 
+				     data.get_object_id(v_corporation.key),
+				     null, 
+				     jsonb_build_object('receiver', v_corporation_state, 'description', 'Налог на доход за экономический цикл за сделки рынка ' || v_sector_name, 'sum', round(v_corporation.val * v_state_tax / 100)));
+	  end if;
+	end if;
+      end if;
+    end loop;    
+  end loop;
+
+  -- Для каждой компании проверяем, соглашались ли акционеры не выплату дивидендов
+  for v_corporation in (
+      select oo.object_id as id,
+             o.code as code,
+             json.get_string(av_name.value) as name,
+             json.get_opt_integer(av_capi.value,0) as capi,
+             av_member.value as member,
+             json.get_opt_integer(av_balance.value, 0) as balance
+      from data.object_objects oo
+      join data.objects o on o.id = oo.object_id
+      join data.attribute_values av_capi on av_capi.object_id = oo.object_id 
+					and av_capi.attribute_id = v_corporation_capitalization_attribute_id 
+					and av_capi.value_object_id is null 
+      join data.attribute_values av_name on av_name.object_id = oo.object_id 
+					and av_name.attribute_id = v_name_attribute_id 
+					and av_name.value_object_id is null
+      join data.attribute_values av_member on av_member.object_id = oo.object_id 
+					  and av_member.attribute_id = v_system_corporation_members_attribute_id 
+					  and av_member.value_object_id is null
+      join data.attribute_values av_balance on av_balance.object_id = oo.object_id 
+					  and av_balance.attribute_id = v_system_balance_attribute_id 
+					  and av_balance.value_object_id is null
+      where oo.parent_object_id = data.get_object_id('corporations')
+        and oo.object_id <> oo.parent_object_id) loop
+        -- Если 0,0001% от капитализации не превышает остатка на счёте корпорации
+    if v_corporation.capi * 0.0001 / 100 <= v_corporation.balance then
+      select coalesce(sum(c.percent), 0) 
+        into v_dividend_vote_percent
+      from data.attribute_values av
+      join data.objects o on o.id = av.value_object_id
+      join jsonb_to_recordset(v_corporation.member) as c (member text, percent integer) on c.member = o.code
+      where av.object_id = v_corporation.id
+        and av.attribute_id = v_dividend_vote_attribute_id
+        and av.value_object_id is not null
+        and av.value = jsonb '"Да"';
+      if v_dividend_vote_percent >= 80 then
+        perform
+        (case when round((v_corporation.capi * 0.0001 / 100) * c.percent / 100) > 0 then
+          actions.transfer(in_client, v_corporation.id, null, jsonb_build_object('receiver', c.member, 'description', 'Дивиденды от корпорации ' || v_corporation.name, 'sum', round((v_corporation.capi * 0.0001 / 100) * c.percent / 100)))
+        else null
+        end) 
+        from jsonb_to_recordset(v_corporation.member) as c (member text, percent integer);
+      end if; 
+    end if;
+    perform
+      data.delete_attribute_value_if_exists(v_corporation.id, v_dividend_vote_attribute_id, data.get_object_id(c.member),in_user_object_id)
+    from jsonb_to_recordset(v_corporation.member) as c (member text, percent integer);
+  end loop;
+
+  -- Личные зарплаты персонажей
+  for v_persons in (select o.code, json.get_opt_integer(av_sal.value, 0) sal
+           from data.object_objects oo
+           join data.objects o on o.id = oo.object_id
+           join data.attribute_values av_sal on av_sal.object_id = oo.object_id 
+					and av_sal.attribute_id = v_system_person_salary_attribute_id 
+					and av_sal.value_object_id is null 
+    where oo.parent_object_id = data.get_object_id('persons')
+      and oo.object_id <> oo.parent_object_id
+      and json.get_opt_integer(av_sal.value) > 0) loop
+    perform actions.generate_money(in_client, v_market_id, null, jsonb_build_object('receiver', v_persons.code, 'description', 'Доход за экономический цикл', 'sum', to_jsonb(v_persons.sal)));
+  end loop;
+  
+  return api_utils.get_objects(in_client,
+				     in_user_object_id,
+				     jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_market_code),
+			    'get_actions', true,
+			    'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+
 insert into data.action_generators(function, params, description) values
 ('login', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция входа в систему'),
 ('logout', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция выхода из системы'),
@@ -5686,6 +6066,9 @@ insert into data.action_generators(function, params, description) values
         ],
         "sector": [
           {"function": "change_sector_volume"}
+        ]
+        "market": [
+          {"function": "calc_money"}
         ]
       },
       "mail_type": {
