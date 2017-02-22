@@ -2092,6 +2092,7 @@ select
   data.set_attribute_value(data.get_object_id('library_document' || o1.value || o2.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
   data.set_attribute_value(data.get_object_id('library_document' || o1.value || o2.value), data.get_attribute_id('type'), null, jsonb '"document"'),
   data.set_attribute_value(data.get_object_id('library_document' || o1.value || o2.value), data.get_attribute_id('name'), null, to_jsonb('Документ ' || o1.value || o2.value)),
+  data.set_attribute_value(data.get_object_id('library_document' || o1.value || o2.value), data.get_attribute_id('document_title'), null, to_jsonb('Документ ' || o1.value || o2.value)),
   data.set_attribute_value(data.get_object_id('library_document' || o1.value || o2.value), data.get_attribute_id('system_library_category'), null, to_jsonb('library_category' || o1.value)),
   data.set_attribute_value(data.get_object_id('library_document' || o1.value || o2.value), data.get_attribute_id('content'), null, to_jsonb('Содержимое документа ' || o1.value || o2.value))
 from generate_series(1, 9) o1(value)
@@ -7084,6 +7085,9 @@ insert into data.action_generators(function, params, description) values
         "med_document": [
           {"function": "generate_if_user_attribute", "params": {"attribute_code": "system_master", "attribute_value": true, "function": "delete_document", "params": {"return_object_code": "med_library"}}},
           {"function": "edit_med_document"}
+        ],
+        "document": [
+          {"function": "edit_document"}
         ],
         "research_document": [
           {"function": "generate_if_user_attribute", "params": {"attribute_code": "system_master", "attribute_value": true, "function": "delete_document", "params": {"return_object_code": "research_library"}}},
