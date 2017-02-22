@@ -243,7 +243,7 @@ select 'library_document' || o1.* || o2.* from generate_series(1, 9) o1(value)
 join generate_series(1, 20) o2(value) on 1=1;
 
 insert into data.objects(code)
-select 'personal_document' || o1.* from generate_series(1, 100) o1(value);
+select 'personal_document' || o1.* from generate_series(1, 18) o1(value);
 
 insert into data.objects(code)
 select 'med_document' || o1.* from generate_series(1, 15) o1(value);
@@ -474,6 +474,7 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('system_crew_documents', 'Маркер персонажа, имеющего доступ к отчётам команды', 'SYSTEM', null),
 ('system_technician', 'Маркер персонажа-техника', 'SYSTEM', null),
 ('system_library_category', 'Категория документа', 'SYSTEM', null),
+('system_personal_document', 'Личный документ', 'SYSTEM', null),
 ('news_title', 'Заголовок новости', 'NORMAL', null),
 ('news_media', 'Источник новости', 'NORMAL', 'code'),
 ('system_news_time', 'Реальное время публикации новости', 'SYSTEM', null),
@@ -527,6 +528,7 @@ insert into data.attribute_value_change_functions(attribute_id, function, params
 (data.get_attribute_id('system_crew_documents'), 'boolean_value_to_object', jsonb '{"object_code": "crew_documents"}'),
 (data.get_attribute_id('system_technician'), 'boolean_value_to_object', jsonb '{"object_code": "technicians"}'),
 (data.get_attribute_id('system_mail_contact'), 'boolean_value_to_attribute', jsonb '{"object_code": "mail_contacts", "attribute_code": "mail_contacts"}'),
+(data.get_attribute_id('system_personal_document'), 'boolean_value_to_value_attribute', jsonb '{"object_code": "personal_library", "attribute_code": "system_value"}'),
 (data.get_attribute_id('system_meta'), 'boolean_value_to_value_attribute', jsonb '{"object_code": "meta_entities", "attribute_code": "meta_entities"}'),
 (data.get_attribute_id('system_corporation_members'), 'json_member_to_object', null),
 (data.get_attribute_id('deal_status'), 'string_value_to_object', jsonb '{"params": {"normal": "normal_deals", "draft": "draft_deals", "canceled": "canceled_deals"}}');
@@ -542,8 +544,6 @@ from (select '"race' || o.value || '": "race' || o.value || '"' as value from ge
 insert into data.attribute_value_change_functions(attribute_id, function, params)
 select data.get_attribute_id('person_state'), 'string_value_to_object', ('{"params": {' || string_agg(s.value, ',') || '}}')::jsonb
 from (select '"state' || o.value || '": "state' || o.value || '"' as value from generate_series(1, 10) o(value)) s;
-
-select data.add_object_to_object(data.get_object_id('personal_document' || o.value), data.get_object_id('person' || ((o.value - 1) % 50 + 1))) from generate_series(1, 100) o(value);
 
 -- Функции для вычисления атрибутов
 CREATE OR REPLACE FUNCTION attribute_value_fill_functions.merge_metaobjects(in_params jsonb)
@@ -1163,6 +1163,49 @@ $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
 
+CREATE OR REPLACE FUNCTION attribute_value_fill_functions.fill_personal_library(in_params jsonb)
+  RETURNS void AS
+$BODY$
+declare
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_attribute_id integer := json.get_integer(in_params, 'attribute_id');
+  v_system_value_attr_id integer := data.get_attribute_id('system_value');
+  v_value jsonb := data.get_raw_attribute_value(v_object_id, v_system_value_attr_id, v_user_object_id);
+  v_name_attr_id integer := data.get_attribute_id('name');
+  v_document_info record;
+  v_content text;
+begin
+  perform json.get_opt_string_array(v_value);
+
+  for v_document_info in
+    select o.code, json.get_string(data.get_attribute_value(v_user_object_id, o.id, v_name_attr_id)) as name
+    from (
+      select json.get_string(value) as code
+      from jsonb_array_elements(v_value)
+    ) e
+    join data.objects o on
+      o.code = e.code
+    order by name
+  loop
+    if v_content is not null then
+      v_content := v_content || E'<br>\n';
+    else
+      v_content := '';
+    end if;
+    v_content := v_content || '<a href="babcom:' || v_document_info.code || '">' || v_document_info.name || '</a>';
+  end loop;
+
+  if v_content is null then
+    v_content := 'Документов нет';
+  end if;
+
+  perform data.set_attribute_value_if_changed(v_object_id, v_attribute_id, v_user_object_id, to_jsonb(v_content), v_user_object_id);
+end;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+
 insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
 (
   data.get_attribute_id('content'),
@@ -1198,6 +1241,10 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
         "conditions": [{"attribute_code": "type", "attribute_value": "transactions"}],
         "function": "fill_user_content_from_attribute",
         "params": {"placeholder": "Транзакций нет", "source_attribute_code": "system_value", "sort_type": "desc", "output": [{"type": "string", "data": "<a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+      },
+      {
+        "conditions": [{"attribute_code": "type", "attribute_value": "personal_library"}],
+        "function": "fill_personal_library"
       },
       {
         "conditions": [{"attribute_code": "type", "attribute_value": "med_library"}],
@@ -1580,9 +1627,6 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
       }
     ]
   }', 'Получение рейтинга телепата');
-
-  -- TODO и другие:
-  -- personal_library: system_value[player] -> content[player]
 
 -- Заполнение атрибутов
 select data.set_attribute_value(data.get_object_id('mail_contacts'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
@@ -2042,23 +2086,31 @@ select
 from generate_series(1, 9) o(value);
 
 select
-  data.set_attribute_value(data.get_object_id('library_document' || o1.value || o2.value ), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
-  data.set_attribute_value(data.get_object_id('library_document' || o1.value || o2.value ), data.get_attribute_id('type'), null, jsonb '"document"'),
-  data.set_attribute_value(data.get_object_id('library_document' || o1.value || o2.value ), data.get_attribute_id('name'), null, to_jsonb('Документ ' || o1.value || o2.value)),
-  data.set_attribute_value(data.get_object_id('library_document' || o1.value || o2.value ), data.get_attribute_id('system_library_category'), null, to_jsonb('library_category' || o1.value)),
-  data.set_attribute_value(data.get_object_id('library_document' || o1.value || o2.value ), data.get_attribute_id('content'), null, to_jsonb('Содержимое документа ' || o1.value || o2.value))
+  data.set_attribute_value(data.get_object_id('library_document' || o1.value || o2.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('library_document' || o1.value || o2.value), data.get_attribute_id('type'), null, jsonb '"document"'),
+  data.set_attribute_value(data.get_object_id('library_document' || o1.value || o2.value), data.get_attribute_id('name'), null, to_jsonb('Документ ' || o1.value || o2.value)),
+  data.set_attribute_value(data.get_object_id('library_document' || o1.value || o2.value), data.get_attribute_id('system_library_category'), null, to_jsonb('library_category' || o1.value)),
+  data.set_attribute_value(data.get_object_id('library_document' || o1.value || o2.value), data.get_attribute_id('content'), null, to_jsonb('Содержимое документа ' || o1.value || o2.value))
 from generate_series(1, 9) o1(value)
 join generate_series(1, 20) o2(value) on 1=1;
 
-  -- TODO: Всё прочее
-/*
-personal_library
-personal_document{1,100}
-*/
+select data.set_attribute_value(data.get_object_id('personal_library'), data.get_attribute_id('system_is_visible'), data.get_object_id('persons'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('personal_library'), data.get_attribute_id('type'), null, jsonb '"personal_library"');
+select data.set_attribute_value(data.get_object_id('personal_library'), data.get_attribute_id('name'), null, jsonb '"Личные документы"');
+select data.set_attribute_value(data.get_object_id('personal_library'), data.get_attribute_id('system_meta'), data.get_object_id('persons'), jsonb 'true');
 
--- TODO: Много разных действий
---   Письма
---   Транзакции
+select
+  data.set_attribute_value(data.get_object_id('personal_document' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('personal_document' || o.value), data.get_attribute_id('type'), null, jsonb '"personal_document"'),
+  data.set_attribute_value(data.get_object_id('personal_document' || o.value), data.get_attribute_id('name'), null, to_jsonb('Личный документ ' || o.value)),
+  data.set_attribute_value(data.get_object_id('personal_document' || o.value), data.get_attribute_id('content'), null, to_jsonb('Содержимое личного документа ' || o.value))
+from generate_series(1, 18) o(value);
+
+select
+  data.set_attribute_value(data.get_object_id('personal_document' || ((o2.value - 1) * 6 + o1.value)), data.get_attribute_id('system_personal_document'), data.get_object_id('person' || ((o1.value - 1) * 10 + o3.value)), jsonb 'true')
+from generate_series(1, 6) o1(value)
+join generate_series(1, 3) o2(value) on 1=1
+join generate_series(1, 10) o3(value) on 1=1;
 
 -- Логины
 insert into data.logins(code, description)
