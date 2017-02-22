@@ -95,7 +95,7 @@ insert into data.params(code, value, description) values
     },
     {
       "attributes": ["document_title", "document_time", "document_author"],
-      "actions": ["share_document", "edit_med_document", "edit_document", "delete_document", "delete_personal_document"]
+      "actions": ["share_document", "edit_med_document", "edit_document", "delete_document", "delete_library_document", "delete_personal_document"]
     },
     {
       "attributes": ["med_document_patient"]
@@ -3585,6 +3585,27 @@ $BODY$
   LANGUAGE plpgsql STABLE
   COST 100;
 
+CREATE OR REPLACE FUNCTION action_generators.delete_library_document(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+begin
+  return jsonb_build_object(
+    'delete_document',
+    jsonb_build_object(
+      'code', 'delete_document',
+      'name', 'Удалить',
+      'type', 'documents.delete',
+      'params', jsonb_build_object('object_code', data.get_object_code(v_object_id), 'return_object_code', data.get_raw_attribute_value(v_object_id, data.get_attribute_id('system_library_category'), null)),
+      'warning', 'Вы действительно хотите удалить документ?'));
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
+
 CREATE OR REPLACE FUNCTION actions.delete_document(
     in_client text,
     in_user_object_id integer,
@@ -3594,11 +3615,13 @@ CREATE OR REPLACE FUNCTION actions.delete_document(
 $BODY$
 declare
   v_object_id integer := data.get_object_id(json.get_string(in_params, 'object_code'));
+  v_system_library_category_attr_id integer := data.get_attribute_id('system_library_category');
   v_system_is_visible_attr_id integer := data.get_attribute_id('system_is_visible');
   v_type_attr_id integer := data.get_attribute_id('type');
   v_return_object_code text := json.get_string(in_params, 'return_object_code');
 begin
-  perform data.set_attribute_value(v_object_id, v_type_attr_id, null, jsonb '"deleted_document"');
+  perform data.delete_attribute_value_if_exists(v_object_id, v_system_library_category_attr_id, null, in_user_object_id);
+  perform data.set_attribute_value(v_object_id, v_type_attr_id, null, jsonb '"deleted_document"', in_user_object_id);
 
   perform data.delete_attribute_value_if_exists(v_object_id, v_system_is_visible_attr_id, value_object_id, in_user_object_id)
   from (
@@ -7087,7 +7110,8 @@ insert into data.action_generators(function, params, description) values
           {"function": "edit_med_document"}
         ],
         "document": [
-          {"function": "edit_document"}
+          {"function": "edit_document"},
+          {"function": "generate_if_user_attribute", "params": {"attribute_code": "system_master", "attribute_value": true, "function": "delete_library_document"}}
         ],
         "research_document": [
           {"function": "generate_if_user_attribute", "params": {"attribute_code": "system_master", "attribute_value": true, "function": "delete_document", "params": {"return_object_code": "research_library"}}},
