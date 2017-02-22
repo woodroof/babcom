@@ -57,7 +57,7 @@ insert into data.params(code, value, description) values
       "attributes": ["transaction_time", "transaction_sum", "balance_rest", "transaction_from", "transaction_to", "transaction_description"]
     },
     {
-      "actions": ["generate_money", "state_money_transfer", "transfer", "send_mail", "send_mail_from_future", "send_notification", "show_transaction_list"]
+      "actions": ["generate_money", "state_money_transfer", "transfer", "send_mail", "send_mail_from_future", "send_notification", "show_transaction_list", "create_personal_document"]
     },
     {
       "attributes": ["person_race", "person_state", "person_psi_scale", "person_job_position"]
@@ -2118,6 +2118,7 @@ join generate_series(1, 10) o3(value) on 1=1;
 select
   data.set_attribute_value(data.get_object_id('secret_document' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
   data.set_attribute_value(data.get_object_id('secret_document' || o.value), data.get_attribute_id('type'), null, jsonb '"secret_document"'),
+  data.set_attribute_value(data.get_object_id('secret_document' || o.value), data.get_attribute_id('document_title'), null, to_jsonb('Секретный документ ' || o.value)),
   data.set_attribute_value(data.get_object_id('secret_document' || o.value), data.get_attribute_id('name'), null, to_jsonb('Секретный документ ' || o.value)),
   data.set_attribute_value(data.get_object_id('secret_document' || o.value), data.get_attribute_id('content'), null, to_jsonb('Содержимое секретного документа ' || o.value))
 from generate_series(1, 10) o(value);
@@ -3625,13 +3626,15 @@ CREATE OR REPLACE FUNCTION action_generators.read_document(
 $BODY$
 declare
   v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
-  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_user_object_id integer;
   v_type_attr_id integer;
   v_type text;
 begin
   if v_object_id is not null then
     return null;
   end if;
+
+  v_user_object_id := json.get_integer(in_params, 'user_object_id');
 
   return jsonb_build_object(
     'read_document',
@@ -3686,6 +3689,81 @@ begin
     in_user_object_id,
     jsonb_build_object(
       'object_codes', jsonb_build_array(v_code),
+      'get_actions', true,
+      'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+-- Действие для создания личного документа
+CREATE OR REPLACE FUNCTION action_generators.create_personal_document(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_type_attr_id integer;
+  v_type text;
+begin
+  return jsonb_build_object(
+    'create_personal_document',
+    jsonb_build_object(
+      'code', 'create_personal_document',
+      'name', 'Создать документ',
+      'type', 'documents.personal.create',
+      'params', jsonb '{}',
+      'user_params',
+        jsonb_build_array(
+          jsonb_build_object(
+            'code', 'title',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1),
+            'description', 'Заголовок',
+            'min_value_count', 1,
+            'max_value_count', 1),
+          jsonb_build_object(
+            'code', 'content',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1, 'multiline', true),
+            'description', 'Содержимое',
+            'min_value_count', 1,
+            'max_value_count', 1))));
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.create_personal_document(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_title text := json.get_string(in_user_params, 'title');
+  v_content text := replace(json.get_string(in_user_params, 'content'), E'\n', '<br>');
+  v_document_id integer;
+  v_document_code text;
+begin
+  insert into data.objects(id) values(default)
+  returning id, code into v_document_id, v_document_code;
+
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('system_personal_document'), in_user_object_id, jsonb 'true');
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('type'), null, jsonb '"personal_document"');
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('name'), null, to_jsonb(v_title));
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('document_title'), null, to_jsonb(v_title));
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('document_author'), null, to_jsonb(data.get_object_code(in_user_object_id)));
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('content'), null, to_jsonb(v_content));
+
+  return api_utils.get_objects(
+    in_client,
+    in_user_object_id,
+    jsonb_build_object(
+      'object_codes', jsonb_build_array(v_document_code),
       'get_actions', true,
       'get_templates', true));
 end;
@@ -6901,6 +6979,9 @@ insert into data.action_generators(function, params, description) values
         "news": [
           {"function": "delete_news"},
           {"function": "edit_news"}
+        ],
+        "personal_library": [
+          {"function": "create_personal_document"}
         ]
       },
       "mail_type": {
