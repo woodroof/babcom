@@ -1911,7 +1911,7 @@ select
     null
   end,
   case when o.value % 5 = 0 then
-    data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_person_salary'), null, to_jsonb(500000))
+    data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_person_salary'), null, to_jsonb(500))
   else
     null
   end
@@ -5393,13 +5393,6 @@ begin
             'data', jsonb_build_object('min_length', 1),
             'min_value_count', 1,
             'max_value_count', 1),
-         jsonb_build_object(
-            'code', 'deal_income',
-            'type', 'integer',
-            'data', jsonb_build_object('min_value', 0),
-            'description', 'Доходность сделки',
-            'min_value_count', 1,
-            'max_value_count', 1),
         jsonb_build_object(
             'code', 'percent_asset',
             'type', 'integer',
@@ -5442,7 +5435,6 @@ declare
   v_deal_name text := json.get_string(in_user_params, 'deal_name');
   v_description text := json.get_string(in_user_params, 'description');
   v_asset_name text := json.get_string(in_user_params, 'asset_name');
-  v_deal_income integer := json.get_integer(in_user_params, 'deal_income');
   v_deal_sector text := json.get_string(in_user_params, 'deal_sector');
   v_percent_asset integer := json.get_integer(in_user_params, 'percent_asset');
   v_percent_income integer := json.get_integer(in_user_params, 'percent_income');
@@ -5461,7 +5453,6 @@ insert into data.objects(id) values(default)
   perform data.set_attribute_value(v_deal_id, data.get_attribute_id('description'), null, to_jsonb(v_description), in_user_object_id);
   perform data.set_attribute_value(v_deal_id, data.get_attribute_id('deal_sector'), null, to_jsonb(v_deal_sector), in_user_object_id);
   perform data.set_attribute_value(v_deal_id, data.get_attribute_id('asset_name'), null, to_jsonb(v_asset_name), in_user_object_id);
-  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('deal_income'), null, to_jsonb(v_deal_income), in_user_object_id);
   perform data.set_attribute_value(v_deal_id, data.get_attribute_id('system_deal_time'), null, to_jsonb(utils.system_time()), in_user_object_id);
   perform data.set_attribute_value(v_deal_id, data.get_attribute_id('deal_status'), null, jsonb '"draft"', in_user_object_id);
   perform data.set_attribute_value(v_deal_id, data.get_attribute_id('asset_cost'), null, to_jsonb(round(v_deal_cost * 0.7)), in_user_object_id);
@@ -6014,16 +6005,6 @@ begin
 					          v_object_id, 
 					          data.get_attribute_id('asset_name'))),
             'min_value_count', 1,
-            'max_value_count', 1),
-         jsonb_build_object(
-            'code', 'deal_income',
-            'type', 'integer',
-            'data', jsonb_build_object('min_value', 0),
-            'description', 'Доходность сделки',
-            'default_value', json.get_opt_integer(data.get_attribute_value(v_user_object_id,
-					          v_object_id, 
-					          data.get_attribute_id('deal_income'))),
-            'min_value_count', 1,
             'max_value_count', 1)))
       );
 end;
@@ -6044,7 +6025,6 @@ declare
   v_deal_name text := json.get_string(in_user_params, 'deal_name');
   v_description text := json.get_string(in_user_params, 'description');
   v_asset_name text := json.get_string(in_user_params, 'asset_name');
-  v_deal_income integer := json.get_integer(in_user_params, 'deal_income');
   v_deal_sector text := json.get_string(in_user_params, 'deal_sector');
 
   v_ret_val api.result;
@@ -6067,8 +6047,6 @@ begin
   perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('description'), null, to_jsonb(v_description), in_user_object_id);
   perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('deal_sector'), null, to_jsonb(v_deal_sector), in_user_object_id);
   perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('asset_name'), null, to_jsonb(v_asset_name), in_user_object_id);
-  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('deal_income'), null, to_jsonb(v_deal_income), in_user_object_id);
-
 
   return api_utils.get_objects(in_client,
 			  in_user_object_id,
@@ -6257,11 +6235,10 @@ begin
 
   -- В сделке должно участвовать не меньше 2 корпораций
   -- Суммарно проценты владения активом и проценты доходов должны быть 100 и 100
-  -- Доходность сделки должна быть не больше, чем 6% от минимальной капитализации корпорации
-  -- Стоимость актива должна быть > 0
+  -- Стоимость актива должна быть >= 1000 000
 
-  if json.get_opt_integer(data.get_attribute_value(in_user_object_id, v_deal_id, data.get_attribute_id('asset_cost')), 0) <= 0 then
-   v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Стоимость актива должна быть больше 0"}';
+  if json.get_opt_integer(data.get_attribute_value(in_user_object_id, v_deal_id, data.get_attribute_id('asset_cost')), 0) < 1000000 then
+   v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Стоимость актива должна быть не меньше 1 000 000 000"}';
    return v_ret_val;
   end if;
 
@@ -6298,11 +6275,6 @@ begin
    return v_ret_val;
   end if;
 
-  if json.get_opt_integer(data.get_attribute_value(in_user_object_id, v_deal_id, data.get_attribute_id('deal_income')), 0) > v_min_capitalization * 0.06 then
-   v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Доходность сделки не может превышать 6% от минимальной капитализации участников"}';
-   return v_ret_val;
-  end if;
-  
   v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Проверка корректности заполнения сделки завершилась успешно"}';
   return v_ret_val;
 end;
@@ -6519,11 +6491,10 @@ begin
      
   -- В сделке должно участвовать не меньше 2 корпораций
   -- Суммарно проценты владения активом и проценты доходов должны быть 100 и 100
-  -- Доходность сделки должна быть не больше, чем 6% от минимальной капитализации корпорации
-  -- Стоимость актива должна быть > 0
+  -- Стоимость актива должна быть >= 1000 000
 
-  if v_asset_cost <= 0 then
-   v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Стоимость актива должна быть больше 0"}';
+  if v_asset_cost < 1000000 then
+   v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Стоимость актива должна быть больше 1000 000"}';
    return v_ret_val;
   end if;
 
@@ -6559,11 +6530,6 @@ begin
    return v_ret_val;
   end if;
 
-  if v_deal_income > v_min_capitalization * 0.06 then
-   v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Доходность сделки не может превышать 6% от минимальной капитализации участников"}';
-   return v_ret_val;
-  end if;
-
   -- проверить, что у всех хватает денег на оплату сделки
   for v_i in 1..10 loop
     v_value := data.get_attribute_value(in_user_object_id, v_deal_id, data.get_attribute_id('system_deal_participant' || v_i));
@@ -6582,6 +6548,9 @@ begin
       end if;
     end if;    
   end loop;
+
+  v_deal_income = round(v_min_capitalization * 0.06); 
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('deal_income'), null, to_jsonb(v_deal_income), in_user_object_id);    
        
   -- снять оплату сделки и пересчитать капитализацию всех корпораций участников
   for v_i in 1..10 loop
@@ -6654,7 +6623,7 @@ begin
         where av.object_id = data.get_object_id(v_corporation_state)
           and av.attribute_id = v_state_tax_attribute_id
           and av.value_object_id is null;
-        if v_state_tax > 0 then
+        if v_state_tax > 0 and round(v_corporation.val * v_state_tax / 100) > 0 then
           perform actions.transfer(in_client, data.get_object_id(v_corporation.key), null, jsonb_build_object('receiver', v_corporation_state, 'description', 'Налог на доход по сделке ' || v_deal_name, 'sum', round(v_corporation.val * v_state_tax / 100)));
         end if;
       end if;
@@ -7379,7 +7348,7 @@ begin
   
   select percent into v_percent
   from jsonb_to_recordset(v_member_value) as (member text, percent integer)
-  where member = v_user_code;
+  where member = json.get_opt_string(data.get_raw_attribute_value(v_object_id, data.get_attribute_id('percent_deal_sender'), null));
   
   return jsonb_build_object(
     'edit_percent_deal',
@@ -7395,6 +7364,7 @@ begin
             'type', 'integer',
             'data', jsonb_build_object('min_value', 0, 'max_value', v_percent),
             'description', 'Процент акций',
+            'default_value', json.get_opt_integer(data.get_raw_attribute_value(v_object_id, data.get_attribute_id('percent_deal_percent'), null)),
             'min_value_count', 1,
             'max_value_count', 1),
         jsonb_build_object(
@@ -7402,6 +7372,7 @@ begin
             'type', 'integer',
             'data', jsonb_build_object('min_value', 0),
             'description', 'Сумма сделки',
+            'default_value', json.get_opt_integer(data.get_raw_attribute_value(v_object_id, data.get_attribute_id('percent_deal_sum'), null)),
             'min_value_count', 1,
             'max_value_count', 1)))
       );
@@ -7730,7 +7701,7 @@ begin
     perform data.delete_attribute_value_if_exists(v_corporation_id, data.get_attribute_id('dividend_vote'), v_sender_id, in_user_object_id);
   end if;
   -- Добавляем покупателя
-  v_member_value := coalesce(v_member_value, jsonb '[]') || jsonb_build_object('member', v_receiver_code, 'percent', v_percent_deal_percent + v_percent_old_receiver);
+  v_member_value := coalesce(v_member_value, jsonb '[]') || jsonb_build_object('member', v_receiver_code, 'percent', v_percent_deal_percent + coalesce(v_percent_old_receiver, 0));
 
   -- Переводим деньги
   if v_percent_deal_sum > 0 then
