@@ -512,7 +512,7 @@ $BODY$
 
 -- Функции для создания связей
 insert into data.attribute_value_change_functions(attribute_id, function, params) values
-(data.get_attribute_id('type'), 'string_value_to_object', jsonb '{"params": {"person": "persons", "corporation": "corporations", "news": "news_hub", "library_category": "library", "crew_document": "crew_library", "research_document": "research_library", "med_document": "med_library", "sector": "market", "state": "states", "mail_folder": "mailbox"}}'),
+(data.get_attribute_id('type'), 'string_value_to_object', jsonb '{"params": {"person": "persons", "corporation": "corporations", "news": "news_hub", "crew_document": "crew_library", "research_document": "research_library", "med_document": "med_library", "sector": "market", "state": "states", "mail_folder": "mailbox"}}'),
 (data.get_attribute_id('person_media'), 'string_value_to_object', jsonb '{"params": {"media1": "media1", "media2": "media2", "media3": "media3"}}'),
 (data.get_attribute_id('news_media'), 'string_value_to_object', jsonb '{"params": {"media1": "media1", "media2": "media2", "media3": "media3"}}'),
 (data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"person": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}, "state": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}, "corporation": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}}}'),
@@ -538,7 +538,11 @@ insert into data.attribute_value_change_functions(attribute_id, function, params
 
 insert into data.attribute_value_change_functions(attribute_id, function, params)
 select data.get_attribute_id('system_library_category'), 'string_value_to_object', ('{"params": {' || string_agg(s.value, ',') || '}}')::jsonb
-from (select '"library_category' || o.value || '": "library_category' || o.value || '"' as value from generate_series(1, 9) o(value)) s;
+from (
+  select '"library_category' || o.value || '": "library_category' || o.value || '"' as value from generate_series(1, 9) o(value)
+  union
+  select '"library": "library"'
+) s;
 
 insert into data.attribute_value_change_functions(attribute_id, function, params)
 select data.get_attribute_id('person_race'), 'string_value_to_object', ('{"params": {' || string_agg(s.value, ',') || '}}')::jsonb
@@ -1221,7 +1225,7 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
         "params": {"placeholder": "Новостей нет", "sort_attribute_code": "system_news_time", "sort_type": "desc", "output": [{"type": "attribute", "data": "news_time"}, {"type": "string", "data": " <a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
       },
       {
-        "conditions": [{"attribute_code": "type", "attribute_value": "library"}, {"attribute_code": "type", "attribute_value": "library_category"}],
+        "conditions": [{"attribute_code": "type", "attribute_value": "library_category"}],
         "function": "fill_content",
         "params": {"placeholder": "Документов нет", "sort_attribute_code": "name", "sort_type": "asc", "output": [{"type": "string", "data": "<a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
       },
@@ -2078,13 +2082,14 @@ select
 from generate_series(1, 15) o(value);
 
 select data.set_attribute_value(data.get_object_id('library'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
-select data.set_attribute_value(data.get_object_id('library'), data.get_attribute_id('type'), null, jsonb '"library"');
+select data.set_attribute_value(data.get_object_id('library'), data.get_attribute_id('type'), null, jsonb '"library_category"');
 select data.set_attribute_value(data.get_object_id('library'), data.get_attribute_id('name'), null, jsonb '"Документы"');
 select data.set_attribute_value(data.get_object_id('library'), data.get_attribute_id('system_meta'), null, jsonb 'true');
 
 select
   data.set_attribute_value(data.get_object_id('library_category' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
   data.set_attribute_value(data.get_object_id('library_category' || o.value), data.get_attribute_id('type'), null, jsonb '"library_category"'),
+  data.set_attribute_value(data.get_object_id('library_category' || o.value), data.get_attribute_id('system_library_category'), null, jsonb '"library"'),
   data.set_attribute_value(data.get_object_id('library_category' || o.value), data.get_attribute_id('name'), null, to_jsonb('Документы ' || o.value))
 from generate_series(1, 9) o(value);
 
