@@ -2105,6 +2105,7 @@ select data.set_attribute_value(data.get_object_id('personal_library'), data.get
 select
   data.set_attribute_value(data.get_object_id('personal_document' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
   data.set_attribute_value(data.get_object_id('personal_document' || o.value), data.get_attribute_id('type'), null, jsonb '"personal_document"'),
+  data.set_attribute_value(data.get_object_id('personal_document' || o.value), data.get_attribute_id('document_title'), null, to_jsonb('Личный документ ' || o.value)),
   data.set_attribute_value(data.get_object_id('personal_document' || o.value), data.get_attribute_id('name'), null, to_jsonb('Личный документ ' || o.value)),
   data.set_attribute_value(data.get_object_id('personal_document' || o.value), data.get_attribute_id('content'), null, to_jsonb('Содержимое личного документа ' || o.value))
 from generate_series(1, 18) o(value);
@@ -3238,11 +3239,11 @@ declare
   v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
   v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
   v_user_object_code text := data.get_object_code(v_user_object_id);
-  v_author_code text := json.get_string(data.get_raw_attribute_value(v_object_id, data.get_attribute_id('document_author'), null));
+  v_author_code text := json.get_opt_string(data.get_raw_attribute_value(v_object_id, data.get_attribute_id('document_author'), null));
   v_masters_object_id integer;
   v_master boolean;
 begin
-  if v_author_code != v_user_object_code then
+  if v_author_code is null or v_author_code != v_user_object_code then
     v_masters_object_id := data.get_object_id('masters');
 
     select true
@@ -7049,7 +7050,8 @@ insert into data.action_generators(function, params, description) values
           {"function": "create_personal_document"}
         ],
         "personal_document": [
-          {"function": "delete_personal_document"}
+          {"function": "delete_personal_document"},
+          {"function": "edit_document"}
         ]
       },
       "mail_type": {
