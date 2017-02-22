@@ -84,8 +84,12 @@ insert into data.params(code, value, description) values
       "actions": ["change_state_tax"]
     },
     {
-      "attributes": ["corporation_state", "corporation_members", "corporation_capitalization", "corporation_sectors", "dividend_vote"],
+      "attributes": ["corporation_state", "corporation_capitalization", "corporation_sectors", "dividend_vote"],
       "actions": ["set_dividend_vote"]
+    },
+    {
+      "attributes": ["corporation_members"],
+      "actions": ["create_percent_deal"]
     },
     {
       "actions": ["create_deal"]
@@ -103,6 +107,10 @@ insert into data.params(code, value, description) values
     {
       "attributes": ["deal_time", "deal_cancel_time", "deal_status", "deal_sector", "asset_name", "asset_cost", "asset_amortization", "deal_income"],
       "actions": ["edit_deal", "delete_deal", "check_deal", "confirm_deal", "cancel_deal"]
+    },
+    {
+      "attributes": ["percent_deal_time", "percent_deal_status", "percent_deal_corporation", "percent_deal_sender", "percent_deal_receiver", "percent_deal_percent", "percent_deal_sum"],
+      "actions": ["edit_percent_deal", "confirm_percent_deal", "cancel_percent_deal"]
     },
     {
       "attributes": ["deal_participant1"],
@@ -186,7 +194,12 @@ insert into data.objects(code) values
 ('states'),
 ('normal_deals'),
 ('draft_deals'),
-('canceled_deals');
+('canceled_deals'),
+('percent_deals'),
+('done_percent_deals'),
+('draft_percent_deals'),
+('canceled_percent_deals'),
+('person_draft_percent_deals');
 
 insert into data.objects(code)
 select 'media' || o.value from generate_series(1, 3) o(value);
@@ -262,6 +275,10 @@ select 'sector' || o1.* from generate_series(1, 4) o1(value);
 
 insert into data.objects(code)
 select 'deal' || o1.* from generate_series(1, 30) o1(value);
+
+insert into data.objects(code)
+select 'percent_deal' || o1.* from generate_series(1, 30) o1(value);
+
 
 -- Функции для получения значений атрибутов
 CREATE OR REPLACE FUNCTION attribute_value_description_functions.person_race(
@@ -359,6 +376,29 @@ begin
     return 'Расторгнута';
   when v_text_value = 'deleted' then
     return 'Удалена';
+  end case;
+
+  return null;
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION attribute_value_description_functions.percent_deal_status(
+    in_user_object_id integer,
+    in_attribute_id integer,
+    in_value jsonb)
+  RETURNS text AS
+$BODY$
+declare
+  v_text_value text := json.get_string(in_value);
+begin
+  case when v_text_value = 'draft' then
+    return 'Предложение';
+  when v_text_value = 'done' then
+    return 'Утверждено';
+  when v_text_value = 'canceled' then
+    return 'Отклонено';
   end case;
 
   return null;
@@ -484,7 +524,16 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('news_time', 'Время публикации новости', 'NORMAL', null),
 ('market_last_time', 'Время последнего пересчёта рынка', 'NORMAL', null),
 ('person_salary', 'Доход за цикл', 'NORMAL', null),
-('system_person_salary', 'Доход за цикл', 'SYSTEM', null);
+('system_person_salary', 'Доход за цикл', 'SYSTEM', null),
+('system_percent_deal_time', 'Дата изменения сделки продажи доли', 'SYSTEM', null),
+('percent_deal_time', 'Дата утверждения сделки', 'NORMAL', null),
+('percent_deal_status', 'Статус сделки', 'NORMAL', 'percent_deal_status'),
+('percent_deal_corporation', 'Корпорация', 'NORMAL', 'code'),
+('percent_deal_sender', 'Продавец', 'NORMAL', 'code'),
+('percent_deal_receiver', 'Покупатель', 'NORMAL', 'code'),
+('percent_deal_percent', 'Процент акций', 'NORMAL', null),
+('percent_deal_sum', 'Сумма сделки', 'NORMAL', null),
+('percent_deals', 'Cделки', 'SYSTEM', null);
 
 CREATE OR REPLACE FUNCTION attribute_value_change_functions.json_member_to_object(in_params jsonb)
   RETURNS void AS
@@ -501,10 +550,17 @@ begin
     from data.object_objects oo
     where oo.parent_object_id = v_object_id and
           oo.parent_object_id != oo.object_id and
+          oo.intermediate_object_ids is null and
           oo.object_id not in (select data.get_object_id(member) from jsonb_to_recordset(v_attribute_value) as (member text));
 
-  perform data.add_object_to_object(data.get_object_id(member), v_object_id)
-    from jsonb_to_recordset(v_attribute_value) as (member text);
+  perform data.add_object_to_object(o.id, v_object_id)
+    from jsonb_to_recordset(v_attribute_value) as c(member text)
+    join data.objects o on o.code = c.member
+    where not exists(select 1 from data.object_objects oo
+                    where oo.object_id = o.id and
+                     oo.parent_object_id = v_object_id and
+                     oo.parent_object_id != oo.object_id and
+                     oo.intermediate_object_ids is null);
 end;
 $BODY$
   LANGUAGE plpgsql VOLATILE
@@ -512,7 +568,7 @@ $BODY$
 
 -- Функции для создания связей
 insert into data.attribute_value_change_functions(attribute_id, function, params) values
-(data.get_attribute_id('type'), 'string_value_to_object', jsonb '{"params": {"person": "persons", "corporation": "corporations", "news": "news_hub", "crew_document": "crew_library", "research_document": "research_library", "med_document": "med_library", "sector": "market", "state": "states", "mail_folder": "mailbox"}}'),
+(data.get_attribute_id('type'), 'string_value_to_object', jsonb '{"params": {"person": "persons", "corporation": "corporations", "news": "news_hub", "crew_document": "crew_library", "research_document": "research_library", "med_document": "med_library", "sector": "market", "state": "states", "mail_folder": "mailbox", "done_percent_deals": "percent_deals", "draft_percent_deals": "percent_deals", "canceled_percent_deals": "percent_deals"}}'),
 (data.get_attribute_id('person_media'), 'string_value_to_object', jsonb '{"params": {"media1": "media1", "media2": "media2", "media3": "media3"}}'),
 (data.get_attribute_id('news_media'), 'string_value_to_object', jsonb '{"params": {"media1": "media1", "media2": "media2", "media3": "media3"}}'),
 (data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"person": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}, "state": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}, "corporation": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}}}'),
@@ -534,7 +590,8 @@ insert into data.attribute_value_change_functions(attribute_id, function, params
 (data.get_attribute_id('system_personal_document'), 'boolean_value_to_value_attribute', jsonb '{"object_code": "personal_library", "attribute_code": "system_value"}'),
 (data.get_attribute_id('system_meta'), 'boolean_value_to_value_attribute', jsonb '{"object_code": "meta_entities", "attribute_code": "meta_entities"}'),
 (data.get_attribute_id('system_corporation_members'), 'json_member_to_object', null),
-(data.get_attribute_id('deal_status'), 'string_value_to_object', jsonb '{"params": {"normal": "normal_deals", "draft": "draft_deals", "canceled": "canceled_deals"}}');
+(data.get_attribute_id('deal_status'), 'string_value_to_object', jsonb '{"params": {"normal": "normal_deals", "draft": "draft_deals", "canceled": "canceled_deals"}}'),
+(data.get_attribute_id('percent_deal_status'), 'string_value_to_object', jsonb '{"params": {"done": "done_percent_deals", "draft": "draft_percent_deals", "canceled": "canceled_percent_deals"}}');
 
 insert into data.attribute_value_change_functions(attribute_id, function, params)
 select data.get_attribute_id('system_library_category'), 'string_value_to_object', ('{"params": {' || string_agg(s.value, ',') || '}}')::jsonb
@@ -1254,6 +1311,11 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
         "function": "fill_personal_library"
       },
       {
+        "conditions": [{"attribute_code": "type", "attribute_value": "person_draft_percent_deals"}],
+        "function": "fill_user_content_from_attribute",
+        "params": {"placeholder": "Предложений продажи акций нет", "source_attribute_code": "percent_deals", "sort_type": "desc", "output": [{"type": "string", "data": "<a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+      },
+      {
         "conditions": [{"attribute_code": "type", "attribute_value": "med_library"}],
         "function": "fill_user_content",
         "params": {"placeholder": "Отчётов нет", "sort_attribute_code": "system_document_time", "sort_type": "desc", "output": [{"type": "string", "data": "<a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
@@ -1287,6 +1349,26 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
         "conditions": [{"attribute_code": "type", "attribute_value": "draft_deals"}],
         "function": "fill_content",
         "params": {"sort_attribute_code": "system_deal_time", "sort_type": "desc", "output": [{"type": "string", "data": "<a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+      },
+      {
+        "conditions": [{"attribute_code": "type", "attribute_value": "percent_deals"}],
+        "function": "fill_content",
+        "params": {"sort_attribute_code": "name", "sort_type": "asc", "output": [{"type": "string", "data": " <a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+      },
+      {
+        "conditions": [{"attribute_code": "type", "attribute_value": "done_percent_deals"}],
+        "function": "fill_content",
+        "params": {"sort_attribute_code": "system_percent_deal_time", "sort_type": "desc", "output": [{"type": "attribute", "data": "percent_deal_time"}, {"type": "string", "data": " <a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+      },
+      {
+        "conditions": [{"attribute_code": "type", "attribute_value": "canceled_percent_deals"}],
+        "function": "fill_content",
+        "params": {"sort_attribute_code": "system_percent_deal_time", "sort_type": "desc", "output": [{"type": "string", "data": " <a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+      },
+      {
+        "conditions": [{"attribute_code": "type", "attribute_value": "draft_percent_deals"}],
+        "function": "fill_content",
+        "params": {"sort_attribute_code": "system_percent_deal_time", "sort_type": "desc", "output": [{"type": "string", "data": "<a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
       },
       {
         "conditions": [{"attribute_code": "type", "attribute_value": "transaction_list"}],
@@ -1881,6 +1963,28 @@ select data.set_attribute_value(data.get_object_id('canceled_deals'), data.get_a
 select data.set_attribute_value(data.get_object_id('canceled_deals'), data.get_attribute_id('type'), null, jsonb '"canceled_deals"');
 select data.set_attribute_value(data.get_object_id('canceled_deals'), data.get_attribute_id('name'), null, jsonb '"Расторгнутые сделки"');
 
+select data.set_attribute_value(data.get_object_id('percent_deals'), data.get_attribute_id('system_meta'), data.get_object_id('masters'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('percent_deals'), data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('percent_deals'), data.get_attribute_id('type'), null, jsonb '"percent_deals"');
+select data.set_attribute_value(data.get_object_id('percent_deals'), data.get_attribute_id('name'), null, jsonb '"Сделки по продаже акций"');
+
+select data.set_attribute_value(data.get_object_id('person_draft_percent_deals'), data.get_attribute_id('system_meta'), data.get_object_id('persons'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person_draft_percent_deals'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person_draft_percent_deals'), data.get_attribute_id('type'), null, jsonb '"person_draft_percent_deals"');
+select data.set_attribute_value(data.get_object_id('person_draft_percent_deals'), data.get_attribute_id('name'), null, jsonb '"Предолжения продажи акций"');
+
+select data.set_attribute_value(data.get_object_id('draft_percent_deals'), data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('draft_percent_deals'), data.get_attribute_id('type'), null, jsonb '"draft_percent_deals"');
+select data.set_attribute_value(data.get_object_id('draft_percent_deals'), data.get_attribute_id('name'), null, jsonb '"Предолжения продажи акций"');
+
+select data.set_attribute_value(data.get_object_id('canceled_percent_deals'), data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('canceled_percent_deals'), data.get_attribute_id('type'), null, jsonb '"canceled_percent_deals"');
+select data.set_attribute_value(data.get_object_id('canceled_percent_deals'), data.get_attribute_id('name'), null, jsonb '"Отклонённые продажи акций"');
+
+select data.set_attribute_value(data.get_object_id('done_percent_deals'), data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('done_percent_deals'), data.get_attribute_id('type'), null, jsonb '"done_percent_deals"');
+select data.set_attribute_value(data.get_object_id('done_percent_deals'), data.get_attribute_id('name'), null, jsonb '"Подтверждённые продажи акций"');
+
 select
   data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
   data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
@@ -1914,6 +2018,35 @@ select
   data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"canceled"')
 from generate_series(21, 30) o(value);
 
+select
+  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('type'), null, jsonb '"percent_deal"'),
+  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('name'), null, to_jsonb('Percent Deal ' || o.value)),
+  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('description'), null, to_jsonb('Описание сделки deal ' || o.value)),
+  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('percent_deal_corporation'), null, to_jsonb('corporation' || (o.value % 9 + 1))),
+  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('percent_deal_sender'), null, to_jsonb('person' || o.value)),
+  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('percent_deal_receiver'), null, to_jsonb('person' || (o.value + 1))),
+  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('percent_deal_percent'), null, to_jsonb(1)),
+  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('percent_deal_sum'), null, to_jsonb(o.value * 1000))
+from generate_series(1, 30) o(value);
+
+select
+  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('system_percent_deal_time'), null, to_jsonb('2259.02.23 15:' || (o.value + 10))),
+  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('percent_deal_time'), null, to_jsonb('2259.02.23 15:' || (o.value + 10))),
+  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('percent_deal_status'), null, jsonb '"done"')
+from generate_series(1, 10) o(value);
+
+select
+  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('system_percent_deal_time'), null, to_jsonb('2259.02.23 12:' || (o.value + 10))),
+  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('percent_deal_status'), null, jsonb '"draft"')
+from generate_series(11, 20) o(value);
+
+select
+  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('system_percent_deal_time'), null, to_jsonb('2259.02.23 18:' || (o.value + 10))),
+  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('percent_deal_status'), null, jsonb '"canceled"')
+from generate_series(21, 30) o(value);
+
+
 -- Пересчитывает капитализацию всех корпораций по текущим активным сделкам
 CREATE OR REPLACE FUNCTION actions.calc_capitalizations()
   RETURNS void AS
@@ -1942,7 +2075,7 @@ begin
         v_corp := json.get_opt_string(v_value, null, 'member');
         v_percent_asset := json.get_opt_integer(v_value, 0, 'percent_asset');
         v_this_cap := json.get_opt_integer(v_corp_cap, 0, v_corp);
-        v_corp_cap :=  jsonb_set(v_corp_cap, array_agg(v_corp), to_jsonb(v_this_cap + v_asset_cost * v_percent_asset / 100));
+        v_corp_cap :=  jsonb_set(v_corp_cap, array_agg(v_corp), to_jsonb(v_this_cap + round(v_asset_cost * v_percent_asset / 100)));
       end if;
     end loop;       
   end loop;
@@ -5263,7 +5396,7 @@ begin
          jsonb_build_object(
             'code', 'deal_income',
             'type', 'integer',
-            'data', jsonb_build_object('min_value', 0, 'max_value', 1000000000000),
+            'data', jsonb_build_object('min_value', 0),
             'description', 'Доходность сделки',
             'min_value_count', 1,
             'max_value_count', 1),
@@ -5284,7 +5417,7 @@ begin
         jsonb_build_object(
             'code', 'deal_cost',
             'type', 'integer',
-            'data', jsonb_build_object('min_value', 0, 'max_value', 100000000000),
+            'data', jsonb_build_object('min_value', 0),
             'description', 'Вложения в сделку для вашей корпорации',
             'min_value_count', 1,
             'max_value_count', 1)))
@@ -5425,7 +5558,7 @@ begin
         jsonb_build_object(
             'code', 'deal_cost',
             'type', 'integer',
-            'data', jsonb_build_object('min_value', 0, 'max_value', 100000000000),
+            'data', jsonb_build_object('min_value', 0),
             'description', 'Вложения в сделку',
             'min_value_count', 1,
             'max_value_count', 1)))
@@ -5595,7 +5728,7 @@ begin
         jsonb_build_object(
             'code', 'deal_cost',
             'type', 'integer',
-            'data', jsonb_build_object('min_value', 0, 'max_value', 100000000000),
+            'data', jsonb_build_object('min_value', 0),
             'description', 'Вложения в сделку',
             'default_value', json.get_opt_integer(v_value -> 'deal_cost'),
             'min_value_count', 1,
@@ -5793,7 +5926,11 @@ begin
           v_system_corporation_draft_deals_attribute_id,
           null));
   v_value := coalesce(v_value, jsonb '[]') - v_deal_code;
-  perform data.set_attribute_value(v_corporation_id, v_system_corporation_draft_deals_attribute_id, null, v_value, in_user_object_id);
+  if v_value = '[]' then
+    perform data.delete_attribute_value(v_corporation_id, v_system_corporation_draft_deals_attribute_id, null, in_user_object_id);
+  else
+    perform data.set_attribute_value(v_corporation_id, v_system_corporation_draft_deals_attribute_id, null, v_value, in_user_object_id);
+  end if;
 
   return api_utils.get_objects(in_client,
 			  in_user_object_id,
@@ -5881,7 +6018,7 @@ begin
          jsonb_build_object(
             'code', 'deal_income',
             'type', 'integer',
-            'data', jsonb_build_object('min_value', 0, 'max_value', 1000000000000),
+            'data', jsonb_build_object('min_value', 0),
             'description', 'Доходность сделки',
             'default_value', json.get_opt_integer(data.get_attribute_value(v_user_object_id,
 					          v_object_id, 
@@ -6026,7 +6163,11 @@ begin
           v_system_corporation_draft_deals_attribute_id,
           null));
       v_value_draft_deals := coalesce(v_value_draft_deals, jsonb '[]') - v_deal_code;
-      perform data.set_attribute_value(v_corporation_id, v_system_corporation_draft_deals_attribute_id, null, v_value_draft_deals, in_user_object_id);
+      if v_value_draft_deals = '[]' then
+        perform data.delete_attribute_value(v_corporation_id, v_system_corporation_draft_deals_attribute_id, null, in_user_object_id);
+      else
+        perform data.set_attribute_value(v_corporation_id, v_system_corporation_draft_deals_attribute_id, null, v_value_draft_deals, in_user_object_id);
+      end if;
     end if;    
   end loop;
 
@@ -6451,7 +6592,7 @@ begin
         perform actions.transfer_to_null(in_client, v_corporation_id, null, jsonb_build_object('receiver', v_deal_code, 'description', 'Оплата сделки ' || v_deal_name, 'sum', json.get_integer(v_value, 'deal_cost')));
       end if;
       v_capitalization := json.get_opt_integer(data.get_attribute_value(in_user_object_id, v_corporation_id, v_corporation_capitalization_attribute_id), 0);
-      perform data.set_attribute_value_if_changed(v_corporation_id, v_corporation_capitalization_attribute_id, null, to_jsonb(v_capitalization + (v_asset_cost * json.get_opt_integer(v_value, 0, 'percent_asset') / 100)), in_user_object_id);
+      perform data.set_attribute_value_if_changed(v_corporation_id, v_corporation_capitalization_attribute_id, null, to_jsonb(v_capitalization + round(v_asset_cost * json.get_opt_integer(v_value, 0, 'percent_asset') / 100)), in_user_object_id);
     end if;    
   end loop;  
  
@@ -6514,7 +6655,7 @@ begin
           and av.attribute_id = v_state_tax_attribute_id
           and av.value_object_id is null;
         if v_state_tax > 0 then
-          perform actions.transfer(in_client, data.get_object_id(v_corporation.key), null, jsonb_build_object('receiver', v_corporation_state, 'description', 'Налог на доход по сделке ' || v_deal_name, 'sum', v_corporation.val * v_state_tax / 100));
+          perform actions.transfer(in_client, data.get_object_id(v_corporation.key), null, jsonb_build_object('receiver', v_corporation_state, 'description', 'Налог на доход по сделке ' || v_deal_name, 'sum', round(v_corporation.val * v_state_tax / 100)));
         end if;
       end if;
     end if;
@@ -6542,7 +6683,11 @@ begin
           v_system_corporation_deals_attribute_id,
           null));
       v_value_draft_deals := coalesce(v_value_draft_deals, jsonb '[]') - v_deal_code;
-      perform data.set_attribute_value(v_corporation_id, v_system_corporation_draft_deals_attribute_id, null, v_value_draft_deals, in_user_object_id);
+      if v_value_draft_deals = '[]' then
+        perform data.set_attribute_value(v_corporation_id, v_system_corporation_draft_deals_attribute_id, null, in_user_object_id);
+      else
+        perform data.set_attribute_value(v_corporation_id, v_system_corporation_draft_deals_attribute_id, null, v_value_draft_deals, in_user_object_id);
+      end if;
       v_value_deals := coalesce(v_value_deals, jsonb '[]') || to_jsonb(v_deal_code);
       perform data.set_attribute_value(v_corporation_id, v_system_corporation_deals_attribute_id, null, v_value_deals, in_user_object_id);
     end if;    
@@ -6647,7 +6792,7 @@ begin
     if v_value is not null then
       v_corporation_id := data.get_object_id(json.get_opt_string(v_value, null, 'member'));
       v_capitalization := json.get_opt_integer(data.get_attribute_value(in_user_object_id, v_corporation_id, v_corporation_capitalization_attribute_id), 0);
-      perform data.set_attribute_value_if_changed(v_corporation_id, v_corporation_capitalization_attribute_id, null, to_jsonb(v_capitalization - (v_asset_cost * json.get_opt_integer(v_value, 0, 'percent_asset') / 100)), in_user_object_id);
+      perform data.set_attribute_value_if_changed(v_corporation_id, v_corporation_capitalization_attribute_id, null, to_jsonb(v_capitalization - round(v_asset_cost * json.get_opt_integer(v_value, 0, 'percent_asset') / 100)), in_user_object_id);
     end if;    
   end loop;  
 
@@ -6673,7 +6818,11 @@ begin
           v_system_corporation_canceled_deals_attribute_id,
           null));
       v_value_deals := coalesce(v_value_deals, jsonb '[]') - v_deal_code;
-      perform data.set_attribute_value(v_corporation_id, v_system_corporation_deals_attribute_id, null, v_value_deals, in_user_object_id);
+      if v_value_deals = '[]' then
+        perform data.set_attribute_value(v_corporation_id, v_system_corporation_deals_attribute_id, null, in_user_object_id);
+      else
+        perform data.set_attribute_value(v_corporation_id, v_system_corporation_deals_attribute_id, null, v_value_deals, in_user_object_id);
+      end if;
       v_value_canceled_deals := coalesce(v_value_canceled_deals, jsonb '[]') || to_jsonb(v_deal_code);
       perform data.set_attribute_value(v_corporation_id, v_system_corporation_canceled_deals_attribute_id, null, v_value_canceled_deals, in_user_object_id);
     end if;    
@@ -7050,6 +7199,588 @@ $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
 
+-- Действие для создания сделки
+CREATE OR REPLACE FUNCTION action_generators.create_percent_deal(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_is_in_group integer; 
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_member_value jsonb;
+  v_percent integer;
+begin
+  select count(1) into v_is_in_group 
+  from data.object_objects oo
+   where oo.parent_object_id = v_object_id
+   and oo.object_id = v_user_object_id;
+
+  if v_is_in_group = 0 then
+    return null;
+  end if;
+
+  v_member_value := data.get_raw_attribute_value(v_object_id, data.get_attribute_id('system_corporation_members'), null);
+  
+  select percent into v_percent
+  from jsonb_to_recordset(v_member_value) as (member text, percent integer)
+  where member = data.get_object_code(v_user_object_id);
+  
+  return jsonb_build_object(
+    'create_percent_deal',
+    jsonb_build_object(
+      'code', 'create_percent_deal',
+      'name', 'Продать акции',
+      'type', 'financial.deal',
+      'params', jsonb_build_object('corporation_code', data.get_object_code(json.get_integer(in_params, 'object_id'))),
+      'user_params', 
+       jsonb_build_array(
+         jsonb_build_object(
+            'code', 'receiver',
+            'type', 'objects',
+            'description', 'Покупатель',
+            'data', jsonb_build_object('object_code', 'persons', 'attribute_code', 'persons'),
+            'min_value_count', 1,
+            'max_value_count', 1),
+        jsonb_build_object(
+            'code', 'percent',
+            'type', 'integer',
+            'data', jsonb_build_object('min_value', 0, 'max_value', v_percent),
+            'description', 'Процент акций',
+            'min_value_count', 1,
+            'max_value_count', 1),
+        jsonb_build_object(
+            'code', 'deal_sum',
+            'type', 'integer',
+            'data', jsonb_build_object('min_value', 0),
+            'description', 'Сумма сделки',
+            'min_value_count', 1,
+            'max_value_count', 1)))
+      );
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.create_percent_deal(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_corporation_code text := json.get_string(in_params, 'corporation_code');
+  v_corporation_id integer := data.get_object_id(v_corporation_code);
+  v_deal_id integer;
+  v_deal_code text;
+  v_receiver text := json.get_string(in_user_params, 'receiver');
+  v_receiver_id integer;
+  v_percent integer := json.get_integer(in_user_params, 'percent');
+  v_deal_sum integer := json.get_integer(in_user_params, 'deal_sum');
+
+  v_name text;
+
+  v_meta_id integer := data.get_object_id('person_draft_percent_deals');
+
+  v_name_attribute_id integer := data.get_attribute_id('name');
+  v_percent_deals_attribute_id integer := data.get_attribute_id('percent_deals');
+  v_value jsonb;
+  v_ret_val api.result;
+begin
+  v_ret_val := api_utils.get_objects(in_client,
+				     in_user_object_id,
+				     jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_corporation_code),
+			    'get_actions', true,
+			    'get_templates', true));
+			    
+  v_receiver_id := data.get_object_id(v_receiver);
+  if v_receiver_id = in_user_object_id then
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Нет смысла продавать акции самому себе"}';
+    return v_ret_val;
+   end if;  
+
+  insert into data.objects(id) values(default)
+  returning id, code into v_deal_id, v_deal_code;
+  
+  v_name := v_percent || '% акций ' || json.get_string(data.get_raw_attribute_value(v_corporation_id, v_name_attribute_id, null)) || ', ' || json.get_string(data.get_raw_attribute_value(in_user_object_id, v_name_attribute_id, null)) ||' -> '|| json.get_string(data.get_raw_attribute_value(v_receiver_id, v_name_attribute_id, null));
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true', in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('system_is_visible'), in_user_object_id, jsonb 'true', in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('system_is_visible'), v_receiver_id, jsonb 'true', in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('type'), null, jsonb '"percent_deal"', in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('name'), null, to_jsonb(v_name), in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('percent_deal_sender'), null, to_jsonb(data.get_object_code(in_user_object_id)), in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('percent_deal_corporation'), null, to_jsonb(v_corporation_code), in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('percent_deal_receiver'), null, to_jsonb(v_receiver), in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('percent_deal_percent'), null, to_jsonb(v_percent), in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('system_percent_deal_time'), null, to_jsonb(utils.system_time()), in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('percent_deal_status'), null, jsonb '"draft"', in_user_object_id);
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('percent_deal_sum'), null, to_jsonb(v_deal_sum), in_user_object_id);
+  
+-- Вставим сделку в метаобъект для отправителя и для получателя
+    v_value := json.get_opt_array(
+        data.get_attribute_value_for_update(
+          v_meta_id,
+          v_percent_deals_attribute_id,
+          in_user_object_id));
+    v_value := coalesce(v_value, jsonb '[]') || jsonb_build_array(v_deal_code);
+    perform data.set_attribute_value(v_meta_id, v_percent_deals_attribute_id, in_user_object_id, v_value, in_user_object_id);
+
+    v_value := json.get_opt_array(
+        data.get_attribute_value_for_update(
+          v_meta_id,
+          v_percent_deals_attribute_id,
+          v_receiver_id));
+    v_value := coalesce(v_value, jsonb '[]') || jsonb_build_array(v_deal_code);
+    perform data.set_attribute_value(v_meta_id, v_percent_deals_attribute_id, v_receiver_id, v_value, in_user_object_id);
+
+  return api_utils.get_objects(in_client,
+			  in_user_object_id,
+			  jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_deal_code),
+			    'get_actions', true,
+			    'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+-- Действие для редактирования сделки продажи акций
+CREATE OR REPLACE FUNCTION action_generators.edit_percent_deal(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_user_code text := data.get_object_code(v_user_object_id);
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_member_value jsonb;
+  v_percent integer;
+  v_corporation_id integer;
+begin
+   -- Показываем только автора сделки и для мастера и когда сделка - черновик
+  if (json.get_opt_string(data.get_raw_attribute_value(v_object_id,
+                         data.get_attribute_id('percent_deal_sender'),
+			 null), '~') <> v_user_code
+  and not json.get_opt_boolean(data.get_attribute_value(v_user_object_id,
+					       v_user_object_id, 
+					       data.get_attribute_id('system_master')), false))
+  or json.get_opt_string(data.get_attribute_value(v_user_object_id,
+					          v_object_id, 
+					          data.get_attribute_id('percent_deal_status')),'~') <> 'draft' then
+     return null;
+  end if;
+
+  v_corporation_id := data.get_object_id(json.get_string(data.get_raw_attribute_value(v_object_id,
+                                                                                      data.get_attribute_id('percent_deal_corporation'),
+			                                                              null)));
+  v_member_value := data.get_raw_attribute_value(v_corporation_id, data.get_attribute_id('system_corporation_members'), null);
+  
+  select percent into v_percent
+  from jsonb_to_recordset(v_member_value) as (member text, percent integer)
+  where member = v_user_code;
+  
+  return jsonb_build_object(
+    'edit_percent_deal',
+    jsonb_build_object(
+      'code', 'edit_percent_deal',
+      'name', 'Изменить условия',
+      'type', 'financial.deal',
+      'params', jsonb_build_object('deal_code', data.get_object_code(v_object_id)),
+      'user_params', 
+       jsonb_build_array(
+        jsonb_build_object(
+            'code', 'percent',
+            'type', 'integer',
+            'data', jsonb_build_object('min_value', 0, 'max_value', v_percent),
+            'description', 'Процент акций',
+            'min_value_count', 1,
+            'max_value_count', 1),
+        jsonb_build_object(
+            'code', 'deal_sum',
+            'type', 'integer',
+            'data', jsonb_build_object('min_value', 0),
+            'description', 'Сумма сделки',
+            'min_value_count', 1,
+            'max_value_count', 1)))
+      );
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.edit_percent_deal(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+
+  v_deal_code text := json.get_string(in_params, 'deal_code');
+  v_deal_id integer := data.get_object_id(v_deal_code);
+  v_corporation_id integer; 
+  v_receiver_id integer;
+  v_sender_id integer;
+  v_percent integer := json.get_integer(in_user_params, 'percent');
+  v_deal_sum integer := json.get_integer(in_user_params, 'deal_sum');
+
+  v_name text;
+
+  v_name_attribute_id integer := data.get_attribute_id('name');
+  v_ret_val api.result;
+begin
+  v_ret_val := api_utils.get_objects(in_client,
+				     in_user_object_id,
+				     jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_deal_code),
+			    'get_actions', true,
+			    'get_templates', true));
+  if json.get_opt_string(data.get_attribute_value(in_user_object_id,
+					          v_deal_id, 
+					          data.get_attribute_id('percent_deal_status')),'~') <> 'draft' then
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Статус сделки изменился!"}';
+    return v_ret_val;
+   end if;
+  v_corporation_id := data.get_object_id(json.get_string(data.get_raw_attribute_value(v_deal_id,
+                                                                                      data.get_attribute_id('percent_deal_corporation'),
+			                                                              null)));
+  v_receiver_id := data.get_object_id(json.get_string(data.get_raw_attribute_value(v_deal_id,
+                                                                                      data.get_attribute_id('percent_deal_receiver'),
+			                                                              null)));
+  v_sender_id := data.get_object_id(json.get_string(data.get_raw_attribute_value(v_deal_id,
+                                                                                      data.get_attribute_id('percent_deal_sender'),
+			                                                              null)));
+  v_name := v_percent || '% акций ' || json.get_string(data.get_raw_attribute_value(v_corporation_id, v_name_attribute_id, null)) || ', ' || json.get_string(data.get_raw_attribute_value(v_sender_id, v_name_attribute_id, null)) ||' -> '|| json.get_string(data.get_raw_attribute_value(v_receiver_id, v_name_attribute_id, null));
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('name'), null, to_jsonb(v_name), in_user_object_id);
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('percent_deal_percent'), null, to_jsonb(v_percent), in_user_object_id);
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('percent_deal_sum'), null, to_jsonb(v_deal_sum), in_user_object_id);
+
+  return api_utils.get_objects(in_client,
+			  in_user_object_id,
+			  jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_deal_code),
+			    'get_actions', true,
+			    'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+  -- Действие для отклонения сделки продажи акций
+CREATE OR REPLACE FUNCTION action_generators.cancel_percent_deal(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_user_code text := data.get_object_code(v_user_object_id);
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+begin
+   -- Показываем только автора сделки, для покупателя и для мастера и когда сделка - черновик
+  if (json.get_opt_string(data.get_raw_attribute_value(v_object_id,
+                         data.get_attribute_id('percent_deal_sender'),
+			 null), '~') <> v_user_code
+  and json.get_opt_string(data.get_raw_attribute_value(v_object_id,
+                         data.get_attribute_id('percent_deal_receiver'),
+			 null), '~') <> v_user_code
+  and not json.get_opt_boolean(data.get_attribute_value(v_user_object_id,
+					       v_user_object_id, 
+					       data.get_attribute_id('system_master')), false))
+  or json.get_opt_string(data.get_attribute_value(v_user_object_id,
+					          v_object_id, 
+					          data.get_attribute_id('percent_deal_status')),'~') <> 'draft'  then
+     return null;
+   end if;
+
+  return jsonb_build_object(
+    'cancel_percent_deal',
+    jsonb_build_object(
+      'code', 'cancel_percent_deal',
+      'name', 'Отклонить сделку',
+      'type', 'financial.deal',
+      'warning', 'Вы точно хотите отклонить сделку?',
+      'params', jsonb_build_object('deal_code', data.get_object_code(v_object_id)))
+      );
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.cancel_percent_deal(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_deal_code text := json.get_string(in_params, 'deal_code');
+  v_deal_id integer := data.get_object_id(v_deal_code);
+  v_receiver_id integer;
+  v_sender_id integer;
+
+  v_name_attribute_id integer := data.get_attribute_id('name');
+
+  v_meta_id integer := data.get_object_id('person_draft_percent_deals');
+
+  v_percent_deals_attribute_id integer := data.get_attribute_id('percent_deals');
+  v_value jsonb;
+  v_description text;
+  v_ret_val api.result;
+begin
+  v_ret_val := api_utils.get_objects(in_client,
+				     in_user_object_id,
+				     jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_deal_code),
+			    'get_actions', true,
+			    'get_templates', true));
+  if json.get_opt_string(data.get_attribute_value(in_user_object_id,
+					          v_deal_id, 
+					          data.get_attribute_id('percent_deal_status')),'~') <> 'draft' then
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Статус сделки изменился!"}';
+    return v_ret_val;
+   end if;
+  v_receiver_id := data.get_object_id(json.get_string(data.get_raw_attribute_value(v_deal_id,
+                                                                                      data.get_attribute_id('percent_deal_receiver'),
+			                                                              null)));
+  v_sender_id := data.get_object_id(json.get_string(data.get_raw_attribute_value(v_deal_id,
+                                                                                      data.get_attribute_id('percent_deal_sender'),
+			                                                              null)));
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('system_is_visible'), v_sender_id, jsonb 'false', in_user_object_id);
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('system_is_visible'), v_receiver_id, jsonb 'false', in_user_object_id);
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('system_percent_deal_time'), null, to_jsonb(utils.system_time()), in_user_object_id);
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('percent_deal_status'), null, jsonb '"canceled"', in_user_object_id);
+  v_description := 'Сделка отклонена ' || json.get_string(data.get_raw_attribute_value(in_user_object_id, v_name_attribute_id, null));
+  perform data.set_attribute_value(v_deal_id, data.get_attribute_id('description'), null, to_jsonb(v_description), in_user_object_id);
+  
+  -- Исключим сделку из метаобъекта для отправителя и для получателя
+    v_value := json.get_opt_array(
+        data.get_attribute_value_for_update(
+          v_meta_id,
+          v_percent_deals_attribute_id,
+          v_sender_id));
+    v_value := coalesce(v_value, jsonb '[]') - v_deal_code;
+    if v_value = '[]' then
+      perform data.delete_attribute_value(v_meta_id, v_percent_deals_attribute_id, v_sender_id, in_user_object_id);
+    else
+      perform data.set_attribute_value(v_meta_id, v_percent_deals_attribute_id, v_sender_id, v_value, in_user_object_id);
+    end if;
+
+    v_value := json.get_opt_array(
+        data.get_attribute_value_for_update(
+          v_meta_id,
+          v_percent_deals_attribute_id,
+          v_receiver_id));
+    v_value := coalesce(v_value, jsonb '[]') - v_deal_code;
+    if v_value = '[]' then
+      perform data.delete_attribute_value(v_meta_id, v_percent_deals_attribute_id, v_receiver_id, in_user_object_id);
+    else
+      perform data.set_attribute_value(v_meta_id, v_percent_deals_attribute_id, v_receiver_id, v_value, in_user_object_id);
+    end if;
+
+
+  return api_utils.get_objects(in_client,
+			  in_user_object_id,
+			  jsonb_build_object(
+			    'object_codes', jsonb_build_array(data.get_object_code(in_user_object_id)),
+			    'get_actions', true,
+			    'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+  -- Действие для подтверждения сделки продажи акций
+CREATE OR REPLACE FUNCTION action_generators.confirm_percent_deal(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_is_in_group integer; 
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_user_code text := data.get_object_code(v_user_object_id);
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+begin
+   -- Показываем только для покупателя и для мастера и когда сделка - черновик
+  if (json.get_opt_string(data.get_raw_attribute_value(v_object_id,
+                         data.get_attribute_id('percent_deal_receiver'),
+			 null), '~') <> v_user_code
+  and not json.get_opt_boolean(data.get_attribute_value(v_user_object_id,
+					       v_user_object_id, 
+					       data.get_attribute_id('system_master')), false))
+  or json.get_opt_string(data.get_attribute_value(v_user_object_id,
+					          v_object_id, 
+					          data.get_attribute_id('percent_deal_status')),'~') <> 'draft'  then
+     return null;
+   end if;
+  
+  return jsonb_build_object(
+    'confirm_percent_deal',
+    jsonb_build_object(
+      'code', 'confirm_percent_deal',
+      'name', 'Подвердить сделку',
+      'type', 'financial.deal',
+      'warning', 'Вы точно хотите подтвердить сделку?',
+      'params', jsonb_build_object('deal_code', data.get_object_code(v_object_id)))
+      );
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.confirm_percent_deal(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_deal_code text := json.get_string(in_params, 'deal_code');
+  v_deal_id integer := data.get_object_id(v_deal_code);
+  v_receiver_id integer;
+  v_sender_id integer;
+  v_sender_code text;
+  v_receiver_code text;
+  v_corporation_id integer;
+
+  v_name_attribute_id integer := data.get_attribute_id('name');
+
+  v_meta_id integer := data.get_object_id('person_draft_percent_deals');
+
+  v_balance integer;
+  v_percent_deal_sum integer;
+  v_member_value jsonb;
+  v_percent_old integer;
+  v_percent_old_receiver integer;
+  v_percent_deal_percent integer;
+
+  v_percent_deals_attribute_id integer := data.get_attribute_id('percent_deals');
+  v_system_balance_attribute_id integer := data.get_attribute_id('system_balance');
+  v_percent_deal_sum_attribute_id integer := data.get_attribute_id('percent_deal_sum');
+  v_percent_deal_percent_attribute_id integer := data.get_attribute_id('percent_deal_percent');
+  v_value jsonb;
+  v_description text;
+  v_ret_val api.result;
+begin
+  v_ret_val := api_utils.get_objects(in_client,
+				     in_user_object_id,
+				     jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_deal_code),
+			    'get_actions', true,
+			    'get_templates', true));
+  if json.get_opt_string(data.get_attribute_value(in_user_object_id,
+					          v_deal_id, 
+					          data.get_attribute_id('percent_deal_status')),'~') <> 'draft' then
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Статус сделки изменился!"}';
+    return v_ret_val;
+  end if;
+  v_sender_code := json.get_string(data.get_raw_attribute_value(v_deal_id,
+                                                                data.get_attribute_id('percent_deal_sender'),
+			                                        null));
+  v_receiver_code := json.get_string(data.get_raw_attribute_value(v_deal_id,
+                                                                  data.get_attribute_id('percent_deal_receiver'),
+			                                          null));
+  v_receiver_id := data.get_object_id(v_receiver_code);
+  v_sender_id := data.get_object_id(v_sender_code);
+
+  v_percent_deal_percent := json.get_integer(data.get_attribute_value_for_share(v_deal_id, v_percent_deal_percent_attribute_id, null));
+
+  v_corporation_id := data.get_object_id(json.get_string(data.get_raw_attribute_value(v_deal_id,
+                                                                                      data.get_attribute_id('percent_deal_corporation'),
+			                                                              null)));
+  v_member_value := data.get_raw_attribute_value(v_corporation_id, data.get_attribute_id('system_corporation_members'), null);
+  
+  select coalesce(percent, 0) into v_percent_old
+  from jsonb_to_recordset(v_member_value) as (member text, percent integer)
+  where member = v_sender_code;
+
+  select coalesce(percent, 0) into v_percent_old_receiver
+  from jsonb_to_recordset(v_member_value) as (member text, percent integer)
+  where member = v_receiver_code;
+
+  -- Если у продавца больше нет такого количества акций, то продавать нечего
+  if v_percent_deal_percent > v_percent_old then
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Продавец не владеет нужным количеством акций"}';
+    return v_ret_val;
+  end if;
+
+  -- Проверяем, что у покупателя достаточно денег на счёте
+  v_balance := json.get_opt_integer(data.get_attribute_value_for_share(v_receiver_id, v_system_balance_attribute_id, null), 0);
+  v_percent_deal_sum := json.get_opt_integer
+  (data.get_attribute_value_for_share(v_deal_id, v_percent_deal_sum_attribute_id, null), 0);
+  if v_percent_deal_sum > 0 and v_balance < v_percent_deal_sum then 
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "У покупателя недостаточно средств"}';
+    return v_ret_val;
+  end if;
+
+  -- Меняем владельцев корпорации
+  select (array_to_json(array_agg(row_to_json(c))))::jsonb into v_member_value
+  from jsonb_to_recordset(v_member_value) as c (member text, percent integer)
+  where c.member not in (v_sender_code, v_receiver_code) ;
+
+  -- Если у продавца ещё остались акции, добавляем их
+  if v_percent_old - v_percent_deal_percent > 0 then
+    v_member_value := coalesce(v_member_value, jsonb '[]') || jsonb_build_object('member', v_sender_code, 'percent', v_percent_old - v_percent_deal_percent);
+  else
+    -- Если не осталось, удаляем голосовательный параметр
+    perform data.delete_attribute_value_if_exists(v_corporation_id, data.get_attribute_id('dividend_vote'), v_sender_id, in_user_object_id);
+  end if;
+  -- Добавляем покупателя
+  v_member_value := coalesce(v_member_value, jsonb '[]') || jsonb_build_object('member', v_receiver_code, 'percent', v_percent_deal_percent + v_percent_old_receiver);
+
+  -- Переводим деньги
+  if v_percent_deal_sum > 0 then
+    perform actions.transfer(in_client, v_receiver_id, null, jsonb_build_object('receiver', v_sender_code, 'description', 'Оплата за ' || json.get_opt_string(data.get_raw_attribute_value(v_deal_id, v_name_attribute_id , null)), 'sum', v_percent_deal_sum));
+  end if;
+
+  perform data.set_attribute_value_if_changed(v_corporation_id, data.get_attribute_id('system_corporation_members'), null, v_member_value, in_user_object_id);  
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('system_is_visible'), v_sender_id, jsonb 'false', in_user_object_id);
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('system_is_visible'), v_receiver_id, jsonb 'false', in_user_object_id);
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('system_percent_deal_time'), null, to_jsonb(utils.system_time()), in_user_object_id);
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('percent_deal_time'), null, to_jsonb(utils.system_time()), in_user_object_id);
+  perform data.set_attribute_value_if_changed(v_deal_id, data.get_attribute_id('percent_deal_status'), null, jsonb '"done"', in_user_object_id);
+  
+  -- Исключим сделку из метаобъекта для отправителя и для получателя
+    v_value := json.get_opt_array(
+        data.get_attribute_value_for_update(
+          v_meta_id,
+          v_percent_deals_attribute_id,
+          v_sender_id));
+    v_value := coalesce(v_value, jsonb '[]') - v_deal_code;
+    if v_value = '[]' then
+      perform data.delete_attribute_value_if_exists(v_meta_id, v_percent_deals_attribute_id, v_sender_id, in_user_object_id);
+    else
+      perform data.set_attribute_value(v_meta_id, v_percent_deals_attribute_id, v_sender_id, v_value, in_user_object_id);
+    end if;
+
+    v_value := json.get_opt_array(
+        data.get_attribute_value_for_update(
+          v_meta_id,
+          v_percent_deals_attribute_id,
+          v_receiver_id));
+    v_value := coalesce(v_value, jsonb '[]') - v_deal_code;
+    if v_value = '[]' then
+      perform data.delete_attribute_value_if_exists(v_meta_id, v_percent_deals_attribute_id, v_receiver_id, in_user_object_id);
+    else
+      perform data.set_attribute_value(v_meta_id, v_percent_deals_attribute_id, v_receiver_id, v_value, in_user_object_id);
+    end if;
+
+
+  return api_utils.get_objects(in_client,
+			  in_user_object_id,
+			  jsonb_build_object(
+			    'object_codes', jsonb_build_array(data.get_object_code(in_user_object_id)),
+			    'get_actions', true,
+			    'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
 insert into data.action_generators(function, params, description) values
 ('login', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция входа в систему'),
 ('logout', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция выхода из системы'),
@@ -7071,7 +7802,8 @@ insert into data.action_generators(function, params, description) values
         ],
         "corporation": [
           {"function": "set_dividend_vote"},
-          {"function": "create_deal"}
+          {"function": "create_deal"},
+          {"function": "create_percent_deal"}
         ],
         "deal": [
           {"function": "add_deal_member"},
@@ -7137,6 +7869,11 @@ insert into data.action_generators(function, params, description) values
           {"function": "delete_personal_document"},
           {"function": "edit_document"},
           {"function": "share_document"}
+        ],
+        "percent_deal": [
+          {"function": "edit_percent_deal"},
+          {"function": "cancel_percent_deal"},
+          {"function": "confirm_percent_deal"}
         ]
       },
       "mail_type": {
