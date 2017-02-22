@@ -246,6 +246,9 @@ insert into data.objects(code)
 select 'personal_document' || o1.* from generate_series(1, 18) o1(value);
 
 insert into data.objects(code)
+select 'secret_document' || o1.* from generate_series(1, 10) o1(value);
+
+insert into data.objects(code)
 select 'med_document' || o1.* from generate_series(1, 15) o1(value);
 
 insert into data.objects(code)
@@ -2112,6 +2115,13 @@ from generate_series(1, 6) o1(value)
 join generate_series(1, 3) o2(value) on 1=1
 join generate_series(1, 10) o3(value) on 1=1;
 
+select
+  data.set_attribute_value(data.get_object_id('secret_document' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('secret_document' || o.value), data.get_attribute_id('type'), null, jsonb '"secret_document"'),
+  data.set_attribute_value(data.get_object_id('secret_document' || o.value), data.get_attribute_id('name'), null, to_jsonb('Секретный документ ' || o.value)),
+  data.set_attribute_value(data.get_object_id('secret_document' || o.value), data.get_attribute_id('content'), null, to_jsonb('Содержимое секретного документа ' || o.value))
+from generate_series(1, 10) o(value);
+
 -- Логины
 insert into data.logins(code, description)
 select 'player' || o.value || '_code', 'player' || o.value from generate_series(1, 50) o(value);
@@ -3601,6 +3611,81 @@ begin
     in_user_object_id,
     jsonb_build_object(
       'object_codes', jsonb_build_array(v_return_object_code),
+      'get_actions', true,
+      'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+-- Действие для чтения документа
+CREATE OR REPLACE FUNCTION action_generators.read_document(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_type_attr_id integer;
+  v_type text;
+begin
+  if v_object_id is not null then
+    return null;
+  end if;
+
+  return jsonb_build_object(
+    'read_document',
+    jsonb_build_object(
+      'code', 'read_document',
+      'name', 'Дешифратор',
+      'type', 'storage.read',
+      'params', jsonb '{}',
+      'user_params',
+        jsonb_build_array(
+          jsonb_build_object(
+            'code', 'code',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1),
+            'description', 'Введите код',
+            'min_value_count', 1,
+            'max_value_count', 1))));
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.read_document(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_code text := json.get_string(in_user_params, 'code');
+  v_type_attr_id integer := data.get_attribute_id('type');
+  v_document_id integer;
+begin
+  select o.id
+  into v_document_id
+  from data.objects o
+  join data.attribute_values av on
+    av.object_id = o.id and
+    av.attribute_id = v_type_attr_id and
+    av.value_object_id is null and
+    av.value = jsonb '"secret_document"'
+  where
+    o.code = v_code;
+
+  if v_document_id is null then
+    return api_utils.create_ok_result(null, 'Введён неправильный код документа!');
+  end if;
+
+  return api_utils.get_objects(
+    in_client,
+    in_user_object_id,
+    jsonb_build_object(
+      'object_codes', jsonb_build_array(v_code),
       'get_actions', true,
       'get_templates', true));
 end;
@@ -6830,6 +6915,7 @@ insert into data.action_generators(function, params, description) values
   }',
   null
 ),
+('generate_if_user_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'person', 'function', 'read_document'), 'Функция для чтения документа с флэшки'),
 ('generate_if_user_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'person', 'function', 'transfer'), 'Функция для перевода средств'),
 ('generate_if_user_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'person', 'function', 'send_mail'), 'Функция отправки письма'),
 ('generate_if_user_attribute', jsonb_build_object('attribute_code', 'system_master', 'attribute_value', true, 'function', 'generate_money'), 'Функция для добавления средств'),
