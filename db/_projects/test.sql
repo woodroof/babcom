@@ -95,7 +95,7 @@ insert into data.params(code, value, description) values
     },
     {
       "attributes": ["document_title", "document_time", "document_author"],
-      "actions": ["edit_med_document", "edit_document", "delete_document"]
+      "actions": ["edit_med_document", "edit_document", "delete_document", "delete_personal_document"]
     },
     {
       "attributes": ["med_document_patient"]
@@ -3619,6 +3619,71 @@ $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
 
+-- Действие для удаления персональных документов
+CREATE OR REPLACE FUNCTION action_generators.delete_personal_document(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_author boolean := data.get_raw_attribute_value(v_object_id, data.get_attribute_id('document_author'), null) = to_jsonb(data.get_object_code(v_user_object_id));
+begin
+  if v_author is null or not v_author then
+    return null;
+  end if;
+
+  return jsonb_build_object(
+    'delete_personal_document',
+    jsonb_build_object(
+      'code', 'delete_personal_document',
+      'name', 'Удалить',
+      'type', 'documents.delete',
+      'params', jsonb_build_object('object_code', data.get_object_code(v_object_id)),
+      'warning', 'Вы действительно хотите удалить документ?'));
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.delete_personal_document(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_object_id integer := data.get_object_id(json.get_string(in_params, 'object_code'));
+  v_system_is_visible_attr_id integer := data.get_attribute_id('system_is_visible');
+  v_system_personal_document_attr_id integer := data.get_attribute_id('system_personal_document');
+  v_type_attr_id integer := data.get_attribute_id('type');
+begin
+  perform data.set_attribute_value(v_object_id, v_type_attr_id, null, jsonb '"deleted_document"');
+
+  perform data.delete_attribute_value_if_exists(v_object_id, v_system_personal_document_attr_id, in_user_object_id, in_user_object_id);
+
+  perform data.delete_attribute_value_if_exists(v_object_id, v_system_is_visible_attr_id, value_object_id, in_user_object_id)
+  from (
+    select value_object_id
+    from data.attribute_values
+    where
+      object_id = v_object_id and
+      attribute_id = v_system_is_visible_attr_id
+  ) o;
+
+  return api_utils.get_objects(
+    in_client,
+    in_user_object_id,
+    jsonb_build_object(
+      'object_codes', jsonb '["personal_library"]',
+      'get_actions', true,
+      'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
 -- Действие для чтения документа
 CREATE OR REPLACE FUNCTION action_generators.read_document(
     in_params in jsonb)
@@ -6982,6 +7047,9 @@ insert into data.action_generators(function, params, description) values
         ],
         "personal_library": [
           {"function": "create_personal_document"}
+        ],
+        "personal_document": [
+          {"function": "delete_personal_document"}
         ]
       },
       "mail_type": {
