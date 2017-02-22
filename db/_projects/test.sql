@@ -95,7 +95,7 @@ insert into data.params(code, value, description) values
     },
     {
       "attributes": ["document_title", "document_time", "document_author"],
-      "actions": ["edit_med_document", "edit_document", "delete_document", "delete_personal_document"]
+      "actions": ["share_document", "edit_med_document", "edit_document", "delete_document", "delete_personal_document"]
     },
     {
       "attributes": ["med_document_patient"]
@@ -3620,6 +3620,57 @@ $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
 
+-- Поделиться документом
+CREATE OR REPLACE FUNCTION action_generators.share_document(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_type_attr_id integer;
+  v_type text;
+begin
+  if v_object_id is null then
+    return null;
+  end if;
+
+  return jsonb_build_object(
+    'share_document',
+    jsonb_build_object(
+      'code', 'send_mail',
+      'name', 'Поделиться',
+      'type', 'mail.send',
+      'params', jsonb '{}',
+      'user_params',
+        jsonb_build_array(
+          jsonb_build_object(
+            'code', 'receivers',
+            'type', 'objects',
+            'data', jsonb_build_object('object_code', 'mail_contacts', 'attribute_code', 'mail_contacts'),
+            'description', 'Получатели',
+            'min_value_count', 1),
+          jsonb_build_object(
+            'code', 'title',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1),
+            'description', 'Тема',
+            'default_value', 'С вами поделились документом',
+            'min_value_count', 1,
+            'max_value_count', 1),
+          jsonb_build_object(
+            'code', 'body',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1, 'multiline', true),
+            'default_value', 'Возможно, вас заинтересует документ <a href="babcom:' || data.get_object_code(v_object_id) || '">' || json.get_string(data.get_raw_attribute_value(v_object_id, data.get_attribute_id('name'), null)) || '</a>',
+            'description', 'Сообщение',
+            'min_value_count', 1,
+            'max_value_count', 1))));
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
+
 -- Действие для удаления персональных документов
 CREATE OR REPLACE FUNCTION action_generators.delete_personal_document(
     in_params in jsonb)
@@ -7051,7 +7102,8 @@ insert into data.action_generators(function, params, description) values
         ],
         "personal_document": [
           {"function": "delete_personal_document"},
-          {"function": "edit_document"}
+          {"function": "edit_document"},
+          {"function": "share_document"}
         ]
       },
       "mail_type": {
