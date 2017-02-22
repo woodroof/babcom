@@ -69,6 +69,9 @@ insert into data.params(code, value, description) values
       "attributes": ["person_salary"]
     },
     {
+      "attributes": ["political_influence"]
+    },
+    {
       "attributes": ["mail_type", "mail_send_time", "mail_title", "mail_author", "mail_receivers"],
       "actions": ["reply", "reply_all", "delete_mail"]
     },
@@ -168,6 +171,10 @@ insert into data.params(code, value, description) values
     {
       "attributes": ["market_last_time"],
       "actions": ["calc_money"]
+    },
+    {
+      "attributes": ["vote_status", "vote_theme", "vote_history"],
+      "actions": ["start_vote", "end_vote", "vote_yes", "vote_no"]
     }
   ]
 }
@@ -199,7 +206,8 @@ insert into data.objects(code) values
 ('done_percent_deals'),
 ('draft_percent_deals'),
 ('canceled_percent_deals'),
-('person_draft_percent_deals');
+('person_draft_percent_deals'),
+('secretaries');
 
 insert into data.objects(code)
 select 'media' || o.value from generate_series(1, 3) o(value);
@@ -233,7 +241,8 @@ insert into data.objects(code) values
 ('transactions'),
 ('assembly'),
 ('market'),
-('meta_entities');
+('meta_entities'),
+('vote');
 
 insert into data.objects(code)
 select 'global_notification' || o.* from generate_series(1, 3) o;
@@ -407,6 +416,27 @@ $BODY$
   LANGUAGE plpgsql IMMUTABLE
   COST 100;
 
+CREATE OR REPLACE FUNCTION attribute_value_description_functions.vote_status(
+    in_user_object_id integer,
+    in_attribute_id integer,
+    in_value jsonb)
+  RETURNS text AS
+$BODY$
+declare
+  v_text_value text := json.get_string(in_value);
+begin
+  case when v_text_value = 'yes' then
+    return 'Идёт голосование';
+  when v_text_value = 'no' then
+    return 'Нет голосования';
+  end case;
+
+  return null;
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
 -- Атрибуты
 insert into data.attributes(code, name, type, value_description_function) values
 ('persons', 'Список доступных персонажей', 'INVISIBLE', null),
@@ -533,7 +563,20 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('percent_deal_receiver', 'Покупатель', 'NORMAL', 'code'),
 ('percent_deal_percent', 'Процент акций', 'NORMAL', null),
 ('percent_deal_sum', 'Сумма сделки', 'NORMAL', null),
-('percent_deals', 'Cделки', 'SYSTEM', null);
+('percent_deals', 'Cделки', 'SYSTEM', null),
+('political_influence', 'Политическое влияние', 'NORMAL', null),
+('system_political_influence', 'Политическое влияние', 'SYSTEM', null),
+('system_person_votes_num', 'Количество голосований за экономический цикл', 'NORMAL', null),
+('vote_status', 'Статус', 'NORMAL', 'vote_status'),
+('vote_theme', 'Тема голосования', 'NORMAL', null),
+('vote_yes', 'Голосование За', 'SYSTEM', null),
+('vote_no', 'Голосование Против', 'SYSTEM', null),
+('system_vote_history_json', 'История голосований', 'SYSTEM', null),
+('system_vote_history', 'История голосований', 'SYSTEM', null),
+('vote_history', 'История голосований', 'NORMAL', null),
+('vote_last_number', 'Номер последнего голосования', 'SYSTEM', null),
+('system_secretary', 'Признак секретаря', 'SYSTEM', null);
+
 
 CREATE OR REPLACE FUNCTION attribute_value_change_functions.json_member_to_object(in_params jsonb)
   RETURNS void AS
@@ -576,6 +619,7 @@ insert into data.attribute_value_change_functions(attribute_id, function, params
 (data.get_attribute_id('system_offline'), 'boolean_value_to_object', jsonb '{"object_code": "offline"}'),
 (data.get_attribute_id('system_online'), 'boolean_value_to_object', jsonb '{"object_code": "online"}'),
 (data.get_attribute_id('system_master'), 'boolean_value_to_object', jsonb '{"object_code": "masters"}'),
+(data.get_attribute_id('system_secretary'), 'boolean_value_to_object', jsonb '{"object_code": "secretaries"}'),
 (data.get_attribute_id('system_psi_scale'), 'any_value_to_object', jsonb '{"object_code": "telepaths"}'),
 (data.get_attribute_id('system_security'), 'boolean_value_to_object', jsonb '{"object_code": "security"}'),
 (data.get_attribute_id('system_politician'), 'boolean_value_to_object', jsonb '{"object_code": "politicians"}'),
@@ -1697,7 +1741,40 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
         "params": {"attribute_code": "system_person_salary"}
       }
     ]
-  }', 'Получение дохода');
+  }', 'Получение дохода'),
+  (
+  data.get_attribute_id('political_influence'),
+  'fill_if_user_object_attribute',
+  '{
+    "blocks": [
+      {
+        "conditions": [{"attribute_code": "system_master", "attribute_value": true}],
+        "function": "fill_value_object_attribute_from_attribute",
+        "params": {"value_object_code": "masters", "attribute_code": "system_political_influence"}
+      },
+      {
+        "function": "fill_object_attribute_from_attribute",
+        "params": {"attribute_code": "system_political_influence"}
+      }
+    ]
+  }', 'Получение политического влияния'),
+  (
+  data.get_attribute_id('vote_history'),
+  'fill_if_user_object_attribute',
+  '{
+    "blocks": [
+      {
+        "conditions": [{"attribute_code": "system_master", "attribute_value": true}],
+        "function": "fill_value_object_attribute_from_attribute",
+        "params": {"value_object_code": "masters", "attribute_code": "system_vote_history"}
+      },
+      {
+        "conditions": [{"attribute_code": "system_secretary", "attribute_value": true}],
+        "function": "fill_value_object_attribute_from_attribute",
+        "params": {"value_object_code": "secretaries", "attribute_code": "system_vote_history"}
+      }
+    ]
+  }', 'Получение истории голосований');
 
 insert into data.attribute_value_fill_functions(attribute_id, function, params, description) values
 (
@@ -1788,6 +1865,12 @@ select data.set_attribute_value(data.get_object_id('technicians'), data.get_attr
 select data.set_attribute_value(data.get_object_id('technicians'), data.get_attribute_id('name'), null, jsonb '"Технический персонал"');
 select data.set_attribute_value(data.get_object_id('technicians'), data.get_attribute_id('system_mail_contact'), null, jsonb 'true');
 
+select data.set_attribute_value(data.get_object_id('secretaries'), data.get_attribute_id('system_priority'), null, jsonb '50');
+select data.set_attribute_value(data.get_object_id('secretaries'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('secretaries'), data.get_attribute_id('type'), null, jsonb '"group"');
+select data.set_attribute_value(data.get_object_id('secretaries'), data.get_attribute_id('name'), null, jsonb '"Секретарь ассамблеи"');
+select data.set_attribute_value(data.get_object_id('secretaries'), data.get_attribute_id('system_mail_contact'), null, jsonb 'false');
+
 select data.set_attribute_value(data.get_object_id('corporations'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('corporations'), data.get_attribute_id('system_meta'), data.get_object_id('masters'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('corporations'), data.get_attribute_id('type'), null, jsonb '"corporations"');
@@ -1822,6 +1905,16 @@ select data.set_attribute_value(data.get_object_id('assembly'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('assembly'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('assembly'), data.get_attribute_id('type'), null, jsonb '"assembly"');
 select data.set_attribute_value(data.get_object_id('assembly'), data.get_attribute_id('name'), null, jsonb '"Ассамблея"');
+
+select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_id('system_meta'), data.get_object_id('secretaries'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_id('system_meta'), data.get_object_id('masters'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_id('system_meta'), data.get_object_id('politicians'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_id('system_is_visible'), data.get_object_id('secretaries'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_id('system_is_visible'), data.get_object_id('politicians'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_id('type'), null, jsonb '"vote"');
+select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_id('name'), null, jsonb '"Голосования"');
+select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_id('vote_status'), null, jsonb '"no"');
 
 select
   data.set_attribute_value(data.get_object_id('state' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
@@ -1914,8 +2007,20 @@ select
     data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_person_salary'), null, to_jsonb(500))
   else
     null
+  end,
+  case when o.value % 6 = 0 then
+    data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_political_influence'), null, to_jsonb(10))
+  else
+    null
+  end,
+  case when o.value % 6 = 0 then
+    data.set_attribute_value(data.get_object_id('person' || o.value), data.get_attribute_id('system_politician'), null, jsonb 'true')
+  else
+    null
   end
 from generate_series(1, 60) o(value);
+
+select data.set_attribute_value(data.get_object_id('person1'), data.get_attribute_id('system_secretary'), null, jsonb 'true');
 
 select data.set_attribute_value(data.get_object_id('market'), data.get_attribute_id('system_meta'), data.get_object_id('masters'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('market'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
