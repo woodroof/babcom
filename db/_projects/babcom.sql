@@ -5763,6 +5763,13 @@ select data.set_attribute_value(data.get_object_id('FH93FH7'), data.get_attribut
 select data.set_attribute_value(data.get_object_id('FH93FH7'), data.get_attribute_id('name'), null, jsonb '"Медицинская справка"');
 select data.set_attribute_value(data.get_object_id('FH93FH7'), data.get_attribute_id('content'), null, jsonb '"Диагноз: В крови обнаружен вирус “Дилгарской чумы”.  Начальная стадия заражения. Диагноз поставлен 6 месяцев назад."');
 
+insert into data.objects(code) values ('LK9021');
+select data.set_attribute_value(data.get_object_id('LK9021'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('LK9021'), data.get_attribute_id('type'), null, jsonb '"secret_document"');
+select data.set_attribute_value(data.get_object_id('LK9021'), data.get_attribute_id('document_title'), null, jsonb '"Полномочия Лианны Кеммер"');
+select data.set_attribute_value(data.get_object_id('LK9021'), data.get_attribute_id('name'), null, jsonb '"Полномочия Лианны Кеммер"');
+select data.set_attribute_value(data.get_object_id('LK9021'), data.get_attribute_id('content'), null, jsonb '"Настоящим подтверждается, что Лианна Кеммер является капитаном службы контрразведки Земного Альянса - “Глаза”.<br>Всем сотрудникам СБ Земного Альянса, всем офицерам вооруженных сил Земного Альянса и официальным лицам - оказывать ей всемерную поддержку.<br>Капитан Кеммер имеет право перехватить управление любым военным объектом Земного Альянса в случае, если она посчитает, что руководство может быть виновно в сабботаже или измене. Об отстранении руководства военным обьектом Кеммер докладывает ОКНШ.<br>Командующий ШОС Эрих Кальтербруннер<br>Командующий Роммель<br>Командующий Паулюс<br>Председатель Комитета Обороны Нейман<br>12 марта 2257 года. Женева. Земля. Земной Альянс"');
+
 insert into data.logins(code, description) values
 ('de829', 'person1'),
 ('0061a', 'person2'),
@@ -6090,7 +6097,7 @@ begin
       v_transaction_id,
       v_name_attr_id,
       in_sender_id,
-      to_jsonb(utils.current_time() || ' добавление ' || in_sum || json.get_string(data.get_attribute_value(in_user_object_id, in_receiver_id, v_name_attr_id)) || ': ' || in_description),
+      to_jsonb(utils.current_time() || ' добавление ' || in_sum || ' ' || json.get_string(data.get_attribute_value(in_user_object_id, in_receiver_id, v_name_attr_id)) || ': ' || in_description),
       in_user_object_id);
   else
     perform data.set_attribute_value(
