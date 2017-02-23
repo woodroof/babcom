@@ -276,7 +276,11 @@ insert into data.objects(code) values
 ('corporation_mollari'),
 ('corporation_makan'),
 ('corporation_masters'),
-('corporation_artalan');
+('corporation_artalan'),
+('corporation_psi_corps'),
+('corporation_anklav_telepats'),
+('corporation_guild_telepats')
+;
 
 insert into data.objects(code)
 select 'news' || o.value from generate_series(1, 14) o(value);
@@ -303,15 +307,9 @@ insert into data.objects(code) values
 ('sector_medicine'),
 ('sector_black_market');
 
--- TODO проценты голосов конгрессменов для голосования
-
--- TODO сделки, проценты сделок (по числу корпораций?)
 
 insert into data.objects(code)
-select 'deal' || o1.* from generate_series(1, 30) o1(value);
-
-insert into data.objects(code)
-select 'percent_deal' || o1.* from generate_series(1, 30) o1(value);
+select 'deal' || o1.* from generate_series(1, 50) o1(value);
 
 -- Функции для получения значений атрибутов
 CREATE OR REPLACE FUNCTION attribute_value_description_functions.person_race(
@@ -700,6 +698,7 @@ insert into data.attribute_value_change_functions(attribute_id, function, params
 (data.get_attribute_id('system_research_documents'), 'boolean_value_to_object', jsonb '{"object_code": "research_documents"}'),
 (data.get_attribute_id('system_crew_documents'), 'boolean_value_to_object', jsonb '{"object_code": "crew_documents"}'),
 (data.get_attribute_id('system_mail_contact'), 'boolean_value_to_attribute', jsonb '{"object_code": "mail_contacts", "attribute_code": "mail_contacts"}'),
+(data.get_attribute_id('system_politician'), 'boolean_value_to_attribute', jsonb '{"object_code": "politicians", "attribute_code": "politicians"}'),
 (data.get_attribute_id('system_personal_document'), 'boolean_value_to_value_attribute', jsonb '{"object_code": "personal_library", "attribute_code": "system_value"}'),
 (data.get_attribute_id('system_meta'), 'boolean_value_to_value_attribute', jsonb '{"object_code": "meta_entities", "attribute_code": "meta_entities"}'),
 (data.get_attribute_id('system_corporation_members'), 'json_member_to_object', null),
@@ -2000,8 +1999,6 @@ select data.set_attribute_value(data.get_object_id('assembly'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('assembly'), data.get_attribute_id('type'), null, jsonb '"assembly"');
 select data.set_attribute_value(data.get_object_id('assembly'), data.get_attribute_id('name'), null, jsonb '"Ассамблея"');
 
--- TODO: Поменять тут и в других местах politicians на congressmen
-
 select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_id('system_meta'), data.get_object_id('secretaries'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_id('system_meta'), data.get_object_id('masters'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_id('system_meta'), data.get_object_id('politicians'), jsonb 'true');
@@ -2014,6 +2011,7 @@ select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_i
 select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_id('vote_status'), null, jsonb '"no"');
 
 -- TODO: Добавить кому-нибудь system_secretary
+--select data.set_attribute_value(data.get_object_id('person1'), data.get_attribute_id('system_secretary'), null, jsonb 'true');
 
 select data.set_attribute_value(data.get_object_id('state_ea'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('state_ea'), data.get_attribute_id('type'), null, jsonb '"state"');
@@ -2123,6 +2121,8 @@ select data.set_attribute_value(data.get_object_id('person1'), data.get_attribut
 select data.set_attribute_value(data.get_object_id('person1'), data.get_attribute_id('system_crew_member'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person1'), data.get_attribute_id('system_crew_documents'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person1'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person1'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person1'), data.get_attribute_id('system_political_influence'), null, to_jsonb(1));
 select data.set_attribute_value(data.get_object_id('person1'), data.get_attribute_id('system_ea_military'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person1'), data.get_attribute_id('person_job_position'), null, jsonb '"Капитан станции Вавилон 5"');
 select data.set_attribute_value(data.get_object_id('person1'), data.get_attribute_id('system_balance'), null, jsonb '400000');
@@ -2158,6 +2158,8 @@ select data.set_attribute_value(data.get_object_id('person3'), data.get_attribut
 select data.set_attribute_value(data.get_object_id('person3'), data.get_attribute_id('system_research_documents'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person3'), data.get_attribute_id('system_crew_documents'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person3'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person3'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person3'), data.get_attribute_id('system_political_influence'), null, to_jsonb(1));
 select data.set_attribute_value(data.get_object_id('person3'), data.get_attribute_id('person_job_position'), null, jsonb '"Второй помощник капитана станции Вавилон 5"');
 select data.set_attribute_value(data.get_object_id('person3'), data.get_attribute_id('system_balance'), null, jsonb '40000');
 select data.set_attribute_value(data.get_object_id('person3'), data.get_attribute_id('system_person_salary'), null, jsonb '20000');
@@ -2491,6 +2493,8 @@ select data.set_attribute_value(data.get_object_id('person25'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person25'), data.get_attribute_id('system_offline'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person25'), data.get_attribute_id('system_senator'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person25'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person25'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person25'), data.get_attribute_id('system_political_influence'), null, to_jsonb(0));
 select data.set_attribute_value(data.get_object_id('person25'), data.get_attribute_id('person_job_position'), null, jsonb '"Президент Земного Альянса"');
 select data.set_attribute_value(data.get_object_id('person25'), data.get_attribute_id('system_balance'), null, jsonb '0');
 select data.set_attribute_value(data.get_object_id('person25'), data.get_attribute_id('system_person_salary'), null, jsonb '0');
@@ -2507,6 +2511,8 @@ select data.set_attribute_value(data.get_object_id('person26'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person26'), data.get_attribute_id('system_offline'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person26'), data.get_attribute_id('system_senator'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person26'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person26'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person26'), data.get_attribute_id('system_political_influence'), null, to_jsonb(5));
 select data.set_attribute_value(data.get_object_id('person26'), data.get_attribute_id('person_job_position'), null, jsonb '"Сенатор ЗА от Австрало-Полинезийского консорциума"');
 select data.set_attribute_value(data.get_object_id('person26'), data.get_attribute_id('system_balance'), null, jsonb '2000000');
 select data.set_attribute_value(data.get_object_id('person26'), data.get_attribute_id('system_person_salary'), null, jsonb '200000');
@@ -2525,6 +2531,8 @@ select data.set_attribute_value(data.get_object_id('person27'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person27'), data.get_attribute_id('system_crew_documents'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person27'), data.get_attribute_id('system_security'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person27'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person27'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person27'), data.get_attribute_id('system_political_influence'), null, to_jsonb(0));
 select data.set_attribute_value(data.get_object_id('person27'), data.get_attribute_id('person_job_position'), null, jsonb '"Начальник охраны президента"');
 select data.set_attribute_value(data.get_object_id('person27'), data.get_attribute_id('system_balance'), null, jsonb '40000');
 select data.set_attribute_value(data.get_object_id('person27'), data.get_attribute_id('system_person_salary'), null, jsonb '20000');
@@ -2540,6 +2548,8 @@ select data.set_attribute_value(data.get_object_id('person28'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person28'), data.get_attribute_id('system_offline'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person28'), data.get_attribute_id('system_senator'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person28'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person28'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person28'), data.get_attribute_id('system_political_influence'), null, to_jsonb(5));
 select data.set_attribute_value(data.get_object_id('person28'), data.get_attribute_id('person_job_position'), null, jsonb '"Глава администрации президента ЗА"');
 select data.set_attribute_value(data.get_object_id('person28'), data.get_attribute_id('system_balance'), null, jsonb '1000000');
 select data.set_attribute_value(data.get_object_id('person28'), data.get_attribute_id('system_person_salary'), null, jsonb '80000');
@@ -2554,6 +2564,8 @@ select data.set_attribute_value(data.get_object_id('person29'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person29'), data.get_attribute_id('person_state'), null, jsonb '"ea"');
 select data.set_attribute_value(data.get_object_id('person29'), data.get_attribute_id('system_offline'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person29'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person29'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person29'), data.get_attribute_id('system_political_influence'), null, to_jsonb(4));
 select data.set_attribute_value(data.get_object_id('person29'), data.get_attribute_id('person_job_position'), null, jsonb '"Исполнительный директор корпорации Рокетдайн. Член делегации колонии Проксима-3"');
 select data.set_attribute_value(data.get_object_id('person29'), data.get_attribute_id('system_balance'), null, jsonb '2000000');
 select data.set_attribute_value(data.get_object_id('person29'), data.get_attribute_id('system_person_salary'), null, jsonb '200000');
@@ -2568,6 +2580,8 @@ select data.set_attribute_value(data.get_object_id('person30'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person30'), data.get_attribute_id('person_state'), null, jsonb '"ea"');
 select data.set_attribute_value(data.get_object_id('person30'), data.get_attribute_id('system_offline'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person30'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person30'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person30'), data.get_attribute_id('system_political_influence'), null, to_jsonb(1));
 select data.set_attribute_value(data.get_object_id('person30'), data.get_attribute_id('system_ea_military'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person30'), data.get_attribute_id('person_job_position'), null, jsonb '"Военный губернатор Проксимы"');
 select data.set_attribute_value(data.get_object_id('person30'), data.get_attribute_id('system_balance'), null, jsonb '2000000');
@@ -2587,6 +2601,8 @@ select data.set_attribute_value(data.get_object_id('person31'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person31'), data.get_attribute_id('system_med_documents'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person31'), data.get_attribute_id('system_research_documents'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person31'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person31'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person31'), data.get_attribute_id('system_political_influence'), null, to_jsonb(4));
 select data.set_attribute_value(data.get_object_id('person31'), data.get_attribute_id('person_job_position'), null, jsonb '"Генеральный директор корпорации \"Umbrella\""');
 select data.set_attribute_value(data.get_object_id('person31'), data.get_attribute_id('system_balance'), null, jsonb '2000000');
 select data.set_attribute_value(data.get_object_id('person31'), data.get_attribute_id('system_person_salary'), null, jsonb '200000');
@@ -2602,6 +2618,8 @@ select data.set_attribute_value(data.get_object_id('person32'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person32'), data.get_attribute_id('system_offline'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person32'), data.get_attribute_id('system_senator'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person32'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person32'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person32'), data.get_attribute_id('system_political_influence'), null, to_jsonb(7));
 select data.set_attribute_value(data.get_object_id('person32'), data.get_attribute_id('system_ambassador'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person32'), data.get_attribute_id('person_job_position'), null, jsonb '"Сенатор ЗА от Марсианского консорциума"');
 select data.set_attribute_value(data.get_object_id('person32'), data.get_attribute_id('system_balance'), null, jsonb '2000000');
@@ -2617,6 +2635,8 @@ select data.set_attribute_value(data.get_object_id('person33'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person33'), data.get_attribute_id('person_state'), null, jsonb '"ea"');
 select data.set_attribute_value(data.get_object_id('person33'), data.get_attribute_id('system_offline'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person33'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person33'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person33'), data.get_attribute_id('system_political_influence'), null, to_jsonb(6));
 select data.set_attribute_value(data.get_object_id('person33'), data.get_attribute_id('system_ea_military'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person33'), data.get_attribute_id('system_ambassador'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person33'), data.get_attribute_id('person_job_position'), null, jsonb '"Исполнительный директор корпорации Марс Индастриз. Член делегации марсианского союза."');
@@ -2633,6 +2653,8 @@ select data.set_attribute_value(data.get_object_id('person34'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person34'), data.get_attribute_id('person_state'), null, jsonb '"ea"');
 select data.set_attribute_value(data.get_object_id('person34'), data.get_attribute_id('system_offline'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person34'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person34'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person34'), data.get_attribute_id('system_political_influence'), null, to_jsonb(2));
 select data.set_attribute_value(data.get_object_id('person34'), data.get_attribute_id('system_ea_military'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person34'), data.get_attribute_id('system_ambassador'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person34'), data.get_attribute_id('person_job_position'), null, jsonb '"Член Палаты Представителей Анклава Телепатов Юкаса"');
@@ -2655,6 +2677,8 @@ select data.set_attribute_value(data.get_object_id('person35'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person35'), data.get_attribute_id('system_crew_documents'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person35'), data.get_attribute_id('system_security'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person35'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person35'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person35'), data.get_attribute_id('system_political_influence'), null, to_jsonb(2));
 select data.set_attribute_value(data.get_object_id('person35'), data.get_attribute_id('person_job_position'), null, jsonb '"Служащая корпорации IPX.Делегат от Союза ВЕГОС."');
 select data.set_attribute_value(data.get_object_id('person35'), data.get_attribute_id('system_balance'), null, jsonb '50000000');
 select data.set_attribute_value(data.get_object_id('person35'), data.get_attribute_id('system_person_salary'), null, jsonb '0');
@@ -2671,6 +2695,8 @@ select data.set_attribute_value(data.get_object_id('person36'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person36'), data.get_attribute_id('system_researcher'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person36'), data.get_attribute_id('system_research_documents'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person36'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person36'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person36'), data.get_attribute_id('system_political_influence'), null, to_jsonb(4));
 select data.set_attribute_value(data.get_object_id('person36'), data.get_attribute_id('person_job_position'), null, jsonb '"Представитель кампании WEILAND-UTANY. Научный руководитель Института Внеземных Технологий."');
 select data.set_attribute_value(data.get_object_id('person36'), data.get_attribute_id('system_balance'), null, jsonb '2000000');
 select data.set_attribute_value(data.get_object_id('person36'), data.get_attribute_id('system_person_salary'), null, jsonb '200000');
@@ -2685,6 +2711,8 @@ select data.set_attribute_value(data.get_object_id('person37'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person37'), data.get_attribute_id('person_state'), null, jsonb '"ea"');
 select data.set_attribute_value(data.get_object_id('person37'), data.get_attribute_id('system_offline'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person37'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person37'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person37'), data.get_attribute_id('system_political_influence'), null, to_jsonb(1));
 select data.set_attribute_value(data.get_object_id('person37'), data.get_attribute_id('system_ea_military'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person37'), data.get_attribute_id('person_job_position'), null, jsonb '"Военный губернатор Вегоса"');
 select data.set_attribute_value(data.get_object_id('person37'), data.get_attribute_id('system_balance'), null, jsonb '1000000');
@@ -2701,6 +2729,8 @@ select data.set_attribute_value(data.get_object_id('person38'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person38'), data.get_attribute_id('system_offline'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person38'), data.get_attribute_id('system_senator'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person38'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person38'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person38'), data.get_attribute_id('system_political_influence'), null, to_jsonb(8));
 select data.set_attribute_value(data.get_object_id('person38'), data.get_attribute_id('person_job_position'), null, jsonb '"Сенатор от Лунного консорциума. Исполнительный директор корпорации \"Рокетдайн\"."');
 select data.set_attribute_value(data.get_object_id('person38'), data.get_attribute_id('system_balance'), null, jsonb '2000000');
 select data.set_attribute_value(data.get_object_id('person38'), data.get_attribute_id('system_person_salary'), null, jsonb '200000');
@@ -2717,6 +2747,8 @@ select data.set_attribute_value(data.get_object_id('person39'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person39'), data.get_attribute_id('system_researcher'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person39'), data.get_attribute_id('system_research_documents'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person39'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person39'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person39'), data.get_attribute_id('system_political_influence'), null, to_jsonb(4));
 select data.set_attribute_value(data.get_object_id('person39'), data.get_attribute_id('person_job_position'), null, jsonb '"Делегат конгресса от земных консорциумов. Член совета директоров корпорации IPX."');
 select data.set_attribute_value(data.get_object_id('person39'), data.get_attribute_id('system_balance'), null, jsonb '2000000');
 select data.set_attribute_value(data.get_object_id('person39'), data.get_attribute_id('system_person_salary'), null, jsonb '200000');
@@ -2732,6 +2764,8 @@ select data.set_attribute_value(data.get_object_id('person40'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person40'), data.get_attribute_id('system_offline'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person40'), data.get_attribute_id('system_senator'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person40'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person40'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person40'), data.get_attribute_id('system_political_influence'), null, to_jsonb(14));
 select data.set_attribute_value(data.get_object_id('person40'), data.get_attribute_id('person_job_position'), null, jsonb '"Сенатор от Японского консорциума"');
 select data.set_attribute_value(data.get_object_id('person40'), data.get_attribute_id('system_balance'), null, jsonb '6000000');
 select data.set_attribute_value(data.get_object_id('person40'), data.get_attribute_id('system_person_salary'), null, jsonb '600000');
@@ -2746,6 +2780,8 @@ select data.set_attribute_value(data.get_object_id('person41'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person41'), data.get_attribute_id('person_state'), null, jsonb '"ea"');
 select data.set_attribute_value(data.get_object_id('person41'), data.get_attribute_id('system_offline'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person41'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person41'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person41'), data.get_attribute_id('system_political_influence'), null, to_jsonb(2));
 select data.set_attribute_value(data.get_object_id('person41'), data.get_attribute_id('system_ea_military'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person41'), data.get_attribute_id('person_job_position'), null, jsonb '"Член совета директоров корпорации \"WEILAND-UTANY\", делегат 4го Конгресса Колоний от Земных Союзов ЗА"');
 select data.set_attribute_value(data.get_object_id('person41'), data.get_attribute_id('system_balance'), null, jsonb '1000000');
@@ -2762,6 +2798,8 @@ select data.set_attribute_value(data.get_object_id('person42'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person42'), data.get_attribute_id('system_offline'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person42'), data.get_attribute_id('system_senator'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person42'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person42'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person42'), data.get_attribute_id('system_political_influence'), null, to_jsonb(7));
 select data.set_attribute_value(data.get_object_id('person42'), data.get_attribute_id('person_job_position'), null, jsonb '"Сенатор от Южно-Американского союза"');
 select data.set_attribute_value(data.get_object_id('person42'), data.get_attribute_id('system_balance'), null, jsonb '4000000');
 select data.set_attribute_value(data.get_object_id('person42'), data.get_attribute_id('system_person_salary'), null, jsonb '300000');
@@ -2778,6 +2816,8 @@ select data.set_attribute_value(data.get_object_id('person43'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person43'), data.get_attribute_id('system_researcher'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person43'), data.get_attribute_id('system_research_documents'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person43'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person43'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person43'), data.get_attribute_id('system_political_influence'), null, to_jsonb(2));
 select data.set_attribute_value(data.get_object_id('person43'), data.get_attribute_id('person_job_position'), null, jsonb '"Акционер компании Umbrella, заведует одной из крупных лабораторий"');
 select data.set_attribute_value(data.get_object_id('person43'), data.get_attribute_id('system_balance'), null, jsonb '1000000');
 select data.set_attribute_value(data.get_object_id('person43'), data.get_attribute_id('system_person_salary'), null, jsonb '80000');
@@ -2792,6 +2832,8 @@ select data.set_attribute_value(data.get_object_id('person44'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person44'), data.get_attribute_id('person_state'), null, jsonb '"ea"');
 select data.set_attribute_value(data.get_object_id('person44'), data.get_attribute_id('system_offline'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person44'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person44'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person44'), data.get_attribute_id('system_political_influence'), null, to_jsonb(4));
 select data.set_attribute_value(data.get_object_id('person44'), data.get_attribute_id('person_job_position'), null, jsonb '" Глава ПСИ Надзора, ИО директора Корпуса"');
 select data.set_attribute_value(data.get_object_id('person44'), data.get_attribute_id('system_psi_scale'), null, jsonb '12');
 select data.set_attribute_value(data.get_object_id('person44'), data.get_attribute_id('system_balance'), null, jsonb '2000000');
@@ -2820,6 +2862,8 @@ select data.set_attribute_value(data.get_object_id('person46'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person46'), data.get_attribute_id('person_state'), null, jsonb '"ea"');
 select data.set_attribute_value(data.get_object_id('person46'), data.get_attribute_id('system_offline'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person46'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person46'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person46'), data.get_attribute_id('system_political_influence'), null, to_jsonb(4));
 select data.set_attribute_value(data.get_object_id('person46'), data.get_attribute_id('person_job_position'), null, jsonb '"Администратор \"Зокало\""');
 select data.set_attribute_value(data.get_object_id('person46'), data.get_attribute_id('system_balance'), null, jsonb '2000000');
 select data.set_attribute_value(data.get_object_id('person46'), data.get_attribute_id('system_person_salary'), null, jsonb '200000');
@@ -2836,6 +2880,8 @@ select data.set_attribute_value(data.get_object_id('person47'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person47'), data.get_attribute_id('system_online'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person47'), data.get_attribute_id('system_senator'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person47'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person47'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person47'), data.get_attribute_id('system_political_influence'), null, to_jsonb(11));
 select data.set_attribute_value(data.get_object_id('person47'), data.get_attribute_id('system_ea_military'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person47'), data.get_attribute_id('person_job_position'), null, jsonb '"Вице-президент"');
 select data.set_attribute_value(data.get_object_id('person47'), data.get_attribute_id('system_balance'), null, jsonb '4000000');
@@ -2866,6 +2912,8 @@ select data.set_attribute_value(data.get_object_id('person49'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person49'), data.get_attribute_id('system_crew_member'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person49'), data.get_attribute_id('system_crew_documents'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person49'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person49'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person49'), data.get_attribute_id('system_political_influence'), null, to_jsonb(1));
 select data.set_attribute_value(data.get_object_id('person49'), data.get_attribute_id('person_job_position'), null, jsonb '"Главный инженер станции Вавилон-5"');
 select data.set_attribute_value(data.get_object_id('person49'), data.get_attribute_id('system_balance'), null, jsonb '200000');
 select data.set_attribute_value(data.get_object_id('person49'), data.get_attribute_id('system_person_salary'), null, jsonb '120000');
@@ -3028,6 +3076,22 @@ select data.set_attribute_value(data.get_object_id('sector_black_market'), data.
 select data.set_attribute_value(data.get_object_id('sector_black_market'), data.get_attribute_id('sector_volume_changes'), null, jsonb '""');
 
 -- TODO корпорации, проценты владения
+
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_ipx' ), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('type'), null, jsonb '"corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('name'), null, to_jsonb('IPX'));
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('description'), null, to_jsonb('Корпорация, занимающаяся поиском и разработкой полезных ископаемых и постройкой гражданских кораблей. Ведущий производитель вортекс-генераторов и систем дальней связи (тахионных передатчиков), гражданских космических объектов (производственных и лабораторных комплексов).Недавно выкупила корп. “Митчел-Хьюдайн” и вышла на рынок вооружений.
+Штаб квартира - Земля.'));
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('corporation_state'), null, to_jsonb('state_ea'));
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_balance'), null, to_jsonb(10000000));
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('corporation_sectors'), null, ('["sector_vpk", "sector_resouces", "sector_connections"]')::jsonb);
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('corporation_capitalization'), null, to_jsonb(10000000));
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_corporation_members'), null, ('[{"member": "person3'", "percent": 12}, {"member": "person35", "percent": 6}, {"member": "person39", "percent": 29}, {"member": "person49", "percent": 4}, {"member": "person58", "percent": 40}]')::jsonb);
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_corporation_deals'), null, ('["deal_ipx1", "deal_ipx2","deal_ipx3", "deal_ipx4","deal_ipx5", "deal_ipx6","deal_ipx7", "deal_ipx8", "deal_ipx9", "deal_ipx10"]')::jsonb);
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_corporation_draft_deals'), null, ('[]')::jsonb);
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_corporation_canceled_deals'), null, ('[]')::jsonb);
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
 
 /*select
   data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
