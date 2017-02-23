@@ -175,6 +175,10 @@ insert into data.params(code, value, description) values
     {
       "attributes": ["vote_status", "vote_theme", "vote_history"],
       "actions": ["start_vote", "stop_vote", "vote_yes", "vote_no"]
+    },
+    {
+      "attributes": ["agreement_accept_cost", "agreement_cancel_cost", "agreement_status", "agreement_type", "agreement_signers"],
+      "actions": ["create_agreement", "confirm_agreement", "delete_agreement", "cancel_agreement", "reject_agreement"]
     }
   ]
 }
@@ -207,7 +211,12 @@ insert into data.objects(code) values
 ('draft_percent_deals'),
 ('canceled_percent_deals'),
 ('person_draft_percent_deals'),
-('secretaries');
+('secretaries'),
+('agreement_types'),
+('draft_agreements'),
+('done_agreements'),
+('deleted_agreements'),
+('canceled_agreements');
 
 insert into data.objects(code)
 select 'media' || o.value from generate_series(1, 3) o(value);
@@ -217,6 +226,9 @@ select 'race' || o.value from generate_series(1, 20) o(value);
 
 insert into data.objects(code)
 select 'state' || o.value from generate_series(1, 10) o(value);
+
+insert into data.objects(code)
+select 'agreement_type' || o.value from generate_series(1, 20) o(value);
 
 -- Персонажи
 insert into data.objects(code) values
@@ -437,6 +449,34 @@ $BODY$
   LANGUAGE plpgsql IMMUTABLE
   COST 100;
 
+
+CREATE OR REPLACE FUNCTION attribute_value_description_functions.agreement_status(
+    in_user_object_id integer,
+    in_attribute_id integer,
+    in_value jsonb)
+  RETURNS text AS
+$BODY$
+declare
+  v_text_value text := json.get_string(in_value);
+begin
+  case when v_text_value = 'draft' then
+    return 'На рассмотрении';
+  when v_text_value = 'done' then
+    return 'Принято';
+  when v_text_value = 'canceled' then
+    return 'Расторгнуто';
+  when v_text_value = 'deleted' then
+    return 'Удалено';
+  else
+    return '-';
+  end case;
+
+  return null;
+end;
+$BODY$
+  LANGUAGE plpgsql IMMUTABLE
+  COST 100;
+
 -- Атрибуты
 insert into data.attributes(code, name, type, value_description_function) values
 ('persons', 'Список доступных персонажей', 'INVISIBLE', null),
@@ -575,7 +615,17 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('system_vote_history', 'История голосований', 'SYSTEM', null),
 ('vote_history', 'История голосований', 'NORMAL', null),
 ('vote_last_number', 'Номер последнего голосования', 'SYSTEM', null),
-('system_secretary', 'Признак секретаря', 'SYSTEM', null);
+('system_secretary', 'Признак секретаря', 'SYSTEM', null),
+('agreement_accept_cost', 'Стоимость принятия соглашения', 'NORMAL', null),
+('agreement_cancel_cost', 'Стоимость расторжения соглашения', 'NORMAL', null),
+('agreement_status', 'Статус соглашения', 'NORMAL', agreement_status),
+('agreement_author', 'Автор соглашения', 'SYSTEM', null),
+('agreement_type', 'Тип соглашения', 'SYSTEM', code),
+('agreement_signers', 'Список подписавшихся', 'SYSTEM', codes),
+('agreement_types', 'Типы соглашений', 'SYSTEM', null),
+('system_agreement_time', 'Дата изменения соглашения', 'SYSTEM', null),
+('politicians', 'Политики', 'SYSTEM', null)
+;
 
 
 CREATE OR REPLACE FUNCTION attribute_value_change_functions.json_member_to_object(in_params jsonb)
@@ -612,10 +662,12 @@ $BODY$
 -- Функции для создания связей
 insert into data.attribute_value_change_functions(attribute_id, function, params) values
 (data.get_attribute_id('type'), 'string_value_to_object', jsonb '{"params": {"person": "persons", "corporation": "corporations", "news": "news_hub", "crew_document": "crew_library", "research_document": "research_library", "med_document": "med_library", "sector": "market", "state": "states", "mail_folder": "mailbox", "done_percent_deals": "percent_deals", "draft_percent_deals": "percent_deals", "canceled_percent_deals": "percent_deals"}}'),
+(data.get_attribute_id('type'), 'string_value_to_object', jsonb '{"params": {"agreement_type": "agreement_types"}}'),
 (data.get_attribute_id('person_media'), 'string_value_to_object', jsonb '{"params": {"media1": "media1", "media2": "media2", "media3": "media3"}}'),
 (data.get_attribute_id('news_media'), 'string_value_to_object', jsonb '{"params": {"media1": "media1", "media2": "media2", "media3": "media3"}}'),
 (data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"person": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}, "state": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}, "corporation": {"object_code": "transaction_destinations", "attribute_code": "transaction_destinations"}}}'),
 (data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"person": {"object_code": "persons", "attribute_code": "persons"}, "sector": {"object_code": "market", "attribute_code": "sectors"}, "corporation": {"object_code": "corporations", "attribute_code": "corporations"}}}'),
+(data.get_attribute_id('type'), 'string_value_to_attribute', jsonb '{"params": {"agreement_type": {"object_code": "agreement_types", "attribute_code": "agreement_types"}}}'),
 (data.get_attribute_id('system_offline'), 'boolean_value_to_object', jsonb '{"object_code": "offline"}'),
 (data.get_attribute_id('system_online'), 'boolean_value_to_object', jsonb '{"object_code": "online"}'),
 (data.get_attribute_id('system_master'), 'boolean_value_to_object', jsonb '{"object_code": "masters"}'),
@@ -631,11 +683,13 @@ insert into data.attribute_value_change_functions(attribute_id, function, params
 (data.get_attribute_id('system_crew_documents'), 'boolean_value_to_object', jsonb '{"object_code": "crew_documents"}'),
 (data.get_attribute_id('system_technician'), 'boolean_value_to_object', jsonb '{"object_code": "technicians"}'),
 (data.get_attribute_id('system_mail_contact'), 'boolean_value_to_attribute', jsonb '{"object_code": "mail_contacts", "attribute_code": "mail_contacts"}'),
+(data.get_attribute_id('system_politician'), 'boolean_value_to_attribute', jsonb '{"object_code": "politicians", "attribute_code": "politicians"}'),
 (data.get_attribute_id('system_personal_document'), 'boolean_value_to_value_attribute', jsonb '{"object_code": "personal_library", "attribute_code": "system_value"}'),
 (data.get_attribute_id('system_meta'), 'boolean_value_to_value_attribute', jsonb '{"object_code": "meta_entities", "attribute_code": "meta_entities"}'),
 (data.get_attribute_id('system_corporation_members'), 'json_member_to_object', null),
 (data.get_attribute_id('deal_status'), 'string_value_to_object', jsonb '{"params": {"normal": "normal_deals", "draft": "draft_deals", "canceled": "canceled_deals"}}'),
-(data.get_attribute_id('percent_deal_status'), 'string_value_to_object', jsonb '{"params": {"done": "done_percent_deals", "draft": "draft_percent_deals", "canceled": "canceled_percent_deals"}}');
+(data.get_attribute_id('percent_deal_status'), 'string_value_to_object', jsonb '{"params": {"done": "done_percent_deals", "draft": "draft_percent_deals", "canceled": "canceled_percent_deals"}}'),
+(data.get_attribute_id('agreement_status'), 'string_value_to_object', jsonb '{"params": {"done": "done_agreements", "draft": "draft_agreements", "canceled": "agreements"}}');
 
 insert into data.attribute_value_change_functions(attribute_id, function, params)
 select data.get_attribute_id('system_library_category'), 'string_value_to_object', ('{"params": {' || string_agg(s.value, ',') || '}}')::jsonb
@@ -1415,6 +1469,21 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
         "params": {"sort_attribute_code": "system_percent_deal_time", "sort_type": "desc", "output": [{"type": "string", "data": "<a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
       },
       {
+        "conditions": [{"attribute_code": "type", "attribute_value": "done_agreements"}],
+        "function": "fill_content",
+        "params": {"sort_attribute_code": "system_agreement_time", "sort_type": "desc", "output": [{"type": "attribute", "data": "agreement_type"},{"type": "string", "data": " <a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+      },
+      {
+        "conditions": [{"attribute_code": "type", "attribute_value": "canceled_agreements"}],
+        "function": "fill_content",
+        "params": {"sort_attribute_code": "system_agreement_time", "sort_type": "desc", "output": [{"type": "attribute", "data": "agreement_type"},{"type": "string", "data": " <a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+      },
+      {
+        "conditions": [{"attribute_code": "type", "attribute_value": "draft_agreements"}],
+        "function": "fill_content",
+        "params": {"sort_attribute_code": "system_agreement_time", "sort_type": "desc", "output": [{"type": "attribute", "data": "agreement_type"},{"type": "string", "data": "<a href=\"babcom:"}, {"type": "code"}, {"type": "string", "data": "\">"}, {"type": "attribute", "data": "name"}, {"type": "string", "data": "</a>"}]}
+      },
+      {
         "conditions": [{"attribute_code": "type", "attribute_value": "transaction_list"}],
         "function": "fill_transaction_list"
       }
@@ -1843,6 +1912,7 @@ select data.set_attribute_value(data.get_object_id('security'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('security'), data.get_attribute_id('system_mail_contact'), null, jsonb 'true');
 
 select data.set_attribute_value(data.get_object_id('politicians'), data.get_attribute_id('system_priority'), null, jsonb '40');
+select data.set_attribute_value(data.get_object_id('politicians'), data.get_attribute_id('system_is_visible'), null, jsonb 'true')
 select data.set_attribute_value(data.get_object_id('politicians'), data.get_attribute_id('type'), null, jsonb '"group"');
 select data.set_attribute_value(data.get_object_id('politicians'), data.get_attribute_id('name'), null, jsonb '"Политики"');
 
@@ -2095,6 +2165,57 @@ select data.set_attribute_value(data.get_object_id('canceled_percent_deals'), da
 select data.set_attribute_value(data.get_object_id('done_percent_deals'), data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('done_percent_deals'), data.get_attribute_id('type'), null, jsonb '"done_percent_deals"');
 select data.set_attribute_value(data.get_object_id('done_percent_deals'), data.get_attribute_id('name'), null, jsonb '"Подтверждённые продажи акций"');
+
+select data.set_attribute_value(data.get_object_id('draft_agreements'), data.get_attribute_id('system_meta'), data.get_object_id('masters'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('draft_agreements'), data.get_attribute_id('system_meta'), data.get_object_id('politicians'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('draft_agreements'), data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('draft_agreements'), data.get_attribute_id('system_is_visible'), data.get_object_id('politicians'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('draft_agreements'), data.get_attribute_id('type'), null, jsonb '"draft_agreements"');
+select data.set_attribute_value(data.get_object_id('draft_agreements'), data.get_attribute_id('name'), null, jsonb '"Соглашения на рассмотрении"');
+
+select data.set_attribute_value(data.get_object_id('done_agreements'), data.get_attribute_id('system_meta'), data.get_object_id('persons'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('done_agreements'), data.get_attribute_id('system_is_visible'), data.get_object_id('persons'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('done_agreements'), data.get_attribute_id('type'), null, jsonb '"done_agreements"');
+select data.set_attribute_value(data.get_object_id('done_agreements'), data.get_attribute_id('name'), null, jsonb '"Принятые соглашения"');
+
+select data.set_attribute_value(data.get_object_id('canceled_agreements'), data.get_attribute_id('system_meta'), data.get_object_id('persons'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('canceled_agreements'), data.get_attribute_id('system_is_visible'), data.get_object_id('persons'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('canceled_agreements'), data.get_attribute_id('type'), null, jsonb '"canceled_agreements"');
+select data.set_attribute_value(data.get_object_id('canceled_agreements'), data.get_attribute_id('name'), null, jsonb '"Принятые соглашения"');
+
+select data.set_attribute_value(data.get_object_id('agreement_types'), data.get_attribute_id('system_is_visible'), data.get_object_id('persons'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('agreement_types'), data.get_attribute_id('type'), null, jsonb '"agreement_types"');
+select data.set_attribute_value(data.get_object_id('agreement_types'), data.get_attribute_id('name'), null, jsonb '"Типы соглашений"');
+
+select data.set_attribute_value(data.get_object_id('agreement_type1'), data.get_attribute_id('system_is_visible'), data.get_object_id('persons'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('agreement_type1'), data.get_attribute_id('type'), null, jsonb '"agreement_type"');
+select data.set_attribute_value(data.get_object_id('agreement_type1'), data.get_attribute_id('name'), null, jsonb '"1.Война: 1.Об объявлении войны"');
+select data.set_attribute_value(data.get_object_id('agreement_type1'), data.get_attribute_id('agreement_accept_cost'), null, to_jsonb(1000));
+select data.set_attribute_value(data.get_object_id('agreement_type1'), data.get_attribute_id('agreement_cancel_cost'), null, to_jsonb(100));
+
+select data.set_attribute_value(data.get_object_id('agreement_type2'), data.get_attribute_id('system_is_visible'), data.get_object_id('persons'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('agreement_type2'), data.get_attribute_id('type'), null, jsonb '"agreement_type"');
+select data.set_attribute_value(data.get_object_id('agreement_type2'), data.get_attribute_id('name'), null, jsonb '"1.Война: 2.О режиме содержания и обмене военнопленными"');
+select data.set_attribute_value(data.get_object_id('agreement_type2'), data.get_attribute_id('agreement_accept_cost'), null, to_jsonb(1000));
+select data.set_attribute_value(data.get_object_id('agreement_type2'), data.get_attribute_id('agreement_cancel_cost'), null, to_jsonb(100));
+
+select data.set_attribute_value(data.get_object_id('agreement_type3'), data.get_attribute_id('system_is_visible'), data.get_object_id('persons'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('agreement_type3'), data.get_attribute_id('type'), null, jsonb '"agreement_type"');
+select data.set_attribute_value(data.get_object_id('agreement_type3'), data.get_attribute_id('name'), null, jsonb '"1.Война: 3.О прекращении огня"');
+select data.set_attribute_value(data.get_object_id('agreement_type3'), data.get_attribute_id('agreement_accept_cost'), null, to_jsonb(1000));
+select data.set_attribute_value(data.get_object_id('agreement_type3'), data.get_attribute_id('agreement_cancel_cost'), null, to_jsonb(100));
+
+select data.set_attribute_value(data.get_object_id('agreement_type4'), data.get_attribute_id('system_is_visible'), data.get_object_id('persons'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('agreement_type4'), data.get_attribute_id('type'), null, jsonb '"agreement_type"');
+select data.set_attribute_value(data.get_object_id('agreement_type4'), data.get_attribute_id('name'), null, jsonb '"1.Война: 4.О капитуляции и контрибуции"');
+select data.set_attribute_value(data.get_object_id('agreement_type4'), data.get_attribute_id('agreement_accept_cost'), null, to_jsonb(1000));
+select data.set_attribute_value(data.get_object_id('agreement_type4'), data.get_attribute_id('agreement_cancel_cost'), null, to_jsonb(100));
+
+select data.set_attribute_value(data.get_object_id('agreement_type5'), data.get_attribute_id('system_is_visible'), data.get_object_id('persons'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('agreement_type5'), data.get_attribute_id('type'), null, jsonb '"agreement_type"');
+select data.set_attribute_value(data.get_object_id('agreement_type5'), data.get_attribute_id('name'), null, jsonb '"2.Дипломатические отношения: 1.О разграничении сфер влияния"');
+select data.set_attribute_value(data.get_object_id('agreement_type5'), data.get_attribute_id('agreement_accept_cost'), null, to_jsonb(1000));
+select data.set_attribute_value(data.get_object_id('agreement_type5'), data.get_attribute_id('agreement_cancel_cost'), null, to_jsonb(100));
 
 select
   data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
