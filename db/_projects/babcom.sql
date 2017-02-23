@@ -5841,6 +5841,83 @@ select data.set_attribute_value(data.get_object_id('LK9021'), data.get_attribute
 select data.set_attribute_value(data.get_object_id('LK9021'), data.get_attribute_id('name'), null, jsonb '"Полномочия Лианны Кеммер"');
 select data.set_attribute_value(data.get_object_id('LK9021'), data.get_attribute_id('content'), null, jsonb '"Настоящим подтверждается, что Лианна Кеммер является капитаном службы контрразведки Земного Альянса - “Глаза”.<br>Всем сотрудникам СБ Земного Альянса, всем офицерам вооруженных сил Земного Альянса и официальным лицам - оказывать ей всемерную поддержку.<br>Капитан Кеммер имеет право перехватить управление любым военным объектом Земного Альянса в случае, если она посчитает, что руководство может быть виновно в сабботаже или измене. Об отстранении руководства военным обьектом Кеммер докладывает ОКНШ.<br>Командующий ШОС Эрих Кальтербруннер<br>Командующий Роммель<br>Командующий Паулюс<br>Председатель Комитета Обороны Нейман<br>12 марта 2257 года. Женева. Земля. Земной Альянс"');
 
+insert into data.objects(code) values ('PK301');
+select data.set_attribute_value(data.get_object_id('PK301'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('PK301'), data.get_attribute_id('type'), null, jsonb '"secret_document"');
+select data.set_attribute_value(data.get_object_id('PK301'), data.get_attribute_id('document_title'), null, jsonb '"Обломки"');
+select data.set_attribute_value(data.get_object_id('PK301'), data.get_attribute_id('name'), null, jsonb '"Обломки"');
+select data.set_attribute_value(data.get_object_id('PK301'), data.get_attribute_id('content'), null, jsonb '"Обломки ксенотехники, надо исследовать"');
+
+insert into data.objects(code) values ('PK302');
+select data.set_attribute_value(data.get_object_id('PK302'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('PK302'), data.get_attribute_id('type'), null, jsonb '"secret_document"');
+select data.set_attribute_value(data.get_object_id('PK302'), data.get_attribute_id('document_title'), null, jsonb '"Обломки"');
+select data.set_attribute_value(data.get_object_id('PK302'), data.get_attribute_id('name'), null, jsonb '"Обломки"');
+select data.set_attribute_value(data.get_object_id('PK302'), data.get_attribute_id('content'), null, jsonb '"Обломки земной техники, надо исследовать"');
+
+insert into data.objects(code) values ('PK303');
+select data.set_attribute_value(data.get_object_id('PK303'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('PK303'), data.get_attribute_id('type'), null, jsonb '"secret_document"');
+select data.set_attribute_value(data.get_object_id('PK303'), data.get_attribute_id('document_title'), null, jsonb '"Обломки"');
+select data.set_attribute_value(data.get_object_id('PK303'), data.get_attribute_id('name'), null, jsonb '"Обломки"');
+select data.set_attribute_value(data.get_object_id('PK303'), data.get_attribute_id('content'), null, jsonb '"Обломки земной техники, надо исследовать"');
+
+insert into data.objects(code) values ('PK304');
+select data.set_attribute_value(data.get_object_id('PK304'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('PK304'), data.get_attribute_id('type'), null, jsonb '"secret_document"');
+select data.set_attribute_value(data.get_object_id('PK304'), data.get_attribute_id('document_title'), null, jsonb '"Обломки"');
+select data.set_attribute_value(data.get_object_id('PK304'), data.get_attribute_id('name'), null, jsonb '"Обломки"');
+select data.set_attribute_value(data.get_object_id('PK304'), data.get_attribute_id('content'), null, jsonb '"Обломки компьютера, надо исследовать"');
+
+insert into data.objects(code) values ('PK305');
+select data.set_attribute_value(data.get_object_id('PK305'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('PK305'), data.get_attribute_id('type'), null, jsonb '"secret_document"');
+select data.set_attribute_value(data.get_object_id('PK305'), data.get_attribute_id('document_title'), null, jsonb '"Биообразцы"');
+select data.set_attribute_value(data.get_object_id('PK305'), data.get_attribute_id('name'), null, jsonb '"Биообразцы"');
+select data.set_attribute_value(data.get_object_id('PK305'), data.get_attribute_id('content'), null, jsonb '"Биообразцы, надо исследовать"');
+
+insert into data.objects(code) values ('PK306');
+select data.set_attribute_value(data.get_object_id('PK306'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('PK306'), data.get_attribute_id('type'), null, jsonb '"secret_document"');
+select data.set_attribute_value(data.get_object_id('PK306'), data.get_attribute_id('document_title'), null, jsonb '"Биообразцы"');
+select data.set_attribute_value(data.get_object_id('PK306'), data.get_attribute_id('name'), null, jsonb '"Биообразцы"');
+select data.set_attribute_value(data.get_object_id('PK306'), data.get_attribute_id('content'), null, jsonb '"Биообразцы, надо исследовать"');
+
+insert into data.objects(code) values ('ZOMBIE2');
+select data.set_attribute_value(data.get_object_id('ZOMBIE2'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('ZOMBIE2'), data.get_attribute_id('type'), null, jsonb '"secret_document"');
+select data.set_attribute_value(data.get_object_id('ZOMBIE2'), data.get_attribute_id('document_title'), null, jsonb '"Биообразцы"');
+select data.set_attribute_value(data.get_object_id('ZOMBIE2'), data.get_attribute_id('name'), null, jsonb '"Биообразцы"');
+select data.set_attribute_value(data.get_object_id('ZOMBIE2'), data.get_attribute_id('content'), null, jsonb '"Биообразцы, надо исследовать"');
+
+insert into data.objects(code) values ('ZOMBIE3');
+select data.set_attribute_value(data.get_object_id('ZOMBIE3'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('ZOMBIE3'), data.get_attribute_id('type'), null, jsonb '"secret_document"');
+select data.set_attribute_value(data.get_object_id('ZOMBIE3'), data.get_attribute_id('document_title'), null, jsonb '"Труп"');
+select data.set_attribute_value(data.get_object_id('ZOMBIE3'), data.get_attribute_id('name'), null, jsonb '"Труп"');
+select data.set_attribute_value(data.get_object_id('ZOMBIE3'), data.get_attribute_id('content'), null, jsonb '"Труп, надо исследовать"');
+
+insert into data.objects(code) values ('ZOMBIE1');
+select data.set_attribute_value(data.get_object_id('ZOMBIE1'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('ZOMBIE1'), data.get_attribute_id('type'), null, jsonb '"secret_document"');
+select data.set_attribute_value(data.get_object_id('ZOMBIE1'), data.get_attribute_id('document_title'), null, jsonb '"Информация"');
+select data.set_attribute_value(data.get_object_id('ZOMBIE1'), data.get_attribute_id('name'), null, jsonb '"Информация"');
+select data.set_attribute_value(data.get_object_id('ZOMBIE1'), data.get_attribute_id('content'), null, jsonb '"Кровавый след тянется в 23 уровень серого сектора"');
+
+insert into data.objects(code) values ('ZOMBIE4');
+select data.set_attribute_value(data.get_object_id('ZOMBIE4'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('ZOMBIE4'), data.get_attribute_id('type'), null, jsonb '"secret_document"');
+select data.set_attribute_value(data.get_object_id('ZOMBIE4'), data.get_attribute_id('document_title'), null, jsonb '"Информация"');
+select data.set_attribute_value(data.get_object_id('ZOMBIE4'), data.get_attribute_id('name'), null, jsonb '"Информация"');
+select data.set_attribute_value(data.get_object_id('ZOMBIE4'), data.get_attribute_id('content'), null, jsonb '"Разгромленная лаборатория, здесь явно проводились медицинские исследования. Есть следы препаратов как центаврианских, так и антаресса."');
+
+insert into data.objects(code) values ('ZOMBIE5');
+select data.set_attribute_value(data.get_object_id('ZOMBIE5'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('ZOMBIE5'), data.get_attribute_id('type'), null, jsonb '"secret_document"');
+select data.set_attribute_value(data.get_object_id('ZOMBIE5'), data.get_attribute_id('document_title'), null, jsonb '"Информация"');
+select data.set_attribute_value(data.get_object_id('ZOMBIE5'), data.get_attribute_id('name'), null, jsonb '"Информация"');
+select data.set_attribute_value(data.get_object_id('ZOMBIE5'), data.get_attribute_id('content'), null, jsonb '"В лаборатории 2 тела, погибшие одеты в халаты медицинских сотрудников.<br>Повреждений очень много - тела практически разорваны, повсюду кровь"');
+
 insert into data.logins(code, description) values
 ('de829', 'person1'),
 ('0061a', 'person2'),
