@@ -278,9 +278,8 @@ insert into data.objects(code) values
 ('corporation_masters'),
 ('corporation_artalan'),
 ('corporation_psi_corps'),
-('corporation_anklav_telepats'),
-('corporation_guild_telepats')
-;
+('corporation_anklav_telepaths'),
+('corporation_guild_telepaths');
 
 insert into data.objects(code)
 select 'news' || o.value from generate_series(1, 14) o(value);
@@ -301,7 +300,7 @@ insert into data.objects(code)
 select 'personal_document' || o.* from generate_series(1, 13) o(value);
 
 insert into data.objects(code) values
-('sector_resouces'),
+('sector_resources'),
 ('sector_vpk'),
 ('sector_connections'),
 ('sector_medicine'),
@@ -3040,12 +3039,12 @@ select data.set_attribute_value(data.get_object_id('market'), data.get_attribute
 select data.set_attribute_value(data.get_object_id('market'), data.get_attribute_id('type'), null, jsonb '"market"');
 select data.set_attribute_value(data.get_object_id('market'), data.get_attribute_id('name'), null, jsonb '"Рынок"');
 
-select data.set_attribute_value(data.get_object_id('sector_resouces'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
-select data.set_attribute_value(data.get_object_id('sector_resouces'), data.get_attribute_id('type'), null, jsonb '"sector"');
-select data.set_attribute_value(data.get_object_id('sector_resouces'), data.get_attribute_id('name'), null, jsonb '"Ресурсы"');
-select data.set_attribute_value(data.get_object_id('sector_resouces'), data.get_attribute_id('description'), null, jsonb '"Ресурсы"');
-select data.set_attribute_value(data.get_object_id('sector_resouces'), data.get_attribute_id('sector_volume'), null, jsonb '500000000');
-select data.set_attribute_value(data.get_object_id('sector_resouces'), data.get_attribute_id('sector_volume_changes'), null, jsonb '""');
+select data.set_attribute_value(data.get_object_id('sector_resources'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('sector_resources'), data.get_attribute_id('type'), null, jsonb '"sector"');
+select data.set_attribute_value(data.get_object_id('sector_resources'), data.get_attribute_id('name'), null, jsonb '"Ресурсы"');
+select data.set_attribute_value(data.get_object_id('sector_resources'), data.get_attribute_id('description'), null, jsonb '"Ресурсы"');
+select data.set_attribute_value(data.get_object_id('sector_resources'), data.get_attribute_id('sector_volume'), null, jsonb '500000000');
+select data.set_attribute_value(data.get_object_id('sector_resources'), data.get_attribute_id('sector_volume_changes'), null, jsonb '""');
 
 select data.set_attribute_value(data.get_object_id('sector_vpk'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('sector_vpk'), data.get_attribute_id('type'), null, jsonb '"sector"');
@@ -3075,40 +3074,320 @@ select data.set_attribute_value(data.get_object_id('sector_black_market'), data.
 select data.set_attribute_value(data.get_object_id('sector_black_market'), data.get_attribute_id('sector_volume'), null, jsonb '500000000');
 select data.set_attribute_value(data.get_object_id('sector_black_market'), data.get_attribute_id('sector_volume_changes'), null, jsonb '""');
 
--- TODO корпорации, проценты владения
-
 select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
-select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_ipx' ), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('type'), null, jsonb '"corporation"');
-select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('name'), null, to_jsonb('IPX'));
-select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('description'), null, to_jsonb('Корпорация, занимающаяся поиском и разработкой полезных ископаемых и постройкой гражданских кораблей. Ведущий производитель вортекс-генераторов и систем дальней связи (тахионных передатчиков), гражданских космических объектов (производственных и лабораторных комплексов).Недавно выкупила корп. “Митчел-Хьюдайн” и вышла на рынок вооружений.
-Штаб квартира - Земля.'));
-select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('corporation_state'), null, to_jsonb('state_ea'));
-select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_balance'), null, to_jsonb(10000000));
-select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('corporation_sectors'), null, ('["sector_vpk", "sector_resouces", "sector_connections"]')::jsonb);
-select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('corporation_capitalization'), null, to_jsonb(10000000));
-select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_corporation_members'), null, ('[{"member": "person3'", "percent": 12}, {"member": "person35", "percent": 6}, {"member": "person39", "percent": 29}, {"member": "person49", "percent": 4}, {"member": "person58", "percent": 40}]')::jsonb);
-select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_corporation_deals'), null, ('["deal_ipx1", "deal_ipx2","deal_ipx3", "deal_ipx4","deal_ipx5", "deal_ipx6","deal_ipx7", "deal_ipx8", "deal_ipx9", "deal_ipx10"]')::jsonb);
-select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_corporation_draft_deals'), null, ('[]')::jsonb);
-select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_corporation_canceled_deals'), null, ('[]')::jsonb);
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_ipx'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('name'), null, jsonb '"IPX"');
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('description'), null, jsonb '"Корпорация, занимающаяся поиском и разработкой полезных ископаемых и постройкой гражданских кораблей. Ведущий производитель вортекс-генераторов и систем дальней связи (тахионных передатчиков), гражданских космических объектов (производственных и лабораторных комплексов). Недавно выкупила корп. “Митчел-Хьюдайн” и вышла на рынок вооружений. Штаб квартира - Земля."');
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('corporation_state'), null, jsonb '"state_ea"');
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('corporation_sectors'), null, jsonb '["sector_vpk", "sector_resources", "sector_connections"]');
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person3'", "percent": 12}, {"member": "person35", "percent": 6}, {"member": "person39", "percent": 29}, {"member": "person49", "percent": 4}, {"member": "person58", "percent": 40}]');
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_ipx1", "deal_ipx2", "deal_ipx3", "deal_ipx4", "deal_ipx5", "deal_ipx6", "deal_ipx7", "deal_ipx8", "deal_ipx9", "deal_ipx10"]');
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
 select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
 
-/*select
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_meta'), data.get_object_id('corporation' || o.value ), jsonb 'true'),
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('type'), null, jsonb '"corporation"'),
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('name'), null, to_jsonb('Corporation ' || o.value)),
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('description'), null, to_jsonb('Описание корпорации corporation ' || o.value)),
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('corporation_state'), null, to_jsonb('state' || (o.value % 10 + 1))),
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_balance'), null, to_jsonb(utils.random_integer(100, 10000000))),
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('corporation_sectors'), null, ('["sector' || (o.value % 3 + 1) || '", "sector' || (o.value % 3 + 2) || '"]')::jsonb),
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('corporation_capitalization'), null, to_jsonb(10000000 + o.value)),
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_corporation_members'), null, ('[{"member": "person' || o.value || '", "percent": 80}, {"member": "person' || (o.value * 2)::text || '", "percent": 20}]')::jsonb),
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_corporation_deals'), null, ('["deal' || o.value || '", "deal' || (o.value + 1) || '"]')::jsonb),
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_corporation_draft_deals'), null, ('["deal' || (10 + o.value) || '", "deal' || (10 + o.value + 1) || '"]')::jsonb),
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('system_corporation_canceled_deals'), null, ('["deal' || (20 + o.value) || '", "deal' || (20 + o.value + 1) || '"]')::jsonb),
-  data.set_attribute_value(data.get_object_id('corporation' || o.value), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"')
-from generate_series(1, 9) o(value);*/
+select data.set_attribute_value(data.get_object_id('corporation_rocketdain'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_rocketdain'), data.get_attribute_id('type'), null, jsonb '"corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_rocketdain'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_rocketdain'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_rocketdain'), data.get_attribute_id('name'), null, jsonb '"РОКЕТДАЙН"');
+select data.set_attribute_value(data.get_object_id('corporation_rocketdain'), data.get_attribute_id('description'), null, jsonb '"Корпорация, производящая сугубо военное оборудование. Также является производителем вортекс-генераторов собственной конструкции.<br>Штаб Квартира - Проксима 3."');
+select data.set_attribute_value(data.get_object_id('corporation_rocketdain'), data.get_attribute_id('corporation_state'), null, jsonb '"state_ea"');
+select data.set_attribute_value(data.get_object_id('corporation_rocketdain'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_rocketdain'), data.get_attribute_id('corporation_sectors'), null, jsonb '["sector_vpk", "sector_connections"]');
+select data.set_attribute_value(data.get_object_id('corporation_rocketdain'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_rocketdain'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person26", "percent": 12}, {"member": "person29", "percent": 26}, {"member": "person38", "percent": 29}, {"member": "person58", "percent": 33}');
+select data.set_attribute_value(data.get_object_id('corporation_rocketdain'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_rocketdain1", "deal_rocketdain2", "deal_rocketdain3", "deal_rocketdain4", "deal_rocketdain5", "deal_rocketdain6", "deal_rocketdain7", "deal_rocketdain8", "deal_rocketdain9", "deal_rocketdain10"]');
+select data.set_attribute_value(data.get_object_id('corporation_rocketdain'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_rocketdain'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_rocketdain'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
+
+select data.set_attribute_value(data.get_object_id('corporation_umbrella'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_umbrella'), data.get_attribute_id('type'), null, jsonb '"corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_umbrella'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_umbrella'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_umbrella'), data.get_attribute_id('name'), null, jsonb '"UMBRELLA"');
+select data.set_attribute_value(data.get_object_id('corporation_umbrella'), data.get_attribute_id('description'), null, jsonb '"Корпорация, занимающаяся производством медпрепаратов, исследованиями в области биоинженерии, проблемами реабилитации, протезированием. Штаб квартира - Берлин II."');
+select data.set_attribute_value(data.get_object_id('corporation_umbrella'), data.get_attribute_id('corporation_state'), null, jsonb '"state_ea"');
+select data.set_attribute_value(data.get_object_id('corporation_umbrella'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_umbrella'), data.get_attribute_id('corporation_sectors'), null, '["sector_medicine"]');
+select data.set_attribute_value(data.get_object_id('corporation_umbrella'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_umbrella'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person26", "percent": 8}, {"member": "person31", "percent": 32}, {"member": "person39", "percent": 32}, {"member": "person43", "percent": 6}, {"member": "person58", "percent": 22}');
+select data.set_attribute_value(data.get_object_id('corporation_umbrella'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_umbrella1", "deal_umbrella2", "deal_umbrella3", "deal_umbrella4", "deal_umbrella5", "deal_umbrella6", "deal_umbrella7", "deal_umbrella8", "deal_umbrella9", "deal_umbrella10"]');
+select data.set_attribute_value(data.get_object_id('corporation_umbrella'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_umbrella'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_umbrella'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
+
+select data.set_attribute_value(data.get_object_id('corporation_weiland'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_weiland'), data.get_attribute_id('type'), null, jsonb '"corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_weiland'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_weiland'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_weiland'), data.get_attribute_id('name'), null, jsonb '"WEILAND-UTANY"');
+select data.set_attribute_value(data.get_object_id('corporation_weiland'), data.get_attribute_id('description'), null, jsonb '"Корпорация, занимающаяся исследованием космоса, археологическими изысканиями, производством медпрепаратов, исследованиями в области биоинженерии, имплантатами, производством роботизированных и автоматизированных систем. Также второй крупнейший поставщик систем связи после IPX.  Штаб квартира - Женева, Земля."');
+select data.set_attribute_value(data.get_object_id('corporation_weiland'), data.get_attribute_id('corporation_state'), null, jsonb '"state_ea"');
+select data.set_attribute_value(data.get_object_id('corporation_weiland'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_weiland'), data.get_attribute_id('corporation_sectors'), null, '["sector_medicine", "sector_connections"]');
+select data.set_attribute_value(data.get_object_id('corporation_weiland'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_weiland'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person26", "percent": 6}, {"member": "person28", "percent": 2}, {"member": "person36", "percent": 25}, {"member": "person37", "percent": 4}, {"member": "person41", "percent": 21}, {"member": "person58", "percent": 42}');
+select data.set_attribute_value(data.get_object_id('corporation_weiland'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_weiland1", "deal_weiland2", "deal_weiland3", "deal_weiland4", "deal_weiland5", "deal_weiland6", "deal_weiland7", "deal_weiland8", "deal_weiland9", "deal_weiland10"]');
+select data.set_attribute_value(data.get_object_id('corporation_weiland'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_weiland'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_weiland'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
+
+select data.set_attribute_value(data.get_object_id('corporation_mars'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_mars'), data.get_attribute_id('type'), null, jsonb '"corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_mars'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_mars'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_mars'), data.get_attribute_id('name'), null, jsonb '"MARS INDUSTRIES"');
+select data.set_attribute_value(data.get_object_id('corporation_mars'), data.get_attribute_id('description'), null, jsonb '"Корпорация, занимающаяся разработкой полезных ископаемых, постройкой гражданских кораблей, производством оружия для наземных сил, постройкой гражданских космических объектов (производственных и лабораторных комплексов). Самая старая корпорация ЗА из не подвергшихся поглощению и слиянию."');
+select data.set_attribute_value(data.get_object_id('corporation_mars'), data.get_attribute_id('corporation_state'), null, jsonb '"state_ea"');
+select data.set_attribute_value(data.get_object_id('corporation_mars'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_mars'), data.get_attribute_id('corporation_sectors'), null, '["sector_vpk", "sector_resources"]');
+select data.set_attribute_value(data.get_object_id('corporation_mars'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_mars'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person26", "percent": 21}, {"member": "person28", "percent": 3}, {"member": "person32", "percent": 23}, {"member": "person33", "percent": 49}, {"member": "person42", "percent": 4}');
+select data.set_attribute_value(data.get_object_id('corporation_mars'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_mars1", "deal_mars2", "deal_mars3", "deal_mars4", "deal_mars5", "deal_mars6", "deal_mars7", "deal_mars8", "deal_mars9", "deal_mars10"]');
+select data.set_attribute_value(data.get_object_id('corporation_mars'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_mars'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_mars'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
+
+select data.set_attribute_value(data.get_object_id('corporation_tong'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_tong'), data.get_attribute_id('type'), null, jsonb '"corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_tong'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_tong'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_tong'), data.get_attribute_id('name'), null, jsonb '"Ассоциация тонгов “Белая Хризантема”"');
+select data.set_attribute_value(data.get_object_id('corporation_tong'), data.get_attribute_id('description'), null, jsonb '"Торговая и посредническая организация, также берёт подряды на охранную деятельность. Имеет лицензию от КРЭФ на занятие кредитной деятельностью и страхованием рисков. Ходят слухи про контрабанду, наемные убийства и торговлю людьми, но это все клевета."');
+select data.set_attribute_value(data.get_object_id('corporation_tong'), data.get_attribute_id('corporation_state'), null, jsonb '"state_ea"');
+select data.set_attribute_value(data.get_object_id('corporation_tong'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_tong'), data.get_attribute_id('corporation_sectors'), null, '["sector_black_market"]');
+select data.set_attribute_value(data.get_object_id('corporation_tong'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_tong'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person40", "percent": 20}, {"member": "person45", "percent": 22}, {"member": "person46", "percent": 26}, {"member": "person58", "percent": 32}');
+select data.set_attribute_value(data.get_object_id('corporation_tong'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_tong1", "deal_tong2", "deal_tong3", "deal_tong4", "deal_tong5", "deal_tong6", "deal_tong7", "deal_tong8", "deal_tong9", "deal_tong10"]');
+select data.set_attribute_value(data.get_object_id('corporation_tong'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_tong'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_tong'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
+
+select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('type'), null, jsonb '"corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_kref'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('name'), null, jsonb '"КРЭФ"');
+select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('description'), null, jsonb '"КРЭФ (Сенатский комитет по регулированию в сфере экономики и финансов) - организация, олицетворяющая банковскую и финансовую сферу. Только государство может выдавать кредиты, или лицензию на кредитно-экономическую деятельность. К тому же государство владеет блокирующими пакетами акций некоторых корпораций, и минорными пакетами акций всех корпораций, чтобы следить за их деятельностью. Нынешний председатель КРЭФ Джон Морган."');
+select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('corporation_state'), null, jsonb '"state_ea"');
+select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('corporation_sectors'), null, '[]');
+select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person26", "percent": 100}');
+select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_kref1", "deal_kref2", "deal_kref3", "deal_kref4", "deal_kref5", "deal_kref6", "deal_kref7", "deal_kref8", "deal_kref9", "deal_kref10"]');
+select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
+
+select data.set_attribute_value(data.get_object_id('corporation_ea'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_ea'), data.get_attribute_id('type'), null, jsonb '"corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_ea'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_ea'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_ea'), data.get_attribute_id('name'), null, jsonb '"Земной альянс"');
+select data.set_attribute_value(data.get_object_id('corporation_ea'), data.get_attribute_id('description'), null, jsonb '"Земной альянс"');
+select data.set_attribute_value(data.get_object_id('corporation_ea'), data.get_attribute_id('corporation_state'), null, jsonb '"state_ea"');
+select data.set_attribute_value(data.get_object_id('corporation_ea'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_ea'), data.get_attribute_id('corporation_sectors'), null, '["sector_vpk", "sector_resources", "sector_connections", "sector_medicine"]');
+select data.set_attribute_value(data.get_object_id('corporation_ea'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_ea'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person26", "percent": 21}, {"member": "person47", "percent": 21}');
+select data.set_attribute_value(data.get_object_id('corporation_ea'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_ea1", "deal_ea2", "deal_ea3", "deal_ea4", "deal_ea5", "deal_ea6", "deal_ea7", "deal_ea8", "deal_ea9", "deal_ea10"]');
+select data.set_attribute_value(data.get_object_id('corporation_ea'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_ea'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_ea'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
+
+select data.set_attribute_value(data.get_object_id('corporation_brakos_diamond'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_brakos_diamond'), data.get_attribute_id('type'), null, jsonb '"corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_brakos_diamond'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_brakos_diamond'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_brakos_diamond'), data.get_attribute_id('name'), null, jsonb '"Бракос Даймонд"');
+select data.set_attribute_value(data.get_object_id('corporation_brakos_diamond'), data.get_attribute_id('description'), null, jsonb '"Корпорация, занимающаяся добычей ресурсов и дальней связью"');
+select data.set_attribute_value(data.get_object_id('corporation_brakos_diamond'), data.get_attribute_id('corporation_state'), null, jsonb '"state_brakiri"');
+select data.set_attribute_value(data.get_object_id('corporation_brakos_diamond'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_brakos_diamond'), data.get_attribute_id('corporation_sectors'), null, '["sector_vpk", "sector_resources"]');
+select data.set_attribute_value(data.get_object_id('corporation_brakos_diamond'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_brakos_diamond'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person14", "percent": 100}');
+select data.set_attribute_value(data.get_object_id('corporation_brakos_diamond'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_brakos_diamond1", "deal_brakos_diamond2", "deal_brakos_diamond3", "deal_brakos_diamond4", "deal_brakos_diamond5", "deal_brakos_diamond6", "deal_brakos_diamond7", "deal_brakos_diamond8", "deal_brakos_diamond9", "deal_brakos_diamond10"]');
+select data.set_attribute_value(data.get_object_id('corporation_brakos_diamond'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_brakos_diamond'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_brakos_diamond'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
+
+select data.set_attribute_value(data.get_object_id('corporation_droshalla_power'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_droshalla_power'), data.get_attribute_id('type'), null, jsonb '"corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_droshalla_power'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_droshalla_power'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_droshalla_power'), data.get_attribute_id('name'), null, jsonb '"Сила Дрошаллы"');
+select data.set_attribute_value(data.get_object_id('corporation_droshalla_power'), data.get_attribute_id('description'), null, jsonb '"Корпорация, работающая в сфере ВПК и дальней связи"');
+select data.set_attribute_value(data.get_object_id('corporation_droshalla_power'), data.get_attribute_id('corporation_state'), null, jsonb '"state_drazzi"');
+select data.set_attribute_value(data.get_object_id('corporation_droshalla_power'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_droshalla_power'), data.get_attribute_id('corporation_sectors'), null, '["sector_vpk", "sector_connections"]');
+select data.set_attribute_value(data.get_object_id('corporation_droshalla_power'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_droshalla_power'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person13", "percent": 100}');
+select data.set_attribute_value(data.get_object_id('corporation_droshalla_power'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_droshalla_power1", "deal_droshalla_power2", "deal_droshalla_power3", "deal_droshalla_power4", "deal_droshalla_power5", "deal_droshalla_power6", "deal_droshalla_power7", "deal_droshalla_power8", "deal_droshalla_power9", "deal_droshalla_power10"]');
+select data.set_attribute_value(data.get_object_id('corporation_droshalla_power'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_droshalla_power'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_droshalla_power'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
+
+select data.set_attribute_value(data.get_object_id('corporation_unnaming_blassing'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_unnaming_blassing'), data.get_attribute_id('type'), null, jsonb '"corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_unnaming_blassing'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_unnaming_blassing'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_unnaming_blassing'), data.get_attribute_id('name'), null, jsonb '"Благословение Безымянного"');
+select data.set_attribute_value(data.get_object_id('corporation_unnaming_blassing'), data.get_attribute_id('description'), null, jsonb '"Медицинская корпорация"');
+select data.set_attribute_value(data.get_object_id('corporation_unnaming_blassing'), data.get_attribute_id('corporation_state'), null, jsonb '"state_markabi"');
+select data.set_attribute_value(data.get_object_id('corporation_unnaming_blassing'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_unnaming_blassing'), data.get_attribute_id('corporation_sectors'), null, '["sector_medicine"]');
+select data.set_attribute_value(data.get_object_id('corporation_unnaming_blassing'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_unnaming_blassing'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person15", "percent": 100}');
+select data.set_attribute_value(data.get_object_id('corporation_unnaming_blassing'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_unnaming_blassing1", "deal_unnaming_blassing2", "deal_unnaming_blassing3", "deal_unnaming_blassing4", "deal_unnaming_blassing5", "deal_unnaming_blassing6", "deal_unnaming_blassing7", "deal_unnaming_blassing8", "deal_unnaming_blassing9", "deal_unnaming_blassing10"]');
+select data.set_attribute_value(data.get_object_id('corporation_unnaming_blassing'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_unnaming_blassing'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_unnaming_blassing'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
+
+select data.set_attribute_value(data.get_object_id('corporation_bhara'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_bhara'), data.get_attribute_id('type'), null, jsonb '"corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_bhara'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_bhara'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_bhara'), data.get_attribute_id('name'), null, jsonb '"Дом Бхара"');
+select data.set_attribute_value(data.get_object_id('corporation_bhara'), data.get_attribute_id('description'), null, jsonb '"Один из синдикатов Антареса"');
+select data.set_attribute_value(data.get_object_id('corporation_bhara'), data.get_attribute_id('corporation_state'), null, jsonb '"state_antares"');
+select data.set_attribute_value(data.get_object_id('corporation_bhara'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_bhara'), data.get_attribute_id('corporation_sectors'), null, '["sector_medicine", "sector_resources", "sector_vpk"]');
+select data.set_attribute_value(data.get_object_id('corporation_bhara'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_bhara'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person20", "percent": 100}');
+select data.set_attribute_value(data.get_object_id('corporation_bhara'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_bhara1", "deal_bhara2", "deal_bhara3", "deal_bhara4", "deal_bhara5", "deal_bhara6", "deal_bhara7", "deal_bhara8", "deal_bhara9", "deal_bhara10"]');
+select data.set_attribute_value(data.get_object_id('corporation_bhara'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_bhara'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_bhara'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
+
+select data.set_attribute_value(data.get_object_id('corporation_antares_finance'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_antares_finance'), data.get_attribute_id('type'), null, jsonb '"corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_antares_finance'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_antares_finance'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_antares_finance'), data.get_attribute_id('name'), null, jsonb '"Антарес-Финанс"');
+select data.set_attribute_value(data.get_object_id('corporation_antares_finance'), data.get_attribute_id('description'), null, jsonb '"Корпорация синдикатов Антареса"');
+select data.set_attribute_value(data.get_object_id('corporation_antares_finance'), data.get_attribute_id('corporation_state'), null, jsonb '"state_antares"');
+select data.set_attribute_value(data.get_object_id('corporation_antares_finance'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_antares_finance'), data.get_attribute_id('corporation_sectors'), null, '["sector_resources", "sector_connections", "sector_black_market"]');
+select data.set_attribute_value(data.get_object_id('corporation_antares_finance'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_antares_finance'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person21", "percent": 100}');
+select data.set_attribute_value(data.get_object_id('corporation_antares_finance'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_antares_finance1", "deal_antares_finance2", "deal_antares_finance3", "deal_antares_finance4", "deal_antares_finance5", "deal_antares_finance6", "deal_antares_finance7", "deal_antares_finance8", "deal_antares_finance9", "deal_antares_finance10"]');
+select data.set_attribute_value(data.get_object_id('corporation_antares_finance'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_antares_finance'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_antares_finance'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
+
+select data.set_attribute_value(data.get_object_id('corporation_marba'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_marba'), data.get_attribute_id('type'), null, jsonb '"corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_marba'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_marba'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_marba'), data.get_attribute_id('name'), null, jsonb '"Марба"');
+select data.set_attribute_value(data.get_object_id('corporation_marba'), data.get_attribute_id('description'), null, jsonb '"Корпорация с Центавра"');
+select data.set_attribute_value(data.get_object_id('corporation_marba'), data.get_attribute_id('corporation_state'), null, jsonb '"state_centauri"');
+select data.set_attribute_value(data.get_object_id('corporation_marba'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_marba'), data.get_attribute_id('corporation_sectors'), null, '["sector_vpk", "sector_connections"]');
+select data.set_attribute_value(data.get_object_id('corporation_marba'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_marba'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person8", "percent": 100}');
+select data.set_attribute_value(data.get_object_id('corporation_marba'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_marba1", "deal_marba2", "deal_marba3", "deal_marba4", "deal_marba5", "deal_marba6", "deal_marba7", "deal_marba8", "deal_marba9", "deal_marba10"]');
+select data.set_attribute_value(data.get_object_id('corporation_marba'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_marba'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_marba'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
+
+select data.set_attribute_value(data.get_object_id('corporation_mollari'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_mollari'), data.get_attribute_id('type'), null, jsonb '"corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_mollari'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_mollari'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_mollari'), data.get_attribute_id('name'), null, jsonb '"Моллари Консолидейтед"');
+select data.set_attribute_value(data.get_object_id('corporation_mollari'), data.get_attribute_id('description'), null, jsonb '"Корпорация дома Моллари"');
+select data.set_attribute_value(data.get_object_id('corporation_mollari'), data.get_attribute_id('corporation_state'), null, jsonb '"state_centauri"');
+select data.set_attribute_value(data.get_object_id('corporation_mollari'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_mollari'), data.get_attribute_id('corporation_sectors'), null, '["sector_resources", "sector_medicine"]');
+select data.set_attribute_value(data.get_object_id('corporation_mollari'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_mollari'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person7", "percent": 100}');
+select data.set_attribute_value(data.get_object_id('corporation_mollari'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_mollari1", "deal_mollari2", "deal_mollari3", "deal_mollari4", "deal_mollari5", "deal_mollari6", "deal_mollari7", "deal_mollari8", "deal_mollari9", "deal_mollari10"]');
+select data.set_attribute_value(data.get_object_id('corporation_mollari'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_mollari'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_mollari'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
+
+select data.set_attribute_value(data.get_object_id('corporation_makan'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_makan'), data.get_attribute_id('type'), null, jsonb '"corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_makan'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_makan'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_makan'), data.get_attribute_id('name'), null, jsonb '"Ma''Kan Industries"');
+select data.set_attribute_value(data.get_object_id('corporation_makan'), data.get_attribute_id('description'), null, jsonb '"Корпорация с Нарна"');
+select data.set_attribute_value(data.get_object_id('corporation_makan'), data.get_attribute_id('corporation_state'), null, jsonb '"state_narn"');
+select data.set_attribute_value(data.get_object_id('corporation_makan'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_makan'), data.get_attribute_id('corporation_sectors'), null, '["sector_vpk", "sector_connections", "sector_resources", "sector_medicine"]');
+select data.set_attribute_value(data.get_object_id('corporation_makan'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_makan'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person10", "percent": 100}');
+select data.set_attribute_value(data.get_object_id('corporation_makan'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_makan1", "deal_makan2", "deal_makan3", "deal_makan4", "deal_makan5", "deal_makan6", "deal_makan7", "deal_makan8", "deal_makan9", "deal_makan10"]');
+select data.set_attribute_value(data.get_object_id('corporation_makan'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_makan'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_makan'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
+
+select data.set_attribute_value(data.get_object_id('corporation_masters'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_masters'), data.get_attribute_id('type'), null, jsonb '"corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_masters'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_masters'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_masters'), data.get_attribute_id('name'), null, jsonb '"Каста мастеров"');
+select data.set_attribute_value(data.get_object_id('corporation_masters'), data.get_attribute_id('description'), null, jsonb '"Каста мастеров минбари"');
+select data.set_attribute_value(data.get_object_id('corporation_masters'), data.get_attribute_id('corporation_state'), null, jsonb '"state_minbari"');
+select data.set_attribute_value(data.get_object_id('corporation_masters'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_masters'), data.get_attribute_id('corporation_sectors'), null, '["sector_vpk", "sector_connections", "sector_resources", "sector_medicine"]');
+select data.set_attribute_value(data.get_object_id('corporation_masters'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_masters'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person17", "percent": 100}');
+select data.set_attribute_value(data.get_object_id('corporation_masters'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_masters1", "deal_masters2", "deal_masters3", "deal_masters4", "deal_masters5", "deal_masters6", "deal_masters7", "deal_masters8", "deal_masters9", "deal_masters10"]');
+select data.set_attribute_value(data.get_object_id('corporation_masters'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_masters'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_masters'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
+
+select data.set_attribute_value(data.get_object_id('corporation_artalan'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_artalan'), data.get_attribute_id('type'), null, jsonb '"corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_artalan'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_artalan'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_artalan'), data.get_attribute_id('name'), null, jsonb '"Арталан"');
+select data.set_attribute_value(data.get_object_id('corporation_artalan'), data.get_attribute_id('description'), null, jsonb '"Корпорация драззи"');
+select data.set_attribute_value(data.get_object_id('corporation_artalan'), data.get_attribute_id('corporation_state'), null, jsonb '"state_drazzi"');
+select data.set_attribute_value(data.get_object_id('corporation_artalan'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_artalan'), data.get_attribute_id('corporation_sectors'), null, '["sector_connections", "sector_black_market"]');
+select data.set_attribute_value(data.get_object_id('corporation_artalan'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_artalan'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person22", "percent": 100}');
+select data.set_attribute_value(data.get_object_id('corporation_artalan'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_artalan1", "deal_artalan2", "deal_artalan3", "deal_artalan4", "deal_artalan5", "deal_artalan6", "deal_artalan7", "deal_artalan8", "deal_artalan9", "deal_artalan10"]');
+select data.set_attribute_value(data.get_object_id('corporation_artalan'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_artalan'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_artalan'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
+
+select data.set_attribute_value(data.get_object_id('corporation_psi_corps'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_psi_corps'), data.get_attribute_id('type'), null, jsonb '"corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_psi_corps'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_psi_corps'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_psi_corps'), data.get_attribute_id('name'), null, jsonb '"PSI corps"');
+select data.set_attribute_value(data.get_object_id('corporation_psi_corps'), data.get_attribute_id('description'), null, jsonb '"Корпорация телепатов"');
+select data.set_attribute_value(data.get_object_id('corporation_psi_corps'), data.get_attribute_id('corporation_state'), null, jsonb '"state_ea"');
+select data.set_attribute_value(data.get_object_id('corporation_psi_corps'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_psi_corps'), data.get_attribute_id('corporation_sectors'), null, '["sector_medicine"]');
+select data.set_attribute_value(data.get_object_id('corporation_psi_corps'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_psi_corps'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person44", "percent": 100}');
+select data.set_attribute_value(data.get_object_id('corporation_psi_corps'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_psi_corps1", "deal_psi_corps2", "deal_psi_corps3", "deal_psi_corps4", "deal_psi_corps5", "deal_psi_corps6", "deal_psi_corps7", "deal_psi_corps8", "deal_psi_corps9", "deal_psi_corps10"]');
+select data.set_attribute_value(data.get_object_id('corporation_psi_corps'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_psi_corps'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_psi_corps'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
+
+select data.set_attribute_value(data.get_object_id('corporation_anklav_telepaths'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_anklav_telepaths'), data.get_attribute_id('type'), null, jsonb '"corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_anklav_telepaths'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_anklav_telepaths'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_anklav_telepaths'), data.get_attribute_id('name'), null, jsonb '"Анклав телепатов"');
+select data.set_attribute_value(data.get_object_id('corporation_anklav_telepaths'), data.get_attribute_id('description'), null, jsonb '"Корпорация телепатов"');
+select data.set_attribute_value(data.get_object_id('corporation_anklav_telepaths'), data.get_attribute_id('corporation_state'), null, jsonb '"state_ea"');
+select data.set_attribute_value(data.get_object_id('corporation_anklav_telepaths'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_anklav_telepaths'), data.get_attribute_id('corporation_sectors'), null, '["sector_medicine"]');
+select data.set_attribute_value(data.get_object_id('corporation_anklav_telepaths'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_anklav_telepaths'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person34", "percent": 100}');
+select data.set_attribute_value(data.get_object_id('corporation_anklav_telepaths'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_anklav_telepaths1", "deal_anklav_telepaths2", "deal_anklav_telepaths3", "deal_anklav_telepaths4", "deal_anklav_telepaths5", "deal_anklav_telepaths6", "deal_anklav_telepaths7", "deal_anklav_telepaths8", "deal_anklav_telepaths9", "deal_anklav_telepaths10"]');
+select data.set_attribute_value(data.get_object_id('corporation_anklav_telepaths'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_anklav_telepaths'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_anklav_telepaths'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
+
+select data.set_attribute_value(data.get_object_id('corporation_guild_telepaths'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_guild_telepaths'), data.get_attribute_id('type'), null, jsonb '"corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_guild_telepaths'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_guild_telepaths'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_guild_telepaths'), data.get_attribute_id('name'), null, jsonb '"Гильдия телепатов"');
+select data.set_attribute_value(data.get_object_id('corporation_guild_telepaths'), data.get_attribute_id('description'), null, jsonb '"Корпорация телепатов с Центавра"');
+select data.set_attribute_value(data.get_object_id('corporation_guild_telepaths'), data.get_attribute_id('corporation_state'), null, jsonb '"state_centauri"');
+select data.set_attribute_value(data.get_object_id('corporation_guild_telepaths'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_guild_telepaths'), data.get_attribute_id('corporation_sectors'), null, '["sector_medicine"]');
+select data.set_attribute_value(data.get_object_id('corporation_guild_telepaths'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_guild_telepaths'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person8", "percent": 100}');
+select data.set_attribute_value(data.get_object_id('corporation_guild_telepaths'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_guild_telepaths1", "deal_guild_telepaths2", "deal_guild_telepaths3", "deal_guild_telepaths4", "deal_guild_telepaths5", "deal_guild_telepaths6", "deal_guild_telepaths7", "deal_guild_telepaths8", "deal_guild_telepaths9", "deal_guild_telepaths10"]');
+select data.set_attribute_value(data.get_object_id('corporation_guild_telepaths'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_guild_telepaths'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
+select data.set_attribute_value(data.get_object_id('corporation_guild_telepaths'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
 
 select data.set_attribute_value(data.get_object_id('normal_deals'), data.get_attribute_id('system_meta'), data.get_object_id('masters'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('normal_deals'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
