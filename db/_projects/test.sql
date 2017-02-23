@@ -174,7 +174,7 @@ insert into data.params(code, value, description) values
     },
     {
       "attributes": ["vote_status", "vote_theme", "vote_history"],
-      "actions": ["start_vote", "end_vote", "vote_yes", "vote_no"]
+      "actions": ["start_vote", "stop_vote", "vote_yes", "vote_no"]
     }
   ]
 }
@@ -566,12 +566,12 @@ insert into data.attributes(code, name, type, value_description_function) values
 ('percent_deals', 'Cделки', 'SYSTEM', null),
 ('political_influence', 'Политическое влияние', 'NORMAL', null),
 ('system_political_influence', 'Политическое влияние', 'SYSTEM', null),
-('system_person_votes_num', 'Количество голосований за экономический цикл', 'NORMAL', null),
+('system_person_votes_num', 'Количество голосований за экономический цикл', 'SYSTEM', null),
 ('vote_status', 'Статус', 'NORMAL', 'vote_status'),
 ('vote_theme', 'Тема голосования', 'NORMAL', null),
 ('vote_yes', 'Голосование За', 'SYSTEM', null),
 ('vote_no', 'Голосование Против', 'SYSTEM', null),
-('system_vote_history_json', 'История голосований', 'SYSTEM', null),
+('system_vote_history_json', 'История голосований', 'INVISIBLE', null),
 ('system_vote_history', 'История голосований', 'SYSTEM', null),
 ('vote_history', 'История голосований', 'NORMAL', null),
 ('vote_last_number', 'Номер последнего голосования', 'SYSTEM', null),
@@ -1772,6 +1772,11 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
         "conditions": [{"attribute_code": "system_secretary", "attribute_value": true}],
         "function": "fill_value_object_attribute_from_attribute",
         "params": {"value_object_code": "secretaries", "attribute_code": "system_vote_history"}
+      },
+      {
+        "conditions": [{"attribute_code": "system_politician", "attribute_value": true}],
+        "function": "fill_value_object_attribute_from_attribute",
+        "params": {"value_object_code": "politicians", "attribute_code": "system_vote_history"}
       }
     ]
   }', 'Получение истории голосований');
@@ -1912,6 +1917,7 @@ select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_i
 select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_id('system_is_visible'), data.get_object_id('secretaries'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_id('system_is_visible'), data.get_object_id('masters'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_id('system_is_visible'), data.get_object_id('politicians'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_id('system_is_visible'), data.get_object_id('anonymous'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_id('type'), null, jsonb '"vote"');
 select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_id('name'), null, jsonb '"Голосования"');
 select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_id('vote_status'), null, jsonb '"no"');
@@ -7082,6 +7088,7 @@ declare
   v_system_corporation_members_attribute_id integer := data.get_attribute_id('system_corporation_members');
   v_system_balance_attribute_id integer := data.get_attribute_id('system_balance');
   v_system_person_salary_attribute_id integer := data.get_attribute_id('system_person_salary');
+  v_system_person_votes_num_attribute_id integer := data.get_attribute_id('system_person_votes_num');
   
 
   v_corp_income jsonb := jsonb '{}';
@@ -7261,6 +7268,33 @@ begin
       and json.get_opt_integer(av_sal.value) > 0) loop
     perform actions.generate_money(in_client, v_market_id, null, jsonb_build_object('receiver', v_persons.code, 'description', 'Доход за экономический цикл', 'sum', to_jsonb(v_persons.sal)));
   end loop;
+
+  -- Плата за голосования
+  for v_persons in (select o.code, json.get_opt_integer(av_vote.value, 0) vote
+			  from data.object_objects oo
+			  join data.objects o on o.id = oo.object_id
+			  join data.attribute_values av_vote on av_vote.object_id = oo.object_id 
+							and av_vote.attribute_id = v_system_person_votes_num_attribute_id 
+							and av_vote.value_object_id is null 
+			  where oo.parent_object_id = data.get_object_id('politicians')
+			      and oo.object_id <> oo.parent_object_id
+			      and oo.intermediate_object_ids is null
+			      and json.get_opt_integer(av_vote.value, 0) > 0) loop
+      perform actions.generate_money(in_client, v_market_id, null, jsonb_build_object('receiver', v_persons.code, 'description', 'Доход за голосования за экономический цикл', 'sum', to_jsonb(v_persons.vote * 500)));
+  end loop;
+
+  -- Обнулить счётчики голосований
+    for v_persons in (select oo.object_id, json.get_opt_integer(av_vote.value, 0) vote
+			  from data.object_objects oo
+			  join data.attribute_values av_vote on av_vote.object_id = oo.object_id 
+							and av_vote.attribute_id = v_system_person_votes_num_attribute_id 
+							and av_vote.value_object_id is null 
+			  where oo.parent_object_id = data.get_object_id('politicians')
+			      and oo.object_id <> oo.parent_object_id
+			      and oo.intermediate_object_ids is null
+			      and json.get_opt_integer(av_vote.value, 0) > 0) loop
+      perform data.set_attribute_value_if_changed(v_persons.object_id, v_system_person_votes_num_attribute_id, null, to_jsonb(0), in_user_object_id);
+    end loop;
   
   return api_utils.get_objects(in_client,
 				     in_user_object_id,
@@ -7857,6 +7891,476 @@ $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
 
+  -- Действие для начала голосования
+CREATE OR REPLACE FUNCTION action_generators.start_vote(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_is_in_group integer; 
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_user_code text := data.get_object_code(v_user_object_id);
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+begin
+   -- Показываем только для секретаря и для мастера и когда голосование не началось
+  if (not json.get_opt_boolean(data.get_attribute_value(v_user_object_id,
+					       v_user_object_id, 
+					       data.get_attribute_id('system_secretary')), false)
+  and not json.get_opt_boolean(data.get_attribute_value(v_user_object_id,
+					       v_user_object_id, 
+					       data.get_attribute_id('system_master')), false))
+  or json.get_opt_string(data.get_attribute_value(v_user_object_id,
+					          v_object_id, 
+					          data.get_attribute_id('vote_status')),'~') = 'yes'  then
+     return null;
+   end if;
+  
+  return jsonb_build_object(
+    'start_vote',
+    jsonb_build_object(
+      'code', 'start_vote',
+      'name', 'Начать голосование',
+      'type', 'politics.vote',
+      'params', jsonb_build_object('vote', data.get_object_code(v_object_id)),
+      'user_params', jsonb_build_array(
+         jsonb_build_object(
+            'code', 'vote_theme',
+            'type', 'string',
+            'description', 'Тема голосования',
+            'data', jsonb_build_object('min_length', 1),
+            'min_value_count', 1,
+            'max_value_count', 1)
+      )
+      ));
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.start_vote(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_vote_code text := json.get_string(in_params, 'vote');
+  v_vote_id integer := data.get_object_id(v_vote_code);
+  v_vote_theme text := json.get_string(in_user_params, 'vote_theme');
+  v_vote_last_number integer;
+  v_receiver_ids integer[];
+  
+  v_ret_val api.result;
+begin
+  v_ret_val := api_utils.get_objects(in_client,
+				     in_user_object_id,
+				     jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_vote_code),
+			    'get_actions', true,
+			    'get_templates', true));
+  if json.get_opt_string(data.get_attribute_value(in_user_object_id,
+					          v_vote_id, 
+					          data.get_attribute_id('vote_status')),'~') <> 'no' then
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Статус голосования изменился!"}';
+    return v_ret_val;
+  end if;
+  
+  perform data.set_attribute_value_if_changed(v_vote_id, data.get_attribute_id('vote_theme'), null, to_jsonb(v_vote_theme), in_user_object_id);
+  perform data.set_attribute_value_if_changed(v_vote_id, data.get_attribute_id('vote_status'), null, jsonb '"yes"', in_user_object_id);
+
+  perform data.delete_attribute_value_if_exists(v_vote_id, data.get_attribute_id('vote_yes'), oo.object_id, in_user_object_id),
+          data.delete_attribute_value_if_exists(v_vote_id, data.get_attribute_id('vote_no'), oo.object_id, in_user_object_id)
+  from data.object_objects oo
+  where oo.parent_object_id = data.get_object_id('politicians')
+      and oo.object_id <> oo.parent_object_id
+      and oo.intermediate_object_ids is null;
+
+  select
+    array_agg(distinct(oo.object_id))
+    into v_receiver_ids
+  from data.object_objects oo
+  where oo.parent_object_id = data.get_object_id('politicians')
+      and oo.object_id <> oo.parent_object_id
+      and oo.intermediate_object_ids is null;
+
+
+  perform actions.create_notification(
+    in_user_object_id,
+    v_receiver_ids,
+    'Началось голосование на тему '||  v_vote_theme,
+    v_vote_code
+    );
+
+
+  v_vote_last_number := json.get_opt_integer(data.get_raw_attribute_value(v_vote_id, data.get_attribute_id('vote_last_number'), null), 0);
+  perform data.set_attribute_value_if_changed(v_vote_id, data.get_attribute_id('vote_last_number'), null, to_jsonb(v_vote_last_number + 1), in_user_object_id);
+
+
+  return api_utils.get_objects(in_client,
+			  in_user_object_id,
+			  jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_vote_code),
+			    'get_actions', true,
+			    'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+ -- Действие голосования за
+CREATE OR REPLACE FUNCTION action_generators.vote_yes(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_is_in_group integer; 
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_user_code text := data.get_object_code(v_user_object_id);
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_disabled boolean := false;
+begin
+   -- Показываем только для политиков и когда голосование началось
+  if not json.get_opt_boolean(data.get_attribute_value(v_user_object_id,
+					       v_user_object_id, 
+					       data.get_attribute_id('system_politician')), false)
+
+  or json.get_opt_string(data.get_attribute_value(v_user_object_id,
+					          v_object_id, 
+					          data.get_attribute_id('vote_status')),'~') <> 'yes'  then
+     return null;
+  end if;
+
+  if json.get_opt_integer(data.get_attribute_value(v_user_object_id,
+					          v_object_id, 
+					          data.get_attribute_id('vote_yes'))) is not null 
+  or json.get_opt_integer(data.get_attribute_value(v_user_object_id,
+					          v_object_id, 
+					          data.get_attribute_id('vote_no'))) is not null then
+    v_disabled := true;
+  end if;
+
+  return jsonb_build_object(
+    'vote_yes',
+    jsonb_build_object(
+      'code', 'vote_yes',
+      'name', 'За',
+      'type', 'politics.vote',
+      'disabled', v_disabled,
+      'params', jsonb_build_object('vote', data.get_object_code(v_object_id), 'vote_last_number', json.get_opt_integer(data.get_attribute_value(v_user_object_id,
+																		v_object_id, 
+																		data.get_attribute_id('vote_last_number')),0))
+      ));
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.vote_yes(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_vote_code text := json.get_string(in_params, 'vote');
+  v_vote_id integer := data.get_object_id(v_vote_code);
+  v_vote_last_number integer := json.get_opt_integer(in_params, 0, 'vote_last_number');
+  v_system_political_influence integer;
+  v_system_person_votes_num integer;
+
+  v_system_person_votes_num_attribute_id integer := data.get_attribute_id('system_person_votes_num');
+  
+  v_ret_val api.result;
+begin
+  v_ret_val := api_utils.get_objects(in_client,
+				     in_user_object_id,
+				     jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_vote_code),
+			    'get_actions', true,
+			    'get_templates', true));
+  if json.get_opt_string(data.get_attribute_value(in_user_object_id,
+					          v_vote_id, 
+					          data.get_attribute_id('vote_status')),'~') <> 'yes' then
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Статус голосования изменился. Перезагрузите страницу"}';
+    return v_ret_val;
+  end if;
+  if json.get_opt_integer(data.get_attribute_value(in_user_object_id,
+					          v_vote_id, 
+					          data.get_attribute_id('vote_last_number')),0) <> v_vote_last_number then
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Тема голосования изменилась. Перезагрузите страницу"}';
+    return v_ret_val;
+  end if;
+  if json.get_opt_integer(data.get_attribute_value(in_user_object_id,
+					          v_vote_id, 
+					          data.get_attribute_id('vote_yes'))) is not null 
+  or json.get_opt_integer(data.get_attribute_value(in_user_object_id,
+					          v_vote_id, 
+					          data.get_attribute_id('vote_no'))) is not null  then
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Вы уже сделали выбор в этом голосовании"}';
+    return v_ret_val;
+  end if;
+
+  v_system_political_influence := json.get_opt_integer(data.get_raw_attribute_value(in_user_object_id, data.get_attribute_id('system_political_influence'), null), 0);
+  perform data.set_attribute_value_if_changed(v_vote_id, data.get_attribute_id('vote_yes'), in_user_object_id, to_jsonb(v_system_political_influence), in_user_object_id);
+
+  v_system_person_votes_num := json.get_opt_integer(data.get_raw_attribute_value(in_user_object_id, v_system_person_votes_num_attribute_id, null), 0);
+  perform data.set_attribute_value_if_changed(in_user_object_id, v_system_person_votes_num_attribute_id, null, to_jsonb(v_system_person_votes_num + 1), in_user_object_id);
+
+
+  return api_utils.get_objects(in_client,
+			  in_user_object_id,
+			  jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_vote_code),
+			    'get_actions', true,
+			    'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+-- Действие голосования против
+CREATE OR REPLACE FUNCTION action_generators.vote_no(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_is_in_group integer; 
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_user_code text := data.get_object_code(v_user_object_id);
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_disabled boolean := false;
+begin
+   -- Показываем только для политиков и когда голосование началось
+  if not json.get_opt_boolean(data.get_attribute_value(v_user_object_id,
+					       v_user_object_id, 
+					       data.get_attribute_id('system_politician')), false)
+
+  or json.get_opt_string(data.get_attribute_value(v_user_object_id,
+					          v_object_id, 
+					          data.get_attribute_id('vote_status')),'~') <> 'yes'  then
+     return null;
+  end if;
+
+  if json.get_opt_integer(data.get_attribute_value(v_user_object_id,
+					          v_object_id, 
+					          data.get_attribute_id('vote_yes'))) is not null 
+  or json.get_opt_integer(data.get_attribute_value(v_user_object_id,
+					          v_object_id, 
+					          data.get_attribute_id('vote_no'))) is not null then
+    v_disabled := true;
+  end if;
+
+  return jsonb_build_object(
+    'vote_no',
+    jsonb_build_object(
+      'code', 'vote_no',
+      'name', 'Против',
+      'type', 'politics.vote',
+      'disabled', v_disabled,
+      'params', jsonb_build_object('vote', data.get_object_code(v_object_id), 'vote_last_number', json.get_opt_integer(data.get_attribute_value(v_user_object_id,
+																		v_object_id, 
+																		data.get_attribute_id('vote_last_number')),0))
+      ));
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.vote_no(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_vote_code text := json.get_string(in_params, 'vote');
+  v_vote_id integer := data.get_object_id(v_vote_code);
+  v_vote_last_number integer := json.get_opt_integer(in_params, 0, 'vote_last_number');
+  v_system_political_influence integer;
+  v_system_person_votes_num integer;
+
+  v_system_person_votes_num_attribute_id integer := data.get_attribute_id('system_person_votes_num');
+  
+  v_ret_val api.result;
+begin
+  v_ret_val := api_utils.get_objects(in_client,
+				     in_user_object_id,
+				     jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_vote_code),
+			    'get_actions', true,
+			    'get_templates', true));
+  if json.get_opt_string(data.get_attribute_value(in_user_object_id,
+					          v_vote_id, 
+					          data.get_attribute_id('vote_status')),'~') <> 'yes' then
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Статус голосования изменился. Перезагрузите страницу"}';
+    return v_ret_val;
+  end if;
+  if json.get_opt_integer(data.get_attribute_value(in_user_object_id,
+					          v_vote_id, 
+					          data.get_attribute_id('vote_last_number')),0) <> v_vote_last_number then
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Тема голосования изменилась. Перезагрузите страницу"}';
+    return v_ret_val;
+  end if;
+  if json.get_opt_integer(data.get_attribute_value(in_user_object_id,
+					          v_vote_id, 
+					          data.get_attribute_id('vote_yes'))) is not null 
+  or json.get_opt_integer(data.get_attribute_value(in_user_object_id,
+					          v_vote_id, 
+					          data.get_attribute_id('vote_no'))) is not null  then
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Вы уже сделали выбор в этом голосовании"}';
+    return v_ret_val;
+  end if;
+
+  v_system_political_influence := json.get_opt_integer(data.get_raw_attribute_value(in_user_object_id, data.get_attribute_id('system_political_influence'), null), 0);
+  perform data.set_attribute_value_if_changed(v_vote_id, data.get_attribute_id('vote_no'), in_user_object_id, to_jsonb(v_system_political_influence), in_user_object_id);
+
+  v_system_person_votes_num := json.get_opt_integer(data.get_raw_attribute_value(in_user_object_id, v_system_person_votes_num_attribute_id, null), 0);
+  perform data.set_attribute_value_if_changed(in_user_object_id, v_system_person_votes_num_attribute_id, null, to_jsonb(v_system_person_votes_num + 1), in_user_object_id);
+
+
+  return api_utils.get_objects(in_client,
+			  in_user_object_id,
+			  jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_vote_code),
+			    'get_actions', true,
+			    'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
+ -- Действие для завершения голосования
+CREATE OR REPLACE FUNCTION action_generators.stop_vote(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_is_in_group integer; 
+  v_user_object_id integer := json.get_integer(in_params, 'user_object_id');
+  v_user_code text := data.get_object_code(v_user_object_id);
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+begin
+   -- Показываем только для секретаря и для мастера и когда голосование началось
+  if (not json.get_opt_boolean(data.get_attribute_value(v_user_object_id,
+					       v_user_object_id, 
+					       data.get_attribute_id('system_secretary')), false)
+  and not json.get_opt_boolean(data.get_attribute_value(v_user_object_id,
+					       v_user_object_id, 
+					       data.get_attribute_id('system_master')), false))
+  or json.get_opt_string(data.get_attribute_value(v_user_object_id,
+					          v_object_id, 
+					          data.get_attribute_id('vote_status')),'~') <> 'yes'  then
+     return null;
+   end if;
+  
+  return jsonb_build_object(
+    'stop_vote',
+    jsonb_build_object(
+      'code', 'stop_vote',
+      'name', 'Завершить голосование',
+      'type', 'politics.vote',
+      'params', jsonb_build_object('vote', data.get_object_code(v_object_id))
+      ));
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.stop_vote(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_vote_code text := json.get_string(in_params, 'vote');
+  v_vote_id integer := data.get_object_id(v_vote_code);
+  v_vote_theme text;
+  v_vote_last_number integer;
+
+  v_yes integer;
+  v_no integer;
+  v_yes_percent integer;
+  v_no_percent integer;
+
+  v_system_vote_history text;
+  v_system_vote_history_json jsonb;
+
+  v_vote_yes_attribute_id integer := data.get_attribute_id('vote_yes');
+  v_vote_no_attribute_id integer := data.get_attribute_id('vote_no');
+  v_system_vote_history_attribute_id integer := data.get_attribute_id('system_vote_history');
+  v_system_vote_history_json_attribute_id integer := data.get_attribute_id('system_vote_history_json');
+  
+  v_ret_val api.result;
+begin
+  v_ret_val := api_utils.get_objects(in_client,
+				     in_user_object_id,
+				     jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_vote_code),
+			    'get_actions', true,
+			    'get_templates', true));
+  if json.get_opt_string(data.get_attribute_value(in_user_object_id,
+					          v_vote_id, 
+					          data.get_attribute_id('vote_status')),'~') <> 'yes' then
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Статус голосования изменился!"}';
+    return v_ret_val;
+  end if;
+  
+  perform data.set_attribute_value_if_changed(v_vote_id, data.get_attribute_id('vote_status'), null, jsonb '"no"', in_user_object_id);
+
+  v_vote_last_number := json.get_opt_integer(data.get_raw_attribute_value(v_vote_id, data.get_attribute_id('vote_last_number'), null), 0);
+  v_vote_theme := json.get_opt_string(data.get_raw_attribute_value(v_vote_id, data.get_attribute_id('vote_theme'), null), '-');
+
+  select sum(case when data.get_attribute_value(oo.object_id, v_vote_id, v_vote_yes_attribute_id) is not null then 1 else 0 end),
+         sum(case when data.get_attribute_value(oo.object_id, v_vote_id, v_vote_no_attribute_id) is not null then 1 else 0 end),
+         sum(json.get_opt_integer(data.get_attribute_value(oo.object_id, v_vote_id, v_vote_yes_attribute_id), 0)),
+         sum(json.get_opt_integer(data.get_attribute_value(oo.object_id, v_vote_id, v_vote_no_attribute_id), 0))
+    into 
+    v_yes,
+    v_no,
+    v_yes_percent,
+    v_no_percent
+  from data.object_objects oo
+  where oo.parent_object_id = data.get_object_id('politicians')
+      and oo.object_id <> oo.parent_object_id
+      and oo.intermediate_object_ids is null;
+
+  v_system_vote_history := json.get_opt_string(data.get_raw_attribute_value(v_vote_id, v_system_vote_history_attribute_id, null), '');
+  v_system_vote_history_json := data.get_raw_attribute_value(v_vote_id, v_system_vote_history_json_attribute_id, null);
+
+  v_system_vote_history := v_vote_theme || ': За - '|| coalesce(v_yes, 0) || ' (' || coalesce(v_yes_percent, 0) || '%). Против - '|| coalesce(v_no, 0) || ' (' || coalesce(v_no_percent, 0) || '%).<br>' || v_system_vote_history;
+  v_system_vote_history_json := coalesce(v_system_vote_history_json, '[]'::jsonb) || jsonb_build_object('id', v_vote_last_number, 
+													'name', v_vote_theme, 
+													'yes', coalesce(v_yes, 0), 
+													'no', coalesce(v_no, 0),
+													'yes_percent', coalesce(v_yes_percent, 0),
+													'no_percent', coalesce(v_no_percent, 0));
+
+  perform data.set_attribute_value_if_changed(v_vote_id, v_system_vote_history_attribute_id, null, to_jsonb(v_system_vote_history), in_user_object_id);
+  perform data.set_attribute_value_if_changed(v_vote_id, v_system_vote_history_json_attribute_id, null, v_system_vote_history_json, in_user_object_id);
+  
+  perform data.delete_attribute_value_if_exists(v_vote_id, data.get_attribute_id('vote_yes'), oo.object_id, in_user_object_id),
+          data.delete_attribute_value_if_exists(v_vote_id, data.get_attribute_id('vote_no'), oo.object_id, in_user_object_id)
+  from data.object_objects oo
+  where oo.parent_object_id = data.get_object_id('politicians')
+      and oo.object_id <> oo.parent_object_id
+      and oo.intermediate_object_ids is null;
+
+  return api_utils.get_objects(in_client,
+			  in_user_object_id,
+			  jsonb_build_object(
+			    'object_codes', jsonb_build_array(v_vote_code),
+			    'get_actions', true,
+			    'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+
 insert into data.action_generators(function, params, description) values
 ('login', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция входа в систему'),
 ('logout', jsonb_build_object('test_object_id', data.get_object_id('anonymous')), 'Функция выхода из системы'),
@@ -7950,7 +8454,13 @@ insert into data.action_generators(function, params, description) values
           {"function": "edit_percent_deal"},
           {"function": "cancel_percent_deal"},
           {"function": "confirm_percent_deal"}
-        ]
+        ],
+        "vote": [
+          {"function": "start_vote"},
+          {"function": "vote_yes"},
+          {"function": "vote_no"},
+          {"function": "stop_vote"}
+          ]
       },
       "mail_type": {
         "inbox": [
