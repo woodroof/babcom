@@ -306,10 +306,6 @@ insert into data.objects(code) values
 ('sector_medicine'),
 ('sector_black_market');
 
-
-insert into data.objects(code)
-select 'deal' || o1.* from generate_series(1, 50) o1(value);
-
 -- Функции для получения значений атрибутов
 CREATE OR REPLACE FUNCTION attribute_value_description_functions.person_race(
     in_user_object_id integer,
@@ -3084,7 +3080,7 @@ select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_
 select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
 select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('corporation_sectors'), null, jsonb '["sector_vpk", "sector_resources", "sector_connections"]');
 select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
-select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person3", "percent": 12}, {"member": "person35", "percent": 6}, {"member": "person39", "percent": 29}, {"member": "person49", "percent": 4}, {"member": "person58", "percent": 40}]');
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person3", "percent": 12},{"member": "person26'", "percent": 9}, {"member": "person35", "percent": 6}, {"member": "person39", "percent": 29}, {"member": "person49", "percent": 4}, {"member": "person58", "percent": 40}]');
 select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_ipx1", "deal_ipx2", "deal_ipx3", "deal_ipx4", "deal_ipx5", "deal_ipx6", "deal_ipx7", "deal_ipx8", "deal_ipx9", "deal_ipx10"]');
 select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
 select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
@@ -3429,6 +3425,1205 @@ select data.set_attribute_value(data.get_object_id('done_percent_deals'), data.g
 
 -- TODO сделки
 
+-- IPX
+insert into data.objects(code)
+select 'deal_ipx' || o1.* from generate_series(1, 10) o1(value);
+
+select
+  data.set_attribute_value(data.get_object_id('deal_ipx' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal_ipx' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal_ipx' || o.value), data.get_attribute_id('deal_sector'), null, to_jsonb('sector_vpk')),
+  data.set_attribute_value(data.get_object_id('deal_ipx' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(600000)),
+  data.set_attribute_value(data.get_object_id('deal_ipx' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(1000000)),
+  data.set_attribute_value(data.get_object_id('deal_ipx' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(100000)),
+  data.set_attribute_value(data.get_object_id('deal_ipx' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation_ipx", "percent_asset": 100, "percent_income": 100, "deal_cost": 1430000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal_ipx' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_ipx' || o.value), data.get_attribute_id('deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_ipx' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"'))
+from generate_series(1, 10) o(value);
+
+  select data.set_attribute_value(data.get_object_id('deal_ipx1'), data.get_attribute_id('name'), null, to_jsonb('Митчелл–Хьюндайн'));
+  select data.set_attribute_value(data.get_object_id('deal_ipx1'), data.get_attribute_id('description'), null, to_jsonb('"Митчелл–Хьюндайн" (была поглощена IPX)'));
+  select data.set_attribute_value(data.get_object_id('deal_ipx1'), data.get_attribute_id('asset_name'), null, to_jsonb('Митчелл–Хьюндайн'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_ipx2'), data.get_attribute_id('name'), null, to_jsonb('Лаборатория "Радаманта"'));
+  select data.set_attribute_value(data.get_object_id('deal_ipx2'), data.get_attribute_id('description'), null, to_jsonb('Лаборатория “Радаманта” Лонг Бич, Северная Америка, Земля. производит технологии для москитного флота'));
+  select data.set_attribute_value(data.get_object_id('deal_ipx2'), data.get_attribute_id('asset_name'), null, to_jsonb('Лаборатория "Радаманта"'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_ipx3'), data.get_attribute_id('name'), null, to_jsonb('Орбитальные верфи "Нью–Кобе"'));
+  select data.set_attribute_value(data.get_object_id('deal_ipx3'), data.get_attribute_id('description'), null, to_jsonb('Орбитальные верфи "Нью–Кобе", Лунный консорциум Производит “валькирии”, “фурии” и корверты типа Олимпус'));
+  select data.set_attribute_value(data.get_object_id('deal_ipx3'), data.get_attribute_id('asset_name'), null, to_jsonb('Орбитальные верфи "Нью–Кобе"'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_ipx4'), data.get_attribute_id('name'), null, to_jsonb('Орбитальный производственно-лабораторный комплекс и верфи “Пасем”'));
+  select data.set_attribute_value(data.get_object_id('deal_ipx4'), data.get_attribute_id('description'), null, to_jsonb('Орбитальный производственно-лабораторный комплекс и верфи “Пасем”. Производит транспортные корабли типа “Тескан” и исследовательские корабли типа “Икар”, на Пасеме были построены все корабли серии “Кортес”. источник технологий'));
+  select data.set_attribute_value(data.get_object_id('deal_ipx4'), data.get_attribute_id('asset_name'), null, to_jsonb('Орбитальный производственно-лабораторный комплекс и верфи “Пасем”'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_ipx5'), data.get_attribute_id('name'), null, to_jsonb('Корабль “Кортес”'));
+  select data.set_attribute_value(data.get_object_id('deal_ipx5'), data.get_attribute_id('description'), null, to_jsonb('Корабль “Кортес” - первый корабль серии переоборудован в учебный сняты вортекс-генераторы'));
+  select data.set_attribute_value(data.get_object_id('deal_ipx5'), data.get_attribute_id('asset_name'), null, to_jsonb('Корабль “Кортес”'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_ipx6'), data.get_attribute_id('name'), null, to_jsonb('Корабль “Тихо Брааге”'));
+  select data.set_attribute_value(data.get_object_id('deal_ipx6'), data.get_attribute_id('description'), null, to_jsonb('Корабль “Тихо Брааге” систершип “Кортеса”. Порт приписки - верфи “Нью-Кобе”'));
+  select data.set_attribute_value(data.get_object_id('deal_ipx6'), data.get_attribute_id('asset_name'), null, to_jsonb('Корабль “Тихо Брааге”'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_ipx7'), data.get_attribute_id('name'), null, to_jsonb('Корабль “Иоган Кеплер”'));
+  select data.set_attribute_value(data.get_object_id('deal_ipx7'), data.get_attribute_id('description'), null, to_jsonb('Корабль “Иоган Кеплер” - порт приписки верфи “Кум-Рияд” (имеется соглашение об обслуживании с Рокетдайн)'));
+  select data.set_attribute_value(data.get_object_id('deal_ipx7'), data.get_attribute_id('asset_name'), null, to_jsonb('Корабль “Иоган Кеплер”'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_ipx8'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ipx8'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ipx8'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_ipx9'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ipx9'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ipx9'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_ipx10'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ipx10'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ipx10'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  -- rocketdain
+insert into data.objects(code)
+select 'deal_rocketdain' || o1.* from generate_series(1, 10) o1(value);
+
+select
+  data.set_attribute_value(data.get_object_id('deal_rocketdain' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal_rocketdain' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal_rocketdain' || o.value), data.get_attribute_id('deal_sector'), null, to_jsonb('sector_connections')),
+  data.set_attribute_value(data.get_object_id('deal_rocketdain' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(600000)),
+  data.set_attribute_value(data.get_object_id('deal_rocketdain' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(1000000)),
+  data.set_attribute_value(data.get_object_id('deal_rocketdain' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(100000)),
+  data.set_attribute_value(data.get_object_id('deal_rocketdain' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation_rocketdain", "percent_asset": 100, "percent_income": 100, "deal_cost": 1430000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal_rocketdain' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_rocketdain' || o.value), data.get_attribute_id('deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_rocketdain' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"'))
+from generate_series(1, 10) o(value);
+
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain1'), data.get_attribute_id('name'), null, to_jsonb('Лабораторный комплекс и орбитальные верфи “Хеврон”'));
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain1'), data.get_attribute_id('description'), null, to_jsonb('Лабораторный комплекс и орбитальные верфи “Хеврон” - производят корветы типа “Олимпус”, защитное вооружение (автоматические ракетные установки, мины, системы наведения и управления и пр.) источник технологий'));
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain1'), null, to_jsonb('Лабораторный комплекс и орбитальные верфи “Хеврон”'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain2'), data.get_attribute_id('name'), null, to_jsonb('"КармаТек"'));
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain2'), data.get_attribute_id('description'), null, to_jsonb('"КармаТек" (была поглощена Рокетдайн), орбитальные космоверфи "Кум-Рияд", Проксима 3. Производит Гиперионы (тяжелые крейсера) и дредноуты типа “Нова”'));
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain2'), data.get_attribute_id('asset_name'), null, to_jsonb('"КармаТек"'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain3'), data.get_attribute_id('name'), null, to_jsonb('"M''Gede Technologies"'));
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain3'), data.get_attribute_id('description'), null, to_jsonb('"M''Gede Technologies"  (была поглощена Рокетдайн), Лунный консорциум, производит оборудование для стационарных военных баз.'));
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain3'), data.get_attribute_id('asset_name'), null, to_jsonb('"M''Gede Technologies"'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain4'), data.get_attribute_id('name'), null, to_jsonb('Производственный комплекс “Мауи”'));
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain4'), data.get_attribute_id('description'), null, to_jsonb('Производственный комплекс “Мауи”, Станция "Гагарин" система Проксима - производит вооружение и оборудование для наземных сил'));
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain4'), data.get_attribute_id('asset_name'), null, to_jsonb('Производственный комплекс “Мауи”'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain5'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain5'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain5'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain6'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain6'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain6'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain7'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain7'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain7'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain8'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain8'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain8'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain9'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain9'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain9'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain10'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain10'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_rocketdain10'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  -- umbrella
+insert into data.objects(code)
+select 'deal_umbrella' || o1.* from generate_series(1, 10) o1(value);
+
+select
+  data.set_attribute_value(data.get_object_id('deal_umbrella' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal_umbrella' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal_umbrella' || o.value), data.get_attribute_id('deal_sector'), null, to_jsonb('sector_connections')),
+  data.set_attribute_value(data.get_object_id('deal_umbrella' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(600000)),
+  data.set_attribute_value(data.get_object_id('deal_umbrella' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(1000000)),
+  data.set_attribute_value(data.get_object_id('deal_umbrella' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(100000)),
+  data.set_attribute_value(data.get_object_id('deal_umbrella' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation_umbrella", "percent_asset": 100, "percent_income": 100, "deal_cost": 1430000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal_umbrella' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_umbrella' || o.value), data.get_attribute_id('deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_umbrella' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"'))
+from generate_series(1, 10) o(value);
+
+  select data.set_attribute_value(data.get_object_id('deal_umbrella1'), data.get_attribute_id('name'), null, to_jsonb('"Luigi Mendoza et Cie"'));
+  select data.set_attribute_value(data.get_object_id('deal_umbrella1'), data.get_attribute_id('description'), null, to_jsonb('"Luigi Mendoza et Cie" (поглощена корпорацией umbrella). Имеется орбитальный лабораторно исследовательский комплекс в системе Берлин - “Седьмая Дракона”. Производит технологии.'));
+  select data.set_attribute_value(data.get_object_id('deal_umbrella1'), null, to_jsonb('"Luigi Mendoza et Cie"'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_umbrella2'), data.get_attribute_id('name'), null, to_jsonb('“Небесные врата”'));
+  select data.set_attribute_value(data.get_object_id('deal_umbrella2'), data.get_attribute_id('description'), null, to_jsonb('“Небесные врата” - лабораторно-производственный комплекс технологии и медпрепараты. Самая известная ВИП лечебница в ЗА. Находится на Берлин II.'));
+  select data.set_attribute_value(data.get_object_id('deal_umbrella2'), data.get_attribute_id('asset_name'), null, to_jsonb('“Небесные врата”'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_umbrella3'), data.get_attribute_id('name'), null, to_jsonb('“Роща богов”'));
+  select data.set_attribute_value(data.get_object_id('deal_umbrella3'), data.get_attribute_id('description'), null, to_jsonb('“Роща богов” - лабораторно производственный комплекс. Самый крупный и старый медицинский комплекс в ЗА. Южная америка НьюМехико. Здесь был синтезирован нейропротектор, и проводились первые исследования феномена метасенсорных способностей.'));
+  select data.set_attribute_value(data.get_object_id('deal_umbrella3'), data.get_attribute_id('asset_name'), null, to_jsonb('“Роща богов”'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_umbrella4'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_umbrella4'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_umbrella4'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_umbrella5'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_umbrella5'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_umbrella5'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_umbrella6'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_umbrella6'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_umbrella6'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_umbrella7'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_umbrella7'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_umbrella7'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_umbrella8'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_umbrella8'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_umbrella8'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_umbrella9'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_umbrella9'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_umbrella9'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_umbrella10'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_umbrella10'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_umbrella10'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+    -- weiland
+insert into data.objects(code)
+select 'deal_weiland' || o1.* from generate_series(1, 10) o1(value);
+
+select
+  data.set_attribute_value(data.get_object_id('deal_weiland' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal_weiland' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal_weiland' || o.value), data.get_attribute_id('deal_sector'), null, to_jsonb('sector_connections')),
+  data.set_attribute_value(data.get_object_id('deal_weiland' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(600000)),
+  data.set_attribute_value(data.get_object_id('deal_weiland' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(1000000)),
+  data.set_attribute_value(data.get_object_id('deal_weiland' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(100000)),
+  data.set_attribute_value(data.get_object_id('deal_weiland' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation_weiland", "percent_asset": 100, "percent_income": 100, "deal_cost": 1430000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal_weiland' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_weiland' || o.value), data.get_attribute_id('deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_weiland' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"'))
+from generate_series(1, 10) o(value);
+
+  select data.set_attribute_value(data.get_object_id('deal_weiland1'), data.get_attribute_id('name'), null, to_jsonb('Лабораторно-исследовательский комплекс - Станция "Занзибар", Сириус IV'));
+  select data.set_attribute_value(data.get_object_id('deal_weiland1'), data.get_attribute_id('description'), null, to_jsonb('Лабораторно-исследовательский комплекс - Станция "Занзибар", Сириус IV. производит технологии при наличии открытых раскопок.'));
+  select data.set_attribute_value(data.get_object_id('deal_weiland1'), null, to_jsonb('Лабораторно-исследовательский комплекс - Станция "Занзибар", Сириус IV'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_weiland2'), data.get_attribute_id('name'), null, to_jsonb('Лабораторно-исследовательский комплекс - “Шрайк”, Орион III'));
+  select data.set_attribute_value(data.get_object_id('deal_weiland2'), data.get_attribute_id('description'), null, to_jsonb('Лабораторно-исследовательский комплекс - “Шрайк”, Орион III. производит технологии при наличии открытых раскопок.'));
+  select data.set_attribute_value(data.get_object_id('deal_weiland2'), data.get_attribute_id('asset_name'), null, to_jsonb('Лабораторно-исследовательский комплекс - “Шрайк”, Орион III'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_weiland3'), data.get_attribute_id('name'), null, to_jsonb('Производственный комплекс - “Прометей”, Вега IX'));
+  select data.set_attribute_value(data.get_object_id('deal_weiland3'), data.get_attribute_id('description'), null, to_jsonb('Производственный комплекс - “Прометей”, Вега IX производит станции и системы связи, оборудование для вещательных корпораций, вортекс-генераторы.'));
+  select data.set_attribute_value(data.get_object_id('deal_weiland3'), data.get_attribute_id('asset_name'), null, to_jsonb('Производственный комплекс - “Прометей”, Вега IX'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_weiland4'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_weiland4'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_weiland4'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_weiland5'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_weiland5'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_weiland5'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_weiland6'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_weiland6'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_weiland6'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_weiland7'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_weiland7'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_weiland7'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_weiland8'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_weiland8'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_weiland8'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_weiland9'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_weiland9'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_weiland9'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_weiland10'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_weiland10'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_weiland10'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  -- mars
+insert into data.objects(code)
+select 'deal_mars' || o1.* from generate_series(1, 10) o1(value);
+
+select
+  data.set_attribute_value(data.get_object_id('deal_mars' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal_mars' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal_mars' || o.value), data.get_attribute_id('deal_sector'), null, to_jsonb('sector_resources')),
+  data.set_attribute_value(data.get_object_id('deal_mars' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(600000)),
+  data.set_attribute_value(data.get_object_id('deal_mars' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(1000000)),
+  data.set_attribute_value(data.get_object_id('deal_mars' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(100000)),
+  data.set_attribute_value(data.get_object_id('deal_mars' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation_mars", "percent_asset": 100, "percent_income": 100, "deal_cost": 1430000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal_mars' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_mars' || o.value), data.get_attribute_id('deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_mars' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"'))
+from generate_series(1, 10) o(value);
+
+  select data.set_attribute_value(data.get_object_id('deal_mars1'), data.get_attribute_id('name'), null, to_jsonb('Производственный комплекс “Лузус”'));
+  select data.set_attribute_value(data.get_object_id('deal_mars1'), data.get_attribute_id('description'), null, to_jsonb('Производственный комплекс “Лузус”, Лунный консорциум, производит оборудование для стационарных военных баз.'));
+  select data.set_attribute_value(data.get_object_id('deal_mars1'), null, to_jsonb('Производственный комплекс “Лузус”'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_mars2'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mars2'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mars2'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_mars3'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mars3'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mars3'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_mars4'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mars4'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mars4'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_mars5'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mars5'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mars5'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_mars6'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mars6'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mars6'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_mars7'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mars7'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mars7'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_mars8'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mars8'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mars8'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_mars9'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mars9'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mars9'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_mars10'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mars10'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mars10'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+
+    -- tong
+insert into data.objects(code)
+select 'deal_tong' || o1.* from generate_series(1, 10) o1(value);
+
+select
+  data.set_attribute_value(data.get_object_id('deal_tong' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal_tong' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal_tong' || o.value), data.get_attribute_id('deal_sector'), null, to_jsonb('sector_vpk')),
+  data.set_attribute_value(data.get_object_id('deal_tong' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(600000)),
+  data.set_attribute_value(data.get_object_id('deal_tong' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(1000000)),
+  data.set_attribute_value(data.get_object_id('deal_tong' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(100000)),
+  data.set_attribute_value(data.get_object_id('deal_tong' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation_tong", "percent_asset": 100, "percent_income": 100, "deal_cost": 1430000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal_tong' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_tong' || o.value), data.get_attribute_id('deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_tong' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"'))
+from generate_series(1, 10) o(value);
+
+  select data.set_attribute_value(data.get_object_id('deal_tong1'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_tong1'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_tong1'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_tong2'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_tong2'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_tong2'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_tong3'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_tong3'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_tong3'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_tong4'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_tong4'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_tong4'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_tong5'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_tong5'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_tong5'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_tong6'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_tong6'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_tong6'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_tong7'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_tong7'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_tong7'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_tong8'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_tong8'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_tong8'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_tong9'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_tong9'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_tong9'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_tong10'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_tong10'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_tong10'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  --kref
+  
+ insert into data.objects(code)
+select 'deal_kref' || o1.* from generate_series(1, 10) o1(value);
+
+select
+  data.set_attribute_value(data.get_object_id('deal_kref' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal_kref' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal_kref' || o.value), data.get_attribute_id('deal_sector'), null, to_jsonb('sector_resources')),
+  data.set_attribute_value(data.get_object_id('deal_kref' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(600000)),
+  data.set_attribute_value(data.get_object_id('deal_kref' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(1000000)),
+  data.set_attribute_value(data.get_object_id('deal_kref' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(100000)),
+  data.set_attribute_value(data.get_object_id('deal_kref' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation_kref", "percent_asset": 100, "percent_income": 100, "deal_cost": 1430000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal_kref' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_kref' || o.value), data.get_attribute_id('deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_kref' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"'))
+from generate_series(1, 10) o(value);
+
+  select data.set_attribute_value(data.get_object_id('deal_kref1'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_kref1'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_kref1'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_kref2'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_kref2'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_kref2'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_kref3'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_kref3'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_kref3'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_kref4'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_kref4'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_kref4'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_kref5'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_kref5'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_kref5'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_kref6'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_kref6'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_kref6'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_kref7'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_kref7'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_kref7'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_kref8'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_kref8'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_kref8'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_kref9'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_kref9'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_kref9'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_kref10'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_kref10'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_kref10'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  insert into data.objects(code)
+select 'deal_kref' || o1.* from generate_series(1, 10) o1(value);
+
+-- ea
+select
+  data.set_attribute_value(data.get_object_id('deal_ea' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal_ea' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal_ea' || o.value), data.get_attribute_id('deal_sector'), null, to_jsonb('sector_resources')),
+  data.set_attribute_value(data.get_object_id('deal_ea' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(600000)),
+  data.set_attribute_value(data.get_object_id('deal_ea' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(1000000)),
+  data.set_attribute_value(data.get_object_id('deal_ea' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(100000)),
+  data.set_attribute_value(data.get_object_id('deal_ea' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation_ea", "percent_asset": 100, "percent_income": 100, "deal_cost": 1430000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal_ea' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_ea' || o.value), data.get_attribute_id('deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_ea' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"'))
+from generate_series(1, 10) o(value);
+
+  select data.set_attribute_value(data.get_object_id('deal_ea1'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ea1'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ea1'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_ea2'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ea2'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ea2'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_ea3'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ea3'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ea3'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_ea4'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ea4'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ea4'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_ea5'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ea5'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ea5'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_ea6'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ea6'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ea6'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_ea7'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ea7'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ea7'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_ea8'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ea8'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ea8'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_ea9'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ea9'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ea9'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_ea10'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ea10'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_ea10'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+    --brakos_diamond
+insert into data.objects(code)
+select 'deal_brakos_diamond' || o1.* from generate_series(1, 10) o1(value);
+
+select
+  data.set_attribute_value(data.get_object_id('deal_brakos_diamond' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal_brakos_diamond' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal_brakos_diamond' || o.value), data.get_attribute_id('deal_sector'), null, to_jsonb('sector_resources')),
+  data.set_attribute_value(data.get_object_id('deal_brakos_diamond' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(600000)),
+  data.set_attribute_value(data.get_object_id('deal_brakos_diamond' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(1000000)),
+  data.set_attribute_value(data.get_object_id('deal_brakos_diamond' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(100000)),
+  data.set_attribute_value(data.get_object_id('deal_brakos_diamond' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation_brakos_diamond", "percent_asset": 100, "percent_income": 100, "deal_cost": 1430000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal_brakos_diamond' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_brakos_diamond' || o.value), data.get_attribute_id('deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_brakos_diamond' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"'))
+from generate_series(1, 10) o(value);
+
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond1'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond1'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond1'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond2'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond2'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond2'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond3'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond3'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond3'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond4'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond4'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond4'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond5'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond5'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond5'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond6'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond6'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond6'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond7'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond7'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond7'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond8'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond8'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond8'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond9'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond9'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond9'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond10'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond10'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_brakos_diamond10'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+ --droshalla_power
+insert into data.objects(code)
+select 'deal_droshalla_power' || o1.* from generate_series(1, 10) o1(value);
+
+select
+  data.set_attribute_value(data.get_object_id('deal_droshalla_power' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal_droshalla_power' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal_droshalla_power' || o.value), data.get_attribute_id('deal_sector'), null, to_jsonb('sector_connections')),
+  data.set_attribute_value(data.get_object_id('deal_droshalla_power' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(600000)),
+  data.set_attribute_value(data.get_object_id('deal_droshalla_power' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(1000000)),
+  data.set_attribute_value(data.get_object_id('deal_droshalla_power' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(100000)),
+  data.set_attribute_value(data.get_object_id('deal_droshalla_power' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation_droshalla_power", "percent_asset": 100, "percent_income": 100, "deal_cost": 1430000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal_droshalla_power' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_droshalla_power' || o.value), data.get_attribute_id('deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_droshalla_power' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"'))
+from generate_series(1, 10) o(value);
+
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power1'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power1'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power1'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power2'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power2'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power2'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power3'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power3'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power3'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power4'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power4'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power4'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power5'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power5'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power5'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power6'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power6'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power6'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power7'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power7'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power7'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power8'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power8'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power8'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power9'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power9'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power9'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power10'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power10'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_droshalla_power10'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  
+  --unnaming_blassing
+insert into data.objects(code)
+select 'deal_unnaming_blassing' || o1.* from generate_series(1, 10) o1(value);
+
+select
+  data.set_attribute_value(data.get_object_id('deal_unnaming_blassing' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal_unnaming_blassing' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal_unnaming_blassing' || o.value), data.get_attribute_id('deal_sector'), null, to_jsonb('sector_medicine')),
+  data.set_attribute_value(data.get_object_id('deal_unnaming_blassing' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(600000)),
+  data.set_attribute_value(data.get_object_id('deal_unnaming_blassing' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(1000000)),
+  data.set_attribute_value(data.get_object_id('deal_unnaming_blassing' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(100000)),
+  data.set_attribute_value(data.get_object_id('deal_unnaming_blassing' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation_unnaming_blassing", "percent_asset": 100, "percent_income": 100, "deal_cost": 1430000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal_unnaming_blassing' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_unnaming_blassing' || o.value), data.get_attribute_id('deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_unnaming_blassing' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"'))
+from generate_series(1, 10) o(value);
+
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing1'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing1'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing1'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing2'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing2'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing2'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing3'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing3'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing3'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing4'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing4'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing4'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing5'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing5'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing5'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing6'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing6'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing6'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing7'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing7'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing7'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing8'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing8'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing8'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing9'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing9'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing9'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing10'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing10'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_unnaming_blassing10'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  --bhara
+insert into data.objects(code)
+select 'deal_bhara' || o1.* from generate_series(1, 10) o1(value);
+
+select
+  data.set_attribute_value(data.get_object_id('deal_bhara' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal_bhara' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal_bhara' || o.value), data.get_attribute_id('deal_sector'), null, to_jsonb('sector_resources')),
+  data.set_attribute_value(data.get_object_id('deal_bhara' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(600000)),
+  data.set_attribute_value(data.get_object_id('deal_bhara' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(1000000)),
+  data.set_attribute_value(data.get_object_id('deal_bhara' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(100000)),
+  data.set_attribute_value(data.get_object_id('deal_bhara' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation_bhara", "percent_asset": 100, "percent_income": 100, "deal_cost": 1430000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal_bhara' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_bhara' || o.value), data.get_attribute_id('deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_bhara' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"'))
+from generate_series(1, 10) o(value);
+
+  select data.set_attribute_value(data.get_object_id('deal_bhara1'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_bhara1'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_bhara1'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_bhara2'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_bhara2'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_bhara2'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_bhara3'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_bhara3'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_bhara3'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_bhara4'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_bhara4'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_bhara4'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_bhara5'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_bhara5'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_bhara5'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_bhara6'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_bhara6'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_bhara6'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_bhara7'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_bhara7'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_bhara7'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_bhara8'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_bhara8'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_bhara8'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_bhara9'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_bhara9'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_bhara9'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_bhara10'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_bhara10'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_bhara10'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+    -- antares_finance
+insert into data.objects(code)
+select 'deal_antares_finance' || o1.* from generate_series(1, 10) o1(value);
+
+select
+  data.set_attribute_value(data.get_object_id('deal_antares_finance' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal_antares_finance' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal_antares_finance' || o.value), data.get_attribute_id('deal_sector'), null, to_jsonb('sector_resources')),
+  data.set_attribute_value(data.get_object_id('deal_antares_finance' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(600000)),
+  data.set_attribute_value(data.get_object_id('deal_antares_finance' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(1000000)),
+  data.set_attribute_value(data.get_object_id('deal_antares_finance' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(100000)),
+  data.set_attribute_value(data.get_object_id('deal_antares_finance' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation_antares_finance", "percent_asset": 100, "percent_income": 100, "deal_cost": 1430000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal_antares_finance' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_antares_finance' || o.value), data.get_attribute_id('deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_antares_finance' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"'))
+from generate_series(1, 10) o(value);
+
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance1'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance1'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance1'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance2'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance2'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance2'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance3'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance3'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance3'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance4'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance4'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance4'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance5'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance5'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance5'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance6'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance6'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance6'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance7'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance7'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance7'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance8'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance8'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance8'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance9'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance9'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance9'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance10'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance10'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_antares_finance10'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+    -- marba
+insert into data.objects(code)
+select 'deal_marba' || o1.* from generate_series(1, 10) o1(value);
+
+select
+  data.set_attribute_value(data.get_object_id('deal_marba' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal_marba' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal_marba' || o.value), data.get_attribute_id('deal_sector'), null, to_jsonb('sector_connections')),
+  data.set_attribute_value(data.get_object_id('deal_marba' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(600000)),
+  data.set_attribute_value(data.get_object_id('deal_marba' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(1000000)),
+  data.set_attribute_value(data.get_object_id('deal_marba' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(100000)),
+  data.set_attribute_value(data.get_object_id('deal_marba' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation_marba", "percent_asset": 100, "percent_income": 100, "deal_cost": 1430000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal_marba' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_marba' || o.value), data.get_attribute_id('deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_marba' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"'))
+from generate_series(1, 10) o(value);
+
+  select data.set_attribute_value(data.get_object_id('deal_marba1'), data.get_attribute_id('name'), null, to_jsonb('"Оружейные Рода Тавари"'));
+  select data.set_attribute_value(data.get_object_id('deal_marba1'), data.get_attribute_id('description'), null, to_jsonb('"Оружейные Рода Тавари", орбитальные космоверфи "Hevaria", Толониус VII.'));
+  select data.set_attribute_value(data.get_object_id('deal_marba1'), null, to_jsonb('"Оружейные Рода Тавари"'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_marba2'), data.get_attribute_id('name'), null, to_jsonb('"Оружейные верфи рода Рокко"'));
+  select data.set_attribute_value(data.get_object_id('deal_marba2'), data.get_attribute_id('description'), null, to_jsonb('"Оружейные Рода Тавари", орбитальные космоверфи "Hevaria", Толониус VII.'));
+  select data.set_attribute_value(data.get_object_id('deal_marba2'), data.get_attribute_id('asset_name'), null, to_jsonb('"Оружейные верфи рода Рокко"'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_marba3'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_marba3'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_marba3'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_marba4'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_marba4'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_marba4'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_marba5'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_marba5'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_marba5'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_marba6'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_marba6'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_marba6'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_marba7'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_marba7'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_marba7'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_marba8'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_marba8'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_marba8'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_marba9'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_marba9'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_marba9'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_marba10'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_marba10'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_marba10'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+     -- mollari
+insert into data.objects(code)
+select 'deal_mollari' || o1.* from generate_series(1, 10) o1(value);
+
+select
+  data.set_attribute_value(data.get_object_id('deal_mollari' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal_mollari' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal_mollari' || o.value), data.get_attribute_id('deal_sector'), null, to_jsonb('sector_resources')),
+  data.set_attribute_value(data.get_object_id('deal_mollari' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(600000)),
+  data.set_attribute_value(data.get_object_id('deal_mollari' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(1000000)),
+  data.set_attribute_value(data.get_object_id('deal_mollari' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(100000)),
+  data.set_attribute_value(data.get_object_id('deal_mollari' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation_mollari", "percent_asset": 100, "percent_income": 100, "deal_cost": 1430000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal_mollari' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_mollari' || o.value), data.get_attribute_id('deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_mollari' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"'))
+from generate_series(1, 10) o(value);
+
+  select data.set_attribute_value(data.get_object_id('deal_mollari1'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mollari1'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mollari1'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_mollari2'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mollari2'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mollari2'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_mollari3'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mollari3'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mollari3'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_mollari4'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mollari4'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mollari4'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_mollari5'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mollari5'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mollari5'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_mollari6'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mollari6'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mollari6'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_mollari7'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mollari7'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mollari7'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_mollari8'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mollari8'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mollari8'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_mollari9'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mollari9'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mollari9'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_mollari10'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mollari10'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_mollari10'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+ -- makan
+insert into data.objects(code)
+select 'deal_makan' || o1.* from generate_series(1, 10) o1(value);
+
+select
+  data.set_attribute_value(data.get_object_id('deal_makan' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal_makan' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal_makan' || o.value), data.get_attribute_id('deal_sector'), null, to_jsonb('sector_connections')),
+  data.set_attribute_value(data.get_object_id('deal_makan' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(600000)),
+  data.set_attribute_value(data.get_object_id('deal_makan' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(1000000)),
+  data.set_attribute_value(data.get_object_id('deal_makan' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(100000)),
+  data.set_attribute_value(data.get_object_id('deal_makan' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation_makan", "percent_asset": 100, "percent_income": 100, "deal_cost": 1430000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal_makan' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_makan' || o.value), data.get_attribute_id('deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_makan' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"'))
+from generate_series(1, 10) o(value);
+
+  select data.set_attribute_value(data.get_object_id('deal_makan1'), data.get_attribute_id('name'), null, to_jsonb('космоверфь "Крылья Г''Лана",'));
+  select data.set_attribute_value(data.get_object_id('deal_makan1'), data.get_attribute_id('description'), null, to_jsonb('космоверфь "Крылья Г''Лана",'));
+  select data.set_attribute_value(data.get_object_id('deal_makan1'), null, to_jsonb('космоверфь "Крылья Г''Лана",'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_makan2'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_makan2'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_makan2'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_makan3'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_makan3'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_makan3'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_makan4'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_makan4'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_makan4'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_makan5'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_makan5'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_makan5'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_makan6'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_makan6'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_makan6'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_makan7'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_makan7'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_makan7'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_makan8'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_makan8'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_makan8'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_makan9'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_makan9'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_makan9'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_makan10'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_makan10'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_makan10'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  --masters
+  insert into data.objects(code)
+select 'deal_masters' || o1.* from generate_series(1, 10) o1(value);
+
+select
+  data.set_attribute_value(data.get_object_id('deal_masters' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal_masters' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal_masters' || o.value), data.get_attribute_id('deal_sector'), null, to_jsonb('sector_vpk')),
+  data.set_attribute_value(data.get_object_id('deal_masters' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(600000)),
+  data.set_attribute_value(data.get_object_id('deal_masters' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(1000000)),
+  data.set_attribute_value(data.get_object_id('deal_masters' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(100000)),
+  data.set_attribute_value(data.get_object_id('deal_masters' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation_masters", "percent_asset": 100, "percent_income": 100, "deal_cost": 1430000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal_masters' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_masters' || o.value), data.get_attribute_id('deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_masters' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"'))
+from generate_series(1, 10) o(value);
+
+  select data.set_attribute_value(data.get_object_id('deal_masters1'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_masters1'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_masters1'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_masters2'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_masters2'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_masters2'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_masters3'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_masters3'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_masters3'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_masters4'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_masters4'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_masters4'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_masters5'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_masters5'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_masters5'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_masters6'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_masters6'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_masters6'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_masters7'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_masters7'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_masters7'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_masters8'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_masters8'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_masters8'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_masters9'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_masters9'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_masters9'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_masters10'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_masters10'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_masters10'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+    --artalan
+  insert into data.objects(code)
+select 'deal_artalan' || o1.* from generate_series(1, 10) o1(value);
+
+select
+  data.set_attribute_value(data.get_object_id('deal_artalan' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal_artalan' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal_artalan' || o.value), data.get_attribute_id('deal_sector'), null, to_jsonb('sector_vpk')),
+  data.set_attribute_value(data.get_object_id('deal_artalan' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(600000)),
+  data.set_attribute_value(data.get_object_id('deal_artalan' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(1000000)),
+  data.set_attribute_value(data.get_object_id('deal_artalan' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(100000)),
+  data.set_attribute_value(data.get_object_id('deal_artalan' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation_artalan", "percent_asset": 100, "percent_income": 100, "deal_cost": 1430000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal_artalan' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_artalan' || o.value), data.get_attribute_id('deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_artalan' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"'))
+from generate_series(1, 10) o(value);
+
+  select data.set_attribute_value(data.get_object_id('deal_artalan1'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_artalan1'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_artalan1'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_artalan2'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_artalan2'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_artalan2'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_artalan3'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_artalan3'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_artalan3'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_artalan4'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_artalan4'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_artalan4'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_artalan5'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_artalan5'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_artalan5'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_artalan6'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_artalan6'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_artalan6'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_artalan7'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_artalan7'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_artalan7'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_artalan8'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_artalan8'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_artalan8'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_artalan9'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_artalan9'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_artalan9'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_artalan10'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_artalan10'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_artalan10'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+      --psi_corps
+  insert into data.objects(code)
+select 'deal_psi_corps' || o1.* from generate_series(1, 10) o1(value);
+
+select
+  data.set_attribute_value(data.get_object_id('deal_psi_corps' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal_psi_corps' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal_psi_corps' || o.value), data.get_attribute_id('deal_sector'), null, to_jsonb('sector_medicine')),
+  data.set_attribute_value(data.get_object_id('deal_psi_corps' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(600000)),
+  data.set_attribute_value(data.get_object_id('deal_psi_corps' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(1000000)),
+  data.set_attribute_value(data.get_object_id('deal_psi_corps' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(100000)),
+  data.set_attribute_value(data.get_object_id('deal_psi_corps' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation_psi_corps", "percent_asset": 100, "percent_income": 100, "deal_cost": 1430000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal_psi_corps' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_psi_corps' || o.value), data.get_attribute_id('deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_psi_corps' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"'))
+from generate_series(1, 10) o(value);
+
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps1'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps1'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps1'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps2'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps2'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps2'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps3'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps3'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps3'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps4'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps4'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps4'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps5'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps5'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps5'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps6'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps6'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps6'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps7'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps7'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps7'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps8'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps8'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps8'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps9'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps9'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps9'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps10'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps10'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_psi_corps10'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+       --anklav_telepaths
+  insert into data.objects(code)
+select 'deal_anklav_telepaths' || o1.* from generate_series(1, 10) o1(value);
+
+select
+  data.set_attribute_value(data.get_object_id('deal_anklav_telepaths' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal_anklav_telepaths' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal_anklav_telepaths' || o.value), data.get_attribute_id('deal_sector'), null, to_jsonb('sector_medicine')),
+  data.set_attribute_value(data.get_object_id('deal_anklav_telepaths' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(600000)),
+  data.set_attribute_value(data.get_object_id('deal_anklav_telepaths' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(1000000)),
+  data.set_attribute_value(data.get_object_id('deal_anklav_telepaths' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(100000)),
+  data.set_attribute_value(data.get_object_id('deal_anklav_telepaths' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation_anklav_telepaths", "percent_asset": 100, "percent_income": 100, "deal_cost": 1430000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal_anklav_telepaths' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_anklav_telepaths' || o.value), data.get_attribute_id('deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_anklav_telepaths' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"'))
+from generate_series(1, 10) o(value);
+
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths1'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths1'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths1'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths2'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths2'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths2'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths3'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths3'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths3'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths4'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths4'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths4'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths5'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths5'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths5'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths6'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths6'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths6'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths7'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths7'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths7'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths8'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths8'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths8'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths9'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths9'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths9'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths10'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths10'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_anklav_telepaths10'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+   --guild_telepaths
+  insert into data.objects(code)
+select 'deal_guild_telepaths' || o1.* from generate_series(1, 10) o1(value);
+
+select
+  data.set_attribute_value(data.get_object_id('deal_guild_telepaths' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal_guild_telepaths' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal_guild_telepaths' || o.value), data.get_attribute_id('deal_sector'), null, to_jsonb('sector_medicine')),
+  data.set_attribute_value(data.get_object_id('deal_guild_telepaths' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(600000)),
+  data.set_attribute_value(data.get_object_id('deal_guild_telepaths' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(1000000)),
+  data.set_attribute_value(data.get_object_id('deal_guild_telepaths' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(100000)),
+  data.set_attribute_value(data.get_object_id('deal_guild_telepaths' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation_guild_telepaths", "percent_asset": 100, "percent_income": 100, "deal_cost": 1430000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal_guild_telepaths' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_guild_telepaths' || o.value), data.get_attribute_id('deal_time'), null, to_jsonb('20.02.2258 12:00')),
+  data.set_attribute_value(data.get_object_id('deal_guild_telepaths' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"'))
+from generate_series(1, 10) o(value);
+
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths1'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths1'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths1'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths2'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths2'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths2'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths3'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths3'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths3'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths4'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths4'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths4'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths5'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths5'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths5'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths6'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths6'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths6'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths7'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths7'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths7'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths8'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths8'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths8'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths9'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths9'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths9'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+  
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths10'), data.get_attribute_id('name'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths10'), data.get_attribute_id('description'), null, to_jsonb('Разное имущество'));
+  select data.set_attribute_value(data.get_object_id('deal_guild_telepaths10'), data.get_attribute_id('asset_name'), null, to_jsonb('Разное имущество'));
+
 /*select
   data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
   data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
@@ -3443,7 +4638,7 @@ select data.set_attribute_value(data.get_object_id('done_percent_deals'), data.g
   data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('system_deal_participant2'), null, ('{"member" : "corporation' || ((o.value + 1) % 9 + 1) || '", "percent_asset": 20, "percent_income": 70, "deal_cost": 50000}')::jsonb)
 from generate_series(1, 30) o(value);*/
 
-select
+/*select
   data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('system_deal_time'), null, to_jsonb('2259.02.23 15:' || (o.value + 10))),
   data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_time'), null, to_jsonb('2259.02.23 15:' || (o.value + 10))),
   data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"')
@@ -3460,37 +4655,8 @@ select
   data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_time'), null, to_jsonb('2259.02.23 15:' || (o.value + 10))),
   data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_cancel_time'), null, to_jsonb('2259.02.23 18:' || (o.value + 10))),
   data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"canceled"')
-from generate_series(21, 30) o(value);
+from generate_series(21, 30) o(value);*/
 
--- TODO проценты сделок
-
-/*select
-  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
-  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('type'), null, jsonb '"percent_deal"'),
-  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('name'), null, to_jsonb('Percent Deal ' || o.value)),
-  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('description'), null, to_jsonb('Описание сделки deal ' || o.value)),
-  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('percent_deal_corporation'), null, to_jsonb('corporation' || (o.value % 9 + 1))),
-  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('percent_deal_sender'), null, to_jsonb('person' || o.value)),
-  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('percent_deal_receiver'), null, to_jsonb('person' || (o.value + 1))),
-  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('percent_deal_percent'), null, to_jsonb(1)),
-  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('percent_deal_sum'), null, to_jsonb(o.value * 1000))
-from generate_series(1, 30) o(value);
-
-select
-  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('system_percent_deal_time'), null, to_jsonb('2259.02.23 15:' || (o.value + 10))),
-  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('percent_deal_time'), null, to_jsonb('2259.02.23 15:' || (o.value + 10))),
-  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('percent_deal_status'), null, jsonb '"done"')
-from generate_series(1, 10) o(value);
-
-select
-  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('system_percent_deal_time'), null, to_jsonb('2259.02.23 12:' || (o.value + 10))),
-  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('percent_deal_status'), null, jsonb '"draft"')
-from generate_series(11, 20) o(value);
-
-select
-  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('system_percent_deal_time'), null, to_jsonb('2259.02.23 18:' || (o.value + 10))),
-  data.set_attribute_value(data.get_object_id('percent_deal' || o.value), data.get_attribute_id('percent_deal_status'), null, jsonb '"canceled"')
-from generate_series(21, 30) o(value);
 
 -- Пересчитывает капитализацию всех корпораций по текущим активным сделкам
 CREATE OR REPLACE FUNCTION actions.calc_capitalizations()
@@ -3534,7 +4700,7 @@ $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
 
-select actions.calc_capitalizations();*/
+select actions.calc_capitalizations();
 
 select data.set_attribute_value(data.get_object_id('news1'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('news1'), data.get_attribute_id('type'), null, jsonb '"news"');
@@ -8976,23 +10142,25 @@ begin
   for v_corporation in (select key, json.get_opt_integer(value, 0) val from jsonb_each(v_corp_income)) loop
     if v_corporation.val > 0 then
       perform actions.generate_money(in_client, v_deal_id, null, jsonb_build_object('receiver', v_corporation.key, 'description', 'Доход от сделки ' || v_deal_name, 'sum', v_corporation.val));
+	  if v_deal_sector <> 'sector_black_market' then
       -- Страна для налога
-      select json.get_opt_string(av.value)
-      into v_corporation_state
-      from data.attribute_values av
-      where av.object_id = data.get_object_id(v_corporation.key)
-        and av.attribute_id = v_corporation_state_attribute_id
-        and av.value_object_id is null;
-      if v_corporation_state is not null then
-        select json.get_opt_integer(av.value, 0)
-        into v_state_tax
-        from data.attribute_values av
-        where av.object_id = data.get_object_id(v_corporation_state)
-          and av.attribute_id = v_state_tax_attribute_id
-          and av.value_object_id is null;
-        if v_state_tax > 0 and round(v_corporation.val * v_state_tax / 100) > 0 then
-          perform actions.transfer(in_client, data.get_object_id(v_corporation.key), null, jsonb_build_object('receiver', v_corporation_state, 'description', 'Налог на доход по сделке ' || v_deal_name, 'sum', round(v_corporation.val * v_state_tax / 100)));
-        end if;
+		  select json.get_opt_string(av.value)
+		  into v_corporation_state
+		  from data.attribute_values av
+		  where av.object_id = data.get_object_id(v_corporation.key)
+			and av.attribute_id = v_corporation_state_attribute_id
+			and av.value_object_id is null;
+		  if v_corporation_state is not null then
+			select json.get_opt_integer(av.value, 0)
+			into v_state_tax
+			from data.attribute_values av
+			where av.object_id = data.get_object_id(v_corporation_state)
+			  and av.attribute_id = v_state_tax_attribute_id
+			  and av.value_object_id is null;
+			if v_state_tax > 0 and round(v_corporation.val * v_state_tax / 100) > 0 then
+			  perform actions.transfer(in_client, data.get_object_id(v_corporation.key), null, jsonb_build_object('receiver', v_corporation_state, 'description', 'Налог на доход по сделке ' || v_deal_name, 'sum', round(v_corporation.val * v_state_tax / 100)));
+			end if;
+	    end if;
       end if;
     end if;
   end loop;    
@@ -9444,7 +10612,8 @@ begin
         end if;
       end loop; 
     end loop;
-	  
+	
+	if data.get_object_code(v_deal_sector.id) <> 'sector_black_market' then  
     -- перечисляем налог от каждой компании   
     for v_corporation in (select key, json.get_opt_integer(value, 0) val from jsonb_each(v_corp_income)) loop
       if v_corporation.val > 0 then
@@ -9460,7 +10629,8 @@ begin
 	  end if;
 	end if;
       end if;
-    end loop;    
+    end loop;
+   end if;    
   end loop;
 
   -- Для каждой компании проверяем, соглашались ли акционеры не выплату дивидендов
