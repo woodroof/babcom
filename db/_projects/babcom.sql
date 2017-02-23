@@ -279,7 +279,8 @@ insert into data.objects(code) values
 ('corporation_artalan'),
 ('corporation_psi_corps'),
 ('corporation_anklav_telepaths'),
-('corporation_guild_telepaths');
+('corporation_guild_telepaths'),
+('corporation_an_lashok');
 
 insert into data.objects(code)
 select 'news' || o.value from generate_series(1, 14) o(value);
@@ -2528,7 +2529,7 @@ select data.set_attribute_value(data.get_object_id('person27'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person27'), data.get_attribute_id('system_security'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person27'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person27'), data.get_attribute_id('system_politician'), null, jsonb 'true');
-select data.set_attribute_value(data.get_object_id('person27'), data.get_attribute_id('system_political_influence'), null, to_jsonb(0));
+select data.set_attribute_value(data.get_object_id('person27'), data.get_attribute_id('system_political_influence'), null, to_jsonb(1));
 select data.set_attribute_value(data.get_object_id('person27'), data.get_attribute_id('person_job_position'), null, jsonb '"Начальник охраны президента"');
 select data.set_attribute_value(data.get_object_id('person27'), data.get_attribute_id('system_balance'), null, jsonb '40000');
 select data.set_attribute_value(data.get_object_id('person27'), data.get_attribute_id('system_person_salary'), null, jsonb '20000');
@@ -2561,7 +2562,7 @@ select data.set_attribute_value(data.get_object_id('person29'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person29'), data.get_attribute_id('system_offline'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person29'), data.get_attribute_id('system_congressman'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person29'), data.get_attribute_id('system_politician'), null, jsonb 'true');
-select data.set_attribute_value(data.get_object_id('person29'), data.get_attribute_id('system_political_influence'), null, to_jsonb(4));
+select data.set_attribute_value(data.get_object_id('person29'), data.get_attribute_id('system_political_influence'), null, to_jsonb(3));
 select data.set_attribute_value(data.get_object_id('person29'), data.get_attribute_id('person_job_position'), null, jsonb '"Исполнительный директор корпорации Рокетдайн. Член делегации колонии Проксима-3"');
 select data.set_attribute_value(data.get_object_id('person29'), data.get_attribute_id('system_balance'), null, jsonb '2000000');
 select data.set_attribute_value(data.get_object_id('person29'), data.get_attribute_id('system_person_salary'), null, jsonb '200000');
@@ -3080,7 +3081,7 @@ select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_
 select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
 select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('corporation_sectors'), null, jsonb '["sector_vpk", "sector_resources", "sector_connections"]');
 select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
-select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person3", "percent": 12},{"member": "person26", "percent": 9}, {"member": "person35", "percent": 6}, {"member": "person39", "percent": 29}, {"member": "person49", "percent": 4}, {"member": "person58", "percent": 40}]');
+select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person3", "percent": 12},{"member": "person26", "percent": 16}, {"member": "person35", "percent": 6}, {"member": "person39", "percent": 29}, {"member": "person49", "percent": 4}, {"member": "person58", "percent": 24}]');
 select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_ipx1", "deal_ipx2", "deal_ipx3", "deal_ipx4", "deal_ipx5", "deal_ipx6", "deal_ipx7", "deal_ipx8", "deal_ipx9", "deal_ipx10"]');
 /*select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
 select data.set_attribute_value(data.get_object_id('corporation_ipx'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');*/
@@ -3095,7 +3096,7 @@ select data.set_attribute_value(data.get_object_id('corporation_rocketdain'), da
 select data.set_attribute_value(data.get_object_id('corporation_rocketdain'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
 select data.set_attribute_value(data.get_object_id('corporation_rocketdain'), data.get_attribute_id('corporation_sectors'), null, jsonb '["sector_vpk", "sector_connections"]');
 select data.set_attribute_value(data.get_object_id('corporation_rocketdain'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
-select data.set_attribute_value(data.get_object_id('corporation_rocketdain'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person26", "percent": 12}, {"member": "person29", "percent": 26}, {"member": "person38", "percent": 29}, {"member": "person58", "percent": 33}]');
+select data.set_attribute_value(data.get_object_id('corporation_rocketdain'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person29", "percent": 26}, {"member": "person38", "percent": 29}, {"member": "person58", "percent": 45}]');
 select data.set_attribute_value(data.get_object_id('corporation_rocketdain'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_rocketdain1", "deal_rocketdain2", "deal_rocketdain3", "deal_rocketdain4", "deal_rocketdain5", "deal_rocketdain6", "deal_rocketdain7", "deal_rocketdain8", "deal_rocketdain9", "deal_rocketdain10"]');
 --select data.set_attribute_value(data.get_object_id('corporation_rocketdain'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
 --select data.set_attribute_value(data.get_object_id('corporation_rocketdain'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
@@ -3110,7 +3111,7 @@ select data.set_attribute_value(data.get_object_id('corporation_umbrella'), data
 select data.set_attribute_value(data.get_object_id('corporation_umbrella'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
 select data.set_attribute_value(data.get_object_id('corporation_umbrella'), data.get_attribute_id('corporation_sectors'), null, '["sector_medicine"]');
 select data.set_attribute_value(data.get_object_id('corporation_umbrella'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
-select data.set_attribute_value(data.get_object_id('corporation_umbrella'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person26", "percent": 8}, {"member": "person31", "percent": 32}, {"member": "person39", "percent": 32}, {"member": "person43", "percent": 6}, {"member": "person58", "percent": 22}]');
+select data.set_attribute_value(data.get_object_id('corporation_umbrella'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person31", "percent": 32}, {"member": "person39", "percent": 32}, {"member": "person43", "percent": 6}, {"member": "person58", "percent": 30}]');
 select data.set_attribute_value(data.get_object_id('corporation_umbrella'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_umbrella1", "deal_umbrella2", "deal_umbrella3", "deal_umbrella4", "deal_umbrella5", "deal_umbrella6", "deal_umbrella7", "deal_umbrella8", "deal_umbrella9", "deal_umbrella10"]');
 --select data.set_attribute_value(data.get_object_id('corporation_umbrella'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
 --select data.set_attribute_value(data.get_object_id('corporation_umbrella'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
@@ -3125,7 +3126,7 @@ select data.set_attribute_value(data.get_object_id('corporation_weiland'), data.
 select data.set_attribute_value(data.get_object_id('corporation_weiland'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
 select data.set_attribute_value(data.get_object_id('corporation_weiland'), data.get_attribute_id('corporation_sectors'), null, '["sector_medicine", "sector_connections"]');
 select data.set_attribute_value(data.get_object_id('corporation_weiland'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
-select data.set_attribute_value(data.get_object_id('corporation_weiland'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person26", "percent": 6}, {"member": "person28", "percent": 2}, {"member": "person36", "percent": 25}, {"member": "person37", "percent": 4}, {"member": "person41", "percent": 21}, {"member": "person58", "percent": 42}]');
+select data.set_attribute_value(data.get_object_id('corporation_weiland'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person28", "percent": 2}, {"member": "person36", "percent": 25}, {"member": "person37", "percent": 4}, {"member": "person41", "percent": 21}, {"member": "person58", "percent": 48}]');
 select data.set_attribute_value(data.get_object_id('corporation_weiland'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_weiland1", "deal_weiland2", "deal_weiland3", "deal_weiland4", "deal_weiland5", "deal_weiland6", "deal_weiland7", "deal_weiland8", "deal_weiland9", "deal_weiland10"]');
 --select data.set_attribute_value(data.get_object_id('corporation_weiland'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
 --select data.set_attribute_value(data.get_object_id('corporation_weiland'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
@@ -3140,7 +3141,7 @@ select data.set_attribute_value(data.get_object_id('corporation_mars'), data.get
 select data.set_attribute_value(data.get_object_id('corporation_mars'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
 select data.set_attribute_value(data.get_object_id('corporation_mars'), data.get_attribute_id('corporation_sectors'), null, '["sector_vpk", "sector_resources"]');
 select data.set_attribute_value(data.get_object_id('corporation_mars'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
-select data.set_attribute_value(data.get_object_id('corporation_mars'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person26", "percent": 21}, {"member": "person28", "percent": 3}, {"member": "person32", "percent": 23}, {"member": "person33", "percent": 49}, {"member": "person42", "percent": 4}]');
+select data.set_attribute_value(data.get_object_id('corporation_mars'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person28", "percent": 3}, {"member": "person32", "percent": 23}, {"member": "person33", "percent": 49}, {"member": "person42", "percent": 4}, {"member": "person58", "percent": 21}]');
 select data.set_attribute_value(data.get_object_id('corporation_mars'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_mars1", "deal_mars2", "deal_mars3", "deal_mars4", "deal_mars5", "deal_mars6", "deal_mars7", "deal_mars8", "deal_mars9", "deal_mars10"]');
 --select data.set_attribute_value(data.get_object_id('corporation_mars'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
 --select data.set_attribute_value(data.get_object_id('corporation_mars'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
@@ -3170,7 +3171,7 @@ select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get
 select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
 --select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('corporation_sectors'), null, '[]');
 select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
-select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person26", "percent": 100}]');
+select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person58", "percent": 100}]');
 select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_kref1", "deal_kref2", "deal_kref3", "deal_kref4", "deal_kref5", "deal_kref6", "deal_kref7", "deal_kref8", "deal_kref9", "deal_kref10"]');
 --select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
 --select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
@@ -3185,7 +3186,7 @@ select data.set_attribute_value(data.get_object_id('corporation_ea'), data.get_a
 select data.set_attribute_value(data.get_object_id('corporation_ea'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
 select data.set_attribute_value(data.get_object_id('corporation_ea'), data.get_attribute_id('corporation_sectors'), null, '["sector_vpk", "sector_resources", "sector_connections", "sector_medicine"]');
 select data.set_attribute_value(data.get_object_id('corporation_ea'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
-select data.set_attribute_value(data.get_object_id('corporation_ea'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person26", "percent": 21}, {"member": "person47", "percent": 21}]');
+select data.set_attribute_value(data.get_object_id('corporation_ea'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person47", "percent": 21}, {"member": "person58", "percent": 21}]');
 select data.set_attribute_value(data.get_object_id('corporation_ea'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_ea1", "deal_ea2", "deal_ea3", "deal_ea4", "deal_ea5", "deal_ea6", "deal_ea7", "deal_ea8", "deal_ea9", "deal_ea10"]');
 --select data.set_attribute_value(data.get_object_id('corporation_ea'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
 --select data.set_attribute_value(data.get_object_id('corporation_ea'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
@@ -3385,6 +3386,19 @@ select data.set_attribute_value(data.get_object_id('corporation_guild_telepaths'
 --select data.set_attribute_value(data.get_object_id('corporation_guild_telepaths'), data.get_attribute_id('system_corporation_draft_deals'), null, jsonb '[]');
 --select data.set_attribute_value(data.get_object_id('corporation_guild_telepaths'), data.get_attribute_id('system_corporation_canceled_deals'), null, jsonb '[]');
 select data.set_attribute_value(data.get_object_id('corporation_guild_telepaths'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
+
+select data.set_attribute_value(data.get_object_id('corporation_an_lashok'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_an_lashok'), data.get_attribute_id('type'), null, jsonb '"corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_an_lashok'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_ipx'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_an_lashok'), data.get_attribute_id('name'), null, jsonb '"Ан-Лашок"');
+select data.set_attribute_value(data.get_object_id('corporation_an_lashok'), data.get_attribute_id('description'), null, jsonb '"Ан-Лашок"');
+select data.set_attribute_value(data.get_object_id('corporation_an_lashok'), data.get_attribute_id('corporation_state'), null, jsonb '"state_anlashok"');
+select data.set_attribute_value(data.get_object_id('corporation_an_lashok'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_an_lashok'), data.get_attribute_id('corporation_sectors'), null, jsonb '["sector_vpk", "sector_connections"]');
+select data.set_attribute_value(data.get_object_id('corporation_an_lashok'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
+select data.set_attribute_value(data.get_object_id('corporation_an_lashok'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person23", "percent": 70},{"member": "person24", "percent": 30}]');
+select data.set_attribute_value(data.get_object_id('corporation_an_lashok'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_an_lashok1", "deal_an_lashok2", "deal_an_lashok3", "deal_an_lashok4", "deal_an_lashok5", "deal_an_lashok6", "deal_an_lashok7", "deal_an_lashok8", "deal_an_lashok9", "deal_an_lashok10"]');
+select data.set_attribute_value(data.get_object_id('corporation_an_lashok'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
 
 select data.set_attribute_value(data.get_object_id('normal_deals'), data.get_attribute_id('system_meta'), data.get_object_id('masters'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('normal_deals'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
@@ -4623,6 +4637,63 @@ from generate_series(1, 10) o(value);
   select data.set_attribute_value(data.get_object_id('deal_guild_telepaths10'), data.get_attribute_id('name'), null, jsonb '"Разное имущество"');
   select data.set_attribute_value(data.get_object_id('deal_guild_telepaths10'), data.get_attribute_id('description'), null, jsonb '"Разное имущество"');
   select data.set_attribute_value(data.get_object_id('deal_guild_telepaths10'), data.get_attribute_id('asset_name'), null, jsonb '"Разное имущество"');
+
+-- an_lashok
+    insert into data.objects(code)
+select 'deal_an_lashok' || o1.* from generate_series(1, 10) o1(value);
+
+  select
+  data.set_attribute_value(data.get_object_id('deal_an_lashok' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal_an_lashok' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal_an_lashok' || o.value), data.get_attribute_id('deal_sector'), null, to_jsonb('sector_vpk'::text)),
+  data.set_attribute_value(data.get_object_id('deal_an_lashok' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(600000)),
+  data.set_attribute_value(data.get_object_id('deal_an_lashok' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(1000000)),
+  data.set_attribute_value(data.get_object_id('deal_an_lashok' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(100000)),
+  data.set_attribute_value(data.get_object_id('deal_an_lashok' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation_an_lashok", "percent_asset": 100, "percent_income": 100, "deal_cost": 1430000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal_an_lashok' || o.value), data.get_attribute_id('system_deal_time'), null, jsonb '"20.02.2258 12:00"'),
+  data.set_attribute_value(data.get_object_id('deal_an_lashok' || o.value), data.get_attribute_id('deal_time'), null, jsonb '"20.02.2258 12:00"'),
+  data.set_attribute_value(data.get_object_id('deal_an_lashok' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"')
+from generate_series(1, 10) o(value);
+
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok1'), data.get_attribute_id('name'), null, jsonb '"Разное имущество"');
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok1'), data.get_attribute_id('description'), null, jsonb '"Разное имущество"');
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok1'), data.get_attribute_id('asset_name'), null, jsonb '"Разное имущество"');
+  
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok2'), data.get_attribute_id('name'), null, jsonb '"Разное имущество"');
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok2'), data.get_attribute_id('description'), null, jsonb '"Разное имущество"');
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok2'), data.get_attribute_id('asset_name'), null, jsonb '"Разное имущество"');
+  
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok3'), data.get_attribute_id('name'), null, jsonb '"Разное имущество"');
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok3'), data.get_attribute_id('description'), null, jsonb '"Разное имущество"');
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok3'), data.get_attribute_id('asset_name'), null, jsonb '"Разное имущество"');
+  
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok4'), data.get_attribute_id('name'), null, jsonb '"Разное имущество"');
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok4'), data.get_attribute_id('description'), null, jsonb '"Разное имущество"');
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok4'), data.get_attribute_id('asset_name'), null, jsonb '"Разное имущество"');
+  
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok5'), data.get_attribute_id('name'), null, jsonb '"Разное имущество"');
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok5'), data.get_attribute_id('description'), null, jsonb '"Разное имущество"');
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok5'), data.get_attribute_id('asset_name'), null, jsonb '"Разное имущество"');
+  
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok6'), data.get_attribute_id('name'), null, jsonb '"Разное имущество"');
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok6'), data.get_attribute_id('description'), null, jsonb '"Разное имущество"');
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok6'), data.get_attribute_id('asset_name'), null, jsonb '"Разное имущество"');
+  
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok7'), data.get_attribute_id('name'), null, jsonb '"Разное имущество"');
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok7'), data.get_attribute_id('description'), null, jsonb '"Разное имущество"');
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok7'), data.get_attribute_id('asset_name'), null, jsonb '"Разное имущество"');
+  
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok8'), data.get_attribute_id('name'), null, jsonb '"Разное имущество"');
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok8'), data.get_attribute_id('description'), null, jsonb '"Разное имущество"');
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok8'), data.get_attribute_id('asset_name'), null, jsonb '"Разное имущество"');
+  
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok9'), data.get_attribute_id('name'), null, jsonb '"Разное имущество"');
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok9'), data.get_attribute_id('description'), null, jsonb '"Разное имущество"');
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok9'), data.get_attribute_id('asset_name'), null, jsonb '"Разное имущество"');
+  
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok10'), data.get_attribute_id('name'), null, jsonb '"Разное имущество"');
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok10'), data.get_attribute_id('description'), null, jsonb '"Разное имущество"');
+  select data.set_attribute_value(data.get_object_id('deal_an_lashok10'), data.get_attribute_id('asset_name'), null, jsonb '"Разное имущество"');
 
 /*select
   data.set_attribute_value(data.get_object_id('deal' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
