@@ -3168,7 +3168,7 @@ select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get
 select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('description'), null, jsonb '"КРЭФ (Сенатский комитет по регулированию в сфере экономики и финансов) - организация, олицетворяющая банковскую и финансовую сферу. Только государство может выдавать кредиты, или лицензию на кредитно-экономическую деятельность. К тому же государство владеет блокирующими пакетами акций некоторых корпораций, и минорными пакетами акций всех корпораций, чтобы следить за их деятельностью. Нынешний председатель КРЭФ Джон Морган."');
 select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('corporation_state'), null, jsonb '"state_ea"');
 select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('system_balance'), null, jsonb '10000000');
-select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('corporation_sectors'), null, '[]');
+--select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('corporation_sectors'), null, '[]');
 select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('corporation_capitalization'), null, jsonb '10000000');
 select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person26", "percent": 100}]');
 select data.set_attribute_value(data.get_object_id('corporation_kref'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_kref1", "deal_kref2", "deal_kref3", "deal_kref4", "deal_kref5", "deal_kref6", "deal_kref7", "deal_kref8", "deal_kref9", "deal_kref10"]');
@@ -10545,6 +10545,8 @@ begin
                           and oo.object_id <> oo.parent_object_id) loop
 
      v_sector_name := json.get_string(data.get_raw_attribute_value(v_deal_sector.id, v_name_attribute_id, null));
+
+    v_corp_income := jsonb '{}';
 
     -- вначале посчитаем суммарный доход всех активных сделок по рынку
     select sum(json.get_opt_integer(av_income.value, 0))
