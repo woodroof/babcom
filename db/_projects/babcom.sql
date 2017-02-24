@@ -11078,33 +11078,6 @@ begin
     perform actions.generate_money(in_client, v_market_id, null, jsonb_build_object('receiver', v_persons.code, 'description', 'Доход за экономический цикл', 'sum', to_jsonb(v_persons.sal)));
   end loop;
 
-  -- Плата за голосования
-  for v_persons in (select o.code, json.get_opt_integer(av_vote.value, 0) vote
-			  from data.object_objects oo
-			  join data.objects o on o.id = oo.object_id
-			  join data.attribute_values av_vote on av_vote.object_id = oo.object_id 
-							and av_vote.attribute_id = v_system_person_votes_num_attribute_id 
-							and av_vote.value_object_id is null 
-			  where oo.parent_object_id = data.get_object_id('politicians')
-			      and oo.object_id <> oo.parent_object_id
-			      and oo.intermediate_object_ids is null
-			      and json.get_opt_integer(av_vote.value, 0) > 0) loop
-      perform actions.generate_money(in_client, v_market_id, null, jsonb_build_object('receiver', v_persons.code, 'description', 'Доход за голосования за экономический цикл', 'sum', to_jsonb(v_persons.vote * 150000)));
-  end loop;
-
-  -- Обнулить счётчики голосований
-    for v_persons in (select oo.object_id, json.get_opt_integer(av_vote.value, 0) vote
-			  from data.object_objects oo
-			  join data.attribute_values av_vote on av_vote.object_id = oo.object_id 
-							and av_vote.attribute_id = v_system_person_votes_num_attribute_id 
-							and av_vote.value_object_id is null 
-			  where oo.parent_object_id = data.get_object_id('politicians')
-			      and oo.object_id <> oo.parent_object_id
-			      and oo.intermediate_object_ids is null
-			      and json.get_opt_integer(av_vote.value, 0) > 0) loop
-      perform data.set_attribute_value_if_changed(v_persons.object_id, v_system_person_votes_num_attribute_id, null, to_jsonb(0), in_user_object_id);
-    end loop;
-	
 	for v_persons in (select o.code, json.get_opt_integer(av_vote.value, 0) vote
 			  from data.object_objects oo
 			  join data.objects o on o.id = oo.object_id
@@ -12730,28 +12703,28 @@ select data.set_attribute_value(data.get_object_id('agreement_type1'), data.get_
 select data.set_attribute_value(data.get_object_id('agreement_type1'), data.get_attribute_id('name'), null, jsonb '"1.1.Об объявлении войны"');
 select data.set_attribute_value(data.get_object_id('agreement_type1'), data.get_attribute_id('agreement_accept_cost'), null, to_jsonb(1000000));
 select data.set_attribute_value(data.get_object_id('agreement_type1'), data.get_attribute_id('agreement_cancel_cost'), null, to_jsonb(100000));
-select data.set_attribute_value(data.get_object_id('agreement_type1'), data.get_attribute_id('agreement_income'), null, to_jsonb(1000200));
+select data.set_attribute_value(data.get_object_id('agreement_type1'), data.get_attribute_id('agreement_income'), null, to_jsonb(1200000));
 
 select data.set_attribute_value(data.get_object_id('agreement_type2'), data.get_attribute_id('system_is_visible'), data.get_object_id('persons'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('agreement_type2'), data.get_attribute_id('type'), null, jsonb '"agreement_type"');
 select data.set_attribute_value(data.get_object_id('agreement_type2'), data.get_attribute_id('name'), null, jsonb '"1.2.О режиме содержания и обмене военнопленными"');
 select data.set_attribute_value(data.get_object_id('agreement_type2'), data.get_attribute_id('agreement_accept_cost'), null, to_jsonb(1000000));
 select data.set_attribute_value(data.get_object_id('agreement_type2'), data.get_attribute_id('agreement_cancel_cost'), null, to_jsonb(100000));
-select data.set_attribute_value(data.get_object_id('agreement_type2'), data.get_attribute_id('agreement_income'), null, to_jsonb(1000200));
+select data.set_attribute_value(data.get_object_id('agreement_type2'), data.get_attribute_id('agreement_income'), null, to_jsonb(1200000));
 
 select data.set_attribute_value(data.get_object_id('agreement_type3'), data.get_attribute_id('system_is_visible'), data.get_object_id('persons'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('agreement_type3'), data.get_attribute_id('type'), null, jsonb '"agreement_type"');
 select data.set_attribute_value(data.get_object_id('agreement_type3'), data.get_attribute_id('name'), null, jsonb '"1.3.О прекращении огня"');
 select data.set_attribute_value(data.get_object_id('agreement_type3'), data.get_attribute_id('agreement_accept_cost'), null, to_jsonb(1000000));
 select data.set_attribute_value(data.get_object_id('agreement_type3'), data.get_attribute_id('agreement_cancel_cost'), null, to_jsonb(100000));
-select data.set_attribute_value(data.get_object_id('agreement_type3'), data.get_attribute_id('agreement_income'), null, to_jsonb(1000200));
+select data.set_attribute_value(data.get_object_id('agreement_type3'), data.get_attribute_id('agreement_income'), null, to_jsonb(1200000));
 
 select data.set_attribute_value(data.get_object_id('agreement_type4'), data.get_attribute_id('system_is_visible'), data.get_object_id('persons'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('agreement_type4'), data.get_attribute_id('type'), null, jsonb '"agreement_type"');
 select data.set_attribute_value(data.get_object_id('agreement_type4'), data.get_attribute_id('name'), null, jsonb '"1.4.О капитуляции и контрибуции"');
 select data.set_attribute_value(data.get_object_id('agreement_type4'), data.get_attribute_id('agreement_accept_cost'), null, to_jsonb(1000000));
 select data.set_attribute_value(data.get_object_id('agreement_type4'), data.get_attribute_id('agreement_cancel_cost'), null, to_jsonb(100000));
-select data.set_attribute_value(data.get_object_id('agreement_type4'), data.get_attribute_id('agreement_income'), null, to_jsonb(1000200));
+select data.set_attribute_value(data.get_object_id('agreement_type4'), data.get_attribute_id('agreement_income'), null, to_jsonb(1200000));
 
 select data.set_attribute_value(data.get_object_id('agreement_type5'), data.get_attribute_id('system_is_visible'), data.get_object_id('persons'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('agreement_type5'), data.get_attribute_id('type'), null, jsonb '"agreement_type"');
@@ -13390,6 +13363,7 @@ select data.set_attribute_value(data.get_object_id('person39'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person41'), data.get_attribute_id('system_senator'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person43'), data.get_attribute_id('system_senator'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person44'), data.get_attribute_id('system_senator'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person46'), data.get_attribute_id('system_senator'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('person49'), data.get_attribute_id('system_senator'), null, jsonb 'true');
 
 insert into data.objects(code) values
