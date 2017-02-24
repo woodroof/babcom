@@ -1921,7 +1921,7 @@ select data.set_attribute_value(data.get_object_id('security'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('security'), data.get_attribute_id('name'), null, jsonb '"Служба безопасности"');
 select data.set_attribute_value(data.get_object_id('security'), data.get_attribute_id('system_mail_contact'), null, jsonb 'true');
 
-select data.set_attribute_value(data.get_object_id('senators'), data.get_attribute_id('system_priority'), null, jsonb '40');
+select data.set_attribute_value(data.get_object_id('senators'), data.get_attribute_id('system_priority'), null, jsonb '41');
 select data.set_attribute_value(data.get_object_id('senators'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('senators'), data.get_attribute_id('type'), null, jsonb '"group"');
 select data.set_attribute_value(data.get_object_id('senators'), data.get_attribute_id('name'), null, jsonb '"Сенаторы"');
@@ -10576,7 +10576,7 @@ begin
           null));
       v_value_draft_deals := coalesce(v_value_draft_deals, jsonb '[]') - v_deal_code;
       if v_value_draft_deals = '[]' then
-        perform data.delete_attribute_value_if_exists(v_corporation_id, v_system_corporation_draft_deals_attribute_id, in_user_object_id);
+        perform data.delete_attribute_value_if_exists(v_corporation_id, v_system_corporation_draft_deals_attribute_id, null, in_user_object_id);
       else
         perform data.set_attribute_value(v_corporation_id, v_system_corporation_draft_deals_attribute_id, null, v_value_draft_deals, in_user_object_id);
       end if;
@@ -13477,3 +13477,93 @@ from generate_series(1, 1) o(value);
   select data.set_attribute_value(data.get_object_id('deal_unlim1'), data.get_attribute_id('name'), null, to_jsonb('Galactic Unlim'::text));
   select data.set_attribute_value(data.get_object_id('deal_unlim1'), data.get_attribute_id('description'), null, to_jsonb('Galactic Unlim'::text));
   select data.set_attribute_value(data.get_object_id('deal_unlim1'), data.get_attribute_id('asset_name'), null, to_jsonb('Актив Galactic Unlim'::text));
+  
+ -- Упрощённый перевод (без клиента и возвращаемого объекта)
+  CREATE OR REPLACE FUNCTION actions.transfer_simple(
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS void AS
+$BODY$
+declare
+  v_receiver_id integer := data.get_object_id(json.get_string(in_user_params, 'receiver'));
+  v_description text := json.get_string(in_user_params, 'description');
+  v_sum integer := json.get_integer(in_user_params, 'sum');
+
+  v_system_balance_attribute_id integer := data.get_attribute_id('system_balance');
+  v_user_balance integer;
+  v_receiver_balance integer;
+
+  v_ret_val api.result;
+begin
+  assert in_user_object_id is not null;
+  assert in_user_object_id != v_receiver_id;
+  assert v_sum > 0;
+
+  if in_user_object_id < v_receiver_id then
+    v_user_balance := data.get_attribute_value_for_update(in_user_object_id, v_system_balance_attribute_id, null);
+    v_receiver_balance := data.get_attribute_value_for_update(v_receiver_id, v_system_balance_attribute_id, null);
+  else
+    v_receiver_balance := data.get_attribute_value_for_update(v_receiver_id, v_system_balance_attribute_id, null);
+    v_user_balance := data.get_attribute_value_for_update(in_user_object_id, v_system_balance_attribute_id, null);
+  end if;
+
+  if coalesce(v_user_balance, 0) < v_sum then
+    v_ret_val := api_utils.get_objects(
+      in_client,
+      in_user_object_id,
+      jsonb_build_object(
+        'object_codes', jsonb_build_array(data.get_object_code(in_user_object_id)),
+        'get_actions', true,
+        'get_templates', true));
+    v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "Недостаточно средств!"}';
+
+  end if;
+
+  perform data.set_attribute_value(
+    in_user_object_id,
+    v_system_balance_attribute_id,
+    null,
+    to_jsonb(v_user_balance - v_sum),
+    in_user_object_id,
+    'Перевод средств пользователю ' || v_receiver_id);
+  perform data.set_attribute_value(
+    v_receiver_id,
+    v_system_balance_attribute_id,
+    null,
+    to_jsonb(v_receiver_balance + v_sum),
+    in_user_object_id,
+    'Перевод средств от пользователя ' || in_user_object_id);
+
+  perform actions.create_transaction(
+    in_user_object_id,
+    in_user_object_id,
+    v_receiver_id,
+    v_description,
+    v_sum,
+    v_user_balance - v_sum,
+    v_receiver_balance + v_sum,
+    true,
+    true);
+
+  perform actions.create_notification(
+    in_user_object_id,
+    array[v_receiver_id],
+    (
+      'Входящий перевод на сумму ' ||
+      v_sum ||
+      '.<br>Остаток: ' ||
+      (v_receiver_balance + v_sum) ||
+      '.<br>Отправитель: ' ||
+      coalesce(
+        json.get_opt_string(data.get_attribute_value(v_receiver_id, in_user_object_id, data.get_attribute_id('name'))),
+        'Неизвестный') ||
+      '.<br>Сообщение: ' ||
+      v_description
+    ),
+    'transactions');
+end;
+$BODY$
+  LANGUAGE plpgsql VOLATILE
+  COST 100;
+
