@@ -241,7 +241,7 @@ insert into data.objects(code) values
 ('anonymous');
 
 insert into data.objects(code)
-select 'person' || o.* from generate_series(1, 60) o;
+select 'person' || o.* from generate_series(1, 61) o;
 
 -- Объекты
 insert into data.objects(code) values
@@ -1922,16 +1922,19 @@ select data.set_attribute_value(data.get_object_id('security'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('security'), data.get_attribute_id('system_mail_contact'), null, jsonb 'true');
 
 select data.set_attribute_value(data.get_object_id('senators'), data.get_attribute_id('system_priority'), null, jsonb '40');
+select data.set_attribute_value(data.get_object_id('senators'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('senators'), data.get_attribute_id('type'), null, jsonb '"group"');
 select data.set_attribute_value(data.get_object_id('senators'), data.get_attribute_id('name'), null, jsonb '"Сенаторы"');
 select data.set_attribute_value(data.get_object_id('senators'), data.get_attribute_id('system_mail_contact'), null, jsonb 'true');
 
 select data.set_attribute_value(data.get_object_id('congressmen'), data.get_attribute_id('system_priority'), null, jsonb '40');
+select data.set_attribute_value(data.get_object_id('congressmen'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('congressmen'), data.get_attribute_id('type'), null, jsonb '"group"');
 select data.set_attribute_value(data.get_object_id('congressmen'), data.get_attribute_id('name'), null, jsonb '"Конгрессмены"');
 select data.set_attribute_value(data.get_object_id('congressmen'), data.get_attribute_id('system_mail_contact'), null, jsonb 'true');
 
 select data.set_attribute_value(data.get_object_id('ambassadors'), data.get_attribute_id('system_priority'), null, jsonb '40');
+select data.set_attribute_value(data.get_object_id('ambassadors'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('ambassadors'), data.get_attribute_id('type'), null, jsonb '"group"');
 select data.set_attribute_value(data.get_object_id('ambassadors'), data.get_attribute_id('name'), null, jsonb '"Послы"');
 select data.set_attribute_value(data.get_object_id('ambassadors'), data.get_attribute_id('system_mail_contact'), null, jsonb 'true');
@@ -3059,6 +3062,18 @@ select data.set_attribute_value(data.get_object_id('person60'), data.get_attribu
 select data.set_attribute_value(data.get_object_id('person60'), data.get_attribute_id('system_balance'), null, jsonb '0');
 select data.set_attribute_value(data.get_object_id('person60'), data.get_attribute_id('system_person_salary'), null, jsonb '0');
 select data.set_attribute_value(data.get_object_id('person60'), data.get_attribute_id('person_biography'), null, jsonb '"35 лет. Из бедных слоёв. Стала актрисой в пику строгим родителям-католикам."');
+
+select data.set_attribute_value(data.get_object_id('person61'), data.get_attribute_id('system_priority'), null, jsonb '200');
+select data.set_attribute_value(data.get_object_id('person61'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person61'), data.get_attribute_id('system_mail_contact'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person61'), data.get_attribute_id('person_race'), null, jsonb '"centauri"');
+select data.set_attribute_value(data.get_object_id('person61'), data.get_attribute_id('person_state'), null, jsonb '"centauri"');
+select data.set_attribute_value(data.get_object_id('person61'), data.get_attribute_id('type'), null, jsonb '"person"');
+select data.set_attribute_value(data.get_object_id('person61'), data.get_attribute_id('name'), null, jsonb '"Лорд Новус Фирра"');
+select data.set_attribute_value(data.get_object_id('person61'), data.get_attribute_id('system_online'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person61'), data.get_attribute_id('system_balance'), null, jsonb '100000');
+select data.set_attribute_value(data.get_object_id('person61'), data.get_attribute_id('system_person_salary'), null, jsonb '100000');
+select data.set_attribute_value(data.get_object_id('person61'), data.get_attribute_id('person_biography'), null, jsonb '"Глава дома Фирра"');
 
 select data.set_attribute_value(data.get_object_id('market'), data.get_attribute_id('system_meta'), data.get_object_id('masters'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('market'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
@@ -6101,6 +6116,10 @@ where l.description in ('person50', 'person51', 'person52', 'person53', 'person5
 select data.add_object_to_login(data.get_object_id('person60'), id)
 from data.logins l
 where l.description = 'person25';
+
+select data.add_object_to_login(data.get_object_id('person61'), id)
+from data.logins l
+where l.description = 'person59';
 
 select data.add_object_to_login(data.get_object_id('anonymous'), id)
 from data.logins
