@@ -7078,6 +7078,96 @@ $BODY$
   LANGUAGE plpgsql volatile
   COST 100;
 
+-- Действие для создания "зашифрованного" документа
+CREATE OR REPLACE FUNCTION action_generators.create_secret_document(
+    in_params in jsonb)
+  RETURNS jsonb AS
+$BODY$
+declare
+  v_object_id integer := json.get_opt_integer(in_params, null, 'object_id');
+  v_user_object_id integer;
+  v_medics_objects_id integer;
+  v_medic boolean;
+begin
+  if v_object_id is not null then
+    return null;
+  end if;
+
+  v_user_object_id := json.get_integer(in_params, 'user_object_id');
+
+  return jsonb_build_object(
+    'create_secret_document',
+    jsonb_build_object(
+      'code', 'create_secret_document',
+      'name', 'Создать зашифрованный документ',
+      'type', 'documents.create',
+      'params', jsonb '{}',
+      'user_params',
+        jsonb_build_array(
+          jsonb_build_object(
+            'code', 'code',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1),
+            'description', 'Код расшифровки',
+            'min_value_count', 1,
+            'max_value_count', 1),
+          jsonb_build_object(
+            'code', 'title',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1),
+            'description', 'Заголовок',
+            'min_value_count', 1,
+            'max_value_count', 1),
+          jsonb_build_object(
+            'code', 'content',
+            'type', 'string',
+            'data', jsonb_build_object('min_length', 1, 'multiline', true),
+            'description', 'Содержимое',
+            'min_value_count', 1,
+            'max_value_count', 1))));
+end;
+$BODY$
+  LANGUAGE plpgsql STABLE
+  COST 100;
+
+CREATE OR REPLACE FUNCTION actions.create_secret_document(
+    in_client text,
+    in_user_object_id integer,
+    in_params jsonb,
+    in_user_params jsonb)
+  RETURNS api.result AS
+$BODY$
+declare
+  v_code text := json.get_string(in_user_params, 'code');
+  v_title text := json.get_string(in_user_params, 'title');
+  v_content text := replace(json.get_string(in_user_params, 'content'), E'\n', '<br>');
+
+  v_document_id integer;
+
+  v_type_attr_id integer := data.get_attribute_id('type');
+  v_notification_receiver_ids integer[];
+begin
+  insert into data.objects(code) values(v_code)
+  returning id into v_document_id;
+
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+  perform data.set_attribute_value(v_document_id, v_type_attr_id, null, jsonb '"secret_document"');
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('name'), null, to_jsonb(v_title));
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('document_title'), null, to_jsonb(v_title));
+  perform data.set_attribute_value(v_document_id, data.get_attribute_id('content'), null, to_jsonb(v_content));
+
+  return api_utils.get_objects(
+    in_client,
+    in_user_object_id,
+    jsonb_build_object(
+      'object_codes', jsonb_build_array(v_code),
+      'get_actions', true,
+      'get_templates', true));
+end;
+$BODY$
+  LANGUAGE plpgsql volatile
+  COST 100;
+  
 -- Действие для редактирования медицинского отчёта
 CREATE OR REPLACE FUNCTION action_generators.edit_med_document(
     in_params in jsonb)
@@ -12185,6 +12275,7 @@ insert into data.action_generators(function, params, description) values
 ('generate_if_user_attribute', jsonb_build_object('attribute_code', 'type', 'attribute_value', 'person', 'function', 'send_mail'), 'Функция отправки письма'),
 ('generate_if_user_attribute', jsonb_build_object('attribute_code', 'system_master', 'attribute_value', true, 'function', 'generate_money'), 'Функция для добавления средств'),
 ('generate_if_user_attribute', jsonb_build_object('attribute_code', 'system_master', 'attribute_value', true, 'function', 'send_mail_from_future'), 'Функция отправки письма из будущего'),
+('generate_if_user_attribute', '{"attribute_code": "system_master", "attribute_value": true, "function": "create_secret_document"}', 'Функция создания кодированного документа'),
 ('generate_if_any_user_attribute', jsonb_build_object('attribute_code', 'person_media', 'function', 'write_news'), 'Функция создания новости'),
 (
   'generate_if_user_attribute',
