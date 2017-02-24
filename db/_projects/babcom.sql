@@ -11,12 +11,13 @@ CREATE OR REPLACE FUNCTION utils.system_time(in_days_shift integer DEFAULT NULL:
 $BODY$
 declare
   v_years_shift integer := data.get_integer_param('years_shift');
+  v_days_shift integer := data.get_integer_param('days_shift');
   v_time timestamp with time zone;
 begin
   if in_days_shift is null then
-    v_time := now() + (v_years_shift || 'y')::interval;
+    v_time := now() + (v_years_shift || 'y')::interval + (v_days_shift || 'd')::interval;
   else
-    v_time := now() + (v_years_shift || 'y')::interval + (in_days_shift || 'd')::interval;
+    v_time := now() + (v_years_shift || 'y')::interval + (v_days_shift || 'd')::interval + (in_days_shift || 'd')::interval;
   end if;
 
   return to_char(v_time, 'yyyy.mm.dd hh24:mi:ss.us');
@@ -30,12 +31,13 @@ CREATE OR REPLACE FUNCTION utils.current_time(in_days_shift integer DEFAULT NULL
 $BODY$
 declare
   v_years_shift integer := data.get_integer_param('years_shift');
+  v_days_shift integer := data.get_integer_param('days_shift');
   v_time timestamp with time zone;
 begin
   if in_days_shift is null then
-    v_time := now() + (v_years_shift || 'y')::interval;
+    v_time := now() + (v_years_shift || 'y')::interval + (v_days_shift || 'd')::interval;
   else
-    v_time := now() + (v_years_shift || 'y')::interval + (in_days_shift || 'd')::interval;
+    v_time := now() + (v_years_shift || 'y')::interval + (v_days_shift || 'd')::interval + (in_days_shift || 'd')::interval;
   end if;
 
   return to_char(v_time, 'dd.mm.yyyy hh24:mi');
@@ -46,7 +48,8 @@ $BODY$
 
 -- Параметры
 insert into data.params(code, value, description) values
-('years_shift', jsonb '241', 'Смещение года'),
+('years_shift', jsonb '242', 'Смещение года'),
+('days_shift', jsonb '-55', 'Смещение дней'),
 ('template', jsonb '
 {
   "groups": [
