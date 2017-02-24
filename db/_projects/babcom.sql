@@ -1854,7 +1854,7 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
       {
         "conditions": [{"attribute_code": "system_politician", "attribute_value": true}],
         "function": "fill_value_object_attribute_from_attribute",
-        "params": {"value_object_code": "politicians", "attribute_code": "system_vote_history"}
+        "params": {"value_object_code": "senators", "attribute_code": "system_vote_history"}
       }
     ]
   }', 'Получение истории голосований');
@@ -11081,6 +11081,32 @@ begin
 			      and json.get_opt_integer(av_vote.value, 0) > 0) loop
       perform data.set_attribute_value_if_changed(v_persons.object_id, v_system_person_votes_num_attribute_id, null, to_jsonb(0), in_user_object_id);
     end loop;
+	
+	for v_persons in (select o.code, json.get_opt_integer(av_vote.value, 0) vote
+			  from data.object_objects oo
+			  join data.objects o on o.id = oo.object_id
+			  join data.attribute_values av_vote on av_vote.object_id = oo.object_id 
+							and av_vote.attribute_id = v_system_person_votes_num_attribute_id 
+							and av_vote.value_object_id is null 
+			  where oo.parent_object_id = data.get_object_id('senators')
+			      and oo.object_id <> oo.parent_object_id
+			      and oo.intermediate_object_ids is null
+			      and json.get_opt_integer(av_vote.value, 0) > 0) loop
+      perform actions.generate_money(in_client, v_market_id, null, jsonb_build_object('receiver', v_persons.code, 'description', 'Доход за голосования за экономический цикл', 'sum', to_jsonb(v_persons.vote * 150000)));
+  end loop;
+
+  -- Обнулить счётчики голосований
+    for v_persons in (select oo.object_id, json.get_opt_integer(av_vote.value, 0) vote
+			  from data.object_objects oo
+			  join data.attribute_values av_vote on av_vote.object_id = oo.object_id 
+							and av_vote.attribute_id = v_system_person_votes_num_attribute_id 
+							and av_vote.value_object_id is null 
+			  where oo.parent_object_id = data.get_object_id('senators')
+			      and oo.object_id <> oo.parent_object_id
+			      and oo.intermediate_object_ids is null
+			      and json.get_opt_integer(av_vote.value, 0) > 0) loop
+      perform data.set_attribute_value_if_changed(v_persons.object_id, v_system_person_votes_num_attribute_id, null, to_jsonb(0), in_user_object_id);
+    end loop;
   
   return api_utils.get_objects(in_client,
 				     in_user_object_id,
@@ -11758,7 +11784,7 @@ begin
   perform data.delete_attribute_value_if_exists(v_vote_id, data.get_attribute_id('vote_yes'), oo.object_id, in_user_object_id),
           data.delete_attribute_value_if_exists(v_vote_id, data.get_attribute_id('vote_no'), oo.object_id, in_user_object_id)
   from data.object_objects oo
-  where oo.parent_object_id = data.get_object_id('politicians')
+  where oo.parent_object_id = data.get_object_id('senators')
       and oo.object_id <> oo.parent_object_id
       and oo.intermediate_object_ids is null;
 
@@ -11766,7 +11792,7 @@ begin
     array_agg(distinct(oo.object_id))
     into v_receiver_ids
   from data.object_objects oo
-  where oo.parent_object_id = data.get_object_id('politicians')
+  where oo.parent_object_id = data.get_object_id('senators')
       and oo.object_id <> oo.parent_object_id
       and oo.intermediate_object_ids is null;
 
@@ -12111,7 +12137,7 @@ begin
     v_yes_percent,
     v_no_percent
   from data.object_objects oo
-  where oo.parent_object_id = data.get_object_id('politicians')
+  where oo.parent_object_id = data.get_object_id('senators')
       and oo.object_id <> oo.parent_object_id
       and oo.intermediate_object_ids is null;
 
@@ -12132,7 +12158,7 @@ begin
   perform data.delete_attribute_value_if_exists(v_vote_id, data.get_attribute_id('vote_yes'), oo.object_id, in_user_object_id),
           data.delete_attribute_value_if_exists(v_vote_id, data.get_attribute_id('vote_no'), oo.object_id, in_user_object_id)
   from data.object_objects oo
-  where oo.parent_object_id = data.get_object_id('politicians')
+  where oo.parent_object_id = data.get_object_id('senators')
       and oo.object_id <> oo.parent_object_id
       and oo.intermediate_object_ids is null;
 
@@ -13300,3 +13326,115 @@ insert into data.action_generators(function, params, description) values
   }',
   null
 );
+
+select data.set_attribute_value(data.get_object_id('person7'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person8'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person9'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person10'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person11'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person13'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person14'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person15'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person16'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person17'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person18'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person19'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person20'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person21'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person22'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person23'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person24'), data.get_attribute_id('system_politician'), null, jsonb 'true');
+
+select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_id('system_meta'), data.get_object_id('politicians'), jsonb 'false');
+select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_id('system_is_visible'), data.get_object_id('politicians'), jsonb 'false');
+select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_id('system_meta'), data.get_object_id('senators'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('vote'), data.get_attribute_id('system_is_visible'), data.get_object_id('senators'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('senators'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+
+select data.set_attribute_value(data.get_object_id('person1'), data.get_attribute_id('system_senator'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person3'), data.get_attribute_id('system_senator'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person27'), data.get_attribute_id('system_senator'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person29'), data.get_attribute_id('system_senator'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person30'), data.get_attribute_id('system_senator'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person31'), data.get_attribute_id('system_senator'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person32'), data.get_attribute_id('system_senator'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person33'), data.get_attribute_id('system_senator'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person34'), data.get_attribute_id('system_senator'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person35'), data.get_attribute_id('system_senator'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person36'), data.get_attribute_id('system_senator'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person37'), data.get_attribute_id('system_senator'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person39'), data.get_attribute_id('system_senator'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person41'), data.get_attribute_id('system_senator'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person43'), data.get_attribute_id('system_senator'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person44'), data.get_attribute_id('system_senator'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('person49'), data.get_attribute_id('system_senator'), null, jsonb 'true');
+
+insert into data.objects(code) values
+('corporation_ikkara');
+select data.set_attribute_value(data.get_object_id('corporation_ikkara'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_ikkara'), data.get_attribute_id('type'), null, jsonb '"corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_ikkara'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_ikkara'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_ikkara'), data.get_attribute_id('name'), null, jsonb '"Иккара"');
+select data.set_attribute_value(data.get_object_id('corporation_ikkara'), data.get_attribute_id('description'), null, jsonb '"Корпорация Иккара"');
+select data.set_attribute_value(data.get_object_id('corporation_ikkara'), data.get_attribute_id('corporation_state'), null, jsonb '"state_ikarra"');
+select data.set_attribute_value(data.get_object_id('corporation_ikkara'), data.get_attribute_id('system_balance'), null, jsonb '5000000');
+select data.set_attribute_value(data.get_object_id('corporation_ikkara'), data.get_attribute_id('corporation_sectors'), null, jsonb '["sector_vpk", "sector_resources", "sector_connections","sector_medicine"]');
+select data.set_attribute_value(data.get_object_id('corporation_ikkara'), data.get_attribute_id('corporation_capitalization'), null, jsonb '50000000');
+select data.set_attribute_value(data.get_object_id('corporation_ikkara'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person18", "percent": 100}]');
+select data.set_attribute_value(data.get_object_id('corporation_ikkara'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_ikkara1"]');
+select data.set_attribute_value(data.get_object_id('corporation_ikkara'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
+
+insert into data.objects(code)
+select 'deal_ikkara1' from generate_series(1, 1) o1(value);
+
+select
+  data.set_attribute_value(data.get_object_id('deal_ikkara' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal_ikkara' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal_ikkara' || o.value), data.get_attribute_id('deal_sector'), null, jsonb '"sector_vpk"'),
+  data.set_attribute_value(data.get_object_id('deal_ikkara' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(30000)),
+  data.set_attribute_value(data.get_object_id('deal_ikkara' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(50000000)),
+  data.set_attribute_value(data.get_object_id('deal_ikkara' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(3000)),
+  data.set_attribute_value(data.get_object_id('deal_ikkara' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation_ikkara", "percent_asset": 100, "percent_income": 100, "deal_cost": 143000000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal_ikkara' || o.value), data.get_attribute_id('system_deal_time'), null, jsonb '"24.02.2258 12:00"'),
+  data.set_attribute_value(data.get_object_id('deal_ikkara' || o.value), data.get_attribute_id('deal_time'), null, jsonb '"24.02.2258 12:00"'),
+  data.set_attribute_value(data.get_object_id('deal_ikkara' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"')
+from generate_series(1, 1) o(value);
+
+  select data.set_attribute_value(data.get_object_id('deal_ikkara1'), data.get_attribute_id('name'), null, to_jsonb('Иккара'::text));
+  select data.set_attribute_value(data.get_object_id('deal_ikkara1'), data.get_attribute_id('description'), null, to_jsonb('Иккара'::text));
+  select data.set_attribute_value(data.get_object_id('deal_ikkara1'), data.get_attribute_id('asset_name'), null, to_jsonb('Актив Иккара'::text));
+  
+  insert into data.objects(code) values
+('corporation_dilgar');
+select data.set_attribute_value(data.get_object_id('corporation_dilgar'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_dilgar'), data.get_attribute_id('type'), null, jsonb '"corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_dilgar'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_dilgar'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_dilgar'), data.get_attribute_id('name'), null, jsonb '"Дилгар Corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_dilgar'), data.get_attribute_id('description'), null, jsonb '"Корпорация Дилгар"');
+select data.set_attribute_value(data.get_object_id('corporation_dilgar'), data.get_attribute_id('corporation_state'), null, jsonb '"state_dilgar"');
+select data.set_attribute_value(data.get_object_id('corporation_dilgar'), data.get_attribute_id('system_balance'), null, jsonb '2000000');
+select data.set_attribute_value(data.get_object_id('corporation_dilgar'), data.get_attribute_id('corporation_sectors'), null, jsonb '["sector_vpk", "sector_resources", "sector_connections","sector_medicine"]');
+select data.set_attribute_value(data.get_object_id('corporation_dilgar'), data.get_attribute_id('corporation_capitalization'), null, jsonb '5000000');
+select data.set_attribute_value(data.get_object_id('corporation_dilgar'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person19", "percent": 100}]');
+select data.set_attribute_value(data.get_object_id('corporation_dilgar'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_dilgar1"]');
+select data.set_attribute_value(data.get_object_id('corporation_dilgar'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
+
+insert into data.objects(code)
+select 'deal_dilgar1' from generate_series(1, 1) o1(value);
+
+select
+  data.set_attribute_value(data.get_object_id('deal_dilgar' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal_dilgar' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal_dilgar' || o.value), data.get_attribute_id('deal_sector'), null, jsonb '"sector_resources"'),
+  data.set_attribute_value(data.get_object_id('deal_dilgar' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(3000)),
+  data.set_attribute_value(data.get_object_id('deal_dilgar' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(5000000)),
+  data.set_attribute_value(data.get_object_id('deal_dilgar' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(300)),
+  data.set_attribute_value(data.get_object_id('deal_dilgar' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation_dilgar", "percent_asset": 100, "percent_income": 100, "deal_cost": 14300000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal_dilgar' || o.value), data.get_attribute_id('system_deal_time'), null, jsonb '"24.02.2258 12:00"'),
+  data.set_attribute_value(data.get_object_id('deal_dilgar' || o.value), data.get_attribute_id('deal_time'), null, jsonb '"24.02.2258 12:00"'),
+  data.set_attribute_value(data.get_object_id('deal_dilgar' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"')
+from generate_series(1, 1) o(value);
+
+  select data.set_attribute_value(data.get_object_id('deal_dilgar1'), data.get_attribute_id('name'), null, to_jsonb('Дилгар Co'::text));
+  select data.set_attribute_value(data.get_object_id('deal_dilgar1'), data.get_attribute_id('description'), null, to_jsonb('Дилгар Co'::text));
+  select data.set_attribute_value(data.get_object_id('deal_dilgar1'), data.get_attribute_id('asset_name'), null, to_jsonb('Актив Дилгар Co'::text));

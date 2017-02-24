@@ -523,7 +523,7 @@ begin
             'type', 'objects',
             'description', 'Список подписавшихся',
             'data', jsonb_build_object('object_code', 'politicians', 'attribute_code', 'politicians'),
-            'min_value_count', 1,
+            'min_value_count', 2,
             'max_value_count', 100),
          jsonb_build_object(
             'code', 'agreement_type',
@@ -550,7 +550,7 @@ declare
   v_agreement_code text;
   v_name text := json.get_string(in_user_params, 'name');
   v_description text := json.get_string(in_user_params, 'description');
-  v_signers jsonb := '[]'::jsonb || in_user_params->'signers';
+  v_signers jsonb := in_user_params->'signers';
   v_agreement_type text := json.get_string(in_user_params, 'agreement_type');
   v_agreement_type_id integer := data.get_object_id(v_agreement_type);
   v_agreement_accept_cost integer;
@@ -663,7 +663,7 @@ begin
   v_agreement_type := json.get_string(data.get_raw_attribute_value(v_agreement_id, data.get_attribute_id('agreement_type'), null));
   v_agreement_income := json.get_opt_integer(data.get_raw_attribute_value(data.get_object_id(v_agreement_type), data.get_attribute_id('agreement_income'), null), 0);
   v_agreement_name := json.get_opt_string(data.get_raw_attribute_value(v_agreement_id, v_name_attribute_id, null), '-');
-  v_agreement_signers := '[]'::jsonb || data.get_raw_attribute_value(v_agreement_id, data.get_attribute_id('agreement_signers'), null);
+  v_agreement_signers := data.get_raw_attribute_value(v_agreement_id, data.get_attribute_id('agreement_signers'), null);
 
   if v_agreement_accept_cost > 0 then
   -- проверить, что у всех хватает денег на оплату соглашения
