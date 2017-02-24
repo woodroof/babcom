@@ -175,6 +175,10 @@ insert into data.params(code, value, description) values
     {
       "attributes": ["vote_status", "vote_theme", "vote_history"],
       "actions": ["start_vote", "stop_vote", "vote_yes", "vote_no"]
+    },
+    {
+      "attributes": ["agreement_accept_cost", "agreement_cancel_cost", "agreement_status", "agreement_type", "agreement_signers"],
+      "actions": ["create_agreement", "confirm_agreement", "delete_agreement", "cancel_agreement", "reject_agreement"]
     }
   ]
 }
@@ -12876,7 +12880,7 @@ begin
             'type', 'objects',
             'description', 'Список подписавшихся',
             'data', jsonb_build_object('object_code', 'politicians', 'attribute_code', 'politicians'),
-            'min_value_count', 1,
+            'min_value_count', 2,
             'max_value_count', 100),
          jsonb_build_object(
             'code', 'agreement_type',
@@ -12903,7 +12907,7 @@ declare
   v_agreement_code text;
   v_name text := json.get_string(in_user_params, 'name');
   v_description text := json.get_string(in_user_params, 'description');
-  v_signers jsonb := '[]'::jsonb || in_user_params->'signers';
+  v_signers jsonb := '[]'::jsonb || (in_user_params->'signers');
   v_agreement_type text := json.get_string(in_user_params, 'agreement_type');
   v_agreement_type_id integer := data.get_object_id(v_agreement_type);
   v_agreement_accept_cost integer;
@@ -13024,7 +13028,7 @@ begin
     v_balance := json.get_opt_integer(data.get_attribute_value_for_share(data.get_object_id(v_politics.value), v_system_balance_attribute_id, null));
   
     if v_balance < v_agreement_accept_cost then 
-        v_ret_val.data := v_ret_val.data::jsonb || jsonb '{"message": "На балансе '|| json.get_string(data.get_raw_attribute_value(data.get_object_id(v_politics.value),v_name_attribute_id, null)) || 'недостаточно средств для оплаты соглашения"}';
+        v_ret_val.data := v_ret_val.data::jsonb || jsonb ('{"message": "На балансе '|| json.get_string(data.get_raw_attribute_value(data.get_object_id(v_politics.value),v_name_attribute_id, null)) || 'недостаточно средств для оплаты соглашения"}');
         return v_ret_val;
     end if;
    end loop;
@@ -13409,7 +13413,7 @@ from generate_series(1, 1) o(value);
 select data.set_attribute_value(data.get_object_id('corporation_dilgar'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
 select data.set_attribute_value(data.get_object_id('corporation_dilgar'), data.get_attribute_id('type'), null, jsonb '"corporation"');
 select data.set_attribute_value(data.get_object_id('corporation_dilgar'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_dilgar'), jsonb 'true');
-select data.set_attribute_value(data.get_object_id('corporation_dilgar'), data.get_attribute_id('name'), null, jsonb '"Дилгар Corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_dilgar'), data.get_attribute_id('name'), null, jsonb '"Корпорация 731"');
 select data.set_attribute_value(data.get_object_id('corporation_dilgar'), data.get_attribute_id('description'), null, jsonb '"Корпорация Дилгар"');
 select data.set_attribute_value(data.get_object_id('corporation_dilgar'), data.get_attribute_id('corporation_state'), null, jsonb '"state_dilgar"');
 select data.set_attribute_value(data.get_object_id('corporation_dilgar'), data.get_attribute_id('system_balance'), null, jsonb '2000000');
@@ -13438,3 +13442,38 @@ from generate_series(1, 1) o(value);
   select data.set_attribute_value(data.get_object_id('deal_dilgar1'), data.get_attribute_id('name'), null, to_jsonb('Дилгар Co'::text));
   select data.set_attribute_value(data.get_object_id('deal_dilgar1'), data.get_attribute_id('description'), null, to_jsonb('Дилгар Co'::text));
   select data.set_attribute_value(data.get_object_id('deal_dilgar1'), data.get_attribute_id('asset_name'), null, to_jsonb('Актив Дилгар Co'::text));
+  
+insert into data.objects(code) values
+('corporation_unlim');
+select data.set_attribute_value(data.get_object_id('corporation_unlim'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_unlim'), data.get_attribute_id('type'), null, jsonb '"corporation"');
+select data.set_attribute_value(data.get_object_id('corporation_unlim'), data.get_attribute_id('system_meta'), data.get_object_id('corporation_unlim'), jsonb 'true');
+select data.set_attribute_value(data.get_object_id('corporation_unlim'), data.get_attribute_id('name'), null, jsonb '"Galactic Unlim"');
+select data.set_attribute_value(data.get_object_id('corporation_unlim'), data.get_attribute_id('description'), null, jsonb '"Galactic Unlim"');
+select data.set_attribute_value(data.get_object_id('corporation_unlim'), data.get_attribute_id('corporation_state'), null, jsonb '"state_ea"');
+select data.set_attribute_value(data.get_object_id('corporation_unlim'), data.get_attribute_id('system_balance'), null, jsonb '0');
+select data.set_attribute_value(data.get_object_id('corporation_unlim'), data.get_attribute_id('corporation_sectors'), null, jsonb '["sector_vpk", "sector_resources", "sector_connections","sector_medicine"]');
+select data.set_attribute_value(data.get_object_id('corporation_unlim'), data.get_attribute_id('corporation_capitalization'), null, jsonb '100000000');
+select data.set_attribute_value(data.get_object_id('corporation_unlim'), data.get_attribute_id('system_corporation_members'), null, jsonb '[{"member": "person56", "percent": 100}]');
+select data.set_attribute_value(data.get_object_id('corporation_unlim'), data.get_attribute_id('system_corporation_deals'), null, jsonb '["deal_unlim1"]');
+select data.set_attribute_value(data.get_object_id('corporation_unlim'), data.get_attribute_id('dividend_vote'), null, jsonb '"Нет"');
+
+insert into data.objects(code)
+select 'deal_unlim1' from generate_series(1, 1) o1(value);
+
+select
+  data.set_attribute_value(data.get_object_id('deal_unlim' || o.value), data.get_attribute_id('system_is_visible'), null, jsonb 'true'),
+  data.set_attribute_value(data.get_object_id('deal_unlim' || o.value), data.get_attribute_id('type'), null, jsonb '"deal"'),
+  data.set_attribute_value(data.get_object_id('deal_unlim' || o.value), data.get_attribute_id('deal_sector'), null, jsonb '"sector_vpk"'),
+  data.set_attribute_value(data.get_object_id('deal_unlim' || o.value), data.get_attribute_id('deal_income'), null, to_jsonb(1000000)),
+  data.set_attribute_value(data.get_object_id('deal_unlim' || o.value), data.get_attribute_id('asset_cost'), null, to_jsonb(100000000)),
+  data.set_attribute_value(data.get_object_id('deal_unlim' || o.value), data.get_attribute_id('asset_amortization'), null, to_jsonb(100000)),
+  data.set_attribute_value(data.get_object_id('deal_unlim' || o.value), data.get_attribute_id('system_deal_participant1'), null, ('{"member" : "corporation_unlim", "percent_asset": 0, "percent_income": 0, "deal_cost": 1430000}')::jsonb),
+  data.set_attribute_value(data.get_object_id('deal_unlim' || o.value), data.get_attribute_id('system_deal_time'), null, jsonb '"24.02.2258 12:00"'),
+  data.set_attribute_value(data.get_object_id('deal_unlim' || o.value), data.get_attribute_id('deal_time'), null, jsonb '"24.02.2258 12:00"'),
+  data.set_attribute_value(data.get_object_id('deal_unlim' || o.value), data.get_attribute_id('deal_status'), null, jsonb '"normal"')
+from generate_series(1, 1) o(value);
+
+  select data.set_attribute_value(data.get_object_id('deal_unlim1'), data.get_attribute_id('name'), null, to_jsonb('Galactic Unlim'::text));
+  select data.set_attribute_value(data.get_object_id('deal_unlim1'), data.get_attribute_id('description'), null, to_jsonb('Galactic Unlim'::text));
+  select data.set_attribute_value(data.get_object_id('deal_unlim1'), data.get_attribute_id('asset_name'), null, to_jsonb('Актив Galactic Unlim'::text));
