@@ -12133,6 +12133,9 @@ insert into data.action_generators(function, params, description) values
           {"function": "edit_document"},
           {"function": "generate_if_user_attribute", "params": {"attribute_code": "system_master", "attribute_value": true, "function": "delete_library_document"}}
         ],
+        "secret_document": [
+          {"function": "generate_if_user_attribute", "params": {"attribute_code": "system_master", "attribute_value": true, "function": "edit_document"}}
+        ],
         "research_document": [
           {"function": "generate_if_user_attribute", "params": {"attribute_code": "system_master", "attribute_value": true, "function": "delete_document", "params": {"return_object_code": "research_library"}}},
           {"function": "edit_document"}
