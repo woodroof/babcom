@@ -1795,8 +1795,8 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
     "blocks": [
       {
         "conditions": [{"attribute_code": "system_master", "attribute_value": true}],
-        "function": "fill_value_object_attribute_from_attribute",
-        "params": {"value_object_code": "masters", "attribute_code": "system_balance"}
+        "function": "fill_user_object_attribute_from_attribute",
+        "params": {"attribute_code": "system_balance"}
       },
       {
         "function": "fill_object_attribute_from_attribute",
@@ -1811,8 +1811,8 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
     "blocks": [
       {
         "conditions": [{"attribute_code": "system_master", "attribute_value": true}],
-        "function": "fill_value_object_attribute_from_attribute",
-        "params": {"value_object_code": "masters", "attribute_code": "system_person_salary"}
+        "function": "fill_user_object_attribute_from_attribute",
+        "params": {"attribute_code": "system_person_salary"}
       },
       {
         "function": "fill_object_attribute_from_attribute",
@@ -1827,8 +1827,8 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
     "blocks": [
       {
         "conditions": [{"attribute_code": "system_master", "attribute_value": true}],
-        "function": "fill_value_object_attribute_from_attribute",
-        "params": {"value_object_code": "masters", "attribute_code": "system_political_influence"}
+        "function": "fill_user_object_attribute_from_attribute",
+        "params": {"attribute_code": "system_political_influence"}
       },
       {
         "function": "fill_object_attribute_from_attribute",
@@ -1867,8 +1867,8 @@ insert into data.attribute_value_fill_functions(attribute_id, function, params, 
     "blocks": [
       {
         "conditions": [{"attribute_code": "system_master", "attribute_value": true}],
-        "function": "fill_value_object_attribute_from_attribute",
-        "params": {"value_object_code": "masters", "attribute_code": "system_psi_scale"}
+        "function": "fill_user_object_attribute_from_attribute",
+        "params": {"attribute_code": "system_psi_scale"}
       },
       {
         "function": "fill_object_attribute_from_attribute",
