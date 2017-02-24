@@ -6,11 +6,14 @@ CREATE OR REPLACE FUNCTION api.api(in_params jsonb)
   RETURNS api.result AS
 $BODY$
 declare
+  v_start_time timestamp with time zone := clock_timestamp();
+  v_end_time timestamp with time zone;
+  v_interval interval := '5s';
+
   v_client text;
   v_function text;
   v_params jsonb;
 
-  v_current_time timestamp with time zone := now();
   v_login_id integer;
   v_is_admin boolean;
   v_is_active boolean;
@@ -63,12 +66,35 @@ begin
       routines.routine_name = v_function;
 
     if v_schema is not null and not v_is_admin then
-      return api_utils.create_forbidden_result('User has no administrator privileges');
+      v_result := api_utils.create_forbidden_result('User has no administrator privileges');
+      v_end_time := clock_timestamp();
+
+      if v_end_time - v_start_time > v_interval then
+        perform data.log(
+          'WARNING',
+          format(E'Too slow request: %s\nParams:\n%s', v_end_time - v_start_time, in_params),
+          v_client,
+          v_login_id);
+      end if;
+
+      return v_result;
     end if;
   end if;
 
   if v_schema is null then
-    return api_utils.create_bad_request_result(format('Unknown function "%s"', v_function));
+    v_result := api_utils.create_bad_request_result(format('Unknown function "%s"', v_function));
+
+    v_end_time := clock_timestamp();
+
+    if v_end_time - v_start_time > v_interval then
+      perform data.log(
+        'WARNING',
+        format(E'Too slow request: %s\nParams:\n%s', v_end_time - v_start_time, in_params),
+        v_client,
+        v_login_id);
+    end if;
+
+    return v_result;
   end if;
 
   loop
@@ -76,6 +102,16 @@ begin
       execute format('select * from %s.%s($1, $2, $3)', v_schema, v_function)
       using v_client, v_login_id, v_params
       into v_result;
+
+      v_end_time := clock_timestamp();
+
+      if v_end_time - v_start_time > v_interval then
+        perform data.log(
+          'WARNING',
+          format(E'Too slow request: %s\nParams:\n%s', v_end_time - v_start_time, in_params),
+          v_client,
+          v_login_id);
+      end if;
 
       return v_result;
     exception when deadlock_detected then
@@ -96,6 +132,16 @@ exception when invalid_parameter_value then
       v_client,
       v_login_id);
 
+    v_end_time := clock_timestamp();
+
+    if v_end_time - v_start_time > v_interval then
+      perform data.log(
+        'WARNING',
+        format(E'Too slow request: %s\nParams:\n%s', v_end_time - v_start_time, in_params),
+        v_client,
+        v_login_id);
+    end if;
+
     return api_utils.create_bad_request_result(v_exception_message);
   end;
 when others or assert_failure then
@@ -113,10 +159,20 @@ when others or assert_failure then
       v_client,
       v_login_id);
 
+    v_end_time := clock_timestamp();
+
+    if v_end_time - v_start_time > v_interval then
+      perform data.log(
+        'WARNING',
+        format(E'Too slow request: %s\nParams:\n%s', v_end_time - v_start_time, in_params),
+        v_client,
+        v_login_id);
+    end if;
+
     return api_utils.create_internal_server_error_result(v_exception_message);
   end;
 end;
 $BODY$
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
   COST 100;
-GRANT EXECUTE ON FUNCTION api.api(jsonb) TO public;
+GRANT EXECUTE ON FUNCTION api.api(jsonb) TO http;
