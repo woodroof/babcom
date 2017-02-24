@@ -295,7 +295,7 @@ insert into data.objects(code) values
 ('category_universe');
 
 insert into data.objects(code)
-select 'library_document' || o.value from generate_series(1, 42) o(value);
+select 'library_document' || o.value from generate_series(1, 43) o(value);
 
 insert into data.objects(code)
 select 'personal_document' || o.* from generate_series(1, 16) o(value);
@@ -5322,6 +5322,13 @@ select data.set_attribute_value(data.get_object_id('library_document42'), data.g
 select data.set_attribute_value(data.get_object_id('library_document42'), data.get_attribute_id('system_library_category'), null, jsonb '"category_universe"');
 select data.set_attribute_value(data.get_object_id('library_document42'), data.get_attribute_id('content'), null, jsonb '"(Справка из STELLAR-COM<br>Тучанки - Гуманоиды.<br>У тучанкью очень интенсивный метаболизм, из-за чего они выглядят очень усталыми. Половые органы невыраженные. Цвет кожи - от яркого канареечно-желтого до темно-коричневого. Тучанкью имеют брюшную сумку.<br>Тучанкью не имеют глаз, вместо этого они увенчаны своеобразным гребнем из игл ///. Язык тучанкью имеет форму трубки.//<br><br>Psi Ability Есть. В причудливой форме слышат \"Песню\" (смесь психометрии и телепатии). Тучанкью не спят. Фактически, лишившийся сознания тучанкью становится буйно помешанным. Отсутствие памяти (или \"Песни Сознания\") в течении любого промежутка времени делает тучанкью ментально нестабильным, и, как следствие, он теряет свое чувство социальной ответственности//.<br>Culture Костюмы тучанкью - запутанные сооружения из меха, перьев, кожи, чешуи и костей. Из многих ритуалов тучанка достойны упоминания Ритуал Прибытия, исполняемый всякий раз, //// )<br><br>Тучанка была системой входящей в Лигу Неприсоединившихся Миров.<br><br>12 сентября 2242 года стало днем смерти Тучанкью. Ночью плазменные орудия превратили ее столицу, Лоталиар, в 18-километровое стеклянное поле. Через два дня на поверхность планеты высадились нарны. Тучанкью были порабощены и принуждены работать на нарнских фабриках по производству боеприпасов, совершенно разрушивших своими отходами экосистему Тучанкью.<br><br>\"До прихода нарнов, ни один из нас не пребывал вне Родины, ибо каждый унаследовал Песню своих предков во всей ее полноте, и всю эту страну, через которую прошла Песня. Вирши гражданина были его правами на нашу землю. С появлением нарнов, Песни сменились на грохот войны и лязг машин.\"<br><br>Также именно на Тучанке Режим Нарна разместил Дилгар, сделав их надсмотрщиками за Тучанками и \"элитой\" планеты. При этом из-за неблагоприятной экологической обстановки и те и другие мрут как мухи.<br><br>Лига неоднократно требовала от Режима Нарна освободить систему, но что Режим Нарна обычно отвечал в духе \"Все законно у нас есть разрешение\". Конфликт до сих пор не решен."');
 
+select data.set_attribute_value(data.get_object_id('library_document43'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('library_document43'), data.get_attribute_id('type'), null, jsonb '"document"');
+select data.set_attribute_value(data.get_object_id('library_document43'), data.get_attribute_id('name'), null, jsonb '"Приказ о продлении режима чрезвычайного положения"');
+select data.set_attribute_value(data.get_object_id('library_document43'), data.get_attribute_id('document_title'), null, jsonb '"Приказ о продлении режима чрезвычайного положения"');
+select data.set_attribute_value(data.get_object_id('library_document43'), data.get_attribute_id('system_library_category'), null, jsonb '"category_laws_babylon"');
+select data.set_attribute_value(data.get_object_id('library_document43'), data.get_attribute_id('content'), null, jsonb '"Приказ Военного губернатора директории Эпсилон капитана Джона Шерридана<br><br>В соответствии со ст. 89 Конституции ЗА с 8-00 31.12.2258 г. до 8-00 1.01.2259 г. в Директории Вавилон сохраняется режим чрезвычайного положения. Приказываю службе безопасности сохранять повышенную боеготовность. Продолжить патрулирование сектора эскадрильей станции «Вавилон-5».<br><br>Джон Шерридан<br>Военный губернатор директории Эпсилон<br>31 декабря 2258 г.<br>Станция Вавилон-5. Планета Эпсилон-3, Система Эпсилон, Земной Альянс."');
+
 select data.set_attribute_value(data.get_object_id('personal_library'), data.get_attribute_id('system_is_visible'), data.get_object_id('persons'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('personal_library'), data.get_attribute_id('type'), null, jsonb '"personal_library"');
 select data.set_attribute_value(data.get_object_id('personal_library'), data.get_attribute_id('name'), null, jsonb '"Личные документы"');
@@ -6010,7 +6017,21 @@ select data.set_attribute_value(data.get_object_id('lab03'), data.get_attribute_
 select data.set_attribute_value(data.get_object_id('lab03'), data.get_attribute_id('type'), null, jsonb '"secret_document"');
 select data.set_attribute_value(data.get_object_id('lab03'), data.get_attribute_id('document_title'), null, jsonb '"Координаты лаборатории"');
 select data.set_attribute_value(data.get_object_id('lab03'), data.get_attribute_id('name'), null, jsonb '"Координаты лаборатории"');
-select data.set_attribute_value(data.get_object_id('lab03'), data.get_attribute_id('content'), null, jsonb '"В документе содержатся координаты лаборатории, выпускающей СЛЭГ"');
+select data.set_attribute_value(data.get_object_id('lab03'), data.get_attribute_id('content'), null, jsonb '"В документе содержатся координаты лаборатории, выпускающей СЛЭГ<br>Находится в системе Эпсилон. Можно долететь на шаттле."');
+
+insert into data.objects(code) values ('ert18');
+select data.set_attribute_value(data.get_object_id('ert18'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('ert18'), data.get_attribute_id('type'), null, jsonb '"secret_document"');
+select data.set_attribute_value(data.get_object_id('ert18'), data.get_attribute_id('document_title'), null, jsonb '"Устройство Ларсена"');
+select data.set_attribute_value(data.get_object_id('ert18'), data.get_attribute_id('name'), null, jsonb '"Устройство Ларсена"');
+select data.set_attribute_value(data.get_object_id('ert18'), data.get_attribute_id('content'), null, jsonb '"Устройство предположительно позволяет перенести слепок электрических полей головного мозга “человека, человеческого рода” на информационный носитель большого объема. При последних экспериментах, при переносе, возникала необъяснимая утечка энергии. Подопытный впадал в кому и произвести обратный перенос не получалось."');
+
+insert into data.objects(code) values ('ekt19');
+select data.set_attribute_value(data.get_object_id('ekt19'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('ekt19'), data.get_attribute_id('type'), null, jsonb '"secret_document"');
+select data.set_attribute_value(data.get_object_id('ekt19'), data.get_attribute_id('document_title'), null, jsonb '"Инфокристалл"');
+select data.set_attribute_value(data.get_object_id('ekt19'), data.get_attribute_id('name'), null, jsonb '"Инфокристалл"');
+select data.set_attribute_value(data.get_object_id('ekt19'), data.get_attribute_id('content'), null, jsonb '"На этот кристалл записано огромное количество информации. Он явно изготовлен промышленным способом. Можно попытаться извлечь информацию на электронный носитель или в мозг живого человека."');
 
 insert into data.logins(code, description) values
 ('de829', 'person1'),
