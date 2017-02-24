@@ -299,7 +299,7 @@ insert into data.objects(code) values
 ('category_universe');
 
 insert into data.objects(code)
-select 'library_document' || o.value from generate_series(1, 43) o(value);
+select 'library_document' || o.value from generate_series(1, 44) o(value);
 
 insert into data.objects(code)
 select 'personal_document' || o.* from generate_series(1, 16) o(value);
@@ -5347,6 +5347,13 @@ select data.set_attribute_value(data.get_object_id('library_document43'), data.g
 select data.set_attribute_value(data.get_object_id('library_document43'), data.get_attribute_id('document_title'), null, jsonb '"Приказ о продлении режима чрезвычайного положения"');
 select data.set_attribute_value(data.get_object_id('library_document43'), data.get_attribute_id('system_library_category'), null, jsonb '"category_laws_babylon"');
 select data.set_attribute_value(data.get_object_id('library_document43'), data.get_attribute_id('content'), null, jsonb '"Приказ Военного губернатора директории Эпсилон капитана Джона Шерридана<br><br>В соответствии со ст. 89 Конституции ЗА с 8-00 31.12.2258 г. до 8-00 1.01.2259 г. в Директории Вавилон сохраняется режим чрезвычайного положения. Приказываю службе безопасности сохранять повышенную боеготовность. Продолжить патрулирование сектора эскадрильей станции «Вавилон-5».<br><br>Джон Шерридан<br>Военный губернатор директории Эпсилон<br>31 декабря 2258 г.<br>Станция Вавилон-5. Планета Эпсилон-3, Система Эпсилон, Земной Альянс."');
+
+select data.set_attribute_value(data.get_object_id('library_document44'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('library_document44'), data.get_attribute_id('type'), null, jsonb '"document"');
+select data.set_attribute_value(data.get_object_id('library_document44'), data.get_attribute_id('name'), null, jsonb '"Приказ фильтрационным центрам Пси Корпуса"');
+select data.set_attribute_value(data.get_object_id('library_document44'), data.get_attribute_id('document_title'), null, jsonb '"Приказ фильтрационным центрам Пси Корпуса"');
+select data.set_attribute_value(data.get_object_id('library_document44'), data.get_attribute_id('system_library_category'), null, jsonb '"category_laws_ea"');
+select data.set_attribute_value(data.get_object_id('library_document44'), data.get_attribute_id('content'), null, jsonb '"В соответствии с актом Сантьяго-Кербера-Бетте приказываю:<br>1) Начать вывозку телепатов Юкаса в фильтрационные центры, производить под надзором комиссии Сената по метасенсорике, с соблюдением прав личности.<br>2) Учредить специальное присутствие суда в составе трибунала Пси Корпуса и сенатской комиссии по метасенсорике.<br>3) Следственные действия провести силами Пси Надзора, при непосредственном контроле комиссии по метасенсорики.<br>4) Рассмотреть в индивидуальном порядке дела телепатов «анклава Юкас» специальным присутствием суда, с целью выявить зачинщиков, руководителей мятежа, судить их в соответствии с УК ЗА.<br>5) Прочих участников «анклава Юкас» амнистировать, в соответствии с актом Сантьяго-Кербера-Бетте принятым IV колониальным конгрессом.<br>Председатель сенатского комитета по метасенсорике Президент Сантьяго<br>И.О. Директора Корпус ᴪ Теодор Бетте"');
 
 select data.set_attribute_value(data.get_object_id('personal_library'), data.get_attribute_id('system_is_visible'), data.get_object_id('persons'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('personal_library'), data.get_attribute_id('type'), null, jsonb '"personal_library"');
