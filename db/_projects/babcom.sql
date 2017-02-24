@@ -299,7 +299,7 @@ insert into data.objects(code) values
 ('category_universe');
 
 insert into data.objects(code)
-select 'library_document' || o.value from generate_series(1, 44) o(value);
+select 'library_document' || o.value from generate_series(1, 47) o(value);
 
 insert into data.objects(code)
 select 'personal_document' || o.* from generate_series(1, 16) o(value);
@@ -5354,6 +5354,27 @@ select data.set_attribute_value(data.get_object_id('library_document44'), data.g
 select data.set_attribute_value(data.get_object_id('library_document44'), data.get_attribute_id('document_title'), null, jsonb '"Приказ фильтрационным центрам Пси Корпуса"');
 select data.set_attribute_value(data.get_object_id('library_document44'), data.get_attribute_id('system_library_category'), null, jsonb '"category_laws_ea"');
 select data.set_attribute_value(data.get_object_id('library_document44'), data.get_attribute_id('content'), null, jsonb '"В соответствии с актом Сантьяго-Кербера-Бетте приказываю:<br>1) Начать вывозку телепатов Юкаса в фильтрационные центры, производить под надзором комиссии Сената по метасенсорике, с соблюдением прав личности.<br>2) Учредить специальное присутствие суда в составе трибунала Пси Корпуса и сенатской комиссии по метасенсорике.<br>3) Следственные действия провести силами Пси Надзора, при непосредственном контроле комиссии по метасенсорики.<br>4) Рассмотреть в индивидуальном порядке дела телепатов «анклава Юкас» специальным присутствием суда, с целью выявить зачинщиков, руководителей мятежа, судить их в соответствии с УК ЗА.<br>5) Прочих участников «анклава Юкас» амнистировать, в соответствии с актом Сантьяго-Кербера-Бетте принятым IV колониальным конгрессом.<br>Председатель сенатского комитета по метасенсорике Президент Сантьяго<br>И.О. Директора Корпус ᴪ Теодор Бетте"');
+
+select data.set_attribute_value(data.get_object_id('library_document45'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('library_document45'), data.get_attribute_id('type'), null, jsonb '"document"');
+select data.set_attribute_value(data.get_object_id('library_document45'), data.get_attribute_id('name'), null, jsonb '"Введение военного положения на Юкосе"');
+select data.set_attribute_value(data.get_object_id('library_document45'), data.get_attribute_id('document_title'), null, jsonb '"Введение военного положения на Юкосе"');
+select data.set_attribute_value(data.get_object_id('library_document45'), data.get_attribute_id('system_library_category'), null, jsonb '"category_laws_ea"');
+select data.set_attribute_value(data.get_object_id('library_document45'), data.get_attribute_id('content'), null, jsonb '"Капитан Гонсалес, Военный губернатор Вегоса<br>31.12.2258г.<br>Приказ<br>Я, военный губернатор Вегоса, в связи с антиконституционными выступлениями в директории Юкас, объявляю в директории Юкас военное положение. Всем законопослушным гражданам приказываю, оставаться в своих домах и не покидать их без крайней необходимости.<br><br>Военный губернатор Вегоса капитан Гонсалес<br>Утверждено<br>Президент ЗА Мари Кейн"');
+
+select data.set_attribute_value(data.get_object_id('library_document46'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('library_document46'), data.get_attribute_id('type'), null, jsonb '"document"');
+select data.set_attribute_value(data.get_object_id('library_document46'), data.get_attribute_id('name'), null, jsonb '"Приказ о выводе сил пси-корпуса"');
+select data.set_attribute_value(data.get_object_id('library_document46'), data.get_attribute_id('document_title'), null, jsonb '"Приказ о выводе сил пси-корпуса"');
+select data.set_attribute_value(data.get_object_id('library_document46'), data.get_attribute_id('system_library_category'), null, jsonb '"category_laws_ea"');
+select data.set_attribute_value(data.get_object_id('library_document46'), data.get_attribute_id('content'), null, jsonb '"Вывести силы пси корпуса с Юкаса в сопредельные системы<br>Теодор Бетте"');
+
+select data.set_attribute_value(data.get_object_id('library_document47'), data.get_attribute_id('system_is_visible'), null, jsonb 'true');
+select data.set_attribute_value(data.get_object_id('library_document47'), data.get_attribute_id('type'), null, jsonb '"document"');
+select data.set_attribute_value(data.get_object_id('library_document47'), data.get_attribute_id('name'), null, jsonb '"Обращение Хенгиста Кербера к Анклаву Телепатов Юкас"');
+select data.set_attribute_value(data.get_object_id('library_document47'), data.get_attribute_id('document_title'), null, jsonb '"Обращение Хенгиста Кербера к Анклаву Телепатов Юкас"');
+select data.set_attribute_value(data.get_object_id('library_document47'), data.get_attribute_id('system_library_category'), null, jsonb '"category_universe"');
+select data.set_attribute_value(data.get_object_id('library_document47'), data.get_attribute_id('content'), null, jsonb '"Братья и сестры!<br><br>Мне не хватает слов. Я не нахожу мыслеформ, чтобы сделать понятными вам мои чувства.<br>В долгом и сложном процессе переговоров мной и представителями Земного Альянса было выработано, как мне казалось, решение - ни плохое, ни хорошее, но единственное. От имени Анклава Телепатов Юкас я заключил с Правительством ЗА договоренности, призванные вернуть диалог в мирное русло. Жизни моих сограждан казались мне величайшей ценностью, и я стремился всеми силами избежать кровопролития.<br><br>Я ошибся. И за свою ошибку я отвечу перед строгим, но справедливым судом народа Юкаса.<br><br>Народ Юкаса не принял моего решения. Народ Юкаса взял в руки меч, чтобы отстоять свои идеалы, свои права. Свои плоть и кровь. Народ Юкаса платит за мои ошибки. Если среди моего народа осталось хоть капля веры в меня и порученную мне задачу, я говорю от имени Анклава Юкаса следующее:<br><br>Я, Хегист Кербер, заявляю:<br>От имени Анклава Юкас я обратился к Империи Ворлон с просьбой о помощи - бойня в системе Юкас должна быть остановлена. Следующим моим шагом будет обращение к Консультативному Совету Галактической Ассамблеи с просьбой о признании Анклава Телепатов Юкас самостоятельной цивилизацией, осознающей себя новой общностью и готовой к межцивилизационному диалогу.<br><br>Братья и сестры! Я призываю вас к битве до конца! Наше дело - правое! Победа будет за нами!"');
 
 select data.set_attribute_value(data.get_object_id('personal_library'), data.get_attribute_id('system_is_visible'), data.get_object_id('persons'), jsonb 'true');
 select data.set_attribute_value(data.get_object_id('personal_library'), data.get_attribute_id('type'), null, jsonb '"personal_library"');
