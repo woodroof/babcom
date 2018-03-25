@@ -11,15 +11,8 @@ DB_PORT = 5433
 
 PORT = 8000
 
-class InvalidContentTypeError(Exception):
-	pass
-
 async def process_post_request(request):
-	try:
-		content_type = request.headers['Content-Type']
-		if content_type != 'application/json':
-			raise InvalidContentTypeError()
-	except:
+	if request.content_type != 'application/json':
 		return web.Response(status=415)
 
 	connection = await asyncpg.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME)
@@ -28,7 +21,7 @@ async def process_post_request(request):
 	except asyncpg.exceptions.InvalidTextRepresentationError:
 		return web.Response(status=400)
 
-	return web.Response(status=result[0], text=result[1])
+	return web.Response(status=result[0], content_type='application/json', text=result[1])
 
 app = web.Application()
 app.router.add_post('/', process_post_request)
