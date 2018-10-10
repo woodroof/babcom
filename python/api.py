@@ -1,56 +1,58 @@
-import http.server
-import socketserver
-import json
-import psycopg2
-import psycopg2.extras
+import asyncio
 
-DB_NAME = 'babcom'
-DB_USER = 'http'
-DB_PASSWORD = 'http'
-DB_HOST = 'localhost'
-DB_PORT = 5433
+from aiohttp import web
+from aiohttp import WSMsgType
 
 PORT = 8000
 
-class HttpRequestHandler(http.server.BaseHTTPRequestHandler):
-	def error(self):
-		self.send_response(400)
-		self.send_header('Content-Length', 0)
-		self.end_headers()
+async def api(request):
+    client_id = request.match_info.get('client_id')
+    print('Connected: %s' % client_id)
 
-	def do_HEAD(self):
-		self.error()
+    connections = request.app.connections
+    if client_id in connections:
+        print('Attempt to connect twice with same client_id: %s' % client_id)
+        return web.Response(status=500)
 
-	def do_GET(self):
-		self.error()
+    ws = web.WebSocketResponse()
+    connections[client_id] = ws
+    await ws.prepare(request)
 
-	def do_POST(self):
-		content_length = int(self.headers.get('Content-Length'))
-		request_data = self.rfile.read(content_length)
-		try:
-			request = json.loads(request_data.decode())
-		except json.JSONDecodeError:
-			self.error()
-			return
+    async for msg in ws:
+        if msg.type == WSMsgType.TEXT:
+            # TODO Честно обращаться к базе
+            # TODO обработка исключения при закрытии подключения
+            await ws.send_str('{"type": "actors", "data": {"actors": []}}')
+        elif msg.type == WSMsgType.BINARY:
+            print('Received binary message')
+        elif msg.type == WSMsgType.ERROR:
+            print('Connection closed: %s' % ws.exception())
 
-		cursor = connection.cursor()
-		cursor.execute("select * from api.api(%s);", (psycopg2.extras.Json(request),))
-		result = cursor.fetchone()
+    print ('Disconnected: %s' % client_id)
+    del connections[client_id]
 
-		code = result[0]
-		data = json.dumps(result[1], ensure_ascii=False).encode('utf8')
+    return ws
 
-		self.send_response(code)
-		self.send_header('Content-Type', 'application/json')
-		self.send_header('Content-Length', len(data))
-		self.end_headers()
-		self.wfile.write(data)
+async def post_image(request):
+    # TODO
+    web.Response(status=200, content_type='application/json', text='{"filename": "1.png"}')
 
-if __name__ == "__main__":
-	connection = psycopg2.connect(database=DB_NAME, user=DB_USER, password=DB_PASSWORD, host=DB_HOST, port=DB_PORT)
-	connection.autocommit = True
+async def get_image(request):
+    file_name = request.match_info.get('file_name')
+    # TODO
+    web.Response(status=200, text=file_name)
 
-	handler = HttpRequestHandler
-	handler.protocol_version='HTTP/1.1'
-	httpd = socketserver.TCPServer(("", PORT), handler)
-	httpd.serve_forever()
+async def init_app():
+    app = web.Application()
+    app.add_routes(
+        [
+            web.get('/api/{client_id}', api),
+            web.get('/images/{file_name}', get_image),
+            web.post('/images', post_image),
+        ])
+    app.connections = {}
+    return app
+
+loop = asyncio.get_event_loop()
+app = loop.run_until_complete(init_app())
+web.run_app(app, port = PORT)

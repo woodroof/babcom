@@ -1,1 +1,0 @@
-create role http noinherit login password 'http';
