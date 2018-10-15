@@ -21,7 +21,7 @@ function newMessage(msg)
 function sendMessage()
 {
 	var text_field = document.getElementById('send_text');
-	socket.send(text_field.innerText);
+	socket.send(text_field.value);
 	return false;
 }
 
