@@ -88,11 +88,12 @@ where
 
 def save_db(path):
 	db_path = path / 'db'
-	try:
-		shutil.rmtree(db_path)
-	except FileNotFoundError:
-		pass
-	db_path.mkdir()
+	if db_path.exists():
+		for subdir_path in db_path.iterdir():
+			if subdir_path.is_dir():
+				shutil.rmtree(subdir_path)
+	else:
+		db_path.mkdir()
 
 	connection = psycopg2.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, dbname=DB_NAME)
 
