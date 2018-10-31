@@ -74,7 +74,7 @@ def listener_creator(app):
     return listener
 
 def jsonb_encoder(value):
-    return b'\x01' + json.dumps(value).encode('utf-8')
+    return b'\x01' + json.dumps(json.loads(value)).encode('utf-8')
 
 def jsonb_decoder(value):
     return json.loads(value[1:].decode('utf-8'))
