@@ -1,8 +1,9 @@
 -- drop function json_test.get_boolean_array_should_throw_for_invalid_param_elem_type();
 
 create or replace function json_test.get_boolean_array_should_throw_for_invalid_param_elem_type()
+returns void
 immutable
-returns void as
+as
 $$
 
 declare

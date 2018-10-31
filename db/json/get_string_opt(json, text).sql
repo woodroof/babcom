@@ -1,8 +1,9 @@
 -- drop function json.get_string_opt(json, text);
 
 create or replace function json.get_string_opt(in_json json, in_default text)
+returns text
 immutable
-returns text as
+as
 $$
 
 declare

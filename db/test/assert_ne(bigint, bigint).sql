@@ -1,8 +1,9 @@
 -- drop function test.assert_ne(bigint, bigint);
 
 create or replace function test.assert_ne(in_expected bigint, in_actual bigint)
+returns void
 immutable
-returns void as
+as
 $$
 -- Проверяет, что реальное значение не равно ожидаемому
 -- Если оба значения null, то это считается равенством

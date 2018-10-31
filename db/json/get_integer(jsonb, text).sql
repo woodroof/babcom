@@ -1,8 +1,9 @@
 -- drop function json.get_integer(jsonb, text);
 
 create or replace function json.get_integer(in_json jsonb, in_name text DEFAULT NULL::text)
+returns integer
 immutable
-returns integer as
+as
 $$
 
 declare

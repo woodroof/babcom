@@ -1,8 +1,9 @@
 -- drop function json.get_integer_array_opt(jsonb, integer[]);
 
 create or replace function json.get_integer_array_opt(in_json jsonb, in_default integer[])
+returns integer[]
 immutable
-returns integer[] as
+as
 $$
 
 declare

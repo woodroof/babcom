@@ -1,8 +1,9 @@
 -- drop function json.get_boolean_array(jsonb, text);
 
 create or replace function json.get_boolean_array(in_json jsonb, in_name text DEFAULT NULL::text)
+returns boolean[]
 immutable
-returns boolean[] as
+as
 $$
 
 declare

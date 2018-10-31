@@ -1,8 +1,9 @@
 -- drop function json.get_boolean_opt(jsonb, boolean);
 
 create or replace function json.get_boolean_opt(in_json jsonb, in_default boolean)
+returns boolean
 immutable
-returns boolean as
+as
 $$
 
 declare

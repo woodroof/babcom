@@ -1,8 +1,9 @@
 -- drop function json_test.get_x_should_throw_for_null_json();
 
 create or replace function json_test.get_x_should_throw_for_null_json()
+returns void
 immutable
-returns void as
+as
 $$
 
 declare

@@ -1,8 +1,9 @@
 -- drop function json.get_string(json, text);
 
 create or replace function json.get_string(in_json json, in_name text DEFAULT NULL::text)
+returns text
 immutable
-returns text as
+as
 $$
 
 declare

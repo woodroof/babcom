@@ -1,8 +1,9 @@
 -- drop function test.fail(text);
 
 create or replace function test.fail(in_description text DEFAULT NULL::text)
+returns void
 immutable
-returns void as
+as
 $$
 -- Всегда генерирует исключение
 begin

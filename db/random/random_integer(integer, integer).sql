@@ -1,8 +1,9 @@
 -- drop function random.random_integer(integer, integer);
 
 create or replace function random.random_integer(in_min_value integer, in_max_value integer)
+returns integer
 volatile
-returns integer as
+as
 $$
 
 -- Возвращает случайное число от in_min_value до in_max_value включительно

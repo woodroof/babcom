@@ -1,8 +1,9 @@
 -- drop function test.assert_ge(bigint, bigint);
 
 create or replace function test.assert_ge(in_expected bigint, in_actual bigint)
+returns void
 immutable
-returns void as
+as
 $$
 -- Проверяет, что ожидаемое значение больше или равно реальному
 begin

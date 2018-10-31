@@ -1,8 +1,9 @@
 -- drop function test.assert_eq(bigint, bigint);
 
 create or replace function test.assert_eq(in_expected bigint, in_actual bigint)
+returns void
 immutable
-returns void as
+as
 $$
 -- Проверяет, что реальное значение равно ожидаемому
 -- Если оба значения null, то это считается равенством

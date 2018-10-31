@@ -1,8 +1,9 @@
 -- drop function json.get_object_opt(json, text, json);
 
 create or replace function json.get_object_opt(in_json json, in_name text, in_default json)
+returns json
 immutable
-returns json as
+as
 $$
 
 declare

@@ -1,8 +1,9 @@
 -- drop function test.assert_eq(jsonb, jsonb);
 
 create or replace function test.assert_eq(in_expected jsonb, in_actual jsonb)
+returns void
 immutable
-returns void as
+as
 $$
 -- Проверяет, что реальное значение равно ожидаемому
 -- Если оба значения null, то это считается равенством

@@ -1,8 +1,9 @@
 -- drop function random_test.random_x_should_return_ge_than_min_value();
 
 create or replace function random_test.random_x_should_return_ge_than_min_value()
+returns void
 immutable
-returns void as
+as
 $$
 
 declare

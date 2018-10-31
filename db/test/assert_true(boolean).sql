@@ -1,8 +1,9 @@
 -- drop function test.assert_true(boolean);
 
 create or replace function test.assert_true(in_expression boolean)
+returns void
 immutable
-returns void as
+as
 $$
 -- Проверяет, что выражение истинно
 begin

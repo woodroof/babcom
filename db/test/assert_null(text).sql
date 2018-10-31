@@ -1,8 +1,9 @@
 -- drop function test.assert_null(text);
 
 create or replace function test.assert_null(in_expression text)
+returns void
 immutable
-returns void as
+as
 $$
 -- Проверяет, что выражение является null
 begin

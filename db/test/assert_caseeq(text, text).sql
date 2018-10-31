@@ -1,8 +1,9 @@
 -- drop function test.assert_caseeq(text, text);
 
 create or replace function test.assert_caseeq(in_expected text, in_actual text)
+returns void
 immutable
-returns void as
+as
 $$
 -- Проверяет, что реальное значение равно ожидаемому без учёта регистра
 -- Если оба значения null, то это считается равенством

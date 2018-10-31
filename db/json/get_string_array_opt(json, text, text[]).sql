@@ -1,8 +1,9 @@
 -- drop function json.get_string_array_opt(json, text, text[]);
 
 create or replace function json.get_string_array_opt(in_json json, in_name text, in_default text[])
+returns text[]
 immutable
-returns text[] as
+as
 $$
 
 declare

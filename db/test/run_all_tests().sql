@@ -1,8 +1,9 @@
 -- drop function test.run_all_tests();
 
 create or replace function test.run_all_tests()
+returns boolean
 volatile
-returns boolean as
+as
 $$
 -- Тесты запускаются в пустой базе
 -- Ищутся и запускаются функции *_test.*, возвращающие void и не имеющие входных параметров

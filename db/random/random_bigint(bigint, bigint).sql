@@ -1,8 +1,9 @@
 -- drop function random.random_bigint(bigint, bigint);
 
 create or replace function random.random_bigint(in_min_value bigint, in_max_value bigint)
+returns bigint
 volatile
-returns bigint as
+as
 $$
 
 -- Возвращает случайное число от in_min_value до in_max_value включительно

@@ -1,8 +1,9 @@
 -- drop function test.assert_eq(text[], text[]);
 
 create or replace function test.assert_eq(in_expected text[], in_actual text[])
+returns void
 immutable
-returns void as
+as
 $$
 -- Проверяет, что реальное содержимое массива равно ожидаемому
 -- Если оба значения null, то это считается равенством

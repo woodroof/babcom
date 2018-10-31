@@ -1,8 +1,9 @@
 -- drop function error.raise_invalid_input_param_value(text, text);
 
 create or replace function error.raise_invalid_input_param_value(in_format text, in_param text)
+returns bigint
 immutable
-returns bigint as
+as
 $$
 
 begin

@@ -1,8 +1,9 @@
 -- drop function json.get_bigint_array_opt(json, text, bigint[]);
 
 create or replace function json.get_bigint_array_opt(in_json json, in_name text, in_default bigint[])
+returns bigint[]
 immutable
-returns bigint[] as
+as
 $$
 
 declare

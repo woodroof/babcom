@@ -1,8 +1,9 @@
 -- drop function json.get_integer_array(json, text);
 
 create or replace function json.get_integer_array(in_json json, in_name text DEFAULT NULL::text)
+returns integer[]
 immutable
-returns integer[] as
+as
 $$
 
 declare

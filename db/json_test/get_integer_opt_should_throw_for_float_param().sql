@@ -1,8 +1,9 @@
 -- drop function json_test.get_integer_opt_should_throw_for_float_param();
 
 create or replace function json_test.get_integer_opt_should_throw_for_float_param()
+returns void
 immutable
-returns void as
+as
 $$
 
 declare

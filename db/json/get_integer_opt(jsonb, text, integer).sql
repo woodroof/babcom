@@ -1,8 +1,9 @@
 -- drop function json.get_integer_opt(jsonb, text, integer);
 
 create or replace function json.get_integer_opt(in_json jsonb, in_name text, in_default integer)
+returns integer
 immutable
-returns integer as
+as
 $$
 
 declare

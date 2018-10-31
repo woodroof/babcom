@@ -1,8 +1,9 @@
 -- drop function json_test.get_array_opt_should_throw_for_invalid_json_type();
 
 create or replace function json_test.get_array_opt_should_throw_for_invalid_json_type()
+returns void
 immutable
-returns void as
+as
 $$
 
 declare

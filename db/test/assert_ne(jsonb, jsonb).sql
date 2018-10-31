@@ -1,8 +1,9 @@
 -- drop function test.assert_ne(jsonb, jsonb);
 
 create or replace function test.assert_ne(in_expected jsonb, in_actual jsonb)
+returns void
 immutable
-returns void as
+as
 $$
 -- Проверяет, что реальное значение не равно ожидаемому
 -- Если оба значения null, то это считается равенством

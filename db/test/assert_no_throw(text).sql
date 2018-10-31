@@ -1,8 +1,9 @@
 -- drop function test.assert_no_throw(text);
 
 create or replace function test.assert_no_throw(in_expression text)
+returns void
 volatile
-returns void as
+as
 $$
 -- Проверяет, что выражение не генерирует исключения
 declare

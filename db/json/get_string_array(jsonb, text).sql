@@ -1,8 +1,9 @@
 -- drop function json.get_string_array(jsonb, text);
 
 create or replace function json.get_string_array(in_json jsonb, in_name text DEFAULT NULL::text)
+returns text[]
 immutable
-returns text[] as
+as
 $$
 
 declare

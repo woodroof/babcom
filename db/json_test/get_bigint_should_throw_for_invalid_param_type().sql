@@ -1,8 +1,9 @@
 -- drop function json_test.get_bigint_should_throw_for_invalid_param_type();
 
 create or replace function json_test.get_bigint_should_throw_for_invalid_param_type()
+returns void
 immutable
-returns void as
+as
 $$
 
 declare

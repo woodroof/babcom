@@ -1,8 +1,9 @@
 -- drop function json.get_bigint_opt(json, bigint);
 
 create or replace function json.get_bigint_opt(in_json json, in_default bigint)
+returns bigint
 immutable
-returns bigint as
+as
 $$
 
 declare

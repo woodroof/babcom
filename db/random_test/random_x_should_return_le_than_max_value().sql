@@ -1,8 +1,9 @@
 -- drop function random_test.random_x_should_return_le_than_max_value();
 
 create or replace function random_test.random_x_should_return_le_than_max_value()
+returns void
 immutable
-returns void as
+as
 $$
 
 declare

@@ -1,8 +1,9 @@
 -- drop function json_test.get_x_should_throw_for_non_existing_key();
 
 create or replace function json_test.get_x_should_throw_for_non_existing_key()
+returns void
 immutable
-returns void as
+as
 $$
 
 declare

@@ -1,8 +1,9 @@
 -- drop function test.assert_throw(text, text);
 
 create or replace function test.assert_throw(in_expression text, in_exception_pattern text DEFAULT NULL::text)
+returns void
 volatile
-returns void as
+as
 $$
 -- Проверяет, что выражение генерирует исключение
 declare
