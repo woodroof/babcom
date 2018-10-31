@@ -39,7 +39,30 @@ def save_function(schema, schema_dir_path, func):
 	file.write('$$\n')
 	file.write("language 'plpgsql';\n")
 
-def save_schema(connection, schema, schema_dir_path):
+def save_table(schema, schema_dir_path, table):
+	table_name = table[0]
+	table_columns = table[1]
+	table_constraints = table[2]
+
+	file_path = schema_dir_path / (table_name + '.sql')
+	file = open(file_path, "w+")
+	file.write('-- drop table ' + schema + '.' + table_name + ';\n\n')
+	file.write('create table ' + schema + '.' + table_name + '(\n  ')
+	file.write(',\n  '.join(table_columns))
+	for constraint in table_constraints:
+		file.write(',\n  constraint ' + constraint.lower().replace(' key (', ' key('))
+	file.write("\n);\n")
+
+def save_index(schema, schema_dir_path, index):
+	index_name = index[0]
+	index_definition = index[1]
+
+	file_path = schema_dir_path / (index_name + '.sql')
+	file = open(file_path, "w+")
+	file.write('-- drop index ' + schema + '.' + index_name + ';\n\n')
+	file.write(index_definition.lower().replace(' using btree ', '') + ';\n')
+
+def save_functions(connection, schema, schema_dir_path):
 	cursor = connection.cursor()
 	cursor.execute("""
 select
@@ -89,6 +112,66 @@ where
 	functions = cursor.fetchall()
 	for func in functions:
 		save_function(schema, schema_dir_path, func)
+
+def save_tables(connection, schema, schema_dir_path):
+	cursor = connection.cursor()
+	cursor.execute("""
+select
+  t.relname as name,
+  (
+    select
+      array_agg(
+          attname || ' ' ||
+          format_type(atttypid, null) ||
+          (case when attnotnull then ' not null' else '' end) ||
+          (case when atthasdef then (select ' default ' || adsrc from pg_attrdef where adrelid = t.oid and adnum = a.attnum) else '' end))
+    from pg_attribute a
+    where
+      attrelid = t.oid and
+      attnum > 0
+  ) as columns,
+  (
+    select array_agg(c.conname || ' ' || pg_get_constraintdef(c.oid))
+    from pg_constraint c
+    where conrelid = t.oid
+  ) as constraints
+from pg_class t
+join pg_namespace n
+  on n.nspname = %s
+  and t.relnamespace = n.oid
+where
+  -- only ordinary tables
+  t.relkind = 'r'
+""",
+		(schema,))
+	tables = cursor.fetchall()
+	for table in tables:
+		save_table(schema, schema_dir_path, table)
+
+def save_indexes(connection, schema, schema_dir_path):
+	cursor = connection.cursor()
+	cursor.execute("""
+select
+  i.relname as name,
+  pg_get_indexdef(i.oid) as index_def
+from pg_class i
+join pg_namespace n
+  on n.nspname = %s
+  and i.relnamespace = n.oid
+join pg_index ii
+  on ii.indexrelid = i.oid
+  and (not ii.indisunique or ii.indpred is not null)
+where i.relkind = 'i'
+""",
+		(schema,))
+	indexes = cursor.fetchall()
+	for index in indexes:
+		save_index(schema, schema_dir_path, index)
+
+def save_schema(connection, schema, schema_dir_path):
+	save_functions(connection, schema, schema_dir_path)
+	save_tables(connection, schema, schema_dir_path)
+	save_indexes(connection, schema, schema_dir_path)
 
 def save_db(path):
 	db_path = path / 'db'
