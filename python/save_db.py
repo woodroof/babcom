@@ -172,8 +172,7 @@ join pg_type t
   on t.oid = p.prorettype
 where
   -- only simple functions
-  not p.proisagg and not p.proiswindow and
-  --p.prokind = 'f' and
+  p.prokind = 'f' and
   -- only "in" arguments
   p.proallargtypes is null and
   -- only non-strict functions
