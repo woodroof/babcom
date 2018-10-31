@@ -5,7 +5,6 @@ returns json
 immutable
 as
 $$
-
 declare
   v_default_type text;
   v_param json;
@@ -33,6 +32,5 @@ begin
 
   return v_param;
 end;
-
 $$
 language 'plpgsql';

@@ -5,7 +5,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text := '''5.55''';
@@ -16,6 +15,5 @@ begin
       'Json is not an integer');
   end loop;
 end;
-
 $$
 language 'plpgsql';

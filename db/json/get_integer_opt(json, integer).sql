@@ -5,7 +5,6 @@ returns integer
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_ret_val integer;
@@ -28,6 +27,5 @@ begin
 
   return v_ret_val;
 end;
-
 $$
 language 'plpgsql';

@@ -68,7 +68,6 @@ begin
 	insert into data.connections(client_id)
 	values(in_client_id);
 end;
-
 $$
 language 'plpgsql';
 
@@ -1193,7 +1192,6 @@ returns text
 immutable
 as
 $$
-
 declare
   v_json_type text;
 begin
@@ -1209,7 +1207,6 @@ begin
 
   return in_json#>>'{}';
 end;
-
 $$
 language 'plpgsql';
 
@@ -1220,7 +1217,6 @@ returns text[]
 immutable
 as
 $$
-
 declare
   v_array json := json.get_array_opt(in_json, null);
 begin
@@ -1230,7 +1226,6 @@ begin
 
   return json.get_string_array(v_array);
 end;
-
 $$
 language 'plpgsql';
 
@@ -1241,7 +1236,6 @@ returns jsonb
 immutable
 as
 $$
-
 declare
   v_param jsonb;
   v_param_type text;
@@ -1267,7 +1261,6 @@ begin
 
   return v_param;
 end;
-
 $$
 language 'plpgsql';
 
@@ -1278,7 +1271,6 @@ returns bigint
 immutable
 as
 $$
-
 declare
   v_param jsonb;
   v_param_type text;
@@ -1315,7 +1307,6 @@ begin
 
   return v_ret_val;
 end;
-
 $$
 language 'plpgsql';
 
@@ -1326,7 +1317,6 @@ returns boolean
 immutable
 as
 $$
-
 declare
   v_param json;
   v_param_type text;
@@ -1352,7 +1342,6 @@ begin
 
   return v_param;
 end;
-
 $$
 language 'plpgsql';
 
@@ -1363,7 +1352,6 @@ returns boolean[]
 immutable
 as
 $$
-
 declare
   v_array json := json.get_array_opt(in_json, null);
 begin
@@ -1373,7 +1361,6 @@ begin
 
   return json.get_boolean_array(v_array);
 end;
-
 $$
 language 'plpgsql';
 
@@ -1384,7 +1371,6 @@ returns boolean
 immutable
 as
 $$
-
 declare
   v_param jsonb;
   v_param_type text;
@@ -1410,7 +1396,6 @@ begin
 
   return v_param;
 end;
-
 $$
 language 'plpgsql';
 
@@ -1421,7 +1406,6 @@ returns integer
 immutable
 as
 $$
-
 declare
   v_param jsonb;
   v_param_type text;
@@ -1458,7 +1442,6 @@ begin
 
   return v_ret_val;
 end;
-
 $$
 language 'plpgsql';
 
@@ -1469,7 +1452,6 @@ returns bigint[]
 immutable
 as
 $$
-
 declare
   v_array jsonb := json.get_array(in_json, in_name);
   v_array_len integer := jsonb_array_length(v_array);
@@ -1487,7 +1469,6 @@ exception when invalid_parameter_value then
     perform error.raise_invalid_input_param_value('Json is not a bigint array');
   end if;
 end;
-
 $$
 language 'plpgsql';
 
@@ -1498,7 +1479,6 @@ returns integer[]
 immutable
 as
 $$
-
 declare
   v_array json := json.get_array(in_json, in_name);
   v_array_len integer := json_array_length(v_array);
@@ -1516,7 +1496,6 @@ exception when invalid_parameter_value then
     perform error.raise_invalid_input_param_value('Json is not an integer array');
   end if;
 end;
-
 $$
 language 'plpgsql';
 
@@ -1527,7 +1506,6 @@ returns bigint
 immutable
 as
 $$
-
 declare
   v_param json;
   v_param_type text;
@@ -1555,7 +1533,6 @@ begin
 
   return v_ret_val;
 end;
-
 $$
 language 'plpgsql';
 
@@ -1566,7 +1543,6 @@ returns json
 immutable
 as
 $$
-
 declare
   v_param json;
   v_param_type text;
@@ -1592,7 +1568,6 @@ begin
 
   return v_param;
 end;
-
 $$
 language 'plpgsql';
 
@@ -1603,7 +1578,6 @@ returns text
 immutable
 as
 $$
-
 declare
   v_param json;
   v_param_type text;
@@ -1629,7 +1603,6 @@ begin
 
   return v_param#>>'{}';
 end;
-
 $$
 language 'plpgsql';
 
@@ -1640,7 +1613,6 @@ returns json
 immutable
 as
 $$
-
 declare
   v_array json := json.get_array(in_json, in_name);
   v_array_len integer := json_array_length(v_array);
@@ -1657,7 +1629,6 @@ exception when invalid_parameter_value then
     perform error.raise_invalid_input_param_value('Json is not an object array');
   end if;
 end;
-
 $$
 language 'plpgsql';
 
@@ -1668,7 +1639,6 @@ returns boolean[]
 immutable
 as
 $$
-
 declare
   v_array jsonb := json.get_array_opt(in_json, null);
 begin
@@ -1678,7 +1648,6 @@ begin
 
   return json.get_boolean_array(v_array);
 end;
-
 $$
 language 'plpgsql';
 
@@ -1689,7 +1658,6 @@ returns jsonb
 immutable
 as
 $$
-
 declare
   v_array jsonb := json.get_array(in_json, in_name);
   v_array_len integer := jsonb_array_length(v_array);
@@ -1706,7 +1674,6 @@ exception when invalid_parameter_value then
     perform error.raise_invalid_input_param_value('Json is not an object array');
   end if;
 end;
-
 $$
 language 'plpgsql';
 
@@ -1717,7 +1684,6 @@ returns text[]
 immutable
 as
 $$
-
 declare
   v_array json := json.get_array(in_json, in_name);
   v_array_len integer := json_array_length(v_array);
@@ -1735,7 +1701,6 @@ exception when invalid_parameter_value then
     perform error.raise_invalid_input_param_value('Json is not a string array');
   end if;
 end;
-
 $$
 language 'plpgsql';
 
@@ -1746,7 +1711,6 @@ returns text[]
 immutable
 as
 $$
-
 declare
   v_array jsonb := json.get_array(in_json, in_name);
   v_array_len integer := jsonb_array_length(v_array);
@@ -1764,7 +1728,6 @@ exception when invalid_parameter_value then
     perform error.raise_invalid_input_param_value('Json is not a string array');
   end if;
 end;
-
 $$
 language 'plpgsql';
 
@@ -1775,7 +1738,6 @@ returns boolean[]
 immutable
 as
 $$
-
 declare
   v_array jsonb := json.get_array(in_json, in_name);
   v_array_len integer := jsonb_array_length(v_array);
@@ -1793,7 +1755,6 @@ exception when invalid_parameter_value then
     perform error.raise_invalid_input_param_value('Json is not a boolean array');
   end if;
 end;
-
 $$
 language 'plpgsql';
 
@@ -1804,7 +1765,6 @@ returns bigint[]
 immutable
 as
 $$
-
 declare
   v_array json := json.get_array_opt(in_json, in_name, null);
 begin
@@ -1814,7 +1774,6 @@ begin
 
   return json.get_bigint_array(in_json, in_name);
 end;
-
 $$
 language 'plpgsql';
 
@@ -1825,7 +1784,6 @@ returns text[]
 immutable
 as
 $$
-
 declare
   v_array jsonb := json.get_array_opt(in_json, in_name, null);
 begin
@@ -1835,7 +1793,6 @@ begin
 
   return json.get_string_array(in_json, in_name);
 end;
-
 $$
 language 'plpgsql';
 
@@ -1846,7 +1803,6 @@ returns bigint
 immutable
 as
 $$
-
 declare
   v_param json;
   v_param_type text;
@@ -1883,7 +1839,6 @@ begin
 
   return v_ret_val;
 end;
-
 $$
 language 'plpgsql';
 
@@ -1894,7 +1849,6 @@ returns integer
 immutable
 as
 $$
-
 declare
   v_param json;
   v_param_type text;
@@ -1931,7 +1885,6 @@ begin
 
   return v_ret_val;
 end;
-
 $$
 language 'plpgsql';
 
@@ -1942,7 +1895,6 @@ returns jsonb
 immutable
 as
 $$
-
 declare
   v_param jsonb;
   v_param_type text;
@@ -1968,7 +1920,6 @@ begin
 
   return v_param;
 end;
-
 $$
 language 'plpgsql';
 
@@ -1979,7 +1930,6 @@ returns boolean[]
 immutable
 as
 $$
-
 declare
   v_array json := json.get_array(in_json, in_name);
   v_array_len integer := json_array_length(v_array);
@@ -1997,7 +1947,6 @@ exception when invalid_parameter_value then
     perform error.raise_invalid_input_param_value('Json is not a boolean array');
   end if;
 end;
-
 $$
 language 'plpgsql';
 
@@ -2008,7 +1957,6 @@ returns integer[]
 immutable
 as
 $$
-
 declare
   v_array jsonb := json.get_array(in_json, in_name);
   v_array_len integer := jsonb_array_length(v_array);
@@ -2026,7 +1974,6 @@ exception when invalid_parameter_value then
     perform error.raise_invalid_input_param_value('Json is not an integer array');
   end if;
 end;
-
 $$
 language 'plpgsql';
 
@@ -2037,7 +1984,6 @@ returns text
 immutable
 as
 $$
-
 declare
   v_param jsonb;
   v_param_type text;
@@ -2063,7 +2009,6 @@ begin
 
   return v_param#>>'{}';
 end;
-
 $$
 language 'plpgsql';
 
@@ -2074,7 +2019,6 @@ returns bigint
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_ret_val bigint;
@@ -2097,7 +2041,6 @@ begin
 
   return v_ret_val;
 end;
-
 $$
 language 'plpgsql';
 
@@ -2108,7 +2051,6 @@ returns text[]
 immutable
 as
 $$
-
 declare
   v_array json := json.get_array_opt(in_json, in_name, null);
 begin
@@ -2118,7 +2060,6 @@ begin
 
   return json.get_string_array(in_json, in_name);
 end;
-
 $$
 language 'plpgsql';
 
@@ -2129,7 +2070,6 @@ returns bigint
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_ret_val bigint;
@@ -2152,7 +2092,6 @@ begin
 
   return v_ret_val;
 end;
-
 $$
 language 'plpgsql';
 
@@ -2163,7 +2102,6 @@ returns jsonb
 immutable
 as
 $$
-
 declare
   v_default_type text;
   v_param jsonb;
@@ -2191,7 +2129,6 @@ begin
 
   return v_param;
 end;
-
 $$
 language 'plpgsql';
 
@@ -2202,7 +2139,6 @@ returns json
 immutable
 as
 $$
-
 declare
   v_default_type text;
   v_param json;
@@ -2230,7 +2166,6 @@ begin
 
   return v_param;
 end;
-
 $$
 language 'plpgsql';
 
@@ -2241,7 +2176,6 @@ returns jsonb
 immutable
 as
 $$
-
 declare
   v_default_type text;
   v_json_type text;
@@ -2264,7 +2198,6 @@ begin
 
   return in_json;
 end;
-
 $$
 language 'plpgsql';
 
@@ -2275,7 +2208,6 @@ returns json
 immutable
 as
 $$
-
 declare
   v_default_type text;
   v_json_type text;
@@ -2298,7 +2230,6 @@ begin
 
   return in_json;
 end;
-
 $$
 language 'plpgsql';
 
@@ -2309,7 +2240,6 @@ returns bigint[]
 immutable
 as
 $$
-
 declare
   v_array json := json.get_array_opt(in_json, null);
 begin
@@ -2319,7 +2249,6 @@ begin
 
   return json.get_bigint_array(v_array);
 end;
-
 $$
 language 'plpgsql';
 
@@ -2330,7 +2259,6 @@ returns bigint[]
 immutable
 as
 $$
-
 declare
   v_array jsonb := json.get_array_opt(in_json, null);
 begin
@@ -2340,7 +2268,6 @@ begin
 
   return json.get_bigint_array(v_array);
 end;
-
 $$
 language 'plpgsql';
 
@@ -2351,7 +2278,6 @@ returns bigint
 immutable
 as
 $$
-
 declare
   v_param jsonb;
   v_param_type text;
@@ -2379,7 +2305,6 @@ begin
 
   return v_ret_val;
 end;
-
 $$
 language 'plpgsql';
 
@@ -2390,7 +2315,6 @@ returns integer
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_ret_val integer;
@@ -2413,7 +2337,6 @@ begin
 
   return v_ret_val;
 end;
-
 $$
 language 'plpgsql';
 
@@ -2424,7 +2347,6 @@ returns integer
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_ret_val integer;
@@ -2447,7 +2369,6 @@ begin
 
   return v_ret_val;
 end;
-
 $$
 language 'plpgsql';
 
@@ -2458,7 +2379,6 @@ returns integer
 immutable
 as
 $$
-
 declare
   v_param json;
   v_param_type text;
@@ -2486,7 +2406,6 @@ begin
 
   return v_ret_val;
 end;
-
 $$
 language 'plpgsql';
 
@@ -2497,7 +2416,6 @@ returns integer
 immutable
 as
 $$
-
 declare
   v_param jsonb;
   v_param_type text;
@@ -2525,7 +2443,6 @@ begin
 
   return v_ret_val;
 end;
-
 $$
 language 'plpgsql';
 
@@ -2536,7 +2453,6 @@ returns integer[]
 immutable
 as
 $$
-
 declare
   v_array json := json.get_array_opt(in_json, null);
 begin
@@ -2546,7 +2462,6 @@ begin
 
   return json.get_integer_array(v_array);
 end;
-
 $$
 language 'plpgsql';
 
@@ -2557,7 +2472,6 @@ returns integer[]
 immutable
 as
 $$
-
 declare
   v_array jsonb := json.get_array_opt(in_json, null);
 begin
@@ -2567,7 +2481,6 @@ begin
 
   return json.get_integer_array(v_array);
 end;
-
 $$
 language 'plpgsql';
 
@@ -2578,7 +2491,6 @@ returns bigint[]
 immutable
 as
 $$
-
 declare
   v_array jsonb := json.get_array_opt(in_json, in_name, null);
 begin
@@ -2588,7 +2500,6 @@ begin
 
   return json.get_bigint_array(in_json, in_name);
 end;
-
 $$
 language 'plpgsql';
 
@@ -2599,7 +2510,6 @@ returns integer[]
 immutable
 as
 $$
-
 declare
   v_array jsonb := json.get_array_opt(in_json, in_name, null);
 begin
@@ -2609,7 +2519,6 @@ begin
 
   return json.get_integer_array(in_json, in_name);
 end;
-
 $$
 language 'plpgsql';
 
@@ -2620,7 +2529,6 @@ returns integer[]
 immutable
 as
 $$
-
 declare
   v_array json := json.get_array_opt(in_json, in_name, null);
 begin
@@ -2630,7 +2538,6 @@ begin
 
   return json.get_integer_array(in_json, in_name);
 end;
-
 $$
 language 'plpgsql';
 
@@ -2641,7 +2548,6 @@ returns text[]
 immutable
 as
 $$
-
 declare
   v_array jsonb := json.get_array_opt(in_json, null);
 begin
@@ -2651,7 +2557,6 @@ begin
 
   return json.get_string_array(v_array);
 end;
-
 $$
 language 'plpgsql';
 
@@ -2662,7 +2567,6 @@ returns boolean
 immutable
 as
 $$
-
 declare
   v_param json;
   v_param_type text;
@@ -2683,7 +2587,6 @@ begin
 
   return v_param;
 end;
-
 $$
 language 'plpgsql';
 
@@ -2694,7 +2597,6 @@ returns boolean
 immutable
 as
 $$
-
 declare
   v_param jsonb;
   v_param_type text;
@@ -2715,7 +2617,6 @@ begin
 
   return v_param;
 end;
-
 $$
 language 'plpgsql';
 
@@ -2726,7 +2627,6 @@ returns text
 immutable
 as
 $$
-
 declare
   v_json_type text;
 begin
@@ -2742,7 +2642,6 @@ begin
 
   return in_json#>>'{}';
 end;
-
 $$
 language 'plpgsql';
 
@@ -2753,7 +2652,6 @@ returns text
 immutable
 as
 $$
-
 declare
   v_param jsonb;
   v_param_type text;
@@ -2774,7 +2672,6 @@ begin
 
   return v_param#>>'{}';
 end;
-
 $$
 language 'plpgsql';
 
@@ -2785,7 +2682,6 @@ returns boolean
 immutable
 as
 $$
-
 declare
   v_json_type text;
 begin
@@ -2801,7 +2697,6 @@ begin
 
   return in_json;
 end;
-
 $$
 language 'plpgsql';
 
@@ -2812,7 +2707,6 @@ returns boolean[]
 immutable
 as
 $$
-
 declare
   v_array jsonb := json.get_array_opt(in_json, in_name, null);
 begin
@@ -2822,7 +2716,6 @@ begin
 
   return json.get_boolean_array(in_json, in_name);
 end;
-
 $$
 language 'plpgsql';
 
@@ -2833,7 +2726,6 @@ returns boolean
 immutable
 as
 $$
-
 declare
   v_json_type text;
 begin
@@ -2849,7 +2741,6 @@ begin
 
   return in_json;
 end;
-
 $$
 language 'plpgsql';
 
@@ -2860,7 +2751,6 @@ returns boolean[]
 immutable
 as
 $$
-
 declare
   v_array json := json.get_array_opt(in_json, in_name, null);
 begin
@@ -2870,7 +2760,6 @@ begin
 
   return json.get_boolean_array(in_json, in_name);
 end;
-
 $$
 language 'plpgsql';
 
@@ -2881,7 +2770,6 @@ returns text
 immutable
 as
 $$
-
 declare
   v_param json;
   v_param_type text;
@@ -2902,7 +2790,6 @@ begin
 
   return v_param#>>'{}';
 end;
-
 $$
 language 'plpgsql';
 
@@ -2913,7 +2800,6 @@ returns json
 immutable
 as
 $$
-
 declare
   v_default_type text;
   v_param json;
@@ -2941,7 +2827,6 @@ begin
 
   return v_param;
 end;
-
 $$
 language 'plpgsql';
 
@@ -2952,7 +2837,6 @@ returns jsonb
 immutable
 as
 $$
-
 declare
   v_default_type text;
   v_param jsonb;
@@ -2980,7 +2864,6 @@ begin
 
   return v_param;
 end;
-
 $$
 language 'plpgsql';
 
@@ -2991,7 +2874,6 @@ returns json
 immutable
 as
 $$
-
 declare
   v_default_type text;
   v_json_type text;
@@ -3014,7 +2896,6 @@ begin
 
   return in_json;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3025,7 +2906,6 @@ returns jsonb
 immutable
 as
 $$
-
 declare
   v_default_type text;
   v_json_type text;
@@ -3048,7 +2928,6 @@ begin
 
   return in_json;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3059,7 +2938,6 @@ returns json
 immutable
 as
 $$
-
 declare
   v_default_type text;
   v_array json;
@@ -3079,7 +2957,6 @@ begin
 
   return json.get_object_array(v_array);
 end;
-
 $$
 language 'plpgsql';
 
@@ -3090,7 +2967,6 @@ returns jsonb
 immutable
 as
 $$
-
 declare
   v_default_type text;
   v_array jsonb;
@@ -3110,7 +2986,6 @@ begin
 
   return json.get_object_array(v_array);
 end;
-
 $$
 language 'plpgsql';
 
@@ -3121,7 +2996,6 @@ returns json
 immutable
 as
 $$
-
 declare
   v_default_type text;
   v_array json;
@@ -3143,7 +3017,6 @@ begin
 
   return json.get_object_array(in_json, in_name);
 end;
-
 $$
 language 'plpgsql';
 
@@ -3154,7 +3027,6 @@ returns bigint[]
 immutable
 as
 $$
-
 declare
   v_array json := json.get_array(in_json, in_name);
   v_array_len integer := json_array_length(v_array);
@@ -3172,7 +3044,6 @@ exception when invalid_parameter_value then
     perform error.raise_invalid_input_param_value('Json is not a bigint array');
   end if;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3183,7 +3054,6 @@ returns jsonb
 immutable
 as
 $$
-
 declare
   v_default_type text;
   v_array jsonb;
@@ -3205,7 +3075,6 @@ begin
 
   return json.get_object_array(in_json, in_name);
 end;
-
 $$
 language 'plpgsql';
 
@@ -3244,6 +3113,28 @@ end;
 $$
 language 'plpgsql';
 
+-- drop function json_test.get_integer_should_throw_for_invalid_json_type();
+
+create or replace function json_test.get_integer_should_throw_for_invalid_json_type()
+returns void
+immutable
+as
+$$
+declare
+  v_json_type text;
+  v_json text;
+begin
+  foreach v_json_type in array array ['json', 'jsonb'] loop
+    foreach v_json in array array ['''[]''', '''"qwe"''', '''{}''', '''true''', '''null'''] loop
+      perform test.assert_throw(
+        'select json.get_integer(' || v_json || '::' || v_json_type || ')',
+        'Json is not a number');
+    end loop;
+  end loop;
+end;
+$$
+language 'plpgsql';
+
 -- drop function json_test.get_integer_should_throw_for_invalid_param_type();
 
 create or replace function json_test.get_integer_should_throw_for_invalid_param_type()
@@ -3251,7 +3142,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -3264,7 +3154,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3275,7 +3164,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text := '''5.55''';
@@ -3286,7 +3174,6 @@ begin
       'Json is not a bigint');
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3297,7 +3184,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text := '''{"key": 5.55}''';
@@ -3308,7 +3194,6 @@ begin
       '%key% is not a bigint');
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3319,7 +3204,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text := '''5.55''';
@@ -3330,7 +3214,6 @@ begin
       'Json is not an integer');
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3341,7 +3224,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text := '''{"key": 5.55}''';
@@ -3352,7 +3234,6 @@ begin
       '%key% is not an integer');
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3363,7 +3244,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_type text;
@@ -3377,7 +3257,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3388,7 +3267,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -3401,7 +3279,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3412,7 +3289,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -3425,7 +3301,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3436,7 +3311,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -3449,7 +3323,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3460,7 +3333,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -3473,7 +3345,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3484,7 +3355,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -3497,7 +3367,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3508,7 +3377,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -3521,31 +3389,6 @@ begin
     end loop;
   end loop;
 end;
-
-$$
-language 'plpgsql';
-
--- drop function json_test.get_integer_should_throw_for_invalid_json_type();
-
-create or replace function json_test.get_integer_should_throw_for_invalid_json_type()
-returns void
-immutable
-as
-$$
-
-declare
-  v_json_type text;
-  v_json text;
-begin
-  foreach v_json_type in array array ['json', 'jsonb'] loop
-    foreach v_json in array array ['''[]''', '''"qwe"''', '''{}''', '''true''', '''null'''] loop
-      perform test.assert_throw(
-        'select json.get_integer(' || v_json || '::' || v_json_type || ')',
-        'Json is not a number');
-    end loop;
-  end loop;
-end;
-
 $$
 language 'plpgsql';
 
@@ -3556,7 +3399,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -3569,7 +3411,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3580,7 +3421,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -3593,7 +3433,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3604,7 +3443,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -3617,7 +3455,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3628,7 +3465,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -3641,7 +3477,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3652,7 +3487,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_type text;
@@ -3668,7 +3502,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3679,7 +3512,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -3692,7 +3524,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3703,7 +3534,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_type text;
@@ -3716,7 +3546,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3727,7 +3556,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_type text;
@@ -3743,7 +3571,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3754,7 +3581,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_type text;
@@ -3770,7 +3596,6 @@ begin
 	  end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3781,7 +3606,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -3794,7 +3618,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3805,7 +3628,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_type text;
@@ -3823,7 +3645,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3834,7 +3655,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_type text;
@@ -3850,7 +3670,6 @@ begin
 	  end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3861,7 +3680,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -3874,7 +3692,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3885,7 +3702,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -3898,7 +3714,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3909,7 +3724,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -3922,7 +3736,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3933,7 +3746,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -3946,7 +3758,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3957,7 +3768,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -3970,7 +3780,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -3981,7 +3790,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -3994,7 +3802,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4005,7 +3812,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -4018,7 +3824,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4029,7 +3834,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -4042,7 +3846,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4053,7 +3856,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -4066,7 +3868,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4077,7 +3878,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -4090,7 +3890,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4101,7 +3900,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -4114,7 +3912,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4125,7 +3922,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -4138,7 +3934,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4149,7 +3944,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -4162,7 +3956,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4173,7 +3966,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -4186,7 +3978,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4197,7 +3988,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -4210,7 +4000,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4221,7 +4010,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -4234,7 +4022,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4245,7 +4032,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -4258,7 +4044,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4269,7 +4054,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -4282,7 +4066,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4293,7 +4076,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -4306,7 +4088,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4317,7 +4098,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -4330,7 +4110,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4341,7 +4120,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -4354,7 +4132,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4365,7 +4142,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -4378,7 +4154,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4389,7 +4164,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text := '''{"key": 5.55}''';
@@ -4400,7 +4174,6 @@ begin
       '%key% is not a bigint');
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4411,7 +4184,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text := '''5.55''';
@@ -4422,7 +4194,6 @@ begin
       'Json is not a bigint');
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4433,7 +4204,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -4446,7 +4216,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4457,7 +4226,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -4470,7 +4238,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4481,7 +4248,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -4494,7 +4260,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4505,7 +4270,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -4518,7 +4282,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4529,7 +4292,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text := '''{"key": 5.55}''';
@@ -4540,7 +4302,6 @@ begin
       '%key% is not an integer');
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4551,7 +4312,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text := '''5.55''';
@@ -4562,7 +4322,6 @@ begin
       'Json is not an integer');
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4573,7 +4332,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -4586,7 +4344,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4597,7 +4354,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -4610,7 +4366,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4621,7 +4376,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -4634,7 +4388,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4645,7 +4398,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -4658,7 +4410,6 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4669,7 +4420,6 @@ returns integer
 volatile
 as
 $$
-
 -- Возвращает случайное число от in_min_value до in_max_value включительно
 declare
   v_random_double double precision := random();
@@ -4684,7 +4434,6 @@ begin
 
   return floor(in_min_value + v_random_double * (in_max_value - in_min_value + 1));
 end;
-
 $$
 language 'plpgsql';
 
@@ -4695,7 +4444,6 @@ returns bigint
 volatile
 as
 $$
-
 -- Возвращает случайное число от in_min_value до in_max_value включительно
 declare
   v_random_double double precision := random();
@@ -4710,7 +4458,6 @@ begin
 
   return floor(in_min_value + v_random_double * (in_max_value - in_min_value + 1));
 end;
-
 $$
 language 'plpgsql';
 
@@ -4721,7 +4468,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_type text;
   v_value text := '5';
@@ -4730,7 +4476,6 @@ begin
     execute 'select test.assert_eq(5, random.random_' || v_type || '(' || v_value || ', ' || v_value || '))';
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4741,7 +4486,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_type text;
   v_min_value text := '-5';
@@ -4751,7 +4495,6 @@ begin
     execute 'select test.assert_le(' || v_min_value || ', random.random_' || v_type || '(' || v_min_value || ', ' || v_max_value || '))';
   end loop;
 end;
-
 $$
 language 'plpgsql';
 
@@ -4762,7 +4505,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_type text;
   v_min_value text := '2';
@@ -4772,44 +4514,6 @@ begin
     execute 'select test.assert_ge(' || v_max_value || ', random.random_' || v_type || '(' || v_min_value || ', ' || v_max_value || '))';
   end loop;
 end;
-
-$$
-language 'plpgsql';
-
--- drop function error.raise_invalid_input_param_value(text, text, text);
-
-create or replace function error.raise_invalid_input_param_value(in_format text, in_param1 text, in_param2 text)
-returns bigint
-immutable
-as
-$$
-
-begin
-  assert in_format is not null;
-  assert in_param1 is not null;
-  assert in_param2 is not null;
-
-  raise '%', format(in_format, in_param1, in_param2) using errcode = 'invalid_parameter_value';
-end;
-
-$$
-language 'plpgsql';
-
--- drop function error.raise_invalid_input_param_value(text, text);
-
-create or replace function error.raise_invalid_input_param_value(in_format text, in_param text)
-returns bigint
-immutable
-as
-$$
-
-begin
-  assert in_format is not null;
-  assert in_param is not null;
-
-  raise '%', format(in_format, in_param) using errcode = 'invalid_parameter_value';
-end;
-
 $$
 language 'plpgsql';
 
@@ -4820,13 +4524,44 @@ returns bigint
 immutable
 as
 $$
-
 begin
   assert in_message is not null;
 
   raise '%', in_message using errcode = 'invalid_parameter_value';
 end;
+$$
+language 'plpgsql';
 
+-- drop function error.raise_invalid_input_param_value(text, text, text);
+
+create or replace function error.raise_invalid_input_param_value(in_format text, in_param1 text, in_param2 text)
+returns bigint
+immutable
+as
+$$
+begin
+  assert in_format is not null;
+  assert in_param1 is not null;
+  assert in_param2 is not null;
+
+  raise '%', format(in_format, in_param1, in_param2) using errcode = 'invalid_parameter_value';
+end;
+$$
+language 'plpgsql';
+
+-- drop function error.raise_invalid_input_param_value(text, text);
+
+create or replace function error.raise_invalid_input_param_value(in_format text, in_param text)
+returns bigint
+immutable
+as
+$$
+begin
+  assert in_format is not null;
+  assert in_param is not null;
+
+  raise '%', format(in_format, in_param) using errcode = 'invalid_parameter_value';
+end;
 $$
 language 'plpgsql';
 

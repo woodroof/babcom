@@ -5,7 +5,6 @@ returns jsonb
 immutable
 as
 $$
-
 declare
   v_default_type text;
   v_param jsonb;
@@ -33,6 +32,5 @@ begin
 
   return v_param;
 end;
-
 $$
 language 'plpgsql';

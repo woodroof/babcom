@@ -9,6 +9,5 @@ begin
 	insert into data.connections(client_id)
 	values(in_client_id);
 end;
-
 $$
 language 'plpgsql';

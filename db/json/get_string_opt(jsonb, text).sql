@@ -5,7 +5,6 @@ returns text
 immutable
 as
 $$
-
 declare
   v_json_type text;
 begin
@@ -21,6 +20,5 @@ begin
 
   return in_json#>>'{}';
 end;
-
 $$
 language 'plpgsql';

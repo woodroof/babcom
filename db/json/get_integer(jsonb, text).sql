@@ -5,7 +5,6 @@ returns integer
 immutable
 as
 $$
-
 declare
   v_param jsonb;
   v_param_type text;
@@ -42,6 +41,5 @@ begin
 
   return v_ret_val;
 end;
-
 $$
 language 'plpgsql';

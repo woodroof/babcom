@@ -5,7 +5,6 @@ returns boolean
 immutable
 as
 $$
-
 declare
   v_param jsonb;
   v_param_type text;
@@ -31,6 +30,5 @@ begin
 
   return v_param;
 end;
-
 $$
 language 'plpgsql';

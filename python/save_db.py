@@ -103,9 +103,9 @@ def save_function(schema, schema_dir_path, func, db_info):
 	file.write('returns ' + func_result + '\n')
 	file.write(func_type + '\n')
 	file.write('as\n')
-	file.write('$$')
-	file.write(func_body)
 	file.write('$$\n')
+	file.write(func_body)
+	file.write('\n$$\n')
 	file.write("language 'plpgsql';\n")
 
 def save_table(schema, schema_dir_path, table, db_info):
@@ -159,7 +159,7 @@ select
     ''
   ) proc_arg_types,
   (case when p.provolatile = 'i' then 'immutable' when p.provolatile = 's' then 'stable' else 'volatile' end) proc_type,
-  p.prosrc proc_body
+  trim(E'\n' from p.prosrc) proc_body
 from pg_proc p
 join pg_namespace n
   on n.nspname = %s

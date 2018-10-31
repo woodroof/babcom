@@ -5,7 +5,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_type text;
   v_min_value text := '-5';
@@ -15,6 +14,5 @@ begin
     execute 'select test.assert_le(' || v_min_value || ', random.random_' || v_type || '(' || v_min_value || ', ' || v_max_value || '))';
   end loop;
 end;
-
 $$
 language 'plpgsql';

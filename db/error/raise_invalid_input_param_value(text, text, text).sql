@@ -5,7 +5,6 @@ returns bigint
 immutable
 as
 $$
-
 begin
   assert in_format is not null;
   assert in_param1 is not null;
@@ -13,6 +12,5 @@ begin
 
   raise '%', format(in_format, in_param1, in_param2) using errcode = 'invalid_parameter_value';
 end;
-
 $$
 language 'plpgsql';

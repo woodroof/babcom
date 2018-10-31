@@ -5,7 +5,6 @@ returns json
 immutable
 as
 $$
-
 declare
   v_default_type text;
   v_array json;
@@ -27,6 +26,5 @@ begin
 
   return json.get_object_array(in_json, in_name);
 end;
-
 $$
 language 'plpgsql';

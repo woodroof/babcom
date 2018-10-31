@@ -5,12 +5,10 @@ returns bigint
 immutable
 as
 $$
-
 begin
   assert in_message is not null;
 
   raise '%', in_message using errcode = 'invalid_parameter_value';
 end;
-
 $$
 language 'plpgsql';

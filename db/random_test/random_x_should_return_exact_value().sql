@@ -5,7 +5,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_type text;
   v_value text := '5';
@@ -14,6 +13,5 @@ begin
     execute 'select test.assert_eq(5, random.random_' || v_type || '(' || v_value || ', ' || v_value || '))';
   end loop;
 end;
-
 $$
 language 'plpgsql';

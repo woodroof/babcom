@@ -5,7 +5,6 @@ returns boolean[]
 immutable
 as
 $$
-
 declare
   v_array json := json.get_array(in_json, in_name);
   v_array_len integer := json_array_length(v_array);
@@ -23,6 +22,5 @@ exception when invalid_parameter_value then
     perform error.raise_invalid_input_param_value('Json is not a boolean array');
   end if;
 end;
-
 $$
 language 'plpgsql';

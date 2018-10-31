@@ -5,7 +5,6 @@ returns bigint[]
 immutable
 as
 $$
-
 declare
   v_array jsonb := json.get_array_opt(in_json, in_name, null);
 begin
@@ -15,6 +14,5 @@ begin
 
   return json.get_bigint_array(in_json, in_name);
 end;
-
 $$
 language 'plpgsql';

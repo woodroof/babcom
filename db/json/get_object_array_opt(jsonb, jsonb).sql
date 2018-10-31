@@ -5,7 +5,6 @@ returns jsonb
 immutable
 as
 $$
-
 declare
   v_default_type text;
   v_array jsonb;
@@ -25,6 +24,5 @@ begin
 
   return json.get_object_array(v_array);
 end;
-
 $$
 language 'plpgsql';

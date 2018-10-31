@@ -5,7 +5,6 @@ returns integer
 volatile
 as
 $$
-
 -- Возвращает случайное число от in_min_value до in_max_value включительно
 declare
   v_random_double double precision := random();
@@ -20,6 +19,5 @@ begin
 
   return floor(in_min_value + v_random_double * (in_max_value - in_min_value + 1));
 end;
-
 $$
 language 'plpgsql';

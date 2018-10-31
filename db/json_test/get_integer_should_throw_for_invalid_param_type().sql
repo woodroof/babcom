@@ -5,7 +5,6 @@ returns void
 immutable
 as
 $$
-
 declare
   v_json_type text;
   v_json text;
@@ -18,6 +17,5 @@ begin
     end loop;
   end loop;
 end;
-
 $$
 language 'plpgsql';
