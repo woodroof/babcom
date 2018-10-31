@@ -10,17 +10,84 @@ DB_PASSWORD = ''
 DB_HOST = 'localhost'
 DB_PORT = 5432
 
+DB_EXTENSIONS = ('pgcrypto',)
+
+def append_to_file(file, source_file_paths):
+	for source_file_path in source_file_paths:
+		with open(source_file_path) as source_file:
+			file.write(source_file.read())
+			file.write('\n')
+
+class DatabaseInfo:
+	def __init__(self):
+		self.schemas = []
+		self.functions = []
+		self.indexes = []
+		self.tables = []
+	
+	def create_recreate_script(self, db_path):
+		file = open(db_path / 'recreate.sql', 'w+')
+		file.write("""-- Cleaning database
+
+create schema if not exists database_cleanup;
+
+create or replace function database_cleanup.clean()
+returns void as
+$$
+declare
+  v_schema_name text;
+begin
+  for v_schema_name in
+  (
+    select nspname as name
+    from pg_namespace
+    where nspname not like 'pg\_%' and nspname not in ('information_schema', 'database_cleanup')
+  )
+  loop
+    execute format('drop schema %s cascade', v_schema_name);
+  end loop;
+end;
+$$
+language 'plpgsql';
+
+select database_cleanup.clean();
+
+drop schema database_cleanup cascade;
+
+-- Creating extensions
+""")
+
+		for extension in DB_EXTENSIONS:
+			file.write("""
+create schema {0};
+create extension {0} schema {0};
+""".format(extension))
+
+		file.write('\n-- Creating schemas\n\n')
+		for schema in self.schemas:
+			file.write('create schema {};\n'.format(schema))
+
+		file.write('\n-- Creating functions\n\n')
+		append_to_file(file, self.functions)
+
+		file.write('-- Creating tables\n\n')
+		append_to_file(file, self.tables)
+
+		file.write('-- Creating indexes\n\n')
+		append_to_file(file, self.indexes)
+
 def get_schema_list(connection):
 	cursor = connection.cursor()
 	cursor.execute("""
-select schema_name
-from information_schema.schemata
-where schema_name not like 'pg_%' and schema_name not in ('information_schema', 'pgcrypto');
-""")
+select nspname as name
+from pg_namespace
+where nspname not like 'pg\_%%' and nspname != 'information_schema' and nspname not in %s;
+""",
+		(DB_EXTENSIONS,))
 	result = cursor.fetchall()
 	return [elem[0] for elem in result]
 
-def save_function(schema, schema_dir_path, func):
+def save_function(schema, schema_dir_path, func, db_info):
 	func_name = func[0]
 	func_args = func[1]
 	func_result = func[2]
@@ -29,6 +96,7 @@ def save_function(schema, schema_dir_path, func):
 	func_body = func[5]
 
 	file_path = schema_dir_path / (func_name + '(' + func_arg_types + ')' + '.sql')
+	db_info.functions.append(file_path)
 	file = open(file_path, "w+")
 	file.write('-- drop function ' + schema + '.' + func_name + '(' + func_arg_types + ');\n\n')
 	file.write('create or replace function ' + schema + '.' + func_name + '(' + func_args + ')\n')
@@ -40,12 +108,13 @@ def save_function(schema, schema_dir_path, func):
 	file.write('$$\n')
 	file.write("language 'plpgsql';\n")
 
-def save_table(schema, schema_dir_path, table):
+def save_table(schema, schema_dir_path, table, db_info):
 	table_name = table[0]
 	table_columns = table[1]
 	table_constraints = table[2]
 
 	file_path = schema_dir_path / (table_name + '.sql')
+	db_info.tables.append(file_path)
 	file = open(file_path, "w+")
 	file.write('-- drop table ' + schema + '.' + table_name + ';\n\n')
 	file.write('create table ' + schema + '.' + table_name + '(\n  ')
@@ -54,16 +123,17 @@ def save_table(schema, schema_dir_path, table):
 		file.write(',\n  constraint ' + constraint.lower().replace(' key (', ' key('))
 	file.write("\n);\n")
 
-def save_index(schema, schema_dir_path, index):
+def save_index(schema, schema_dir_path, index, db_info):
 	index_name = index[0]
 	index_definition = index[1]
 
 	file_path = schema_dir_path / (index_name + '.sql')
+	db_info.indexes.append(file_path)
 	file = open(file_path, "w+")
 	file.write('-- drop index ' + schema + '.' + index_name + ';\n\n')
 	file.write(index_definition.lower().replace(' using btree ', '') + ';\n')
 
-def save_functions(connection, schema, schema_dir_path):
+def save_functions(connection, schema, schema_dir_path, db_info):
 	cursor = connection.cursor()
 	cursor.execute("""
 select
@@ -112,9 +182,9 @@ where
 		(schema,))
 	functions = cursor.fetchall()
 	for func in functions:
-		save_function(schema, schema_dir_path, func)
+		save_function(schema, schema_dir_path, func, db_info)
 
-def save_tables(connection, schema, schema_dir_path):
+def save_tables(connection, schema, schema_dir_path, db_info):
 	cursor = connection.cursor()
 	cursor.execute("""
 select
@@ -147,9 +217,9 @@ where
 		(schema,))
 	tables = cursor.fetchall()
 	for table in tables:
-		save_table(schema, schema_dir_path, table)
+		save_table(schema, schema_dir_path, table, db_info)
 
-def save_indexes(connection, schema, schema_dir_path):
+def save_indexes(connection, schema, schema_dir_path, db_info):
 	cursor = connection.cursor()
 	cursor.execute("""
 select
@@ -167,12 +237,12 @@ where i.relkind = 'i'
 		(schema,))
 	indexes = cursor.fetchall()
 	for index in indexes:
-		save_index(schema, schema_dir_path, index)
+		save_index(schema, schema_dir_path, index, db_info)
 
-def save_schema(connection, schema, schema_dir_path):
-	save_functions(connection, schema, schema_dir_path)
-	save_tables(connection, schema, schema_dir_path)
-	save_indexes(connection, schema, schema_dir_path)
+def save_schema(connection, schema, schema_dir_path, db_info):
+	save_functions(connection, schema, schema_dir_path, db_info)
+	save_tables(connection, schema, schema_dir_path, db_info)
+	save_indexes(connection, schema, schema_dir_path, db_info)
 
 def save_db(path):
 	db_path = path / 'db'
@@ -185,11 +255,13 @@ def save_db(path):
 
 	connection = psycopg2.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, dbname=DB_NAME)
 
-	schema_list = get_schema_list(connection)
-	for schema in schema_list:
+	db_info = DatabaseInfo()
+	db_info.schemas = get_schema_list(connection)
+	for schema in db_info.schemas:
 		schema_dir_path = db_path / schema
 		schema_dir_path.mkdir()
-		save_schema(connection, schema, schema_dir_path)
+		save_schema(connection, schema, schema_dir_path, db_info)
+	db_info.create_recreate_script(db_path)
 
 path = Path('.')
 if len(sys.argv) > 1:
