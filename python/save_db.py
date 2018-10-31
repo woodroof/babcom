@@ -72,14 +72,18 @@ join pg_namespace n
   and n.oid = p.pronamespace
 join pg_language l
   on l.oid = p.prolang
-  and l.lanname = 'plpgsql' -- only pl/pgSQL
+  -- only pl/pgSQL
+  and l.lanname = 'plpgsql'
 join pg_type t
   on t.oid = p.prorettype
 where
-  not p.proisagg and not p.proiswindow and -- only simple functions
+  -- only simple functions
+  not p.proisagg and not p.proiswindow and
   --p.prokind = 'f' and
-  p.proallargtypes is null and -- only "in" arguments
-  p.proisstrict = false -- only non-strict functions
+  -- only "in" arguments
+  p.proallargtypes is null and
+  -- only non-strict functions
+  p.proisstrict = false
 """,
 		(schema,))
 	functions = cursor.fetchall()
