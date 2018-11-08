@@ -20,6 +20,7 @@ OP_TIME_BUCKETS = (0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5
 LONG_TIME_BUCKETS = (0.001, 0.01, 0.1, 1, 10, 1*60, 2*60, 5*60, 10*60, 30*60, 1*60*60, 2*60*60, 5*60*60, 10*60*60, 24*60*60)
 
 CONNECT_TIME = Histogram('connect_time_seconds', 'Time spent creating new connection in database', buckets=OP_TIME_BUCKETS)
+RECONNECT_TIME = Histogram('reconnect_time_seconds', 'Time spent renewing connection in database', buckets=OP_TIME_BUCKETS)
 DISCONNECT_TIME = Histogram('disconnect_time_seconds', 'Time spent deleting connection from database', buckets=OP_TIME_BUCKETS)
 
 MESSAGE_PROCESSING_TIME = Histogram('message_processing_time_seconds', 'Time spent processing one message', buckets=OP_TIME_BUCKETS)
@@ -27,12 +28,31 @@ NOTIFICATION_PROCESSING_TIME = Histogram('notification_processing_time_seconds',
 
 CONNECTION_TIME = Histogram('connection_time_seconds', 'Connection lifetime', buckets=LONG_TIME_BUCKETS)
 
+async def init_socket(socket, request):
+    await socket.prepare(request)
+
 @time(CONNECT_TIME)
-async def connect(connection, client_id):
+async def connect(connection, client_id, connection_object, request):
+    print('Connected: %s' % client_id)
     await connection.execute('select api.add_connection($1)', client_id)
+    ws = web.WebSocketResponse()
+    connection_object['ws'] = ws
+    await init_socket(ws, request)
+    return ws
+
+@time(RECONNECT_TIME)
+async def reconnect(connection, client_id, connection_object, request):
+    print('Reconnected: %s' % client_id)
+    await connection_object['ws'].close()
+    await connection.execute('select api.recreate_connection($1)', client_id)
+    ws = web.WebSocketResponse()
+    connection_object['ws'] = ws
+    await init_socket(ws, request)
+    return ws
 
 @time(DISCONNECT_TIME)
 async def disconnect(connection, client_id):
+    print('Disconnected: %s' % client_id)
     await connection.execute('select api.remove_connection($1)', client_id)
 
 @time(MESSAGE_PROCESSING_TIME)
@@ -47,21 +67,22 @@ async def process_notification(connection, notification_id):
 @time(CONNECTION_TIME)
 async def api(request):
     client_id = request.match_info.get('client_id')
-    print('Connected: %s' % client_id)
 
     connections = request.app.connections
     pool = request.app.db_pool
 
-    if client_id in connections:
-        print('Attempt to connect twice with same client_id: %s' % client_id)
-        return web.Response(status=500)
-
-    ws = web.WebSocketResponse()
-    connections[client_id] = ws
-    await ws.prepare(request)
-
     async with pool.acquire() as connection:
-        await connect(connection, client_id)
+        if client_id in connections:
+            connection_object = connections[client_id]
+            async with connection_object['lock']:
+                ws = await reconnect(connection, client_id, connection_object, request)
+        else:
+            connection_object = {}
+            lock = asyncio.Lock()
+            connection_object['lock'] = lock
+            connections[client_id] = connection_object
+            async with lock:
+                ws = await connect(connection, client_id, connection_object, request)
 
     async for msg in ws:
         if msg.type == WSMsgType.TEXT:
@@ -72,11 +93,12 @@ async def api(request):
         elif msg.type == WSMsgType.ERROR:
             print('Connection closed: %s' % ws.exception())
 
-    async with pool.acquire() as connection:
-        await disconnect(connection, client_id)
+    async with connection_object['lock']:
+        if connection_object['ws'] is ws:
+            del connections[client_id]
 
-    print ('Disconnected: %s' % client_id)
-    del connections[client_id]
+            async with pool.acquire() as connection:
+                await disconnect(connection, client_id)
 
     return ws
 
