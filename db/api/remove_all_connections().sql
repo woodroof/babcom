@@ -7,7 +7,7 @@ as
 $$
 begin
   delete from data.notifications;
-	delete from data.connections;
+  delete from data.connections;
 end;
 $$
 language 'plpgsql';

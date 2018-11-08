@@ -52,7 +52,7 @@ as
 $$
 begin
   delete from data.notifications;
-	delete from data.connections;
+  delete from data.connections;
 end;
 $$
 language 'plpgsql';
@@ -65,8 +65,8 @@ volatile
 as
 $$
 begin
-	insert into data.connections(client_id)
-	values(in_client_id);
+  insert into data.connections(client_id)
+  values(in_client_id);
 end;
 $$
 language 'plpgsql';
@@ -82,8 +82,8 @@ begin
   delete from data.notifications
   where client_id = in_client_id;
 
-	delete from data.connections
-	where client_id = in_client_id;
+  delete from data.connections
+  where client_id = in_client_id;
 end;
 $$
 language 'plpgsql';
@@ -96,18 +96,18 @@ volatile
 as
 $$
 declare
-	v_message text;
-	v_client_id text;
+  v_message text;
+  v_client_id text;
 begin
-	delete from data.notifications
-	where id = in_notification_id
-	returning message, client_id
-	into v_message, v_client_id;
+  delete from data.notifications
+  where id = in_notification_id
+  returning message, client_id
+  into v_message, v_client_id;
 
-	return jsonb_build_object(
-		'client_id',
+  return jsonb_build_object(
+    'client_id',
     v_client_id,
-		'message',
+    'message',
     v_message);
 end;
 $$
@@ -122,7 +122,7 @@ as
 $$
 declare
   v_client_id text;
-	v_notification_id text;
+  v_notification_id text;
   v_message jsonb :=
     jsonb_build_object(
       'type',
@@ -140,11 +140,11 @@ begin
     from data.connections
   )
   loop
-	  insert into data.notifications(message, client_id)
-	  values (v_message, v_client_id)
-	  returning id into v_notification_id;
+    insert into data.notifications(message, client_id)
+    values (v_message, v_client_id)
+    returning id into v_notification_id;
 
-	  perform pg_notify('api_channel', v_notification_id);
+    perform pg_notify('api_channel', v_notification_id);
   end loop;
 end;
 $$
@@ -3607,7 +3607,7 @@ begin
           'select json.get_' || v_type || '_array(' || v_json || '::' || v_json_type || ')',
           'Json is not an array');
       end loop;
-	  end loop;
+    end loop;
   end loop;
 end;
 $$
@@ -3681,7 +3681,7 @@ begin
           'select json.get_' || v_type || '_array(' || v_json || '::' || v_json_type || ', ''key'')',
           '%key% is not an array');
       end loop;
-	  end loop;
+    end loop;
   end loop;
 end;
 $$

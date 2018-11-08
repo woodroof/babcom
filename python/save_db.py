@@ -104,7 +104,7 @@ def save_function(schema, schema_dir_path, func, db_info):
 	file.write(func_type + '\n')
 	file.write('as\n')
 	file.write('$$\n')
-	file.write(func_body)
+	file.write(func_body.replace('\t', '  '))
 	file.write('\n$$\n')
 	file.write("language 'plpgsql';\n")
 

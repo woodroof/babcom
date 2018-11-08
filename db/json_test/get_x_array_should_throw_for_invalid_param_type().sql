@@ -17,7 +17,7 @@ begin
           'select json.get_' || v_type || '_array(' || v_json || '::' || v_json_type || ', ''key'')',
           '%key% is not an array');
       end loop;
-	  end loop;
+    end loop;
   end loop;
 end;
 $$
