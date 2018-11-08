@@ -2,8 +2,10 @@ import asyncio
 import asyncpg
 import json
 
-from aiohttp import web
-from aiohttp import WSMsgType
+from aiohttp import web, WSMsgType
+from aiojobs.aiohttp import atomic, setup
+from prometheus_client import Summary, Histogram, start_http_server
+from prometheus_async.aio import time
 
 DB_NAME = 'woodroof'
 DB_USER = 'woodroof'
@@ -12,7 +14,37 @@ DB_HOST = 'localhost'
 DB_PORT = 5432
 
 PORT = 8000
+PROMETHEUS_CLIENT_PORT = 9001
 
+OP_TIME_BUCKETS = (0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10)
+LONG_TIME_BUCKETS = (0.001, 0.01, 0.1, 1, 10, 1*60, 2*60, 5*60, 10*60, 30*60, 1*60*60, 2*60*60, 5*60*60, 10*60*60, 24*60*60)
+
+CONNECT_TIME = Histogram('connect_time_seconds', 'Time spent creating new connection in database', buckets=OP_TIME_BUCKETS)
+DISCONNECT_TIME = Histogram('disconnect_time_seconds', 'Time spent deleting connection from database', buckets=OP_TIME_BUCKETS)
+
+MESSAGE_PROCESSING_TIME = Histogram('message_processing_time_seconds', 'Time spent processing one message', buckets=OP_TIME_BUCKETS)
+NOTIFICATION_PROCESSING_TIME = Histogram('notification_processing_time_seconds', 'Time spent processing one database notification', buckets=OP_TIME_BUCKETS)
+
+CONNECTION_TIME = Histogram('connection_time_seconds', 'Connection lifetime', buckets=LONG_TIME_BUCKETS)
+
+@time(CONNECT_TIME)
+async def connect(connection, client_id):
+    await connection.execute('select api.add_connection($1)', client_id)
+
+@time(DISCONNECT_TIME)
+async def disconnect(connection, client_id):
+    await connection.execute('select api.remove_connection($1)', client_id)
+
+@time(MESSAGE_PROCESSING_TIME)
+async def process_message(connection, client_id, data):
+    await connection.execute('select api.api($1, $2)', client_id, data)
+
+@time(NOTIFICATION_PROCESSING_TIME)
+async def process_notification(connection, notification_id):
+    return await connection.fetchval('select api.get_notification($1)', notification_id)
+
+@atomic
+@time(CONNECTION_TIME)
 async def api(request):
     client_id = request.match_info.get('client_id')
     print('Connected: %s' % client_id)
@@ -29,19 +61,19 @@ async def api(request):
     await ws.prepare(request)
 
     async with pool.acquire() as connection:
-        await connection.execute('select api.add_connection($1)', client_id)
+        await connect(connection, client_id)
 
     async for msg in ws:
         if msg.type == WSMsgType.TEXT:
             async with pool.acquire() as connection:
-                await connection.execute('select api.api($1, $2)', client_id, msg.data)
+                await process_message(connection, client_id, msg.data)
         elif msg.type == WSMsgType.BINARY:
             print('Received binary message')
         elif msg.type == WSMsgType.ERROR:
             print('Connection closed: %s' % ws.exception())
 
     async with pool.acquire() as connection:
-        await connection.execute('select api.remove_connection($1)', client_id)
+        await disconnect(connection, client_id)
 
     print ('Disconnected: %s' % client_id)
     del connections[client_id]
@@ -57,12 +89,12 @@ async def get_image(request):
     # TODO
     web.Response(status=200, text=file_name)
 
-async def async_listener(app, payload):
+async def async_listener(app, notification_id):
     connections = app.connections
     pool = app.db_pool
 
     async with pool.acquire() as connection:
-        result = await connection.fetchval('select api.get_notification($1)', payload)
+        result = await process_notification(connection, notification_id)
         client_id = result['client_id']
         if client_id in connections:
             # TODO обработка исключения при закрытии подключения
@@ -84,6 +116,7 @@ async def init_connection(conn):
 
 async def init_app():
     app = web.Application()
+    setup(app)
     app.add_routes(
         [
             web.get('/api/{client_id}', api),
@@ -98,6 +131,8 @@ async def init_app():
     await app.listen_connection.add_listener('api_channel', listener_creator(app))
     return app
 
-loop = asyncio.get_event_loop()
-app = loop.run_until_complete(init_app())
-web.run_app(app, port = PORT)
+if __name__ == '__main__':
+    start_http_server(PROMETHEUS_CLIENT_PORT)
+    loop = asyncio.get_event_loop()
+    app = loop.run_until_complete(init_app())
+    web.run_app(app, port = PORT)
