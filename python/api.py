@@ -4,7 +4,7 @@ import json
 
 from aiohttp import web, WSMsgType
 from aiojobs.aiohttp import atomic, setup
-from prometheus_client import Summary, Histogram, start_http_server
+from prometheus_client import Gauge, Summary, Histogram, start_http_server
 from prometheus_async.aio import time
 
 DB_NAME = 'woodroof'
@@ -28,11 +28,15 @@ NOTIFICATION_PROCESSING_TIME = Histogram('notification_processing_time_seconds',
 
 CONNECTION_TIME = Histogram('connection_time_seconds', 'Connection lifetime', buckets=LONG_TIME_BUCKETS)
 
+CONNECTION_COUNT = Gauge('connection_count', 'Current number of active connections')
+PROCESSING_MESSAGE_COUNT = Gauge('processing_message_count', 'Current number of processing messages')
+
 async def init_socket(socket, request):
     await socket.prepare(request)
 
 @time(CONNECT_TIME)
 async def connect(connection, client_id, connection_object, request):
+    CONNECTION_COUNT.inc()
     print('Connected: %s' % client_id)
     await connection.execute('select api.add_connection($1)', client_id)
     ws = web.WebSocketResponse()
@@ -52,6 +56,7 @@ async def reconnect(connection, client_id, connection_object, request):
 
 @time(DISCONNECT_TIME)
 async def disconnect(connection, client_id):
+    CONNECTION_COUNT.dec()
     print('Disconnected: %s' % client_id)
     await connection.execute('select api.remove_connection($1)', client_id)
 
@@ -86,8 +91,10 @@ async def api(request):
 
     async for msg in ws:
         if msg.type == WSMsgType.TEXT:
+            PROCESSING_MESSAGE_COUNT.inc()
             async with pool.acquire() as connection:
                 await process_message(connection, client_id, msg.data)
+            PROCESSING_MESSAGE_COUNT.dec()
         elif msg.type == WSMsgType.BINARY:
             print('Received binary message')
         elif msg.type == WSMsgType.ERROR:
