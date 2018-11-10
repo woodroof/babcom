@@ -4,11 +4,10 @@ import sys
 
 from pathlib import Path
 
-DB_NAME = 'woodroof'
+from db_settings import DB_HOST, DB_PORT, DB_NAME
+
 DB_USER = 'woodroof'
 DB_PASSWORD = ''
-DB_HOST = 'localhost'
-DB_PORT = 5432
 
 DB_EXTENSIONS = ('pgcrypto',)
 

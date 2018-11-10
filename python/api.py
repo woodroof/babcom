@@ -7,11 +7,10 @@ from aiojobs.aiohttp import atomic, setup
 from prometheus_client import Gauge, Summary, Histogram, start_http_server
 from prometheus_async.aio import time
 
-DB_NAME = 'woodroof'
+from db_settings import DB_HOST, DB_PORT, DB_NAME
+
 DB_USER = 'woodroof'
 DB_PASSWORD = ''
-DB_HOST = 'localhost'
-DB_PORT = 5432
 
 PORT = 8000
 PROMETHEUS_CLIENT_PORT = 9001
@@ -125,9 +124,11 @@ async def async_listener(app, notification_id):
     async with pool.acquire() as connection:
         result = await process_notification(connection, notification_id)
         client_id = result['client_id']
+        # TODO гонка с reconnect?
         if client_id in connections:
+            ws = connections[client_id]['ws']
             # TODO обработка исключения при закрытии подключения
-            await connections[client_id].send_str(result['message'])
+            await ws.send_str(result['message'])
 
 def listener_creator(app):
     def listener(connection, pid, channel, payload):
