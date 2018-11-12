@@ -124,11 +124,13 @@ async def async_listener(app, notification_id):
     async with pool.acquire() as connection:
         result = await process_notification(connection, notification_id)
         client_id = result['client_id']
-        # TODO гонка с reconnect?
         if client_id in connections:
-            ws = connections[client_id]['ws']
-            # TODO обработка исключения при закрытии подключения
-            await ws.send_str(result['message'])
+            connection_object = connections[client_id]
+            ws = connection_object['ws']
+            async with connection_object['lock']:
+                if connection_object['ws'] is ws:
+                    # TODO обработка исключения при закрытии подключения
+                    await ws.send_str(result['message'])
 
 def listener_creator(app):
     def listener(connection, pid, channel, payload):
