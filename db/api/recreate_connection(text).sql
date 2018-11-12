@@ -7,7 +7,7 @@ as
 $$
 begin
   delete from data.notifications
-  where client_id = in_client_id;
+  where connection_id = (select id from data.connections where client_id = in_client_id);
 end;
 $$
 language 'plpgsql';

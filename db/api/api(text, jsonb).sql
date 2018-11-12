@@ -6,8 +6,8 @@ volatile
 as
 $$
 declare
-  v_client_id text;
-  v_notification_id text;
+  v_connection_id integer;
+  v_notification_code text;
   v_message jsonb :=
     jsonb_build_object(
       'type',
@@ -19,17 +19,17 @@ declare
         'message',
         in_message));
 begin
-  for v_client_id in
+  for v_connection_id in
   (
-    select client_id
+    select id
     from data.connections
   )
   loop
-    insert into data.notifications(message, client_id)
-    values (v_message, v_client_id)
-    returning id into v_notification_id;
+    insert into data.notifications(message, connection_id)
+    values (v_message, v_connection_id)
+    returning code into v_notification_code;
 
-    perform pg_notify('api_channel', v_notification_id);
+    perform pg_notify('api_channel', v_notification_code);
   end loop;
 end;
 $$

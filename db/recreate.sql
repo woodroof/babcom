@@ -82,8 +82,8 @@ volatile
 as
 $$
 declare
-  v_client_id text;
-  v_notification_id text;
+  v_connection_id integer;
+  v_notification_code text;
   v_message jsonb :=
     jsonb_build_object(
       'type',
@@ -95,17 +95,17 @@ declare
         'message',
         in_message));
 begin
-  for v_client_id in
+  for v_connection_id in
   (
-    select client_id
+    select id
     from data.connections
   )
   loop
-    insert into data.notifications(message, client_id)
-    values (v_message, v_client_id)
-    returning id into v_notification_id;
+    insert into data.notifications(message, connection_id)
+    values (v_message, v_connection_id)
+    returning code into v_notification_code;
 
-    perform pg_notify('api_channel', v_notification_id);
+    perform pg_notify('api_channel', v_notification_code);
   end loop;
 end;
 $$
@@ -113,19 +113,25 @@ language 'plpgsql';
 
 -- drop function api.get_notification(text);
 
-create or replace function api.get_notification(in_notification_id text)
+create or replace function api.get_notification(in_notification_code text)
 returns jsonb
 volatile
 as
 $$
 declare
   v_message text;
+  v_connection_id integer;
   v_client_id text;
 begin
   delete from data.notifications
-  where id = in_notification_id
-  returning message, client_id
-  into v_message, v_client_id;
+  where code = in_notification_code
+  returning message, connection_id
+  into v_message, v_connection_id;
+  
+  select client_id
+  into v_client_id
+  from data.connections
+  where id = v_connection_id;
 
   return jsonb_build_object(
     'client_id',
@@ -145,7 +151,7 @@ as
 $$
 begin
   delete from data.notifications
-  where client_id = in_client_id;
+  where connection_id = (select id from data.connections where client_id = in_client_id);
 end;
 $$
 language 'plpgsql';
@@ -171,12 +177,19 @@ returns void
 volatile
 as
 $$
+declare
+  v_connection_id integer;
 begin
-  delete from data.notifications
+  select id
+  into v_connection_id
+  from data.connections
   where client_id = in_client_id;
 
+  delete from data.notifications
+  where connection_id = v_connection_id;
+
   delete from data.connections
-  where client_id = in_client_id;
+  where id = v_connection_id;
 end;
 $$
 language 'plpgsql';
@@ -4601,23 +4614,27 @@ language 'plpgsql';
 -- drop table data.connections;
 
 create table data.connections(
+  id integer not null generated always as identity,
   client_id text not null,
-  constraint connections_pk primary key(client_id)
+  constraint connections_pk primary key(id),
+  constraint connections_unique_client_id unique(client_id)
 );
 
 -- drop table data.notifications;
 
 create table data.notifications(
-  id text not null default (pgcrypto.gen_random_uuid())::text,
+  id integer not null generated always as identity,
+  code text not null default (pgcrypto.gen_random_uuid())::text,
   message jsonb not null,
-  client_id text not null,
+  connection_id integer not null,
   constraint notifications_pk primary key(id),
-  constraint notifications_fk_connections foreign key(client_id) references data.connections(client_id)
+  constraint notifications_unique_code unique(code),
+  constraint notifications_fk_connections foreign key(connection_id) references data.connections(id)
 );
 
 -- Creating indexes
 
--- drop index data.notifications_idx_client_id;
+-- drop index data.notifications_idx_connection_id;
 
-create index notifications_idx_client_id on data.notifications(client_id);
+create index notifications_idx_connection_id on data.notifications(connection_id);
 
