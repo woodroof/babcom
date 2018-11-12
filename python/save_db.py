@@ -244,7 +244,7 @@ select
       attnum > 0
   ) as columns,
   (
-    select array_agg(c.conname || ' ' || pg_get_constraintdef(c.oid))
+    select array_agg(c.conname || ' ' || pg_get_constraintdef(c.oid) order by c.conname)
     from pg_constraint c
     where conrelid = t.oid
   ) as constraints
