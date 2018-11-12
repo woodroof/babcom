@@ -40,6 +40,23 @@ create schema random;
 create schema random_test;
 create schema error;
 create schema data;
+create schema types;
+
+-- Creating enums
+
+-- drop type types.attribute_type;
+
+create type types.attribute_type as enum(
+  'system',
+  'hidden',
+  'normal');
+
+-- drop type types.card_type;
+
+create type types.card_type as enum(
+  'full',
+  'mini');
+
 
 -- Creating functions
 
