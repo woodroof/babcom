@@ -18,12 +18,7 @@ PROMETHEUS_CLIENT_PORT = 9001
 OP_TIME_BUCKETS = (0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10)
 LONG_TIME_BUCKETS = (0.001, 0.01, 0.1, 1, 10, 1*60, 2*60, 5*60, 10*60, 30*60, 1*60*60, 2*60*60, 5*60*60, 10*60*60, 24*60*60)
 
-CONNECT_TIME = Histogram('connect_time_seconds', 'Time spent creating new connection in database', buckets=OP_TIME_BUCKETS)
-RECONNECT_TIME = Histogram('reconnect_time_seconds', 'Time spent renewing connection in database', buckets=OP_TIME_BUCKETS)
-DISCONNECT_TIME = Histogram('disconnect_time_seconds', 'Time spent deleting connection from database', buckets=OP_TIME_BUCKETS)
-
-MESSAGE_PROCESSING_TIME = Histogram('message_processing_time_seconds', 'Time spent processing one message', buckets=OP_TIME_BUCKETS)
-NOTIFICATION_PROCESSING_TIME = Histogram('notification_processing_time_seconds', 'Time spent processing one database notification', buckets=OP_TIME_BUCKETS)
+SQL_TIME = Histogram('sql_time_seconds', 'Time spent executing sql query', buckets=OP_TIME_BUCKETS)
 
 CONNECTION_TIME = Histogram('connection_time_seconds', 'Connection lifetime', buckets=LONG_TIME_BUCKETS)
 
@@ -33,39 +28,42 @@ PROCESSING_MESSAGE_COUNT = Gauge('processing_message_count', 'Current number of 
 async def init_socket(socket, request):
     await socket.prepare(request)
 
-@time(CONNECT_TIME)
+@time(SQL_TIME)
+async def execute_sql(connection, query, *args):
+    await connection.execute(query, *args)
+
+@time(SQL_TIME)
+async def fetchval_sql(connection, query, *args):
+    return await connection.fetchval(query, *args)
+
 async def connect(connection, client_id, connection_object, request):
     CONNECTION_COUNT.inc()
     print('Connected: %s' % client_id)
-    await connection.execute('select api.add_connection($1)', client_id)
+    await execute_sql(connection, 'select api.add_connection($1)', client_id)
     ws = web.WebSocketResponse()
     connection_object['ws'] = ws
     await init_socket(ws, request)
     return ws
 
-@time(RECONNECT_TIME)
 async def reconnect(connection, client_id, connection_object, request):
     print('Reconnected: %s' % client_id)
     await connection_object['ws'].close()
-    await connection.execute('select api.recreate_connection($1)', client_id)
+    await execute_sql(connection, 'select api.recreate_connection($1)', client_id)
     ws = web.WebSocketResponse()
     connection_object['ws'] = ws
     await init_socket(ws, request)
     return ws
 
-@time(DISCONNECT_TIME)
 async def disconnect(connection, client_id):
     CONNECTION_COUNT.dec()
     print('Disconnected: %s' % client_id)
-    await connection.execute('select api.remove_connection($1)', client_id)
+    await execute_sql(connection, 'select api.remove_connection($1)', client_id)
 
-@time(MESSAGE_PROCESSING_TIME)
 async def process_message(connection, client_id, data):
-    await connection.execute('select api.api($1, $2)', client_id, data)
+    await execute_sql(connection, 'select api.api($1, $2)', client_id, data)
 
-@time(NOTIFICATION_PROCESSING_TIME)
 async def process_notification(connection, notification_id):
-    return await connection.fetchval('select api.get_notification($1)', notification_id)
+    return await fetchval_sql(connection, 'select api.get_notification($1)', notification_id)
 
 @atomic
 @time(CONNECTION_TIME)
