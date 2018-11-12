@@ -12,7 +12,7 @@ DB_PASSWORD = ''
 DB_EXTENSIONS = ('pgcrypto',)
 
 def append_to_file(file, source_file_paths):
-	for source_file_path in source_file_paths:
+	for source_file_path in sorted(source_file_paths):
 		with open(source_file_path) as source_file:
 			file.write(source_file.read())
 			file.write('\n')
@@ -64,7 +64,7 @@ create extension {0} schema {0};
 """.format(extension))
 
 		file.write('\n-- Creating schemas\n\n')
-		for schema in self.schemas:
+		for schema in sorted(self.schemas):
 			file.write('create schema {};\n'.format(schema))
 
 		file.write('\n-- Creating enums\n\n')
