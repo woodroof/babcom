@@ -20,6 +20,7 @@ def append_to_file(file, source_file_paths):
 class DatabaseInfo:
 	def __init__(self):
 		self.schemas = []
+		self.enums = []
 		self.functions = []
 		self.indexes = []
 		self.tables = []
@@ -66,6 +67,9 @@ create extension {0} schema {0};
 		for schema in self.schemas:
 			file.write('create schema {};\n'.format(schema))
 
+		file.write('\n-- Creating enums\n\n')
+		append_to_file(file, self.enums)
+
 		file.write('\n-- Creating functions\n\n')
 		append_to_file(file, self.functions)
 
@@ -85,6 +89,17 @@ where nspname not like 'pg\_%%' and nspname != 'information_schema' and nspname 
 		(DB_EXTENSIONS,))
 	result = cursor.fetchall()
 	return [elem[0] for elem in result]
+
+def save_enum(schema, schema_dir_path, enum, db_info):
+	enum_name = enum[0]
+	enum_values = enum[1]
+
+	file_path = schema_dir_path / (enum_name + '.sql')
+	db_info.enums.append(file_path)
+	file = open(file_path, "w+")
+	file.write('-- drop type ' + schema + '.' + enum_name + ';\n\n')
+	file.write('create type ' + schema + '.' + enum_name + ' as enum(\n')
+	file.write(enum_values + ');\n')
 
 def save_function(schema, schema_dir_path, func, db_info):
 	func_name = func[0]
@@ -131,6 +146,34 @@ def save_index(schema, schema_dir_path, index, db_info):
 	file = open(file_path, "w+")
 	file.write('-- drop index ' + schema + '.' + index_name + ';\n\n')
 	file.write(index_definition.lower().replace(' using btree ', '') + ';\n')
+
+def save_enums(connection, schema, schema_dir_path, db_info):
+	cursor = connection.cursor()
+	cursor.execute("""
+select
+  t.typname enum_name,
+  (
+    select string_agg(ev.name, E',\n')
+    from
+    (
+      select '  ''' || enumlabel || '''' as name
+      from pg_enum
+      where enumtypid = t.oid
+      order by enumsortorder
+    ) ev
+  ) enum_values
+from pg_type t
+join pg_namespace n
+  on n.nspname = %s
+  and n.oid = t.typnamespace
+where
+  -- only enums
+  t.typtype = 'e'
+""",
+		(schema,))
+	enums = cursor.fetchall()
+	for enum in enums:
+		save_enum(schema, schema_dir_path, enum, db_info)
 
 def save_functions(connection, schema, schema_dir_path, db_info):
 	cursor = connection.cursor()
@@ -238,6 +281,7 @@ where i.relkind = 'i'
 		save_index(schema, schema_dir_path, index, db_info)
 
 def save_schema(connection, schema, schema_dir_path, db_info):
+	save_enums(connection, schema, schema_dir_path, db_info)
 	save_functions(connection, schema, schema_dir_path, db_info)
 	save_tables(connection, schema, schema_dir_path, db_info)
 	save_indexes(connection, schema, schema_dir_path, db_info)
