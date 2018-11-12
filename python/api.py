@@ -4,7 +4,7 @@ import json
 
 from aiohttp import web, WSMsgType
 from aiojobs.aiohttp import atomic, setup
-from prometheus_client import Gauge, Summary, Histogram, start_http_server
+from prometheus_client import Counter, Gauge, Summary, Histogram, start_http_server
 from prometheus_async.aio import time
 
 from db_settings import DB_HOST, DB_PORT, DB_NAME
@@ -22,6 +22,8 @@ SQL_TIME = Histogram('sql_time_seconds', 'Time spent executing sql query', bucke
 
 CONNECTION_TIME = Histogram('connection_time_seconds', 'Connection lifetime', buckets=LONG_TIME_BUCKETS)
 
+SQL_EXCEPTION_COUNT = Counter('sql_exception_count', 'Total number of sql errors')
+
 CONNECTION_COUNT = Gauge('connection_count', 'Current number of active connections')
 PROCESSING_MESSAGE_COUNT = Gauge('processing_message_count', 'Current number of processing messages')
 
@@ -30,11 +32,19 @@ async def init_socket(socket, request):
 
 @time(SQL_TIME)
 async def execute_sql(connection, query, *args):
-    await connection.execute(query, *args)
+    try:
+        await connection.execute(query, *args)
+    except:
+        SQL_EXCEPTION_COUNT.inc()
+        raise
 
 @time(SQL_TIME)
 async def fetchval_sql(connection, query, *args):
-    return await connection.fetchval(query, *args)
+    try:
+        return await connection.fetchval(query, *args)
+    except:
+        SQL_EXCEPTION_COUNT.inc()
+        raise
 
 async def connect(connection, client_id, connection_object, request):
     CONNECTION_COUNT.inc()
