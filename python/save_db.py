@@ -134,7 +134,7 @@ def save_table(schema, schema_dir_path, table, db_info):
 	file.write('create table ' + schema + '.' + table_name + '(\n  ')
 	file.write(',\n  '.join(table_columns))
 	for constraint in table_constraints:
-		file.write(',\n  constraint ' + constraint.lower().replace(' key (', ' key('))
+		file.write(',\n  constraint ' + constraint.lower().replace(' key (', ' key(').replace(' unique (', ' unique('))
 	file.write("\n);\n")
 
 def save_index(schema, schema_dir_path, index, db_info):
