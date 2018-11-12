@@ -26,7 +26,7 @@ class DatabaseInfo:
 	
 	def create_recreate_script(self, db_path):
 		file = open(db_path / 'recreate.sql', 'w+')
-		file.write("""-- Cleaning database
+		file.write(r"""-- Cleaning database
 
 create schema if not exists database_cleanup;
 
@@ -77,7 +77,7 @@ create extension {0} schema {0};
 
 def get_schema_list(connection):
 	cursor = connection.cursor()
-	cursor.execute("""
+	cursor.execute(r"""
 select nspname as name
 from pg_namespace
 where nspname not like 'pg\_%%' and nspname != 'information_schema' and nspname not in %s;
