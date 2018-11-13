@@ -67,8 +67,12 @@ volatile
 as
 $$
 begin
+  assert in_client_id is not null;
+
   insert into data.connections(client_id)
   values(in_client_id);
+exception when unique_violation then
+  raise exception 'Client with id "%" already connected', in_client_id;
 end;
 $$
 language 'plpgsql';
@@ -94,6 +98,9 @@ declare
         'message',
         in_message));
 begin
+  assert in_client_id is not null;
+  assert in_message is not null;
+
   for v_connection_id in
   (
     select id
@@ -122,15 +129,23 @@ declare
   v_connection_id integer;
   v_client_id text;
 begin
+  assert in_notification_code is not null;
+
   delete from data.notifications
   where code = in_notification_code
   returning message, connection_id
   into v_message, v_connection_id;
-  
+
+  if v_connection_id is null then
+    raise exception 'Can''t find notification with code "%"', in_notification_code;
+  end if;
+
   select client_id
   into v_client_id
   from data.connections
   where id = v_connection_id;
+
+  assert v_client_id is not null;
 
   return jsonb_build_object(
     'client_id',
@@ -148,9 +163,22 @@ returns void
 volatile
 as
 $$
+declare
+  v_connection_id integer;
 begin
+  assert in_client_id is not null;
+
+  select id
+  into v_connection_id
+  from data.connections
+  where client_id = in_client_id;
+
+  if v_connection_id is null then
+    raise exception 'Client with id "%" is not connected', in_client_id;
+  end if;
+
   delete from data.notifications
-  where connection_id = (select id from data.connections where client_id = in_client_id);
+  where connection_id = v_connection_id;
 end;
 $$
 language 'plpgsql';
@@ -179,10 +207,16 @@ $$
 declare
   v_connection_id integer;
 begin
+  assert in_client_id is not null;
+
   select id
   into v_connection_id
   from data.connections
   where client_id = in_client_id;
+
+  if v_connection_id is null then
+    raise exception 'Client with id "%" is not connected', in_client_id;
+  end if;
 
   delete from data.notifications
   where connection_id = v_connection_id;

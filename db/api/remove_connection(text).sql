@@ -8,10 +8,16 @@ $$
 declare
   v_connection_id integer;
 begin
+  assert in_client_id is not null;
+
   select id
   into v_connection_id
   from data.connections
   where client_id = in_client_id;
+
+  if v_connection_id is null then
+    raise exception 'Client with id "%" is not connected', in_client_id;
+  end if;
 
   delete from data.notifications
   where connection_id = v_connection_id;

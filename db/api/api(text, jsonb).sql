@@ -19,6 +19,9 @@ declare
         'message',
         in_message));
 begin
+  assert in_client_id is not null;
+  assert in_message is not null;
+
   for v_connection_id in
   (
     select id
