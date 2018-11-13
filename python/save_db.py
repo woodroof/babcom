@@ -129,6 +129,8 @@ def save_table(schema, schema_dir_path, table, db_info):
 	table_name = table[0]
 	table_columns = table[1]
 	table_constraints = table[2]
+	table_comment = table[3]
+	column_comments = table[4]
 
 	file_path = schema_dir_path / (table_name + '.sql')
 	db_info.tables.append(file_path)
@@ -139,6 +141,12 @@ def save_table(schema, schema_dir_path, table, db_info):
 	for constraint in table_constraints:
 		file.write(',\n  constraint ' + constraint.lower().replace(' key (', ' key(').replace(' unique (', ' unique('))
 	file.write("\n);\n")
+	if table_comment is not None:
+		file.write('\ncomment on table ' + schema + '.' + table_name + " is '" + table_comment + "';\n")
+	if column_comments:
+		file.write('\n')
+		for column_comment in column_comments:
+			file.write('comment on column ' + schema + '.' + table_name + '.' + column_comment + ';\n')
 
 def save_index(schema, schema_dir_path, index, db_info):
 	index_name = index[0]
@@ -250,7 +258,26 @@ select
     select array_agg(c.conname || ' ' || pg_get_constraintdef(c.oid) order by c.conname)
     from pg_constraint c
     where conrelid = t.oid
-  ) as constraints
+  ) as constraints,
+  (
+    select description
+    from pg_description
+    where
+      objoid = t.oid and
+      objsubid = 0
+  ) as comment,
+  (
+    select
+      array_agg(
+        a.attname || ' is ''' || d.description || '''')
+    from pg_attribute a
+    join pg_description d
+      on d.objoid = a.attrelid
+      and d.objsubid = a.attnum
+    where
+      a.attrelid = t.oid and
+      a.attnum > 0
+  ) as column_comments
 from pg_class t
 join pg_namespace n
   on n.nspname = %s
