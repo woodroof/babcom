@@ -193,6 +193,32 @@ end;
 $$
 language 'plpgsql';
 
+-- drop function data.get_param(text);
+
+create or replace function data.get_param(in_code text)
+returns jsonb
+stable
+as
+$$
+declare
+  v_value jsonb;
+begin
+  assert in_code is not null;
+
+  select value
+  into v_value
+  from data.params
+  where code = in_code;
+
+  if v_value is null then
+    raise exception 'Param "%" was not found', in_code;
+  end if;
+
+  return v_value;
+end;
+$$
+language 'plpgsql';
+
 -- drop function error.raise_invalid_input_param_value(text);
 
 create or replace function error.raise_invalid_input_param_value(in_message text)
@@ -4629,6 +4655,17 @@ create table data.notifications(
   constraint notifications_fk_connections foreign key(connection_id) references data.connections(id),
   constraint notifications_pk primary key(id),
   constraint notifications_unique_code unique(code)
+);
+
+-- drop table data.params;
+
+create table data.params(
+  id integer not null generated always as identity,
+  code text not null,
+  value jsonb not null,
+  description text,
+  constraint params_pk primary key(id),
+  constraint params_unique_code unique(code)
 );
 
 -- Creating indexes
