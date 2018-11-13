@@ -40,20 +40,19 @@ create schema json_test;
 create schema random;
 create schema random_test;
 create schema test;
-create schema types;
 
 -- Creating enums
 
--- drop type types.attribute_type;
+-- drop type data.attribute_type;
 
-create type types.attribute_type as enum(
+create type data.attribute_type as enum(
   'system',
   'hidden',
   'normal');
 
--- drop type types.card_type;
+-- drop type data.card_type;
 
-create type types.card_type as enum(
+create type data.card_type as enum(
   'full',
   'mini');
 
