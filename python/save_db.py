@@ -1,5 +1,6 @@
-import shutil
 import psycopg2
+import re
+import shutil
 import sys
 
 from pathlib import Path
@@ -10,6 +11,8 @@ DB_USER = 'woodroof'
 DB_PASSWORD = ''
 
 DB_EXTENSIONS = ('pgcrypto',)
+
+EMPTY_STR_REGEX = re.compile(r"^ +$", re.MULTILINE)
 
 def append_to_file(file, source_file_paths):
 	for source_file_path in sorted(source_file_paths):
@@ -118,7 +121,7 @@ def save_function(schema, schema_dir_path, func, db_info):
 	file.write(func_type + '\n')
 	file.write('as\n')
 	file.write('$$\n')
-	file.write(func_body.replace('\t', '  '))
+	file.write(EMPTY_STR_REGEX.sub('', func_body.replace('\t', '  ')))
 	file.write('\n$$\n')
 	file.write("language 'plpgsql';\n")
 
