@@ -27,6 +27,9 @@ drop schema database_cleanup cascade;
 
 -- Creating extensions
 
+create schema intarray;
+create extension intarray schema intarray;
+
 create schema pgcrypto;
 create extension pgcrypto schema pgcrypto;
 

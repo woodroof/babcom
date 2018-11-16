@@ -10,7 +10,7 @@ from db_settings import DB_HOST, DB_PORT, DB_NAME
 DB_USER = 'woodroof'
 DB_PASSWORD = ''
 
-DB_EXTENSIONS = ('pgcrypto',)
+DB_EXTENSIONS = ('intarray', 'pgcrypto')
 
 EMPTY_STR_REGEX = re.compile(r"^ +$", re.MULTILINE)
 
