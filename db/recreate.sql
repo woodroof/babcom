@@ -255,6 +255,22 @@ end;
 $$
 language 'plpgsql';
 
+-- drop function data.objects_after_insert();
+
+create or replace function data.objects_after_insert()
+returns trigger
+volatile
+as
+$$
+begin
+  insert into data.object_objects(parent_object_id, object_id)
+  values(new.id, new.id);
+
+  return null;
+end;
+$$
+language 'plpgsql';
+
 -- drop function error.raise_invalid_input_param_value(text);
 
 create or replace function error.raise_invalid_input_param_value(in_message text)
@@ -4710,6 +4726,45 @@ create table data.notifications(
   constraint notifications_unique_code unique(code)
 );
 
+-- drop table data.object_objects;
+
+create table data.object_objects(
+  id integer not null,
+  parent_object_id integer not null,
+  object_id integer not null,
+  intermediate_object_ids integer[],
+  start_time timestamp with time zone not null default now(),
+  constraint object_objects_fk_object foreign key(object_id) references data.objects(id),
+  constraint object_objects_fk_parent_object foreign key(parent_object_id) references data.objects(id),
+  constraint object_objects_intermediate_object_ids_check check(intarray.uniq(intarray.sort(intermediate_object_ids)) = intarray.sort(intermediate_object_ids)),
+  constraint object_objects_pk primary key(id)
+);
+
+comment on column data.object_objects.intermediate_object_ids is 'Список промежуточных объектов, через которые связан дочерний объект с родительским';
+
+-- drop table data.object_objects_journal;
+
+create table data.object_objects_journal(
+  id integer not null generated always as identity,
+  parent_object_id integer not null,
+  object_id integer not null,
+  intermediate_object_ids integer[],
+  start_time timestamp with time zone not null,
+  end_time timestamp with time zone not null,
+  constraint object_objects_journal_fk_object foreign key(object_id) references data.objects(id),
+  constraint object_objects_journal_fk_parent_object foreign key(parent_object_id) references data.objects(id),
+  constraint object_objects_journal_pk primary key(id)
+);
+
+-- drop table data.objects;
+
+create table data.objects(
+  id integer not null generated always as identity,
+  code text not null default (pgcrypto.gen_random_uuid())::text,
+  constraint objects_pk primary key(id),
+  constraint objects_unique_code unique(code)
+);
+
 -- drop table data.params;
 
 create table data.params(
@@ -4726,4 +4781,30 @@ create table data.params(
 -- drop index data.notifications_idx_connection_id;
 
 create index notifications_idx_connection_id on data.notifications(connection_id);
+
+-- drop index data.object_objects_idx_loi_goi;
+
+create unique index object_objects_idx_loi_goi on data.object_objects(least(parent_object_id, object_id), greatest(parent_object_id, object_id)) where (intermediate_object_ids is null);
+
+-- drop index data.object_objects_idx_oi;
+
+create index object_objects_idx_oi on data.object_objects(object_id);
+
+-- drop index data.object_objects_idx_poi_oi;
+
+create unique index object_objects_idx_poi_oi on data.object_objects(parent_object_id, object_id) where (intermediate_object_ids is null);
+
+-- drop index data.object_objects_idx_poi_oi_ioi;
+
+create unique index object_objects_idx_poi_oi_ioi on data.object_objects(parent_object_id, object_id, intarray.uniq(intarray.sort(intermediate_object_ids))) where (intermediate_object_ids is not null);
+
+-- Creating triggers
+
+-- drop trigger objects_trigger_after_insert on data.objects;
+
+create trigger objects_trigger_after_insert
+after insert
+on data.objects
+for each row
+execute function data.objects_after_insert();
 
