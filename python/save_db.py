@@ -17,8 +17,8 @@ EMPTY_STR_REGEX = re.compile(r"^ +$", re.MULTILINE)
 def append_to_file(file, source_file_paths):
 	for source_file_path in sorted(source_file_paths):
 		with open(source_file_path) as source_file:
-			file.write(source_file.read())
 			file.write('\n')
+			file.write(source_file.read())
 
 class DatabaseInfo:
 	def __init__(self):
@@ -71,19 +71,19 @@ create extension {0} schema {0};
 		for schema in sorted(self.schemas):
 			file.write('create schema {};\n'.format(schema))
 
-		file.write('\n-- Creating enums\n\n')
+		file.write('\n-- Creating enums\n')
 		append_to_file(file, self.enums)
 
-		file.write('-- Creating functions\n\n')
+		file.write('\n-- Creating functions\n')
 		append_to_file(file, self.functions)
 
-		file.write('-- Creating tables\n\n')
+		file.write('\n-- Creating tables\n')
 		append_to_file(file, self.tables)
 
-		file.write('-- Creating indexes\n\n')
+		file.write('\n-- Creating indexes\n')
 		append_to_file(file, self.indexes)
 
-		file.write('-- Creating triggers\n\n')
+		file.write('\n-- Creating triggers\n')
 		append_to_file(file, self.triggers)
 
 def get_schema_list(connection):
