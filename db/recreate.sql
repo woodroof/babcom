@@ -4721,7 +4721,6 @@ create table data.notifications(
   code text not null default (pgcrypto.gen_random_uuid())::text,
   message jsonb not null,
   connection_id integer not null,
-  constraint notifications_fk_connections foreign key(connection_id) references data.connections(id),
   constraint notifications_pk primary key(id),
   constraint notifications_unique_code unique(code)
 );
@@ -4734,8 +4733,6 @@ create table data.object_objects(
   object_id integer not null,
   intermediate_object_ids integer[],
   start_time timestamp with time zone not null default now(),
-  constraint object_objects_fk_object foreign key(object_id) references data.objects(id),
-  constraint object_objects_fk_parent_object foreign key(parent_object_id) references data.objects(id),
   constraint object_objects_intermediate_object_ids_check check(intarray.uniq(intarray.sort(intermediate_object_ids)) = intarray.sort(intermediate_object_ids)),
   constraint object_objects_pk primary key(id)
 );
@@ -4751,8 +4748,6 @@ create table data.object_objects_journal(
   intermediate_object_ids integer[],
   start_time timestamp with time zone not null,
   end_time timestamp with time zone not null,
-  constraint object_objects_journal_fk_object foreign key(object_id) references data.objects(id),
-  constraint object_objects_journal_fk_parent_object foreign key(parent_object_id) references data.objects(id),
   constraint object_objects_journal_pk primary key(id)
 );
 
@@ -4775,6 +4770,23 @@ create table data.params(
   constraint params_pk primary key(id),
   constraint params_unique_code unique(code)
 );
+
+-- Creating foreign keys
+
+alter table data.notifications add constraint notifications_fk_connections
+foreign key(connection_id) references data.connections(id);
+
+alter table data.object_objects add constraint object_objects_fk_object
+foreign key(object_id) references data.objects(id);
+
+alter table data.object_objects add constraint object_objects_fk_parent_object
+foreign key(parent_object_id) references data.objects(id);
+
+alter table data.object_objects_journal add constraint object_objects_journal_fk_object
+foreign key(object_id) references data.objects(id);
+
+alter table data.object_objects_journal add constraint object_objects_journal_fk_parent_object
+foreign key(parent_object_id) references data.objects(id);
 
 -- Creating indexes
 

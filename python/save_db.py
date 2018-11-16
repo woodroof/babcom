@@ -27,6 +27,7 @@ class DatabaseInfo:
 		self.functions = []
 		self.indexes = []
 		self.tables = []
+		self.foreign_keys = []
 		self.triggers = []
 	
 	def create_recreate_script(self, db_path):
@@ -79,6 +80,9 @@ create extension {0} schema {0};
 
 		file.write('\n-- Creating tables\n')
 		append_to_file(file, self.tables)
+
+		file.write('\n-- Creating foreign keys\n')
+		append_to_file(file, self.foreign_keys)
 
 		file.write('\n-- Creating indexes\n')
 		append_to_file(file, self.indexes)
@@ -151,6 +155,17 @@ def save_table(schema, schema_dir_path, table, db_info):
 		file.write('\n')
 		for column_comment in column_comments:
 			file.write('comment on column ' + schema + '.' + table_name + '.' + column_comment + ';\n')
+
+def save_foreign_key(schema, schema_dir_path, foreign_key, db_info):
+	table_name = foreign_key[0]
+	key_name = foreign_key[1]
+	key_def = foreign_key[2]
+
+	file_path = schema_dir_path / (key_name + '.sql')
+	db_info.foreign_keys.append(file_path)
+	file = open(file_path, "w+")
+	file.write('alter table ' + schema + '.' + table_name + ' add constraint ' + key_name + '\n')
+	file.write(key_def.lower().replace(' key (', ' key(') + ';\n')
 
 def save_index(schema, schema_dir_path, index, db_info):
 	index_name = index[0]
@@ -310,7 +325,9 @@ select
   (
     select array_agg(c.conname || ' ' || (case when c.conbin is null then pg_get_constraintdef(c.oid) else 'check' || c.consrc end) order by c.conname)
     from pg_constraint c
-    where conrelid = t.oid
+    where
+      conrelid = t.oid and
+      contype != 'f'
   ) as constraints,
   (
     select description
@@ -343,6 +360,28 @@ where
 	tables = cursor.fetchall()
 	for table in tables:
 		save_table(schema, schema_dir_path, table, db_info)
+
+def save_foreign_keys(connection, schema, schema_dir_path, db_info):
+	cursor = connection.cursor()
+	cursor.execute("""
+select
+  t.relname table_name,
+  c.conname key_name,
+  pg_get_constraintdef(c.oid) key_def
+from pg_class t
+join pg_namespace n
+  on n.nspname = %s
+  and t.relnamespace = n.oid
+  -- only ordinary tables
+  and t.relkind = 'r'
+join pg_constraint c
+  on c.conrelid = t.oid
+  and c.contype = 'f'
+""",
+		(schema,))
+	foreign_keys = cursor.fetchall()
+	for foreign_key in foreign_keys:
+		save_foreign_key(schema, schema_dir_path, foreign_key, db_info)
 
 def save_indexes(connection, schema, schema_dir_path, db_info):
 	cursor = connection.cursor()
@@ -398,6 +437,7 @@ def save_schema(connection, schema, schema_dir_path, db_info):
 	save_enums(connection, schema, schema_dir_path, db_info)
 	save_functions(connection, schema, schema_dir_path, db_info)
 	save_tables(connection, schema, schema_dir_path, db_info)
+	save_foreign_keys(connection, schema, schema_dir_path, db_info)
 	save_indexes(connection, schema, schema_dir_path, db_info)
 	save_triggers(connection, schema, schema_dir_path, db_info)
 

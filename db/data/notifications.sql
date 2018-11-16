@@ -5,7 +5,6 @@ create table data.notifications(
   code text not null default (pgcrypto.gen_random_uuid())::text,
   message jsonb not null,
   connection_id integer not null,
-  constraint notifications_fk_connections foreign key(connection_id) references data.connections(id),
   constraint notifications_pk primary key(id),
   constraint notifications_unique_code unique(code)
 );
