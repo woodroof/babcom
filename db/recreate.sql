@@ -380,6 +380,32 @@ end;
 $$
 language 'plpgsql';
 
+-- drop function data.get_attribute_id(text);
+
+create or replace function data.get_attribute_id(in_attribute_code text)
+returns integer
+stable
+as
+$$
+declare
+  v_attribute_id integer;
+begin
+  assert in_attribute_code is not null;
+
+  select id
+  into v_attribute_id
+  from data.attributes
+  where code = in_attribute_code;
+
+  if v_attribute_id is null then
+    perform error.raise_invalid_input_param_value('Can''t find attribute "%s"', in_attribute_code);
+  end if;
+
+  return v_attribute_id;
+end;
+$$
+language 'plpgsql';
+
 -- drop function data.get_bigint_param(text);
 
 create or replace function data.get_bigint_param(in_code text)
@@ -433,6 +459,58 @@ begin
       data.get_param(in_code));
 exception when invalid_parameter_value then
   raise exception 'Param "%" is not an integer', in_code;
+end;
+$$
+language 'plpgsql';
+
+-- drop function data.get_object_code(integer);
+
+create or replace function data.get_object_code(in_object_id integer)
+returns text
+stable
+as
+$$
+declare
+  v_object_code text;
+begin
+  assert in_object_id is not null;
+
+  select code
+  into v_object_code
+  from data.objects
+  where id = in_object_id;
+
+  if v_object_code is null then
+    perform error.raise_invalid_input_param_value('Can''t find object %s', in_object_id);
+  end if;
+
+  return v_object_code;
+end;
+$$
+language 'plpgsql';
+
+-- drop function data.get_object_id(text);
+
+create or replace function data.get_object_id(in_object_code text)
+returns integer
+stable
+as
+$$
+declare
+  v_object_id integer;
+begin
+  assert in_object_code is not null;
+
+  select id
+  into v_object_id
+  from data.objects
+  where code = in_object_code;
+
+  if v_object_id is null then
+    perform error.raise_invalid_input_param_value('Can''t find object "%s"', in_object_code);
+  end if;
+
+  return v_object_id;
 end;
 $$
 language 'plpgsql';
@@ -497,6 +575,30 @@ begin
       data.get_param(in_code));
 exception when invalid_parameter_value then
   raise exception 'Param "%" is not a string', in_code;
+end;
+$$
+language 'plpgsql';
+
+-- drop function data.is_system_attribute(integer);
+
+create or replace function data.is_system_attribute(in_attribute_id integer)
+returns boolean
+stable
+as
+$$
+declare
+  v_ret_val boolean;
+begin
+  select type = 'SYSTEM'
+  into v_ret_val
+  from data.attributes
+  where id = in_attribute_id;
+
+  if v_ret_val is null then
+    raise exception 'Attribute % was not found', in_attribute_id;
+  end if;
+
+  return v_ret_val;
 end;
 $$
 language 'plpgsql';
