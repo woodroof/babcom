@@ -27,6 +27,7 @@ class DatabaseInfo:
 		self.functions = []
 		self.indexes = []
 		self.tables = []
+		self.triggers = []
 	
 	def create_recreate_script(self, db_path):
 		file = open(db_path / 'recreate.sql', 'w+')
@@ -81,6 +82,9 @@ create extension {0} schema {0};
 
 		file.write('-- Creating indexes\n\n')
 		append_to_file(file, self.indexes)
+
+		file.write('-- Creating triggers\n\n')
+		append_to_file(file, self.triggers)
 
 def get_schema_list(connection):
 	cursor = connection.cursor()
@@ -157,6 +161,55 @@ def save_index(schema, schema_dir_path, index, db_info):
 	file = open(file_path, "w+")
 	file.write('-- drop index ' + schema + '.' + index_name + ';\n\n')
 	file.write(index_definition.lower().replace(' using btree ', '') + ';\n')
+
+def get_trigger_events(trigger_type):
+	if trigger_type & (1 << 2):
+		events = 'insert'
+	if trigger_type & (1 << 3):
+		if events:
+			events += ' or '
+		events += 'delete'
+	if trigger_type & (1 << 4):
+		if events:
+			events += ' or '
+		events += 'update'
+	if trigger_type & (1 << 5):
+		if events:
+			events += ' or '
+		events += 'truncate'
+
+	return events
+
+def get_trigger_time(trigger_type):
+	if trigger_type & (1 << 1):
+		time = 'before'
+	elif trigger_type & (1 << 6):
+		time = 'instead of'
+	else:
+		time = 'after'
+
+	return time
+
+def get_trigger_scope(trigger_type):
+	if trigger_type & 1:
+		return 'for each row'
+	return 'for each statement'
+
+def save_trigger(schema, schema_dir_path, trigger, db_info):
+	trigger_name = trigger[0]
+	trigger_type = trigger[1]
+	table_name = trigger[2]
+	function_name = trigger[3]
+
+	file_path = schema_dir_path / (trigger_name + '.sql')
+	db_info.triggers.append(file_path)
+	file = open(file_path, "w+")
+	file.write('-- drop trigger ' + trigger_name + ' on ' + schema + '.' + table_name + ';\n\n')
+	file.write('create trigger ' + trigger_name + '\n')
+	file.write(get_trigger_time(trigger_type) + ' ' + get_trigger_events(trigger_type) + '\n')
+	file.write('on ' + schema + '.' + table_name + '\n')
+	file.write(get_trigger_scope(trigger_type) + '\n')
+	file.write('execute function ' + function_name + '();\n')
 
 def save_enums(connection, schema, schema_dir_path, db_info):
 	cursor = connection.cursor()
@@ -311,11 +364,42 @@ where i.relkind = 'i'
 	for index in indexes:
 		save_index(schema, schema_dir_path, index, db_info)
 
+def save_triggers(connection, schema, schema_dir_path, db_info):
+	cursor = connection.cursor()
+	cursor.execute("""
+select
+  t.tgname trigger_name,
+  t.tgtype trigger_type,
+  c.relname table_name,
+  pn.nspname || '.' || p.proname as function_name
+from pg_trigger t
+join pg_class c
+  on c.oid = t.tgrelid
+join pg_namespace n
+  on n.oid = c.relnamespace
+  and n.nspname = %s
+join pg_proc p
+  on p.oid = t.tgfoid
+join pg_namespace pn
+  on pn.oid = p.pronamespace
+where
+  t.tgisinternal = false and
+  -- only for tables
+  array_length(t.tgattr, 1) = 0 and
+  -- only without "when"
+  t.tgqual is null
+""",
+		(schema,))
+	triggers = cursor.fetchall()
+	for trigger in triggers:
+		save_trigger(schema, schema_dir_path, trigger, db_info)
+
 def save_schema(connection, schema, schema_dir_path, db_info):
 	save_enums(connection, schema, schema_dir_path, db_info)
 	save_functions(connection, schema, schema_dir_path, db_info)
 	save_tables(connection, schema, schema_dir_path, db_info)
 	save_indexes(connection, schema, schema_dir_path, db_info)
+	save_triggers(connection, schema, schema_dir_path, db_info)
 
 def save_db(path):
 	db_path = path / 'db'
