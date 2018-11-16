@@ -59,7 +59,6 @@ create type data.card_type as enum(
   'full',
   'mini');
 
-
 -- Creating functions
 
 -- drop function api.add_connection(text);

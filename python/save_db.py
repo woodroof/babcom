@@ -74,7 +74,7 @@ create extension {0} schema {0};
 		file.write('\n-- Creating enums\n\n')
 		append_to_file(file, self.enums)
 
-		file.write('\n-- Creating functions\n\n')
+		file.write('-- Creating functions\n\n')
 		append_to_file(file, self.functions)
 
 		file.write('-- Creating tables\n\n')
