@@ -229,6 +229,101 @@ end;
 $$
 language 'plpgsql';
 
+-- drop function data.get_array_param(text);
+
+create or replace function data.get_array_param(in_code text)
+returns jsonb
+stable
+as
+$$
+begin
+  assert in_code is not null;
+
+  return
+    json.get_array(
+      data.get_param(in_code));
+exception when invalid_parameter_value then
+  raise exception 'Param "%" is not an array', in_code;
+end;
+$$
+language 'plpgsql';
+
+-- drop function data.get_bigint_param(text);
+
+create or replace function data.get_bigint_param(in_code text)
+returns bigint
+stable
+as
+$$
+begin
+  assert in_code is not null;
+
+  return
+    json.get_bigint(
+      data.get_param(in_code));
+exception when invalid_parameter_value then
+  raise exception 'Param "%" is not a bigint', in_code;
+end;
+$$
+language 'plpgsql';
+
+-- drop function data.get_boolean_param(text);
+
+create or replace function data.get_boolean_param(in_code text)
+returns boolean
+stable
+as
+$$
+begin
+  assert in_code is not null;
+
+  return
+    json.get_boolean(
+      data.get_param(in_code));
+exception when invalid_parameter_value then
+  raise exception 'Param "%" is not a boolean', in_code;
+end;
+$$
+language 'plpgsql';
+
+-- drop function data.get_integer_param(text);
+
+create or replace function data.get_integer_param(in_code text)
+returns integer
+stable
+as
+$$
+begin
+  assert in_code is not null;
+
+  return
+    json.get_integer(
+      data.get_param(in_code));
+exception when invalid_parameter_value then
+  raise exception 'Param "%" is not an integer', in_code;
+end;
+$$
+language 'plpgsql';
+
+-- drop function data.get_object_param(text);
+
+create or replace function data.get_object_param(in_code text)
+returns jsonb
+stable
+as
+$$
+begin
+  assert in_code is not null;
+
+  return
+    json.get_object(
+      data.get_param(in_code));
+exception when invalid_parameter_value then
+  raise exception 'Param "%" is not an object', in_code;
+end;
+$$
+language 'plpgsql';
+
 -- drop function data.get_param(text);
 
 create or replace function data.get_param(in_code text)
@@ -251,6 +346,25 @@ begin
   end if;
 
   return v_value;
+end;
+$$
+language 'plpgsql';
+
+-- drop function data.get_string_param(text);
+
+create or replace function data.get_string_param(in_code text)
+returns text
+stable
+as
+$$
+begin
+  assert in_code is not null;
+
+  return
+    json.get_string(
+      data.get_param(in_code));
+exception when invalid_parameter_value then
+  raise exception 'Param "%" is not a string', in_code;
 end;
 $$
 language 'plpgsql';
