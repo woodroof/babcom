@@ -5113,6 +5113,39 @@ language 'plpgsql';
 
 -- Creating tables
 
+-- drop table data.attribute_values;
+
+create table data.attribute_values(
+  id integer not null generated always as identity,
+  object_id integer not null,
+  attribute_id integer not null,
+  value_object_id integer,
+  value jsonb,
+  start_time timestamp with time zone not null default now(),
+  start_reason text,
+  start_object_id integer,
+  constraint attribute_values_pk primary key(id)
+);
+
+comment on column data.attribute_values.value_object_id is 'Объект, для которого переопределено значение атрибута. В случае, если видно несколько переопределённых значений, выбирается значение для объекта с наивысшим приоритетом.';
+
+-- drop table data.attribute_values_journal;
+
+create table data.attribute_values_journal(
+  id integer not null generated always as identity,
+  object_id integer not null,
+  attribute_id integer not null,
+  value_object_id integer,
+  value jsonb,
+  start_time timestamp with time zone not null,
+  start_reason text,
+  start_object_id integer,
+  end_time timestamp with time zone not null,
+  end_reason text,
+  end_object_id integer,
+  constraint attribute_values_journal_pk primary key(id)
+);
+
 -- drop table data.attributes;
 
 create table data.attributes(
@@ -5198,6 +5231,33 @@ create table data.params(
 
 -- Creating foreign keys
 
+alter table data.attribute_values add constraint attribute_values_fk_attribute
+foreign key(attribute_id) references data.attributes(id);
+
+alter table data.attribute_values add constraint attribute_values_fk_object
+foreign key(object_id) references data.objects(id);
+
+alter table data.attribute_values add constraint attribute_values_fk_start_object
+foreign key(start_object_id) references data.objects(id);
+
+alter table data.attribute_values add constraint attribute_values_fk_value_object
+foreign key(value_object_id) references data.objects(id);
+
+alter table data.attribute_values_journal add constraint attribute_values_journal_fk_attribute
+foreign key(attribute_id) references data.attributes(id);
+
+alter table data.attribute_values_journal add constraint attribute_values_journal_fk_end_object
+foreign key(end_object_id) references data.objects(id);
+
+alter table data.attribute_values_journal add constraint attribute_values_journal_fk_object
+foreign key(object_id) references data.objects(id);
+
+alter table data.attribute_values_journal add constraint attribute_values_journal_fk_start_object
+foreign key(start_object_id) references data.objects(id);
+
+alter table data.attribute_values_journal add constraint attribute_values_journal_fk_value_object
+foreign key(value_object_id) references data.objects(id);
+
 alter table data.notifications add constraint notifications_fk_connections
 foreign key(connection_id) references data.connections(id);
 
@@ -5214,6 +5274,14 @@ alter table data.object_objects_journal add constraint object_objects_journal_fk
 foreign key(parent_object_id) references data.objects(id);
 
 -- Creating indexes
+
+-- drop index data.attribute_values_idx_oi_ai;
+
+create unique index attribute_values_idx_oi_ai on data.attribute_values(object_id, attribute_id) where (value_object_id is null);
+
+-- drop index data.attribute_values_idx_oi_ai_voi;
+
+create unique index attribute_values_idx_oi_ai_voi on data.attribute_values(object_id, attribute_id, value_object_id) where (value_object_id is not null);
 
 -- drop index data.notifications_idx_connection_id;
 
