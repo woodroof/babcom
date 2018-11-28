@@ -10,6 +10,8 @@ begin
 
   update data.clients
   set is_connected = false;
+
+  perform data.log('info', 'All clients were disconnected');
 end;
 $$
 language 'plpgsql';

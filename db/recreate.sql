@@ -139,6 +139,8 @@ begin
     update data.clients
     set is_connected = true
     where id = v_client_id;
+
+    perform data.log('info', format('Connected client with code "%"', in_client_code));
   end if;
 end;
 $$
@@ -156,6 +158,8 @@ begin
 
   update data.clients
   set is_connected = false;
+
+  perform data.log('info', 'All clients were disconnected');
 end;
 $$
 language 'plpgsql';
@@ -190,6 +194,8 @@ begin
 
   delete from data.notifications
   where client_id = v_client_id;
+
+  perform data.log('info', format('Disconnected client with code "%"', in_client_code));
 end;
 $$
 language 'plpgsql';
