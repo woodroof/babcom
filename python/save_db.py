@@ -322,7 +322,8 @@ select
     from pg_attribute a
     where
       attrelid = t.oid and
-      attnum > 0
+      attnum > 0 and
+      attisdropped = false
   ) as columns,
   (
     select array_agg(c.conname || ' ' || (case when c.conbin is null then pg_get_constraintdef(c.oid) else 'check' || c.consrc end) order by c.conname)
@@ -348,7 +349,8 @@ select
       and d.objsubid = a.attnum
     where
       a.attrelid = t.oid and
-      a.attnum > 0
+      a.attnum > 0 and
+      a.attisdropped = false
   ) as column_comments
 from pg_class t
 join pg_namespace n
