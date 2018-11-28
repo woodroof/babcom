@@ -59,6 +59,13 @@ create type data.card_type as enum(
   'full',
   'mini');
 
+-- drop type data.severity;
+
+create type data.severity as enum(
+  'error',
+  'warning',
+  'info');
+
 -- Creating functions
 
 -- drop function api.api(text, jsonb);
@@ -596,6 +603,20 @@ begin
   end if;
 
   return v_ret_val;
+end;
+$$
+language 'plpgsql';
+
+-- drop function data.log(data.severity, text, integer);
+
+create or replace function data.log(in_severity data.severity, in_message text, in_actor_id integer DEFAULT NULL::integer)
+returns void
+volatile
+as
+$$
+begin
+  insert into data.log(severity, message, actor_id)
+  values(in_severity, in_message, in_actor_id);
 end;
 $$
 language 'plpgsql';
@@ -5171,6 +5192,17 @@ create table data.clients(
   constraint clients_unique_code unique(code)
 );
 
+-- drop table data.log;
+
+create table data.log(
+  id integer not null generated always as identity,
+  severity data.severity not null,
+  event_time timestamp with time zone not null default now(),
+  message text not null,
+  actor_id integer,
+  constraint log_pk primary key(id)
+);
+
 -- drop table data.notifications;
 
 create table data.notifications(
@@ -5258,6 +5290,9 @@ alter table data.attribute_values_journal add constraint attribute_values_journa
 foreign key(value_object_id) references data.objects(id);
 
 alter table data.clients add constraint clients_fk_objects
+foreign key(actor_id) references data.objects(id);
+
+alter table data.log add constraint log_fk_objects
 foreign key(actor_id) references data.objects(id);
 
 alter table data.notifications add constraint notifications_fk_clients
