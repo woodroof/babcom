@@ -126,7 +126,7 @@ def save_function(schema, schema_dir_path, func, db_info):
 	db_info.functions.append(file_path)
 	file = open(file_path, "w+")
 	file.write('-- drop function ' + schema + '.' + func_name + '(' + func_arg_types + ');\n\n')
-	file.write('create or replace function ' + schema + '.' + func_name + '(' + func_args + ')\n')
+	file.write('create or replace function ' + schema + '.' + func_name + '(' + func_args.replace(' DEFAULT', ' default').replace(' NULL', ' null') + ')\n')
 	file.write('returns ' + func_result + '\n')
 	file.write(func_type + '\n')
 	file.write('as\n')

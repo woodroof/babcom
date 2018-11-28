@@ -1,6 +1,6 @@
 -- drop function json.get_integer(json, text);
 
-create or replace function json.get_integer(in_json json, in_name text DEFAULT NULL::text)
+create or replace function json.get_integer(in_json json, in_name text default null::text)
 returns integer
 immutable
 as

@@ -1,6 +1,6 @@
 -- drop function json.get_array(jsonb, text);
 
-create or replace function json.get_array(in_json jsonb, in_name text DEFAULT NULL::text)
+create or replace function json.get_array(in_json jsonb, in_name text default null::text)
 returns jsonb
 immutable
 as

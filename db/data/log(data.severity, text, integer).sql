@@ -1,6 +1,6 @@
 -- drop function data.log(data.severity, text, integer);
 
-create or replace function data.log(in_severity data.severity, in_message text, in_actor_id integer DEFAULT NULL::integer)
+create or replace function data.log(in_severity data.severity, in_message text, in_actor_id integer default null::integer)
 returns void
 volatile
 as

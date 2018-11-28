@@ -609,7 +609,7 @@ language 'plpgsql';
 
 -- drop function data.log(data.severity, text, integer);
 
-create or replace function data.log(in_severity data.severity, in_message text, in_actor_id integer DEFAULT NULL::integer)
+create or replace function data.log(in_severity data.severity, in_message text, in_actor_id integer default null::integer)
 returns void
 volatile
 as
@@ -764,7 +764,7 @@ language 'plpgsql';
 
 -- drop function json.get_array(json, text);
 
-create or replace function json.get_array(in_json json, in_name text DEFAULT NULL::text)
+create or replace function json.get_array(in_json json, in_name text default null::text)
 returns json
 immutable
 as
@@ -799,7 +799,7 @@ language 'plpgsql';
 
 -- drop function json.get_array(jsonb, text);
 
-create or replace function json.get_array(in_json jsonb, in_name text DEFAULT NULL::text)
+create or replace function json.get_array(in_json jsonb, in_name text default null::text)
 returns jsonb
 immutable
 as
@@ -972,7 +972,7 @@ language 'plpgsql';
 
 -- drop function json.get_bigint(json, text);
 
-create or replace function json.get_bigint(in_json json, in_name text DEFAULT NULL::text)
+create or replace function json.get_bigint(in_json json, in_name text default null::text)
 returns bigint
 immutable
 as
@@ -1018,7 +1018,7 @@ language 'plpgsql';
 
 -- drop function json.get_bigint(jsonb, text);
 
-create or replace function json.get_bigint(in_json jsonb, in_name text DEFAULT NULL::text)
+create or replace function json.get_bigint(in_json jsonb, in_name text default null::text)
 returns bigint
 immutable
 as
@@ -1064,7 +1064,7 @@ language 'plpgsql';
 
 -- drop function json.get_bigint_array(json, text);
 
-create or replace function json.get_bigint_array(in_json json, in_name text DEFAULT NULL::text)
+create or replace function json.get_bigint_array(in_json json, in_name text default null::text)
 returns bigint[]
 immutable
 as
@@ -1091,7 +1091,7 @@ language 'plpgsql';
 
 -- drop function json.get_bigint_array(jsonb, text);
 
-create or replace function json.get_bigint_array(in_json jsonb, in_name text DEFAULT NULL::text)
+create or replace function json.get_bigint_array(in_json jsonb, in_name text default null::text)
 returns bigint[]
 immutable
 as
@@ -1332,7 +1332,7 @@ language 'plpgsql';
 
 -- drop function json.get_boolean(json, text);
 
-create or replace function json.get_boolean(in_json json, in_name text DEFAULT NULL::text)
+create or replace function json.get_boolean(in_json json, in_name text default null::text)
 returns boolean
 immutable
 as
@@ -1367,7 +1367,7 @@ language 'plpgsql';
 
 -- drop function json.get_boolean(jsonb, text);
 
-create or replace function json.get_boolean(in_json jsonb, in_name text DEFAULT NULL::text)
+create or replace function json.get_boolean(in_json jsonb, in_name text default null::text)
 returns boolean
 immutable
 as
@@ -1402,7 +1402,7 @@ language 'plpgsql';
 
 -- drop function json.get_boolean_array(json, text);
 
-create or replace function json.get_boolean_array(in_json json, in_name text DEFAULT NULL::text)
+create or replace function json.get_boolean_array(in_json json, in_name text default null::text)
 returns boolean[]
 immutable
 as
@@ -1429,7 +1429,7 @@ language 'plpgsql';
 
 -- drop function json.get_boolean_array(jsonb, text);
 
-create or replace function json.get_boolean_array(in_json jsonb, in_name text DEFAULT NULL::text)
+create or replace function json.get_boolean_array(in_json jsonb, in_name text default null::text)
 returns boolean[]
 immutable
 as
@@ -1642,7 +1642,7 @@ language 'plpgsql';
 
 -- drop function json.get_integer(json, text);
 
-create or replace function json.get_integer(in_json json, in_name text DEFAULT NULL::text)
+create or replace function json.get_integer(in_json json, in_name text default null::text)
 returns integer
 immutable
 as
@@ -1688,7 +1688,7 @@ language 'plpgsql';
 
 -- drop function json.get_integer(jsonb, text);
 
-create or replace function json.get_integer(in_json jsonb, in_name text DEFAULT NULL::text)
+create or replace function json.get_integer(in_json jsonb, in_name text default null::text)
 returns integer
 immutable
 as
@@ -1734,7 +1734,7 @@ language 'plpgsql';
 
 -- drop function json.get_integer_array(json, text);
 
-create or replace function json.get_integer_array(in_json json, in_name text DEFAULT NULL::text)
+create or replace function json.get_integer_array(in_json json, in_name text default null::text)
 returns integer[]
 immutable
 as
@@ -1761,7 +1761,7 @@ language 'plpgsql';
 
 -- drop function json.get_integer_array(jsonb, text);
 
-create or replace function json.get_integer_array(in_json jsonb, in_name text DEFAULT NULL::text)
+create or replace function json.get_integer_array(in_json jsonb, in_name text default null::text)
 returns integer[]
 immutable
 as
@@ -2002,7 +2002,7 @@ language 'plpgsql';
 
 -- drop function json.get_object(json, text);
 
-create or replace function json.get_object(in_json json, in_name text DEFAULT NULL::text)
+create or replace function json.get_object(in_json json, in_name text default null::text)
 returns json
 immutable
 as
@@ -2037,7 +2037,7 @@ language 'plpgsql';
 
 -- drop function json.get_object(jsonb, text);
 
-create or replace function json.get_object(in_json jsonb, in_name text DEFAULT NULL::text)
+create or replace function json.get_object(in_json jsonb, in_name text default null::text)
 returns jsonb
 immutable
 as
@@ -2072,7 +2072,7 @@ language 'plpgsql';
 
 -- drop function json.get_object_array(json, text);
 
-create or replace function json.get_object_array(in_json json, in_name text DEFAULT NULL::text)
+create or replace function json.get_object_array(in_json json, in_name text default null::text)
 returns json
 immutable
 as
@@ -2098,7 +2098,7 @@ language 'plpgsql';
 
 -- drop function json.get_object_array(jsonb, text);
 
-create or replace function json.get_object_array(in_json jsonb, in_name text DEFAULT NULL::text)
+create or replace function json.get_object_array(in_json jsonb, in_name text default null::text)
 returns jsonb
 immutable
 as
@@ -2382,7 +2382,7 @@ language 'plpgsql';
 
 -- drop function json.get_string(json, text);
 
-create or replace function json.get_string(in_json json, in_name text DEFAULT NULL::text)
+create or replace function json.get_string(in_json json, in_name text default null::text)
 returns text
 immutable
 as
@@ -2417,7 +2417,7 @@ language 'plpgsql';
 
 -- drop function json.get_string(jsonb, text);
 
-create or replace function json.get_string(in_json jsonb, in_name text DEFAULT NULL::text)
+create or replace function json.get_string(in_json jsonb, in_name text default null::text)
 returns text
 immutable
 as
@@ -2452,7 +2452,7 @@ language 'plpgsql';
 
 -- drop function json.get_string_array(json, text);
 
-create or replace function json.get_string_array(in_json json, in_name text DEFAULT NULL::text)
+create or replace function json.get_string_array(in_json json, in_name text default null::text)
 returns text[]
 immutable
 as
@@ -2479,7 +2479,7 @@ language 'plpgsql';
 
 -- drop function json.get_string_array(jsonb, text);
 
-create or replace function json.get_string_array(in_json jsonb, in_name text DEFAULT NULL::text)
+create or replace function json.get_string_array(in_json jsonb, in_name text default null::text)
 returns text[]
 immutable
 as
@@ -4710,7 +4710,7 @@ language 'plpgsql';
 
 -- drop function test.assert_throw(text, text);
 
-create or replace function test.assert_throw(in_expression text, in_exception_pattern text DEFAULT NULL::text)
+create or replace function test.assert_throw(in_expression text, in_exception_pattern text default null::text)
 returns void
 volatile
 as
@@ -4762,7 +4762,7 @@ language 'plpgsql';
 
 -- drop function test.fail(text);
 
-create or replace function test.fail(in_description text DEFAULT NULL::text)
+create or replace function test.fail(in_description text default null::text)
 returns void
 immutable
 as

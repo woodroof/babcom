@@ -1,6 +1,6 @@
 -- drop function test.fail(text);
 
-create or replace function test.fail(in_description text DEFAULT NULL::text)
+create or replace function test.fail(in_description text default null::text)
 returns void
 immutable
 as

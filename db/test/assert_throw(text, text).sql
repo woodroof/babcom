@@ -1,6 +1,6 @@
 -- drop function test.assert_throw(text, text);
 
-create or replace function test.assert_throw(in_expression text, in_exception_pattern text DEFAULT NULL::text)
+create or replace function test.assert_throw(in_expression text, in_exception_pattern text default null::text)
 returns void
 volatile
 as
