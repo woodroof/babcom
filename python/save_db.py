@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 import psycopg2
 import re
 import shutil
@@ -461,7 +462,7 @@ def save_db(path):
 		save_schema(connection, schema, schema_dir_path, db_info)
 	db_info.create_recreate_script(db_path)
 
-path = Path('.')
+path = Path(os.path.dirname(os.path.abspath(__file__))) / '..'
 if len(sys.argv) > 1:
 	path = Path(sys.argv[1])
 save_db(path)
