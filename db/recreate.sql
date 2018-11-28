@@ -61,33 +61,15 @@ create type data.card_type as enum(
 
 -- Creating functions
 
--- drop function api.add_connection(text);
-
-create or replace function api.add_connection(in_client_id text)
-returns void
-volatile
-as
-$$
-begin
-  assert in_client_id is not null;
-
-  insert into data.connections(client_id)
-  values(in_client_id);
-exception when unique_violation then
-  raise exception 'Client with id "%" already connected', in_client_id;
-end;
-$$
-language 'plpgsql';
-
 -- drop function api.api(text, jsonb);
 
-create or replace function api.api(in_client_id text, in_message jsonb)
+create or replace function api.api(in_client_code text, in_message jsonb)
 returns void
 volatile
 as
 $$
 declare
-  v_connection_id integer;
+  v_client_id integer;
   v_notification_code text;
   v_message jsonb :=
     jsonb_build_object(
@@ -95,26 +77,112 @@ declare
       'test',
       'data',
       jsonb_build_object(
-        'client_id',
-        in_client_id,
+        'client_code',
+        in_client_code,
         'message',
         in_message));
 begin
-  assert in_client_id is not null;
+  assert in_client_code is not null;
   assert in_message is not null;
 
-  for v_connection_id in
+  for v_client_id in
   (
     select id
-    from data.connections
+    from data.clients
+    where is_connected = true
   )
   loop
-    insert into data.notifications(message, connection_id)
-    values (v_message, v_connection_id)
+    insert into data.notifications(message, client_id)
+    values(v_message, v_client_id)
     returning code into v_notification_code;
 
     perform pg_notify('api_channel', v_notification_code);
   end loop;
+end;
+$$
+language 'plpgsql';
+
+-- drop function api.connect_client(text);
+
+create or replace function api.connect_client(in_client_code text)
+returns void
+volatile
+as
+$$
+declare
+  v_client_id integer;
+  v_is_connected boolean;
+begin
+  assert in_client_code is not null;
+
+  select id, is_connected
+  into v_client_id, v_is_connected
+  from data.clients
+  where code = in_client_code
+  for update;
+
+  if v_client_id is null then
+    insert into data.clients(code, is_connected)
+    values(in_client_code, true);
+  else
+    if v_is_connected = true then
+      raise exception 'Client with code "%" already connected', in_client_code;
+    end if;
+
+    update data.clients
+    set is_connected = true
+    where id = v_client_id;
+  end if;
+end;
+$$
+language 'plpgsql';
+
+-- drop function api.disconnect_all_clients();
+
+create or replace function api.disconnect_all_clients()
+returns void
+volatile
+as
+$$
+begin
+  delete from data.notifications;
+
+  update data.clients
+  set is_connected = false;
+end;
+$$
+language 'plpgsql';
+
+-- drop function api.disconnect_client(text);
+
+create or replace function api.disconnect_client(in_client_code text)
+returns void
+volatile
+as
+$$
+declare
+  v_client_id integer;
+begin
+  assert in_client_code is not null;
+
+  select id
+  into v_client_id
+  from data.clients
+  where
+    code = in_client_code and
+    is_connected = true
+  for update;
+
+  if v_client_id is null then
+    raise exception 'Client with code "%" is not connected', in_client_code;
+  end if;
+
+  update data.clients
+  set is_connected = false
+  where id = v_client_id;
+
+  delete from data.notifications
+  where client_id = v_client_id;
 end;
 $$
 language 'plpgsql';
@@ -128,103 +196,32 @@ as
 $$
 declare
   v_message text;
-  v_connection_id integer;
-  v_client_id text;
+  v_client_id integer;
+  v_client_code text;
 begin
   assert in_notification_code is not null;
 
   delete from data.notifications
   where code = in_notification_code
-  returning message, connection_id
-  into v_message, v_connection_id;
+  returning message, client_id
+  into v_message, v_client_id;
 
-  if v_connection_id is null then
+  if v_client_id is null then
     raise exception 'Can''t find notification with code "%"', in_notification_code;
   end if;
 
-  select client_id
-  into v_client_id
-  from data.connections
-  where id = v_connection_id;
+  select code
+  into v_client_code
+  from data.clients
+  where id = v_client_id;
 
-  assert v_client_id is not null;
+  assert v_client_code is not null;
 
   return jsonb_build_object(
-    'client_id',
-    v_client_id,
+    'client_code',
+    v_client_code,
     'message',
     v_message);
-end;
-$$
-language 'plpgsql';
-
--- drop function api.recreate_connection(text);
-
-create or replace function api.recreate_connection(in_client_id text)
-returns void
-volatile
-as
-$$
-declare
-  v_connection_id integer;
-begin
-  assert in_client_id is not null;
-
-  select id
-  into v_connection_id
-  from data.connections
-  where client_id = in_client_id;
-
-  if v_connection_id is null then
-    raise exception 'Client with id "%" is not connected', in_client_id;
-  end if;
-
-  delete from data.notifications
-  where connection_id = v_connection_id;
-end;
-$$
-language 'plpgsql';
-
--- drop function api.remove_all_connections();
-
-create or replace function api.remove_all_connections()
-returns void
-volatile
-as
-$$
-begin
-  delete from data.notifications;
-  delete from data.connections;
-end;
-$$
-language 'plpgsql';
-
--- drop function api.remove_connection(text);
-
-create or replace function api.remove_connection(in_client_id text)
-returns void
-volatile
-as
-$$
-declare
-  v_connection_id integer;
-begin
-  assert in_client_id is not null;
-
-  select id
-  into v_connection_id
-  from data.connections
-  where client_id = in_client_id;
-
-  if v_connection_id is null then
-    raise exception 'Client with id "%" is not connected', in_client_id;
-  end if;
-
-  delete from data.notifications
-  where connection_id = v_connection_id;
-
-  delete from data.connections
-  where id = v_connection_id;
 end;
 $$
 language 'plpgsql';
@@ -5163,13 +5160,15 @@ create table data.attributes(
 comment on column data.attributes.card_type is 'Если null, то применимо ко всем типам карточек';
 comment on column data.attributes.value_description_function is 'Имя функции из схемы attribute_value_description_functions. Функция вызывается с параметрами (user_object_id, attribute_id, value).';
 
--- drop table data.connections;
+-- drop table data.clients;
 
-create table data.connections(
+create table data.clients(
   id integer not null generated always as identity,
-  client_id text not null,
-  constraint connections_pk primary key(id),
-  constraint connections_unique_client_id unique(client_id)
+  code text not null,
+  is_connected boolean not null,
+  actor_id integer,
+  constraint clients_pk primary key(id),
+  constraint clients_unique_code unique(code)
 );
 
 -- drop table data.notifications;
@@ -5178,7 +5177,7 @@ create table data.notifications(
   id integer not null generated always as identity,
   code text not null default (pgcrypto.gen_random_uuid())::text,
   message jsonb not null,
-  connection_id integer not null,
+  client_id integer not null,
   constraint notifications_pk primary key(id),
   constraint notifications_unique_code unique(code)
 );
@@ -5258,8 +5257,11 @@ foreign key(start_object_id) references data.objects(id);
 alter table data.attribute_values_journal add constraint attribute_values_journal_fk_value_object
 foreign key(value_object_id) references data.objects(id);
 
-alter table data.notifications add constraint notifications_fk_connections
-foreign key(connection_id) references data.connections(id);
+alter table data.clients add constraint clients_fk_objects
+foreign key(actor_id) references data.objects(id);
+
+alter table data.notifications add constraint notifications_fk_clients
+foreign key(client_id) references data.clients(id);
 
 alter table data.object_objects add constraint object_objects_fk_object
 foreign key(object_id) references data.objects(id);
@@ -5283,9 +5285,9 @@ create unique index attribute_values_idx_oi_ai on data.attribute_values(object_i
 
 create unique index attribute_values_idx_oi_ai_voi on data.attribute_values(object_id, attribute_id, value_object_id) where (value_object_id is not null);
 
--- drop index data.notifications_idx_connection_id;
+-- drop index data.notifications_idx_client_id;
 
-create index notifications_idx_connection_id on data.notifications(connection_id);
+create index notifications_idx_client_id on data.notifications(client_id);
 
 -- drop index data.object_objects_idx_loi_goi;
 

@@ -47,31 +47,32 @@ async def fetchval_sql(connection, query, *args):
         SQL_EXCEPTION_COUNT.inc()
         raise
 
-async def connect(connection, client_id, connection_object, request):
+async def connect(connection, client_code, connection_object, request):
     CONNECTION_COUNT.inc()
-    print('Connected: %s' % client_id)
-    await execute_sql(connection, 'select api.add_connection($1)', client_id)
+    print('Connected: %s' % client_code)
+    await execute_sql(connection, 'select api.connect_client($1)', client_code)
     ws = web.WebSocketResponse()
     connection_object['ws'] = ws
     await init_socket(ws, request)
     return ws
 
-async def reconnect(connection, client_id, connection_object, request):
-    print('Reconnected: %s' % client_id)
+async def reconnect(connection, client_code, connection_object, request):
+    print('Reconnected: %s' % client_code)
     await connection_object['ws'].close()
-    await execute_sql(connection, 'select api.recreate_connection($1)', client_id)
+    await execute_sql(connection, 'select api.disconnect_client($1)', client_code)
+    await execute_sql(connection, 'select api.connect_client($1)', client_code)
     ws = web.WebSocketResponse()
     connection_object['ws'] = ws
     await init_socket(ws, request)
     return ws
 
-async def disconnect(connection, client_id):
+async def disconnect(connection, client_code):
     CONNECTION_COUNT.dec()
-    print('Disconnected: %s' % client_id)
-    await execute_sql(connection, 'select api.remove_connection($1)', client_id)
+    print('Disconnected: %s' % client_code)
+    await execute_sql(connection, 'select api.disconnect_client($1)', client_code)
 
-async def process_message(connection, client_id, data):
-    await execute_sql(connection, 'select api.api($1, $2)', client_id, data)
+async def process_message(connection, client_code, data):
+    await execute_sql(connection, 'select api.api($1, $2)', client_code, data)
 
 async def process_notification(connection, notification_id):
     return await fetchval_sql(connection, 'select api.get_notification($1)', notification_id)
@@ -79,29 +80,29 @@ async def process_notification(connection, notification_id):
 @atomic
 @time(CONNECTION_TIME)
 async def api(request):
-    client_id = request.match_info.get('client_id')
+    client_code = request.match_info.get('client_id')
 
     connections = request.app.connections
     pool = request.app.db_pool
 
     async with pool.acquire() as connection:
-        if client_id in connections:
-            connection_object = connections[client_id]
+        if client_code in connections:
+            connection_object = connections[client_code]
             async with connection_object['lock']:
-                ws = await reconnect(connection, client_id, connection_object, request)
+                ws = await reconnect(connection, client_code, connection_object, request)
         else:
             connection_object = {}
             lock = asyncio.Lock()
             connection_object['lock'] = lock
-            connections[client_id] = connection_object
+            connections[client_code] = connection_object
             async with lock:
-                ws = await connect(connection, client_id, connection_object, request)
+                ws = await connect(connection, client_code, connection_object, request)
 
     async for msg in ws:
         if msg.type == WSMsgType.TEXT:
             PROCESSING_MESSAGE_COUNT.inc()
             async with pool.acquire() as connection:
-                await process_message(connection, client_id, msg.data)
+                await process_message(connection, client_code, msg.data)
             PROCESSING_MESSAGE_COUNT.dec()
         elif msg.type == WSMsgType.BINARY:
             print('Received binary message')
@@ -110,10 +111,10 @@ async def api(request):
 
     async with connection_object['lock']:
         if connection_object['ws'] is ws:
-            del connections[client_id]
+            del connections[client_code]
 
             async with pool.acquire() as connection:
-                await disconnect(connection, client_id)
+                await disconnect(connection, client_code)
 
     return ws
 
@@ -132,9 +133,9 @@ async def async_listener(app, notification_id):
 
     async with pool.acquire() as connection:
         result = await process_notification(connection, notification_id)
-        client_id = result['client_id']
-        if client_id in connections:
-            connection_object = connections[client_id]
+        client_code = result['client_code']
+        if client_code in connections:
+            connection_object = connections[client_code]
             ws = connection_object['ws']
             async with connection_object['lock']:
                 if connection_object['ws'] is ws:
@@ -167,7 +168,7 @@ async def init_app():
     app.connections = {}
     app.db_pool = await asyncpg.create_pool(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME, init=init_connection)
     async with app.db_pool.acquire() as connection:
-        await connection.execute('select api.remove_all_connections()')
+        await connection.execute('select api.disconnect_all_clients()')
     app.listen_connection = await asyncpg.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME)
     await app.listen_connection.add_listener('api_channel', listener_creator(app))
     return app

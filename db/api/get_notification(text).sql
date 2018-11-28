@@ -7,30 +7,30 @@ as
 $$
 declare
   v_message text;
-  v_connection_id integer;
-  v_client_id text;
+  v_client_id integer;
+  v_client_code text;
 begin
   assert in_notification_code is not null;
 
   delete from data.notifications
   where code = in_notification_code
-  returning message, connection_id
-  into v_message, v_connection_id;
+  returning message, client_id
+  into v_message, v_client_id;
 
-  if v_connection_id is null then
+  if v_client_id is null then
     raise exception 'Can''t find notification with code "%"', in_notification_code;
   end if;
 
-  select client_id
-  into v_client_id
-  from data.connections
-  where id = v_connection_id;
+  select code
+  into v_client_code
+  from data.clients
+  where id = v_client_id;
 
-  assert v_client_id is not null;
+  assert v_client_code is not null;
 
   return jsonb_build_object(
-    'client_id',
-    v_client_id,
+    'client_code',
+    v_client_code,
     'message',
     v_message);
 end;

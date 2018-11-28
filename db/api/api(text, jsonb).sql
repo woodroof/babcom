@@ -1,12 +1,12 @@
 -- drop function api.api(text, jsonb);
 
-create or replace function api.api(in_client_id text, in_message jsonb)
+create or replace function api.api(in_client_code text, in_message jsonb)
 returns void
 volatile
 as
 $$
 declare
-  v_connection_id integer;
+  v_client_id integer;
   v_notification_code text;
   v_message jsonb :=
     jsonb_build_object(
@@ -14,22 +14,23 @@ declare
       'test',
       'data',
       jsonb_build_object(
-        'client_id',
-        in_client_id,
+        'client_code',
+        in_client_code,
         'message',
         in_message));
 begin
-  assert in_client_id is not null;
+  assert in_client_code is not null;
   assert in_message is not null;
 
-  for v_connection_id in
+  for v_client_id in
   (
     select id
-    from data.connections
+    from data.clients
+    where is_connected = true
   )
   loop
-    insert into data.notifications(message, connection_id)
-    values (v_message, v_connection_id)
+    insert into data.notifications(message, client_id)
+    values(v_message, v_client_id)
     returning code into v_notification_code;
 
     perform pg_notify('api_channel', v_notification_code);
