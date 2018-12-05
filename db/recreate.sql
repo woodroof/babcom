@@ -5355,3 +5355,6 @@ after insert
 on data.objects
 for each row
 execute function data.objects_after_insert();
+
+-- Initial data
+

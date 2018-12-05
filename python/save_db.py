@@ -16,11 +16,14 @@ DB_EXTENSIONS = ('intarray', 'pgcrypto')
 
 EMPTY_STR_REGEX = re.compile(r"^ +$", re.MULTILINE)
 
-def append_to_file(file, source_file_paths):
-	for source_file_path in sorted(source_file_paths):
-		with open(source_file_path) as source_file:
+def append_file(file, source_file_path):
+	with open(source_file_path) as source_file:
 			file.write('\n')
 			file.write(source_file.read())
+
+def append_files(file, source_file_paths):
+	for source_file_path in sorted(source_file_paths):
+		append_file(file, source_file_path)
 
 class DatabaseInfo:
 	def __init__(self):
@@ -75,22 +78,25 @@ create extension {0} schema {0};
 			file.write('create schema {};\n'.format(schema))
 
 		file.write('\n-- Creating enums\n')
-		append_to_file(file, self.enums)
+		append_files(file, self.enums)
 
 		file.write('\n-- Creating functions\n')
-		append_to_file(file, self.functions)
+		append_files(file, self.functions)
 
 		file.write('\n-- Creating tables\n')
-		append_to_file(file, self.tables)
+		append_files(file, self.tables)
 
 		file.write('\n-- Creating foreign keys\n')
-		append_to_file(file, self.foreign_keys)
+		append_files(file, self.foreign_keys)
 
 		file.write('\n-- Creating indexes\n')
-		append_to_file(file, self.indexes)
+		append_files(file, self.indexes)
 
 		file.write('\n-- Creating triggers\n')
-		append_to_file(file, self.triggers)
+		append_files(file, self.triggers)
+
+		file.write('\n-- Initial data\n')
+		append_file(file, db_path / 'initial_data.sql')
 
 def get_schema_list(connection):
 	cursor = connection.cursor()
