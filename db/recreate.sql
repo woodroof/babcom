@@ -5326,6 +5326,10 @@ create unique index attribute_values_idx_oi_ai on data.attribute_values(object_i
 
 create unique index attribute_values_idx_oi_ai_voi on data.attribute_values(object_id, attribute_id, value_object_id) where (value_object_id is not null);
 
+-- drop index data.attribute_values_nuidx_oi_ai;
+
+create index attribute_values_nuidx_oi_ai on data.attribute_values(object_id, attribute_id);
+
 -- drop index data.notifications_idx_client_id;
 
 create index notifications_idx_client_id on data.notifications(client_id);
@@ -5345,6 +5349,10 @@ create unique index object_objects_idx_poi_oi on data.object_objects(parent_obje
 -- drop index data.object_objects_idx_poi_oi_ioi;
 
 create unique index object_objects_idx_poi_oi_ioi on data.object_objects(parent_object_id, object_id, intarray.uniq(intarray.sort(intermediate_object_ids))) where (intermediate_object_ids is not null);
+
+-- drop index data.object_objects_nuidx_poi_oi;
+
+create index object_objects_nuidx_poi_oi on data.object_objects(parent_object_id, object_id);
 
 -- Creating triggers
 
