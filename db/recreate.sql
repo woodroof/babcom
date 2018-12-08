@@ -35,13 +35,41 @@ create extension pgcrypto schema pgcrypto;
 
 -- Creating schemas
 
+-- drop schema api;
+
 create schema api;
+
+-- drop schema attribute_value_description_functions;
+
+create schema attribute_value_description_functions;
+comment on schema attribute_value_description_functions is 'Схема для функций с описанием значений аргументов. Функции вызываются с параметрами (user_object_id, attribute_id, value), возвращают строку.';
+
+-- drop schema data;
+
 create schema data;
+
+-- drop schema error;
+
 create schema error;
+
+-- drop schema json;
+
 create schema json;
+
+-- drop schema json_test;
+
 create schema json_test;
+
+-- drop schema random;
+
 create schema random;
+
+-- drop schema random_test;
+
 create schema random_test;
+
+-- drop schema test;
+
 create schema test;
 
 -- Creating enums
