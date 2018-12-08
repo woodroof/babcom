@@ -1,6 +1,17 @@
 var socket;
 var uuid = uuidv4();
 
+var requests = {
+	'get_actors': '{}',
+	'get_object': '{\n\t\t"object_id": "ID"\n\t}',
+	'get_page': '{\n\t\t"list_id": "ID",\n\t\t"page_index": 0\n\t}',
+	'make_action': '{\n\t\t"action_code": "CODE",\n\t\t"params": null,\n\t\t"user_params": {\n\t\t}\n\t}',
+	'open_object': '{\n\t\t"object_id": "ID"\n\t}',
+	'set_actor': '{\n\t\t"actor_id": "ID"\n\t}',
+	'subscribe': '{\n\t\t"object_id": "ID"\n\t}',
+	'unsubscribe': '{\n\t\t"object_id": "ID"\n\t}'
+};
+
 function uuidv4()
 {
 	return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
@@ -46,4 +57,34 @@ function createSocket()
 		};
 	socket.onclose = function(event) { recreateSocket(); };
 	socket.onmessage = function(event) { newMessage(event.data); };
+}
+
+function setMessage(type, data)
+{
+	var text_field = document.getElementById('send_text');
+	text_field.value = '{\n\t"request_id": "1",\n\t"type": "' + type + '",\n\t"data": ' + data + '\n}';
+}
+
+function createCallback(key)
+{
+	return () => setMessage(key, requests[key]);
+}
+
+function generateRequests()
+{
+	var parent = document.getElementById('requests');
+	for (var key in requests)
+	{
+		var request = document.createElement('div');
+		request.className = 'request';
+		request.onclick = createCallback(key);
+		request.innerText = key;
+		parent.appendChild(request);
+	}
+}
+
+function init()
+{
+	generateRequests();
+	createSocket();
 }
