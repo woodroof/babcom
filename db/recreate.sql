@@ -480,6 +480,30 @@ end;
 $$
 language 'plpgsql';
 
+-- drop function data.can_attribute_be_overridden(integer);
+
+create or replace function data.can_attribute_be_overridden(in_attribute_id integer)
+returns boolean
+stable
+as
+$$
+declare
+  v_ret_val boolean;
+begin
+  select can_be_overridden
+  into v_ret_val
+  from data.attributes
+  where id = in_attribute_id;
+
+  if v_ret_val is null then
+    raise exception 'Attribute % was not found', in_attribute_id;
+  end if;
+
+  return v_ret_val;
+end;
+$$
+language 'plpgsql';
+
 -- drop function data.get_array_param(text);
 
 create or replace function data.get_array_param(in_code text)
@@ -5257,6 +5281,7 @@ create table data.attribute_values(
   start_time timestamp with time zone not null default now(),
   start_reason text,
   start_object_id integer,
+  constraint attribute_values_override_check check((value_object_id is null) or data.can_attribute_be_overridden(attribute_id)),
   constraint attribute_values_pk primary key(id)
 );
 
@@ -5289,12 +5314,14 @@ create table data.attributes(
   type data.attribute_type not null,
   card_type data.card_type,
   value_description_function text,
+  can_be_overridden boolean not null,
   constraint attributes_pk primary key(id),
   constraint attributes_unique_code unique(code)
 );
 
 comment on column data.attributes.card_type is 'Если null, то применимо ко всем типам карточек';
 comment on column data.attributes.value_description_function is 'Имя функции из схемы attribute_value_description_functions. Функция вызывается с параметрами (user_object_id, attribute_id, value).';
+comment on column data.attributes.can_be_overridden is 'Если false, то значение атрибута не может переопределяться для объектов';
 
 -- drop table data.clients;
 
