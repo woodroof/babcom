@@ -14,5 +14,5 @@ create table data.attributes(
 );
 
 comment on column data.attributes.card_type is 'Если null, то применимо ко всем типам карточек';
-comment on column data.attributes.value_description_function is 'Имя функции из схемы attribute_value_description_functions. Функция вызывается с параметрами (user_object_id, attribute_id, value).';
+comment on column data.attributes.value_description_function is 'Имя функции из схемы attribute_value_description_functions. Функция вызывается с параметрами (attribute_id, value, actor_id). Параметр actor_id может быть null.';
 comment on column data.attributes.can_be_overridden is 'Если false, то значение атрибута не может переопределяться для объектов';
