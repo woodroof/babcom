@@ -6,35 +6,58 @@ volatile
 as
 $$
 declare
+  v_request_id text := json.get_string(in_message, 'request_id');
+  v_type text := json.get_string(in_message, 'type');
   v_client_id integer;
-  v_notification_code text;
-  v_message jsonb :=
-    jsonb_build_object(
-      'type',
-      'test',
-      'data',
-      jsonb_build_object(
-        'client_code',
-        in_client_code,
-        'message',
-        in_message));
+  v_actor_id integer;
+  v_check_result boolean;
+  v_function text;
 begin
   assert in_client_code is not null;
-  assert in_message is not null;
 
-  for v_client_id in
-  (
-    select id
-    from data.clients
-    where is_connected = true
-  )
+  select id, actor_id
+  into v_client_id, v_actor_id
+  from data.clients
+  where
+    code = in_client_code and
+    is_connected = true;
+
+  if v_client_id is null then
+    raise exception 'Client with code "%s" is not connected', in_client_code;
+  end if;
+
+  v_function =
+    case
+      when v_type = 'get_actors' then 'process_get_actors_message'
+      else null
+     end;
+  if v_function is null then
+    raise exception 'Unsupported message type "%s"', v_type;
+  end if;
+
   loop
-    insert into data.notifications(message, client_id)
-    values(v_message, v_client_id)
-    returning code into v_notification_code;
+    begin
+      execute format('select * from api_utils.%s($1, $2, $3, $4)', v_function)
+      using v_client_id, v_actor_id, v_request_id, in_message->'data';
 
-    perform pg_notify('api_channel', v_notification_code);
+      return;
+    exception when deadlock_detected then
+    end;
   end loop;
+exception when others or assert_failure then
+  declare
+    v_exception_message text;
+    v_exception_call_stack text;
+  begin
+    get stacked diagnostics
+      v_exception_message = message_text,
+      v_exception_call_stack = pg_exception_context;
+
+    perform data.log(
+      'error',
+      format(E'Error: %s\nMessage:\n%s\nCall stack:\n%s', v_exception_message, in_message, v_exception_call_stack),
+      v_actor_id);
+  end;
 end;
 $$
 language 'plpgsql';

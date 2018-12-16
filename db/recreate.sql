@@ -38,6 +38,11 @@ create extension pgcrypto schema pgcrypto;
 -- drop schema api;
 
 create schema api;
+comment on schema api is 'Функции, вызываемые web-сервером';
+
+-- drop schema api_utils;
+
+create schema api_utils;
 
 -- drop schema attribute_value_description_functions;
 
@@ -74,6 +79,15 @@ create schema test;
 
 -- Creating enums
 
+-- drop type api_utils.output_message_type;
+
+create type api_utils.output_message_type as enum(
+  'actors',
+  'object',
+  'page',
+  'show_object',
+  'switch_actor');
+
 -- drop type data.attribute_type;
 
 create type data.attribute_type as enum(
@@ -104,35 +118,58 @@ volatile
 as
 $$
 declare
+  v_request_id text := json.get_string(in_message, 'request_id');
+  v_type text := json.get_string(in_message, 'type');
   v_client_id integer;
-  v_notification_code text;
-  v_message jsonb :=
-    jsonb_build_object(
-      'type',
-      'test',
-      'data',
-      jsonb_build_object(
-        'client_code',
-        in_client_code,
-        'message',
-        in_message));
+  v_actor_id integer;
+  v_check_result boolean;
+  v_function text;
 begin
   assert in_client_code is not null;
-  assert in_message is not null;
 
-  for v_client_id in
-  (
-    select id
-    from data.clients
-    where is_connected = true
-  )
+  select id, actor_id
+  into v_client_id, v_actor_id
+  from data.clients
+  where
+    code = in_client_code and
+    is_connected = true;
+
+  if v_client_id is null then
+    raise exception 'Client with code "%s" is not connected', in_client_code;
+  end if;
+
+  v_function =
+    case
+      when v_type = 'get_actors' then 'process_get_actors_message'
+      else null
+     end;
+  if v_function is null then
+    raise exception 'Unsupported message type "%s"', v_type;
+  end if;
+
   loop
-    insert into data.notifications(message, client_id)
-    values(v_message, v_client_id)
-    returning code into v_notification_code;
+    begin
+      execute format('select * from api_utils.%s($1, $2, $3, $4)', v_function)
+      using v_client_id, v_actor_id, v_request_id, in_message->'data';
 
-    perform pg_notify('api_channel', v_notification_code);
+      return;
+    exception when deadlock_detected then
+    end;
   end loop;
+exception when others or assert_failure then
+  declare
+    v_exception_message text;
+    v_exception_call_stack text;
+  begin
+    get stacked diagnostics
+      v_exception_message = message_text,
+      v_exception_call_stack = pg_exception_context;
+
+    perform data.log(
+      'error',
+      format(E'Error: %s\nMessage:\n%s\nCall stack:\n%s', v_exception_message, in_message, v_exception_call_stack),
+      v_actor_id);
+  end;
 end;
 $$
 language 'plpgsql';
@@ -263,6 +300,50 @@ begin
     v_client_code,
     'message',
     v_message);
+end;
+$$
+language 'plpgsql';
+
+-- drop function api_utils.create_notification(integer, text, api_utils.output_message_type, jsonb);
+
+create or replace function api_utils.create_notification(in_client_id integer, in_request_id text, in_type api_utils.output_message_type, in_data jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_message jsonb :=
+    jsonb_build_object(
+      'type', in_type::text,
+      'data', json.get_object(in_data)) ||
+    (case when in_request_id is not null then jsonb_build_object('request_id', in_request_id) else jsonb '{}' end);
+  v_notification_code text;
+begin
+  assert in_client_id is not null;
+  assert in_type is not null;
+
+  insert into data.notifications(message, client_id)
+  values(v_message, in_client_id)
+  returning code into v_notification_code;
+
+  perform pg_notify('api_channel', v_notification_code);
+end;
+$$
+language 'plpgsql';
+
+-- drop function api_utils.process_get_actors_message(integer, integer, text, jsonb);
+
+create or replace function api_utils.process_get_actors_message(in_client_id integer, in_actor_id integer, in_request_id text, in_message_data jsonb)
+returns void
+volatile
+as
+$$
+begin
+  assert in_request_id is not null;
+  assert v_objects is not null;
+
+  -- todo
+  perform api_utils.create_notification(in_client_id, in_request_id, 'actors', jsonb_build_object('actors', null));
 end;
 $$
 language 'plpgsql';
