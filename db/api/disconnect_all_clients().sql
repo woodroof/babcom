@@ -9,7 +9,9 @@ begin
   delete from data.notifications;
 
   update data.clients
-  set is_connected = false;
+  set
+    is_connected = false,
+    actor_id = null;
 
   perform data.log('info', 'All clients were disconnected');
 end;

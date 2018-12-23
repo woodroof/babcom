@@ -10,8 +10,8 @@ declare
   v_type text := json.get_string(in_message, 'type');
   v_client_id integer;
   v_actor_id integer;
+  v_login_id integer;
   v_check_result boolean;
-  v_function text;
 begin
   assert in_client_code is not null;
 
@@ -26,19 +26,13 @@ begin
     raise exception 'Client with code "%s" is not connected', in_client_code;
   end if;
 
-  v_function =
-    case
-      when v_type = 'get_actors' then 'process_get_actors_message'
-      else null
-     end;
-  if v_function is null then
-    raise exception 'Unsupported message type "%s"', v_type;
-  end if;
-
   loop
     begin
-      execute format('select * from api_utils.%s($1, $2, $3, $4)', v_function)
-      using v_client_id, v_actor_id, v_request_id, in_message->'data';
+      if v_type = 'get_actors' then
+        perform api_utils.process_get_actors_message(v_client_id, v_request_id);
+      else
+        raise exception 'Unsupported message type "%s"', v_type;
+      end if;
 
       return;
     exception when deadlock_detected then

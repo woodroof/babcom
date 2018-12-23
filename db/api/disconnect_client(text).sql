@@ -23,7 +23,9 @@ begin
   end if;
 
   update data.clients
-  set is_connected = false
+  set
+    is_connected = false,
+    actor_id = null
   where id = v_client_id;
 
   delete from data.notifications

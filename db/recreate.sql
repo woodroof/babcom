@@ -117,8 +117,8 @@ declare
   v_type text := json.get_string(in_message, 'type');
   v_client_id integer;
   v_actor_id integer;
+  v_login_id integer;
   v_check_result boolean;
-  v_function text;
 begin
   assert in_client_code is not null;
 
@@ -133,19 +133,13 @@ begin
     raise exception 'Client with code "%s" is not connected', in_client_code;
   end if;
 
-  v_function =
-    case
-      when v_type = 'get_actors' then 'process_get_actors_message'
-      else null
-     end;
-  if v_function is null then
-    raise exception 'Unsupported message type "%s"', v_type;
-  end if;
-
   loop
     begin
-      execute format('select * from api_utils.%s($1, $2, $3, $4)', v_function)
-      using v_client_id, v_actor_id, v_request_id, in_message->'data';
+      if v_type = 'get_actors' then
+        perform api_utils.process_get_actors_message(v_client_id, v_request_id);
+      else
+        raise exception 'Unsupported message type "%s"', v_type;
+      end if;
 
       return;
     exception when deadlock_detected then
@@ -217,7 +211,9 @@ begin
   delete from data.notifications;
 
   update data.clients
-  set is_connected = false;
+  set
+    is_connected = false,
+    actor_id = null;
 
   perform data.log('info', 'All clients were disconnected');
 end;
@@ -249,7 +245,9 @@ begin
   end if;
 
   update data.clients
-  set is_connected = false
+  set
+    is_connected = false,
+    actor_id = null
   where id = v_client_id;
 
   delete from data.notifications
@@ -326,18 +324,35 @@ end;
 $$
 language 'plpgsql';
 
--- drop function api_utils.process_get_actors_message(integer, integer, text, jsonb);
+-- drop function api_utils.process_get_actors_message(integer, text);
 
-create or replace function api_utils.process_get_actors_message(in_client_id integer, in_actor_id integer, in_request_id text, in_message_data jsonb)
+create or replace function api_utils.process_get_actors_message(in_client_id integer, in_request_id text)
 returns void
 volatile
 as
 $$
+declare
+  v_login_id integer;
 begin
   assert in_request_id is not null;
-  assert v_objects is not null;
+
+  select login_id
+  into v_login_id
+  from data.clients
+  where id = in_client_id
+  for update;
+
+  if v_login_id is null then
+    v_login_id := data.get_integer_param('default_login_id');
+    assert v_login_id is not null;
+
+    update data.clients
+    set login_id = v_login_id
+    where id = in_client_id;
+  end if;
 
   -- todo
+
   perform api_utils.create_notification(in_client_id, in_request_id, 'actors', jsonb_build_object('actors', null));
 end;
 $$
@@ -5324,6 +5339,7 @@ create table data.clients(
   id integer not null generated always as identity,
   code text not null,
   is_connected boolean not null,
+  login_id integer,
   actor_id integer,
   constraint clients_pk primary key(id),
   constraint clients_unique_code unique(code)
@@ -5338,6 +5354,26 @@ create table data.log(
   message text not null,
   actor_id integer,
   constraint log_pk primary key(id)
+);
+
+-- drop table data.login_actors;
+
+create table data.login_actors(
+  id integer not null generated always as identity,
+  login_id integer not null,
+  actor_id integer not null,
+  priority integer not null,
+  constraint login_actors_pk primary key(id)
+);
+
+comment on column data.login_actors.priority is 'Приоритет, определяющий порядок следования акторов в списке. Список сортируется по уменьшению приоритета.';
+
+-- drop table data.logins;
+
+create table data.logins(
+  id integer not null generated always as identity,
+  code text not null,
+  constraint logins_pk primary key(id)
 );
 
 -- drop table data.notifications;
@@ -5426,10 +5462,19 @@ foreign key(start_object_id) references data.objects(id);
 alter table data.attribute_values_journal add constraint attribute_values_journal_fk_value_object
 foreign key(value_object_id) references data.objects(id);
 
+alter table data.clients add constraint clients_fk_logins
+foreign key(login_id) references data.logins(id);
+
 alter table data.clients add constraint clients_fk_objects
 foreign key(actor_id) references data.objects(id);
 
 alter table data.log add constraint log_fk_objects
+foreign key(actor_id) references data.objects(id);
+
+alter table data.login_actors add constraint login_actors_fk_logins
+foreign key(login_id) references data.logins(id);
+
+alter table data.login_actors add constraint login_actors_fk_objects
 foreign key(actor_id) references data.objects(id);
 
 alter table data.notifications add constraint notifications_fk_clients
