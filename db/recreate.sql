@@ -5290,7 +5290,7 @@ create table data.attribute_values(
   value jsonb,
   start_time timestamp with time zone not null default now(),
   start_reason text,
-  start_object_id integer,
+  start_actor_id integer,
   constraint attribute_values_override_check check((value_object_id is null) or data.can_attribute_be_overridden(attribute_id)),
   constraint attribute_values_pk primary key(id)
 );
@@ -5307,10 +5307,10 @@ create table data.attribute_values_journal(
   value jsonb,
   start_time timestamp with time zone not null,
   start_reason text,
-  start_object_id integer,
+  start_actor_id integer,
   end_time timestamp with time zone not null,
   end_reason text,
-  end_object_id integer,
+  end_actor_id integer,
   constraint attribute_values_journal_pk primary key(id)
 );
 
@@ -5435,29 +5435,29 @@ create table data.params(
 
 -- Creating foreign keys
 
-alter table data.attribute_values add constraint attribute_values_fk_attribute
+alter table data.attribute_values add constraint attribute_values_fk_attributes
 foreign key(attribute_id) references data.attributes(id);
 
-alter table data.attribute_values add constraint attribute_values_fk_object
+alter table data.attribute_values add constraint attribute_values_fk_objects
 foreign key(object_id) references data.objects(id);
 
-alter table data.attribute_values add constraint attribute_values_fk_start_object
-foreign key(start_object_id) references data.objects(id);
+alter table data.attribute_values add constraint attribute_values_fk_start_actor
+foreign key(start_actor_id) references data.objects(id);
 
 alter table data.attribute_values add constraint attribute_values_fk_value_object
 foreign key(value_object_id) references data.objects(id);
 
-alter table data.attribute_values_journal add constraint attribute_values_journal_fk_attribute
+alter table data.attribute_values_journal add constraint attribute_values_journal_fk_attributes
 foreign key(attribute_id) references data.attributes(id);
 
-alter table data.attribute_values_journal add constraint attribute_values_journal_fk_end_object
-foreign key(end_object_id) references data.objects(id);
+alter table data.attribute_values_journal add constraint attribute_values_journal_fk_end_actor
+foreign key(end_actor_id) references data.objects(id);
 
-alter table data.attribute_values_journal add constraint attribute_values_journal_fk_object
+alter table data.attribute_values_journal add constraint attribute_values_journal_fk_objects
 foreign key(object_id) references data.objects(id);
 
-alter table data.attribute_values_journal add constraint attribute_values_journal_fk_start_object
-foreign key(start_object_id) references data.objects(id);
+alter table data.attribute_values_journal add constraint attribute_values_journal_fk_start_actor
+foreign key(start_actor_id) references data.objects(id);
 
 alter table data.attribute_values_journal add constraint attribute_values_journal_fk_value_object
 foreign key(value_object_id) references data.objects(id);

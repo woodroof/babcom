@@ -8,7 +8,7 @@ create table data.attribute_values(
   value jsonb,
   start_time timestamp with time zone not null default now(),
   start_reason text,
-  start_object_id integer,
+  start_actor_id integer,
   constraint attribute_values_override_check check((value_object_id is null) or data.can_attribute_be_overridden(attribute_id)),
   constraint attribute_values_pk primary key(id)
 );

@@ -8,9 +8,9 @@ create table data.attribute_values_journal(
   value jsonb,
   start_time timestamp with time zone not null,
   start_reason text,
-  start_object_id integer,
+  start_actor_id integer,
   end_time timestamp with time zone not null,
   end_reason text,
-  end_object_id integer,
+  end_actor_id integer,
   constraint attribute_values_journal_pk primary key(id)
 );
