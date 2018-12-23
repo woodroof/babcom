@@ -541,7 +541,7 @@ begin
   where code = in_attribute_code;
 
   if v_attribute_id is null then
-    perform error.raise_invalid_input_param_value('Can''t find attribute "%s"', in_attribute_code);
+    raise exception 'Can''t find attribute "%s"', in_attribute_code;
   end if;
 
   return v_attribute_id;
@@ -624,7 +624,7 @@ begin
   where id = in_object_id;
 
   if v_object_code is null then
-    perform error.raise_invalid_input_param_value('Can''t find object %s', in_object_id);
+    raise exception 'Can''t find object %s', in_object_id;
   end if;
 
   return v_object_code;
@@ -650,7 +650,7 @@ begin
   where code = in_object_code;
 
   if v_object_id is null then
-    perform error.raise_invalid_input_param_value('Can''t find object "%s"', in_object_code);
+    raise exception 'Can''t find object "%s"', in_object_code;
   end if;
 
   return v_object_id;

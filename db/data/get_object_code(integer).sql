@@ -16,7 +16,7 @@ begin
   where id = in_object_id;
 
   if v_object_code is null then
-    perform error.raise_invalid_input_param_value('Can''t find object %s', in_object_id);
+    raise exception 'Can''t find object %s', in_object_id;
   end if;
 
   return v_object_code;
