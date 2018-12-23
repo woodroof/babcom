@@ -44,11 +44,6 @@ comment on schema api is 'Функции, вызываемые web-сервер�
 
 create schema api_utils;
 
--- drop schema attribute_value_description_functions;
-
-create schema attribute_value_description_functions;
-comment on schema attribute_value_description_functions is 'Схема для функций с описанием значений аргументов. Функции вызываются с параметрами (user_object_id, attribute_id, value), возвращают строку.';
-
 -- drop schema data;
 
 create schema data;
@@ -5320,7 +5315,7 @@ create table data.attributes(
 );
 
 comment on column data.attributes.card_type is 'Если null, то применимо ко всем типам карточек';
-comment on column data.attributes.value_description_function is 'Имя функции из схемы attribute_value_description_functions. Функция вызывается с параметрами (attribute_id, value, actor_id). Параметр actor_id может быть null.';
+comment on column data.attributes.value_description_function is 'Имя функции для получения описания значения атрибута. Функция вызывается с параметрами (attribute_id, value, actor_id).';
 comment on column data.attributes.can_be_overridden is 'Если false, то значение атрибута не может переопределяться для объектов';
 
 -- drop table data.clients;
