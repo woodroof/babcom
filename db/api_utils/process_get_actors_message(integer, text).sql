@@ -7,8 +7,8 @@ as
 $$
 declare
   v_login_id integer;
-  v_actor_id integer;
   v_actor_function text;
+  v_actor record;
   v_title text;
   v_subtitle text;
   v_actors jsonb[];
@@ -30,35 +30,39 @@ begin
     where id = in_client_id;
   end if;
 
-  for v_actor_id in
-    select actor_id
+  for v_actor_function in
+    select json.get_string_opt(data.get_attribute_value(v_actor_id, 'actor_function'), null) as actor_function
+    from data.login_actors
+    where
+      login_id = v_login_id and
+      actor_function is not null
+  loop
+    execute format('select %s($1)', v_actor_function)
+    using v_actor_id;
+  end loop;
+
+  for v_actor in
+    select
+      actor_id as id,
+      json.get_string_opt(data.get_attribute_value(actor_id, 'title', actor_id), null) as title,
+      json.get_string_opt(data.get_attribute_value(v_actor_id, 'subtitle', v_actor_id), null) as subtitle
     from data.login_actors
     where login_id = v_login_id
-    order by priority desc
+    order by title
   loop
-    v_actor_function := json.get_string_opt(data.get_attribute_value(v_actor_id, 'actor_function'), null);
-
-    if v_actor_function is not null then
-      execute format('select %s($1)', v_actor_function)
-      using v_actor_id;
-    end if;
-
-    v_title := json.get_string_opt(data.get_attribute_value(v_actor_id, 'title', v_actor_id));
-    v_subtitle := json.get_string_opt(data.get_attribute_value(v_actor_id, 'subtitle', v_actor_id));
-
     v_actors :=
       array_append(
         v_actors,
         (
-          jsonb_build_object('id', v_actor_id) ||
-          case when v_title is not null then jsonb_build_object('title', v_title) else jsonb '{}' end ||
-          case when v_subtitle is not null then jsonb_build_object('subtitle', v_subtitle) else jsonb '{}' end
+          jsonb_build_object('id', v_actor.id) ||
+          case when v_actor.title is not null then jsonb_build_object('title', v_actor.title) else jsonb '{}' end ||
+          case when v_actor.subtitle is not null then jsonb_build_object('subtitle', v_actor.subtitle) else jsonb '{}' end
         ));
   end loop;
 
   assert v_actors is not null;
 
-  perform api_utils.create_notification(in_client_id, in_request_id, 'actors', jsonb_build_object('actors', jsonb_build_object(v_actors)));
+  perform api_utils.create_notification(in_client_id, in_request_id, 'actors', jsonb_build_object('actors', jsonb_build_array(v_actors)));
 end;
 $$
 language 'plpgsql';
