@@ -361,6 +361,7 @@ begin
     where
       login_id = v_login_id and
       actor_function is not null
+    for share
   loop
     execute format('select %s($1)', v_actor_function)
     using v_actor_id;
@@ -368,11 +369,13 @@ begin
 
   for v_actor in
     select
-      actor_id as id,
+      o.code as id,
       json.get_string_opt(data.get_attribute_value(actor_id, 'title', actor_id), null) as title,
       json.get_string_opt(data.get_attribute_value(v_actor_id, 'subtitle', v_actor_id), null) as subtitle
-    from data.login_actors
-    where login_id = v_login_id
+    from data.login_actors la
+    join data.objects o
+      on o.id = la.actor_id
+    where la.login_id = v_login_id
     order by title
   loop
     v_actors :=
