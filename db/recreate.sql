@@ -78,10 +78,9 @@ create schema test;
 
 create type api_utils.output_message_type as enum(
   'actors',
-  'object',
-  'page',
-  'show_object',
-  'switch_actor');
+  'diff',
+  'go_back',
+  'object');
 
 -- drop type data.attribute_type;
 
