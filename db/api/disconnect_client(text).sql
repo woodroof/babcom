@@ -31,6 +31,15 @@ begin
   delete from data.notifications
   where client_id = v_client_id;
 
+  delete from data.client_subscription_objects
+  where client_subscription_id in (
+    select id
+    from data.client_subscriptions
+    where client_id = v_client_id);
+
+  delete from data.client_subscriptions
+  where client_id = v_client_id;
+
   perform data.log('info', format('Disconnected client with code "%"', in_client_code));
 end;
 $$

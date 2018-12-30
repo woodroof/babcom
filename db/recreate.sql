@@ -136,6 +136,8 @@ begin
     begin
       if v_type = 'get_actors' then
         perform api_utils.process_get_actors_message(v_client_id, v_request_id);
+      elsif v_type = 'set_actor' then
+        perform api_utils.process_set_actor_message(v_client_id, json.get_object(in_message, 'data'));
       else
         raise exception 'Unsupported message type "%s"', v_type;
       end if;
@@ -208,6 +210,8 @@ as
 $$
 begin
   delete from data.notifications;
+  delete from data.client_subscription_objects;
+  delete from data.client_subscriptions;
 
   update data.clients
   set
@@ -250,6 +254,15 @@ begin
   where id = v_client_id;
 
   delete from data.notifications
+  where client_id = v_client_id;
+
+  delete from data.client_subscription_objects
+  where client_subscription_id in (
+    select id
+    from data.client_subscriptions
+    where client_id = v_client_id);
+
+  delete from data.client_subscriptions
   where client_id = v_client_id;
 
   perform data.log('info', format('Disconnected client with code "%"', in_client_code));
@@ -391,6 +404,62 @@ begin
   assert v_actors is not null;
 
   perform api_utils.create_notification(in_client_id, in_request_id, 'actors', jsonb_build_object('actors', jsonb_build_array(v_actors)));
+end;
+$$
+language 'plpgsql';
+
+-- drop function api_utils.process_set_actor_message(integer, jsonb);
+
+create or replace function api_utils.process_set_actor_message(in_client_id integer, in_message jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id integer := data.get_object_id(json.get_string(in_message, 'actor_id'));
+  v_login_id integer;
+  v_actor_exists boolean;
+begin
+  assert in_client_id is not null;
+
+  select login_id
+  into v_login_id
+  from data.clients
+  where id = in_client_id
+  for update;
+
+  if v_login_id is null then
+    v_login_id := data.get_integer_param('default_login_id');
+    assert v_login_id is not null;
+
+    update data.clients
+    set login_id = v_login_id
+    where id = in_client_id;
+  end if;
+
+  select true
+  into v_actor_exists
+  from data.login_actors
+  where
+    login_id = v_login_id and
+    actor_id = v_actor_id;
+
+  if v_actor_exists is null then
+    raise exception 'Actor % is not available for client %', v_actor_id, in_client_id;
+  end if;
+
+  update data.clients
+  set actor_id = v_actor_id
+  where client_id = in_client_id;
+
+  delete from data.client_subscription_objects
+  where client_subscription_id in (
+    select id
+    from data.client_subscriptions
+    where client_id = in_client_id);
+
+  delete from data.client_subscriptions
+  where client_id = in_client_id;
 end;
 $$
 language 'plpgsql';
@@ -5438,6 +5507,30 @@ comment on column data.attributes.card_type is 'Если null, то примен
 comment on column data.attributes.value_description_function is 'Имя функции для получения описания значения атрибута. Функция вызывается с параметрами (attribute_id, value, actor_id).';
 comment on column data.attributes.can_be_overridden is 'Если false, то значение атрибута не может переопределяться для объектов';
 
+-- drop table data.client_subscription_objects;
+
+create table data.client_subscription_objects(
+  id integer not null generated always as identity,
+  client_subscription_id integer not null,
+  object_id integer not null,
+  index integer not null,
+  is_visible boolean not null,
+  constraint client_subscription_objects_index_check check(index > 0),
+  constraint client_subscription_objects_pk primary key(id),
+  constraint client_subscription_objects_unique_csi_i unique(client_subscription_id, index),
+  constraint client_subscription_objects_unique_oi_csi unique(object_id, client_subscription_id)
+);
+
+-- drop table data.client_subscriptions;
+
+create table data.client_subscriptions(
+  id integer not null generated always as identity,
+  client_id integer not null,
+  object_id integer not null,
+  constraint client_subscriptions_pk primary key(id),
+  constraint client_subscriptions_unique_object_client unique(object_id, client_id)
+);
+
 -- drop table data.clients;
 
 create table data.clients(
@@ -5564,6 +5657,18 @@ foreign key(start_actor_id) references data.objects(id);
 alter table data.attribute_values_journal add constraint attribute_values_journal_fk_value_object
 foreign key(value_object_id) references data.objects(id);
 
+alter table data.client_subscription_objects add constraint client_subscription_objects_fk_client_subscriptions
+foreign key(client_subscription_id) references data.client_subscriptions(id);
+
+alter table data.client_subscription_objects add constraint client_subscription_objects_fk_objects
+foreign key(object_id) references data.objects(id);
+
+alter table data.client_subscriptions add constraint client_subscriptions_fk_clients
+foreign key(client_id) references data.clients(id);
+
+alter table data.client_subscriptions add constraint client_subscriptions_fk_objects
+foreign key(object_id) references data.objects(id);
+
 alter table data.clients add constraint clients_fk_logins
 foreign key(login_id) references data.logins(id);
 
@@ -5607,6 +5712,10 @@ create unique index attribute_values_idx_oi_ai_voi on data.attribute_values(obje
 -- drop index data.attribute_values_nuidx_oi_ai;
 
 create index attribute_values_nuidx_oi_ai on data.attribute_values(object_id, attribute_id);
+
+-- drop index data.client_subscriptions_idx_client;
+
+create index client_subscriptions_idx_client on data.client_subscriptions(client_id);
 
 -- drop index data.notifications_idx_client_id;
 

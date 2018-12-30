@@ -30,6 +30,8 @@ begin
     begin
       if v_type = 'get_actors' then
         perform api_utils.process_get_actors_message(v_client_id, v_request_id);
+      elsif v_type = 'set_actor' then
+        perform api_utils.process_set_actor_message(v_client_id, json.get_object(in_message, 'data'));
       else
         raise exception 'Unsupported message type "%s"', v_type;
       end if;

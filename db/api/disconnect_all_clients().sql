@@ -7,6 +7,8 @@ as
 $$
 begin
   delete from data.notifications;
+  delete from data.client_subscription_objects;
+  delete from data.client_subscriptions;
 
   update data.clients
   set
