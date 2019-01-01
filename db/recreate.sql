@@ -77,10 +77,11 @@ create schema test;
 -- drop type api_utils.output_message_type;
 
 create type api_utils.output_message_type as enum(
+  'action_result',
   'actors',
   'diff',
-  'go_back',
-  'object');
+  'object',
+  'object_list');
 
 -- drop type data.attribute_type;
 
