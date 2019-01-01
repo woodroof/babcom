@@ -5561,15 +5561,17 @@ create table data.login_actors(
   id integer not null generated always as identity,
   login_id integer not null,
   actor_id integer not null,
-  constraint login_actors_pk primary key(id)
+  constraint login_actors_pk primary key(id),
+  constraint login_actors_unique_login_actor unique(login_id, actor_id)
 );
 
 -- drop table data.logins;
 
 create table data.logins(
   id integer not null generated always as identity,
-  code text not null,
-  constraint logins_pk primary key(id)
+  code text not null default (pgcrypto.gen_random_uuid())::text,
+  constraint logins_pk primary key(id),
+  constraint logins_unique_code unique(code)
 );
 
 -- drop table data.notifications;
