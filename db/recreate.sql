@@ -144,6 +144,8 @@ begin
         perform api_utils.process_get_more_message(v_client_id, v_request_id, json.get_object(in_message, 'data'));
       elsif v_type = 'unsubscribe' then
         perform api_utils.process_unsubscribe_message(v_client_id, json.get_object(in_message, 'data'));
+      elsif v_type = 'make_action' then
+        perform api_utils.process_make_action_message(v_client_id, v_request_id, json.get_object(in_message, 'data'));
       else
         raise exception 'Unsupported message type "%s"', v_type;
       end if;
@@ -445,6 +447,48 @@ begin
   v_list := data.get_next_list(in_client_id, v_object_id);
 
   perform api_utils.create_notification(in_client_id, in_request_id, 'object_list', jsonb_create_object('list', v_list));
+end;
+$$
+language 'plpgsql';
+
+-- drop function api_utils.process_make_action_message(integer, integer, jsonb);
+
+create or replace function api_utils.process_make_action_message(in_client_id integer, in_request_id integer, in_message jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_action_code text := json.get_string(in_message, 'action_code');
+  v_params jsonb := in_message->'params';
+  v_user_params jsonb := json.get_object_opt(in_message, 'user_params', null);
+  v_actor_id integer;
+  v_function text;
+begin
+  assert in_client_id is not null;
+  assert in_request_id is not null;
+
+  select actor_id
+  into v_actor_id
+  from data.clients
+  where id = in_client_id
+  for update;
+
+  if v_actor_id is null then
+    raise exception 'Client %s has no active actor', in_client_id;
+  end if;
+
+  select function
+  into v_function
+  from data.actions
+  where code = v_action_code;
+
+  if v_function is null then
+    raise exception 'Function with code %s not found', v_action_code;
+  end if;
+
+  execute format('select %s($1, $2, $3, $4)', v_function)
+  using in_request_id, v_actor_id, v_params, v_user_params;
 end;
 $$
 language 'plpgsql';
@@ -5919,6 +5963,18 @@ $$
 language 'plpgsql';
 
 -- Creating tables
+
+-- drop table data.actions;
+
+create table data.actions(
+  id integer not null generated always as identity,
+  code text not null,
+  function text not null,
+  constraint actions_pk primary key(id),
+  constraint actions_unique_code unique(code)
+);
+
+comment on column data.actions.function is 'Имя функции для выполнения действия. Функция вызывается с параметрами (request_id, actor_id, params, user_params).';
 
 -- drop table data.attribute_values;
 
