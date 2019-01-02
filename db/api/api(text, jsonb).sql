@@ -9,14 +9,13 @@ declare
   v_request_id text := json.get_string(in_message, 'request_id');
   v_type text := json.get_string(in_message, 'type');
   v_client_id integer;
-  v_actor_id integer;
   v_login_id integer;
   v_check_result boolean;
 begin
   assert in_client_code is not null;
 
-  select id, actor_id
-  into v_client_id, v_actor_id
+  select id
+  into v_client_id
   from data.clients
   where
     code = in_client_code and
@@ -53,8 +52,7 @@ exception when others or assert_failure then
 
     perform data.log(
       'error',
-      format(E'Error: %s\nMessage:\n%s\nCall stack:\n%s', v_exception_message, in_message, v_exception_call_stack),
-      v_actor_id);
+      format(E'Error: %s\nMessage:\n%s\nClient: %s\nCall stack:\n%s', v_exception_message, in_message, in_client_code, v_exception_call_stack));
   end;
 end;
 $$
