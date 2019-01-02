@@ -1,0 +1,49 @@
+-- drop function api_utils.process_unsubscribe_message(integer, jsonb);
+
+create or replace function api_utils.process_unsubscribe_message(in_client_id integer, in_message jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_object_id integer := data.get_object_id(json.get_string(in_message, 'object_id'));
+  v_actor_id integer;
+  v_subscription_id integer;
+  v_object jsonb;
+begin
+  assert in_client_id is not null;
+
+  select actor_id
+  into v_actor_id
+  from data.clients
+  where id = in_client_id
+  for update;
+
+  if v_actor_id is null then
+    raise exception 'Client %s has no active actor', in_client_id;
+  end if;
+
+  perform 1
+  from data.objects
+  where object_id = v_object_id
+  for update;
+
+  select id
+  into v_subscription_id
+  from data.client_subscriptions
+  where
+    object_id = v_object_id and
+    client_id = in_client_id;
+
+  if v_subscription_id is null then
+    raise exception 'Client %s has no subscription to object %s', in_client_id, v_object_id;
+  end if;
+
+  delete from data.client_subscription_objects
+  where client_subscription_id = v_subscription_id;
+
+  delete from data.client_subscriptions
+  where id = v_subscription_id;
+end;
+$$
+language 'plpgsql';

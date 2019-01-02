@@ -35,6 +35,8 @@ begin
         perform api_utils.process_subscribe_message(v_client_id, v_request_id, json.get_object(in_message, 'data'));
       elsif v_type = 'get_more' then
         perform api_utils.process_get_more_message(v_client_id, v_request_id, json.get_object(in_message, 'data'));
+      elsif v_type = 'unsubscribe' then
+        perform api_utils.process_unsubscribe_message(v_client_id, json.get_object(in_message, 'data'));
       else
         raise exception 'Unsupported message type "%s"', v_type;
       end if;
