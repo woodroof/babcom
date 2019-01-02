@@ -139,6 +139,8 @@ begin
         perform api_utils.process_get_actors_message(v_client_id, v_request_id);
       elsif v_type = 'set_actor' then
         perform api_utils.process_set_actor_message(v_client_id, json.get_object(in_message, 'data'));
+      elsif v_type = 'subscribe' then
+        perform api_utils.process_subscribe_message(v_client_id, v_request_id, json.get_object(in_message, 'data'));
       else
         raise exception 'Unsupported message type "%s"', v_type;
       end if;
@@ -465,6 +467,104 @@ end;
 $$
 language 'plpgsql';
 
+-- drop function api_utils.process_subscribe_message(integer, integer, jsonb);
+
+create or replace function api_utils.process_subscribe_message(in_client_id integer, in_request_id integer, in_message jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_object_id integer := data.get_object_id(json.get_string(in_message, 'object_id'));
+  v_actor_id integer;
+  v_visited_object_ids integer[];
+  v_full_card_function text;
+  v_redirect_object_id integer;
+  v_object_exists boolean;
+  v_is_visible boolean;
+  v_subscription_exists boolean;
+  v_object jsonb;
+begin
+  assert in_client_id is not null;
+
+  select actor_id
+  into v_actor_id
+  from data.clients
+  where id = in_client_id
+  for update;
+
+  if v_actor_id is null then
+    raise exception 'Client %s has no active actor', in_client_id;
+  end if;
+
+  perform 1
+  from data.objects
+  where object_id = v_object_id
+  for update;
+
+  loop
+    if v_visited_object_ids is not null and array_position(v_visited_object_ids, v_object_id) is not null then
+      raise exception 'Redirection cycle detected for object %', v_object_id;
+    end if;
+
+    v_visited_object_ids := array_append(v_visited_object_ids, v_object_id);
+
+    -- Вызываем функцию на получение полной карточки объекта, если есть
+    v_full_card_function := json.get_string_opt(data.get_attribute_value(v_object_id, 'full_card_function'), null);
+
+    if v_full_card_function is not null then
+      execute format('select %s($1, $2)', v_full_card_function)
+      using v_object_id, v_actor_id;
+    end if;
+
+    -- Смотрим на наличие redirect'а
+    v_redirect_object_id := json.get_integer_opt(data.get_attribute_value(v_object_id, 'redirect', v_actor_id), null);
+    if v_redirect_object_id is not null then
+      v_object_id := v_redirect_object_id;
+
+      -- Проверяем наличие объекта
+      select true
+      into v_object_exists
+      from data.objects
+      where id = v_object_id
+      for update;
+
+      if v_object_exists is null then
+        raise exception 'Object % not found', v_object_id;
+      end if;
+
+      continue;
+    end if;
+
+    -- Проверяем видимость
+    v_is_visible := json.get_boolean_opt(data.get_attribute_value(v_object_id, 'is_visible', in_actor_id), null);
+    if v_is_visible is null then
+      v_object_id := data.get_integer_param('not_found_object_id');
+      continue;
+    end if;
+  end loop;
+
+  select true
+  into v_subscription_exists
+  from data.client_subscriptions
+  where
+    object_id = v_object_id and
+    client_id = in_client_id;
+
+  if v_subscriptions_exists is true then
+    raise exception 'Can''t create second subscription to object %s', v_object_id;
+  end if;
+
+  insert into data.client_subscriptions(client_id, object_id)
+  values(in_client_id, v_object_id);
+
+  v_object := data.get_object(v_object_id, v_actor_id, 'full', v_object_id);
+
+  perform api_utils.create_notification(in_client_id, in_request_id, 'object', v_object);
+end;
+$$
+language 'plpgsql';
+
 -- drop function data.add_object_to_object(integer, integer);
 
 create or replace function data.add_object_to_object(in_object_id integer, in_parent_object_id integer)
@@ -617,6 +717,69 @@ begin
   end if;
 
   return v_ret_val;
+end;
+$$
+language 'plpgsql';
+
+-- drop function data.filter_template(jsonb, jsonb);
+
+create or replace function data.filter_template(in_template jsonb, in_attributes jsonb)
+returns jsonb
+immutable
+as
+$$
+declare
+  v_groups jsonb := json.get_array(json.get_object(in_template), 'groups');
+  v_group jsonb;
+  v_attribute jsonb;
+  v_attribute_name text;
+  v_actions jsonb;
+  v_name text;
+  v_filtered_group jsonb;
+  v_filtered_groups jsonb[];
+  v_filtered_attributes text[];
+begin
+  assert json.get_object(in_attributes) is not null;
+
+  for v_group in
+    select *
+    from jsonb_array_elements(v_groups)
+  loop
+    v_filtered_attributes := null;
+
+    if v_group.value ? 'attributes' then
+      for v_attribute in
+        select *
+        from jsonb_array_elements(json.get_array(v_group.value, 'attributes'))
+      loop
+        v_attribute_name := json.get_string(v_attribute.value);
+        if in_attributes ? v_attribute_name then
+          v_filtered_attributes := array_append(v_filtered_attributes, v_attribute_name);
+        end if;
+      end loop;
+    end if;
+
+    v_actions := json.get_array_opt(v_group.value, 'actions', null);
+
+    if v_actions is not null or v_filtered_attributes is not null then
+      v_name = json.get_string_opt(v_group.value, 'name', null);
+
+      v_filtered_group := jsonb '{}';
+      if v_name is not null then
+        v_filtered_group := v_filtered_group || jsonb_create_object('name', v_name);
+      end if;
+      if v_filtered_attributes is not null then
+        v_filtered_group := v_filtered_group || jsonb_create_object('attributes', jsonb_build_array(v_filtered_attributes));
+      end if;
+      if v_actions is not null then
+        v_filtered_group := v_filtered_group || jsonb_create_object('actions', v_actions);
+      end if;
+
+      v_filtered_groups := array_append(v_filtered_groups, v_filtered_group);
+    end if;
+  end loop;
+
+  return jsonb_create_object('groups', jsonb_build_array(v_filtered_groups));
 end;
 $$
 language 'plpgsql';
@@ -787,6 +950,220 @@ begin
       data.get_param(in_code));
 exception when invalid_parameter_value then
   raise exception 'Param "%" is not an integer', in_code;
+end;
+$$
+language 'plpgsql';
+
+-- drop function data.get_next_list(integer, integer);
+
+create or replace function data.get_next_list(in_client_id integer, in_object_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_page_size integer := data.get_integer_param(page_size);
+  v_actor_id integer;
+  v_last_object_id integer;
+  v_content integer[];
+  v_content_length integer;
+  v_client_subscription_id integer;
+  v_object record;
+  v_mini_card_function text;
+  v_is_visible boolean;
+  v_count integer := 0;
+  v_has_more boolean := false;
+  v_objects jsonb[];
+begin
+  assert in_object_id is not null;
+  assert v_page_size > 0;
+
+  select actor_id
+  into v_actor_id
+  from data.clients
+  where id = in_client_id
+  for update;
+
+  assert v_actor_id is not null;
+
+  v_content = json.get_integer_array(data.get_attribute_value(in_object_id, 'content'));
+  assert intarray.uniq(intarray.sort(v_content)) = v_content;
+
+  v_content_length := array_length(v_content, 1);
+
+  select id
+  into v_client_subscription_id
+  from data.client_subscriptions
+  where
+    client_id = in_client_id and
+    object_id = in_object_id;
+
+  if v_client_subscription_id is null then
+    raise exception 'Client %s has no subscription for object %s', client_id, object_id;
+  end if;
+
+  for v_object in
+    select
+      c.value id,
+      c.num as index
+    from (
+      select
+        row_number() over() as num,
+        value
+      from unnest(v_content) s(value)) c
+    where c.value not in (
+      select object_id
+      from data.client_subscription_objects
+      where client_subscription_id = v_client_subscription_id)
+    order by c.num
+  loop
+    if v_count = v_page_size then
+      v_has_more := true;
+      exit;
+    end if;
+
+    -- Вызываем функцию на получение миникарточки объекта, если есть
+    v_mini_card_function := json.get_string_opt(data.get_attribute_value(v_object.id, 'mini_card_function'), null);
+
+    if v_mini_card_function is not null then
+      execute format('select %s($1, $2)', v_mini_card_function)
+      using v_object.id, in_actor_id;
+    end if;
+
+    -- Проверяем видимость
+    v_is_visible := json.get_boolean_opt(data.get_attribute_value(v_object.id, 'is_visible', in_actor_id), null);
+    if v_is_visible is null then
+      insert into data.client_subscription_objects(client_subscription_id, object_id, index, is_visible)
+      values(v_client_subscription_id, v_object.id, v_object.index, false);
+
+      continue;
+    end if;
+
+    v_objects := array_append(v_objects, json.get_object(data.get_object(v_object.id, in_actor_id, 'mini', in_object_id), 'object'));
+
+    v_count := v_count + 1;
+  end loop;
+
+  return jsonb_build_object('objects', jsonb_build_array(v_objects), 'has_more', v_has_more);
+end;
+$$
+language 'plpgsql';
+
+-- drop function data.get_object(integer, integer, data.card_type, integer);
+
+create or replace function data.get_object(in_object_id integer, in_actor_id integer, in_card_type data.card_type, in_actions_object_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_priority_attribute_id integer := data.get_attribute_id('priority');
+  v_attributes jsonb := jsonb '{}';
+  v_attribute record;
+  v_attribute_json jsonb;
+  v_value_description text;
+  v_actions_function_attribute_id integer :=
+    data.get_attribute_id(case when in_object_id = in_actions_object_id then 'actions_function' else 'list_actions_function' end);
+  v_actions_function text;
+  v_actions jsonb;
+  v_template jsonb := data.get_param('template');
+  v_object jsonb;
+  v_list jsonb;
+begin
+  assert in_object_id is not null;
+  assert in_actor_id is not null;
+  assert in_card_type is not null;
+
+  -- Получаем видимые и hidden-атрибуты для указанной карточки
+  for v_attribute in
+    select
+      a.id,
+      a.code,
+      a.name,
+      case when a.type = 'hidden' then true else false end as hidden,
+      attr.value,
+      a.value_description_function
+    from (
+      select
+        av.attribute_id,
+        av.value,
+        case when lag(av.attribute_id) over (partition by av.object_id, av.attribute_id order by json.get_integer_opt(pr.value, 0) desc) is null then true else false end as needed
+      from data.attribute_values av
+      left join data.object_objects oo on
+        av.value_object_id = oo.parent_object_id and
+        oo.object_id = in_actor_id
+      left join data.attribute_values pr on
+        pr.object_id = av.value_object_id and
+        pr.attribute_id = v_priority_attribute_id and
+        pr.value_object_id is null
+      where
+        av.object_id = in_object_id and
+        (
+          av.value_object_id is null or
+          oo.id is not null
+        )
+    ) attr
+    join data.attributes a
+      on a.id = attr.attribute_id
+      and (a.card_type is null or a.card_type = in_card_type)
+      and a.type != 'system'
+      and attr.needed = true
+    order by a.code
+  loop
+    v_attribute_json := jsonb '{}';
+    if v_attribute.value_description_function is not null then
+      execute format('select %s($1, $2, $3)', v_attribute.value_description_function)
+      using v_attribute.id, v_attribute.value, in_actor_id
+      into v_value_description;
+
+      if v_value_description is not null then
+        v_attribute_json := v_attribute_json || jsonb_build_object('value_description', v_value_description);
+      end if;
+    end if;
+
+    if v_attribute.name is not null then
+      v_attribute_json := v_attribute_json || jsonb_build_object('name', v_attribute.name, 'value', v_attribute.value, 'hidden', v_attribute.hidden);
+    else
+      v_attribute_json := v_attribute_json || jsonb_build_object('value', v_attribute.value, 'hidden', v_attribute.hidden);
+    end if;
+
+    v_attributes := v_attributes || jsonb_build_object(v_attribute.code, v_attribute_json);
+  end loop;
+
+  -- Получаем действия объекта
+  select json.get_string_opt(value, null)
+  into v_actions_function
+  from data.attribute_values
+  where
+    object_id = in_actions_object_id and
+    attribute_id = v_actions_function_attribute_id and
+    value_object_id is null;
+
+  if v_actions_function is not null then
+    if in_object_id = in_actions_object_id then
+      execute format('select %s($1, $2)', v_actions_function)
+      using in_object_id, in_actor_id
+      into v_actions;
+    else
+      execute format('select %s($1, $2, $3)', v_actions_function)
+      using in_actions_object_id, in_object_id, in_actor_id
+      into v_actions;
+    end if;
+  end if;
+
+  -- Отфильтровываем из шаблона лишнее
+  v_template := data.filter_template(v_template, v_attributes);
+
+  v_object := jsonb_create_object('id', v_object_id, 'attributes', v_attributes, 'actions', v_actions, 'template', v_template);
+
+  if v_attributes ? 'content' then
+    assert in_card_type = 'full';
+
+    v_list := data.get_next_list(in_client_id, v_object_id);
+    return jsonb_build_object('object', v_object, 'list', v_list);
+  end if;
+
+  return jsonb_build_object('object', v_object);
 end;
 $$
 language 'plpgsql';
