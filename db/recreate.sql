@@ -140,6 +140,8 @@ begin
         perform api_utils.process_set_actor_message(v_client_id, json.get_object(in_message, 'data'));
       elsif v_type = 'subscribe' then
         perform api_utils.process_subscribe_message(v_client_id, v_request_id, json.get_object(in_message, 'data'));
+      elsif v_type = 'get_more' then
+        perform api_utils.process_get_more_message(v_client_id, v_request_id, json.get_object(in_message, 'data'));
       else
         raise exception 'Unsupported message type "%s"', v_type;
       end if;
@@ -405,6 +407,42 @@ begin
   assert v_actors is not null;
 
   perform api_utils.create_notification(in_client_id, in_request_id, 'actors', jsonb_build_object('actors', jsonb_build_array(v_actors)));
+end;
+$$
+language 'plpgsql';
+
+-- drop function api_utils.process_get_more_message(integer, integer, jsonb);
+
+create or replace function api_utils.process_get_more_message(in_client_id integer, in_request_id integer, in_message jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_object_id integer := data.get_object_id(json.get_string(in_message, 'object_id'));
+  v_actor_id integer;
+  v_list jsonb;
+begin
+  assert in_client_id is not null;
+
+  select actor_id
+  into v_actor_id
+  from data.clients
+  where id = in_client_id
+  for update;
+
+  if v_actor_id is null then
+    raise exception 'Client %s has no active actor', in_client_id;
+  end if;
+
+  perform 1
+  from data.objects
+  where object_id = v_object_id
+  for update;
+
+  v_list := data.get_next_list(in_client_id, v_object_id);
+
+  perform api_utils.create_notification(in_client_id, in_request_id, 'object_list', jsonb_create_object('list', v_list));
 end;
 $$
 language 'plpgsql';
