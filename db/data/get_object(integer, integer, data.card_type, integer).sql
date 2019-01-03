@@ -101,7 +101,7 @@ begin
   end if;
 
   -- Отфильтровываем из шаблона лишнее
-  v_template := data.filter_template(v_template, v_attributes);
+  v_template := data.filter_template(v_template, v_attributes, v_actions);
 
   v_object := jsonb_create_object('id', v_object_id, 'attributes', v_attributes, 'actions', v_actions, 'template', v_template);
 
