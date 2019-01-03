@@ -88,7 +88,7 @@ begin
     v_count := v_count + 1;
   end loop;
 
-  return jsonb_build_object('objects', jsonb_build_array(v_objects), 'has_more', v_has_more);
+  return jsonb_build_object('objects', to_jsonb(v_objects), 'has_more', v_has_more);
 end;
 $$
 language 'plpgsql';

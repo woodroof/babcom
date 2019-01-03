@@ -31,22 +31,22 @@ begin
   end if;
 
   for v_actor_function in
-    select json.get_string_opt(data.get_attribute_value(v_actor_id, 'actor_function'), null) as actor_function
+    select json.get_string_opt(data.get_attribute_value(actor_id, 'actor_function'), null) as actor_function
     from data.login_actors
-    where
-      login_id = v_login_id and
-      actor_function is not null
+    where login_id = v_login_id
     for share
   loop
-    execute format('select %s($1)', v_actor_function)
-    using v_actor_id;
+    if v_actor_function is not null then
+      execute format('select %s($1)', v_actor_function)
+      using v_actor_id;
+    end if;
   end loop;
 
   for v_actor in
     select
       o.code as id,
       json.get_string_opt(data.get_attribute_value(actor_id, 'title', actor_id), null) as title,
-      json.get_string_opt(data.get_attribute_value(v_actor_id, 'subtitle', v_actor_id), null) as subtitle
+      json.get_string_opt(data.get_attribute_value(actor_id, 'subtitle', actor_id), null) as subtitle
     from data.login_actors la
     join data.objects o
       on o.id = la.actor_id
@@ -65,7 +65,7 @@ begin
 
   assert v_actors is not null;
 
-  perform api_utils.create_notification(in_client_id, in_request_id, 'actors', jsonb_build_object('actors', jsonb_build_array(v_actors)));
+  perform api_utils.create_notification(in_client_id, in_request_id, 'actors', jsonb_build_object('actors', to_jsonb(v_actors)));
 end;
 $$
 language 'plpgsql';

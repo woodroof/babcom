@@ -12,7 +12,7 @@ declare
 begin
   assert in_object_id is not null;
   assert in_actor_id is not null;
-  assert data.can_attribute_be_overridden(v_attribute_id) == true;
+  assert data.can_attribute_be_overridden(v_attribute_id) is true;
 
   select av.value
   into v_attribute_value
@@ -26,7 +26,7 @@ begin
     pr.value_object_id is null
   where
     av.object_id = in_object_id and
-    av.attribute_id = in_attribute_id and
+    av.attribute_id = v_attribute_id and
     (
       av.value_object_id is null or
       oo.id is not null

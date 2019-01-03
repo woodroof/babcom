@@ -10,7 +10,7 @@ declare
   v_attribute_value jsonb;
 begin
   assert in_object_id is not null;
-  assert data.can_attribute_be_overridden(v_attribute_id) == false;
+  assert data.can_attribute_be_overridden(v_attribute_id) is false;
 
   select value
   into v_attribute_value

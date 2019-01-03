@@ -380,22 +380,22 @@ begin
   end if;
 
   for v_actor_function in
-    select json.get_string_opt(data.get_attribute_value(v_actor_id, 'actor_function'), null) as actor_function
+    select json.get_string_opt(data.get_attribute_value(actor_id, 'actor_function'), null) as actor_function
     from data.login_actors
-    where
-      login_id = v_login_id and
-      actor_function is not null
+    where login_id = v_login_id
     for share
   loop
-    execute format('select %s($1)', v_actor_function)
-    using v_actor_id;
+    if v_actor_function is not null then
+      execute format('select %s($1)', v_actor_function)
+      using v_actor_id;
+    end if;
   end loop;
 
   for v_actor in
     select
       o.code as id,
       json.get_string_opt(data.get_attribute_value(actor_id, 'title', actor_id), null) as title,
-      json.get_string_opt(data.get_attribute_value(v_actor_id, 'subtitle', v_actor_id), null) as subtitle
+      json.get_string_opt(data.get_attribute_value(actor_id, 'subtitle', actor_id), null) as subtitle
     from data.login_actors la
     join data.objects o
       on o.id = la.actor_id
@@ -414,7 +414,7 @@ begin
 
   assert v_actors is not null;
 
-  perform api_utils.create_notification(in_client_id, in_request_id, 'actors', jsonb_build_object('actors', jsonb_build_array(v_actors)));
+  perform api_utils.create_notification(in_client_id, in_request_id, 'actors', jsonb_build_object('actors', to_jsonb(v_actors)));
 end;
 $$
 language 'plpgsql';
@@ -917,17 +917,17 @@ begin
         v_filtered_group := v_filtered_group || jsonb_create_object('name', v_name);
       end if;
       if v_filtered_attributes is not null then
-        v_filtered_group := v_filtered_group || jsonb_create_object('attributes', jsonb_build_array(v_filtered_attributes));
+        v_filtered_group := v_filtered_group || jsonb_create_object('attributes', to_jsonb(v_filtered_attributes));
       end if;
       if v_filtered_actions is not null then
-        v_filtered_group := v_filtered_group || jsonb_create_object('actions', jsonb_build_array(v_filtered_actions));
+        v_filtered_group := v_filtered_group || jsonb_create_object('actions', to_jsonb(v_filtered_actions));
       end if;
 
       v_filtered_groups := array_append(v_filtered_groups, v_filtered_group);
     end if;
   end loop;
 
-  return jsonb_create_object('groups', jsonb_build_array(v_filtered_groups));
+  return jsonb_create_object('groups', to_jsonb(v_filtered_groups));
 end;
 $$
 language 'plpgsql';
@@ -989,7 +989,7 @@ declare
   v_attribute_value jsonb;
 begin
   assert in_object_id is not null;
-  assert data.can_attribute_be_overridden(v_attribute_id) == false;
+  assert data.can_attribute_be_overridden(v_attribute_id) is false;
 
   select value
   into v_attribute_value
@@ -1018,7 +1018,7 @@ declare
 begin
   assert in_object_id is not null;
   assert in_actor_id is not null;
-  assert data.can_attribute_be_overridden(v_attribute_id) == true;
+  assert data.can_attribute_be_overridden(v_attribute_id) is true;
 
   select av.value
   into v_attribute_value
@@ -1032,7 +1032,7 @@ begin
     pr.value_object_id is null
   where
     av.object_id = in_object_id and
-    av.attribute_id = in_attribute_id and
+    av.attribute_id = v_attribute_id and
     (
       av.value_object_id is null or
       oo.id is not null
@@ -1192,7 +1192,7 @@ begin
     v_count := v_count + 1;
   end loop;
 
-  return jsonb_build_object('objects', jsonb_build_array(v_objects), 'has_more', v_has_more);
+  return jsonb_build_object('objects', to_jsonb(v_objects), 'has_more', v_has_more);
 end;
 $$
 language 'plpgsql';
