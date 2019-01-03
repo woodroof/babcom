@@ -40,7 +40,7 @@ begin
 
   update data.clients
   set actor_id = v_actor_id
-  where client_id = in_client_id;
+  where id = in_client_id;
 
   delete from data.client_subscription_objects
   where client_subscription_id in (

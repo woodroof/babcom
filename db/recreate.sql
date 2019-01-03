@@ -450,7 +450,7 @@ begin
 
   v_list := data.get_next_list(in_client_id, v_object_id);
 
-  perform api_utils.create_notification(in_client_id, in_request_id, 'object_list', jsonb_create_object('list', v_list));
+  perform api_utils.create_notification(in_client_id, in_request_id, 'object_list', jsonb_build_object('list', v_list));
 end;
 $$
 language 'plpgsql';
@@ -539,7 +539,7 @@ begin
 
   update data.clients
   set actor_id = v_actor_id
-  where client_id = in_client_id;
+  where id = in_client_id;
 
   delete from data.client_subscription_objects
   where client_subscription_id in (
@@ -553,9 +553,9 @@ end;
 $$
 language 'plpgsql';
 
--- drop function api_utils.process_subscribe_message(integer, integer, jsonb);
+-- drop function api_utils.process_subscribe_message(integer, text, jsonb);
 
-create or replace function api_utils.process_subscribe_message(in_client_id integer, in_request_id integer, in_message jsonb)
+create or replace function api_utils.process_subscribe_message(in_client_id integer, in_request_id text, in_message jsonb)
 returns void
 volatile
 as
@@ -585,7 +585,7 @@ begin
 
   perform 1
   from data.objects
-  where object_id = v_object_id
+  where id = v_object_id
   for update;
 
   loop
@@ -623,11 +623,13 @@ begin
     end if;
 
     -- Проверяем видимость
-    v_is_visible := json.get_boolean_opt(data.get_attribute_value(v_object_id, 'is_visible', in_actor_id), null);
+    v_is_visible := json.get_boolean_opt(data.get_attribute_value(v_object_id, 'is_visible', v_actor_id), null);
     if v_is_visible is null then
       v_object_id := data.get_integer_param('not_found_object_id');
       continue;
     end if;
+
+    exit;
   end loop;
 
   select true
@@ -637,7 +639,7 @@ begin
     object_id = v_object_id and
     client_id = in_client_id;
 
-  if v_subscriptions_exists is true then
+  if v_subscription_exists is true then
     raise exception 'Can''t create second subscription to object %s', v_object_id;
   end if;
 
@@ -678,7 +680,7 @@ begin
 
   perform 1
   from data.objects
-  where object_id = v_object_id
+  where id = v_object_id
   for update;
 
   select id
@@ -914,20 +916,20 @@ begin
 
       v_filtered_group := jsonb '{}';
       if v_name is not null then
-        v_filtered_group := v_filtered_group || jsonb_create_object('name', v_name);
+        v_filtered_group := v_filtered_group || jsonb_build_object('name', v_name);
       end if;
       if v_filtered_attributes is not null then
-        v_filtered_group := v_filtered_group || jsonb_create_object('attributes', to_jsonb(v_filtered_attributes));
+        v_filtered_group := v_filtered_group || jsonb_build_object('attributes', to_jsonb(v_filtered_attributes));
       end if;
       if v_filtered_actions is not null then
-        v_filtered_group := v_filtered_group || jsonb_create_object('actions', to_jsonb(v_filtered_actions));
+        v_filtered_group := v_filtered_group || jsonb_build_object('actions', to_jsonb(v_filtered_actions));
       end if;
 
       v_filtered_groups := array_append(v_filtered_groups, v_filtered_group);
     end if;
   end loop;
 
-  return jsonb_create_object('groups', to_jsonb(v_filtered_groups));
+  return jsonb_build_object('groups', to_jsonb(v_filtered_groups));
 end;
 $$
 language 'plpgsql';
@@ -1302,12 +1304,13 @@ begin
   -- Отфильтровываем из шаблона лишнее
   v_template := data.filter_template(v_template, v_attributes, v_actions);
 
-  v_object := jsonb_create_object('id', v_object_id, 'attributes', v_attributes, 'actions', v_actions, 'template', v_template);
+  v_object :=
+    jsonb_build_object('id', in_object_id, 'attributes', coalesce(v_attributes, jsonb '{}'), 'actions', coalesce(v_actions, jsonb '{}'), 'template', v_template);
 
   if v_attributes ? 'content' then
     assert in_card_type = 'full';
 
-    v_list := data.get_next_list(in_client_id, v_object_id);
+    v_list := data.get_next_list(in_client_id, in_object_id);
     return jsonb_build_object('object', v_object, 'list', v_list);
   end if;
 

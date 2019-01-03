@@ -55,20 +55,20 @@ begin
 
       v_filtered_group := jsonb '{}';
       if v_name is not null then
-        v_filtered_group := v_filtered_group || jsonb_create_object('name', v_name);
+        v_filtered_group := v_filtered_group || jsonb_build_object('name', v_name);
       end if;
       if v_filtered_attributes is not null then
-        v_filtered_group := v_filtered_group || jsonb_create_object('attributes', to_jsonb(v_filtered_attributes));
+        v_filtered_group := v_filtered_group || jsonb_build_object('attributes', to_jsonb(v_filtered_attributes));
       end if;
       if v_filtered_actions is not null then
-        v_filtered_group := v_filtered_group || jsonb_create_object('actions', to_jsonb(v_filtered_actions));
+        v_filtered_group := v_filtered_group || jsonb_build_object('actions', to_jsonb(v_filtered_actions));
       end if;
 
       v_filtered_groups := array_append(v_filtered_groups, v_filtered_group);
     end if;
   end loop;
 
-  return jsonb_create_object('groups', to_jsonb(v_filtered_groups));
+  return jsonb_build_object('groups', to_jsonb(v_filtered_groups));
 end;
 $$
 language 'plpgsql';

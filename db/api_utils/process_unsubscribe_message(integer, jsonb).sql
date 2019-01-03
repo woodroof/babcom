@@ -25,7 +25,7 @@ begin
 
   perform 1
   from data.objects
-  where object_id = v_object_id
+  where id = v_object_id
   for update;
 
   select id

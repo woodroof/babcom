@@ -1,6 +1,6 @@
--- drop function api_utils.process_subscribe_message(integer, integer, jsonb);
+-- drop function api_utils.process_subscribe_message(integer, text, jsonb);
 
-create or replace function api_utils.process_subscribe_message(in_client_id integer, in_request_id integer, in_message jsonb)
+create or replace function api_utils.process_subscribe_message(in_client_id integer, in_request_id text, in_message jsonb)
 returns void
 volatile
 as
@@ -30,7 +30,7 @@ begin
 
   perform 1
   from data.objects
-  where object_id = v_object_id
+  where id = v_object_id
   for update;
 
   loop
@@ -68,11 +68,13 @@ begin
     end if;
 
     -- Проверяем видимость
-    v_is_visible := json.get_boolean_opt(data.get_attribute_value(v_object_id, 'is_visible', in_actor_id), null);
+    v_is_visible := json.get_boolean_opt(data.get_attribute_value(v_object_id, 'is_visible', v_actor_id), null);
     if v_is_visible is null then
       v_object_id := data.get_integer_param('not_found_object_id');
       continue;
     end if;
+
+    exit;
   end loop;
 
   select true
@@ -82,7 +84,7 @@ begin
     object_id = v_object_id and
     client_id = in_client_id;
 
-  if v_subscriptions_exists is true then
+  if v_subscription_exists is true then
     raise exception 'Can''t create second subscription to object %s', v_object_id;
   end if;
 

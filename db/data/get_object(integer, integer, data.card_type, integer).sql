@@ -103,12 +103,13 @@ begin
   -- Отфильтровываем из шаблона лишнее
   v_template := data.filter_template(v_template, v_attributes, v_actions);
 
-  v_object := jsonb_create_object('id', v_object_id, 'attributes', v_attributes, 'actions', v_actions, 'template', v_template);
+  v_object :=
+    jsonb_build_object('id', in_object_id, 'attributes', coalesce(v_attributes, jsonb '{}'), 'actions', coalesce(v_actions, jsonb '{}'), 'template', v_template);
 
   if v_attributes ? 'content' then
     assert in_card_type = 'full';
 
-    v_list := data.get_next_list(in_client_id, v_object_id);
+    v_list := data.get_next_list(in_client_id, in_object_id);
     return jsonb_build_object('object', v_object, 'list', v_list);
   end if;
 
