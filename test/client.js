@@ -3,10 +3,8 @@ var uuid = uuidv4();
 
 var requests = {
 	'get_actors': '{}',
-	'get_object': '{\n\t\t"object_id": "ID"\n\t}',
-	'get_page': '{\n\t\t"list_id": "ID",\n\t\t"page_index": 0\n\t}',
+	'get_more': '{\n\t\t"object_id": "ID"\n\t}',
 	'make_action': '{\n\t\t"action_code": "CODE",\n\t\t"params": null,\n\t\t"user_params": {\n\t\t}\n\t}',
-	'open_object': '{\n\t\t"object_id": "ID"\n\t}',
 	'set_actor': '{\n\t\t"actor_id": "ID"\n\t}',
 	'subscribe': '{\n\t\t"object_id": "ID"\n\t}',
 	'unsubscribe': '{\n\t\t"object_id": "ID"\n\t}'
