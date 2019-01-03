@@ -25,7 +25,7 @@ begin
   for update;
 
   if v_actor_id is null then
-    raise exception 'Client %s has no active actor', in_client_id;
+    raise exception 'Client % has no active actor', in_client_id;
   end if;
 
   perform 1
@@ -85,7 +85,7 @@ begin
     client_id = in_client_id;
 
   if v_subscription_exists is true then
-    raise exception 'Can''t create second subscription to object %s', v_object_id;
+    raise exception 'Can''t create second subscription to object %', v_object_id;
   end if;
 
   insert into data.client_subscriptions(client_id, object_id)

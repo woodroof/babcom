@@ -40,7 +40,7 @@ begin
   delete from data.client_subscriptions
   where client_id = v_client_id;
 
-  perform data.log('info', format('Disconnected client with code "%"', in_client_code));
+  perform data.log('info', format('Disconnected client with code "%s"', in_client_code));
 end;
 $$
 language 'plpgsql';

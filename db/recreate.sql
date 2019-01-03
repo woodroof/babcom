@@ -133,7 +133,7 @@ begin
     is_connected = true;
 
   if v_client_id is null then
-    raise exception 'Client with code "%s" is not connected', in_client_code;
+    raise exception 'Client with code "%" is not connected', in_client_code;
   end if;
 
   loop
@@ -151,7 +151,7 @@ begin
       elsif v_type = 'make_action' then
         perform api_utils.process_make_action_message(v_client_id, v_request_id, json.get_object(in_message, 'data'));
       else
-        raise exception 'Unsupported message type "%s"', v_type;
+        raise exception 'Unsupported message type "%"', v_type;
       end if;
 
       return;
@@ -206,7 +206,7 @@ begin
     set is_connected = true
     where id = v_client_id;
 
-    perform data.log('info', format('Connected client with code "%"', in_client_code));
+    perform data.log('info', format('Connected client with code "%s"', in_client_code));
   end if;
 end;
 $$
@@ -276,7 +276,7 @@ begin
   delete from data.client_subscriptions
   where client_id = v_client_id;
 
-  perform data.log('info', format('Disconnected client with code "%"', in_client_code));
+  perform data.log('info', format('Disconnected client with code "%s"', in_client_code));
 end;
 $$
 language 'plpgsql';
@@ -440,7 +440,7 @@ begin
   for update;
 
   if v_actor_id is null then
-    raise exception 'Client %s has no active actor', in_client_id;
+    raise exception 'Client % has no active actor', in_client_id;
   end if;
 
   perform 1
@@ -479,7 +479,7 @@ begin
   for update;
 
   if v_actor_id is null then
-    raise exception 'Client %s has no active actor', in_client_id;
+    raise exception 'Client % has no active actor', in_client_id;
   end if;
 
   select function
@@ -488,7 +488,7 @@ begin
   where code = v_action_code;
 
   if v_function is null then
-    raise exception 'Function with code %s not found', v_action_code;
+    raise exception 'Function with code % not found', v_action_code;
   end if;
 
   execute format('select %s($1, $2, $3, $4)', v_function)
@@ -580,7 +580,7 @@ begin
   for update;
 
   if v_actor_id is null then
-    raise exception 'Client %s has no active actor', in_client_id;
+    raise exception 'Client % has no active actor', in_client_id;
   end if;
 
   perform 1
@@ -640,7 +640,7 @@ begin
     client_id = in_client_id;
 
   if v_subscription_exists is true then
-    raise exception 'Can''t create second subscription to object %s', v_object_id;
+    raise exception 'Can''t create second subscription to object %', v_object_id;
   end if;
 
   insert into data.client_subscriptions(client_id, object_id)
@@ -675,7 +675,7 @@ begin
   for update;
 
   if v_actor_id is null then
-    raise exception 'Client %s has no active actor', in_client_id;
+    raise exception 'Client % has no active actor', in_client_id;
   end if;
 
   perform 1
@@ -691,7 +691,7 @@ begin
     client_id = in_client_id;
 
   if v_subscription_id is null then
-    raise exception 'Client %s has no subscription to object %s', in_client_id, v_object_id;
+    raise exception 'Client % has no subscription to object %', in_client_id, v_object_id;
   end if;
 
   delete from data.client_subscription_objects
@@ -971,7 +971,7 @@ begin
   where code = in_attribute_code;
 
   if v_attribute_id is null then
-    raise exception 'Can''t find attribute "%s"', in_attribute_code;
+    raise exception 'Can''t find attribute "%"', in_attribute_code;
   end if;
 
   return v_attribute_id;
@@ -1149,7 +1149,7 @@ begin
     object_id = in_object_id;
 
   if v_client_subscription_id is null then
-    raise exception 'Client %s has no subscription for object %s', client_id, object_id;
+    raise exception 'Client % has no subscription for object %', client_id, object_id;
   end if;
 
   for v_object in
@@ -1337,7 +1337,7 @@ begin
   where id = in_object_id;
 
   if v_object_code is null then
-    raise exception 'Can''t find object %s', in_object_id;
+    raise exception 'Can''t find object %', in_object_id;
   end if;
 
   return v_object_code;
@@ -1363,7 +1363,7 @@ begin
   where code = in_object_code;
 
   if v_object_id is null then
-    raise exception 'Can''t find object "%s"', in_object_code;
+    raise exception 'Can''t find object "%"', in_object_code;
   end if;
 
   return v_object_id;

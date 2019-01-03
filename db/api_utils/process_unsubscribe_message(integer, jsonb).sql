@@ -20,7 +20,7 @@ begin
   for update;
 
   if v_actor_id is null then
-    raise exception 'Client %s has no active actor', in_client_id;
+    raise exception 'Client % has no active actor', in_client_id;
   end if;
 
   perform 1
@@ -36,7 +36,7 @@ begin
     client_id = in_client_id;
 
   if v_subscription_id is null then
-    raise exception 'Client %s has no subscription to object %s', in_client_id, v_object_id;
+    raise exception 'Client % has no subscription to object %', in_client_id, v_object_id;
   end if;
 
   delete from data.client_subscription_objects

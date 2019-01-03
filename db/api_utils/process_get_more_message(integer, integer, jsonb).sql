@@ -19,7 +19,7 @@ begin
   for update;
 
   if v_actor_id is null then
-    raise exception 'Client %s has no active actor', in_client_id;
+    raise exception 'Client % has no active actor', in_client_id;
   end if;
 
   perform 1

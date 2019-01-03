@@ -22,7 +22,7 @@ begin
     is_connected = true;
 
   if v_client_id is null then
-    raise exception 'Client with code "%s" is not connected', in_client_code;
+    raise exception 'Client with code "%" is not connected', in_client_code;
   end if;
 
   loop
@@ -40,7 +40,7 @@ begin
       elsif v_type = 'make_action' then
         perform api_utils.process_make_action_message(v_client_id, v_request_id, json.get_object(in_message, 'data'));
       else
-        raise exception 'Unsupported message type "%s"', v_type;
+        raise exception 'Unsupported message type "%"', v_type;
       end if;
 
       return;

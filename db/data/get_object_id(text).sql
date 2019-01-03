@@ -16,7 +16,7 @@ begin
   where code = in_object_code;
 
   if v_object_id is null then
-    raise exception 'Can''t find object "%s"', in_object_code;
+    raise exception 'Can''t find object "%"', in_object_code;
   end if;
 
   return v_object_id;

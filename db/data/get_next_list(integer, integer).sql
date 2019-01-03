@@ -43,7 +43,7 @@ begin
     object_id = in_object_id;
 
   if v_client_subscription_id is null then
-    raise exception 'Client %s has no subscription for object %s', client_id, object_id;
+    raise exception 'Client % has no subscription for object %', client_id, object_id;
   end if;
 
   for v_object in

@@ -16,7 +16,7 @@ begin
   where code = in_attribute_code;
 
   if v_attribute_id is null then
-    raise exception 'Can''t find attribute "%s"', in_attribute_code;
+    raise exception 'Can''t find attribute "%"', in_attribute_code;
   end if;
 
   return v_attribute_id;

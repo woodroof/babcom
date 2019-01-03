@@ -22,7 +22,7 @@ begin
   for update;
 
   if v_actor_id is null then
-    raise exception 'Client %s has no active actor', in_client_id;
+    raise exception 'Client % has no active actor', in_client_id;
   end if;
 
   select function
@@ -31,7 +31,7 @@ begin
   where code = v_action_code;
 
   if v_function is null then
-    raise exception 'Function with code %s not found', v_action_code;
+    raise exception 'Function with code % not found', v_action_code;
   end if;
 
   execute format('select %s($1, $2, $3, $4)', v_function)
