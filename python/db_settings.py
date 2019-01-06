@@ -1,3 +1,3 @@
 DB_HOST = 'localhost'
 DB_PORT = 5432
-DB_NAME = 'woodroof'
+DB_NAME = 'babcom'
