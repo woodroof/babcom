@@ -124,7 +124,8 @@ def save_function(schema_name, schema_dir_path, func, db_info):
 	func_result = func[2]
 	func_arg_types = func[3]
 	func_type = func[4]
-	func_body = func[5]
+	func_security_definer = func[5]
+	func_body = func[6]
 
 	file_path = schema_dir_path / (func_name + '(' + func_arg_types + ')' + '.sql')
 	db_info.functions.append(file_path)
@@ -133,6 +134,8 @@ def save_function(schema_name, schema_dir_path, func, db_info):
 	file.write('create or replace function ' + schema_name + '.' + func_name + '(' + func_args.replace(' DEFAULT', ' default').replace(' NULL', ' null') + ')\n')
 	file.write('returns ' + func_result + '\n')
 	file.write(func_type + '\n')
+	if func_security_definer:
+		file.write('security definer\n')
 	file.write('as\n')
 	file.write('$$\n')
 	file.write(EMPTY_STR_REGEX.sub('', func_body.replace('\t', '  ')))
@@ -305,6 +308,7 @@ select
     ''
   ) proc_arg_types,
   (case when p.provolatile = 'i' then 'immutable' when p.provolatile = 's' then 'stable' else 'volatile' end) proc_type,
+  prosecdef security_definer,
   trim(E'\n' from p.prosrc) proc_body
 from pg_proc p
 join pg_namespace n

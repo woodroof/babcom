@@ -3,6 +3,7 @@
 create or replace function api.api(in_client_code text, in_message jsonb)
 returns void
 volatile
+security definer
 as
 $$
 declare

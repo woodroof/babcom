@@ -3,6 +3,7 @@
 create or replace function api.disconnect_all_clients()
 returns void
 volatile
+security definer
 as
 $$
 begin

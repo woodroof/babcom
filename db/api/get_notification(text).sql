@@ -3,6 +3,7 @@
 create or replace function api.get_notification(in_notification_code text)
 returns jsonb
 volatile
+security definer
 as
 $$
 declare

@@ -3,6 +3,7 @@
 create or replace function api.disconnect_client(in_client_code text)
 returns void
 volatile
+security definer
 as
 $$
 declare

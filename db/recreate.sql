@@ -114,6 +114,7 @@ create type data.severity as enum(
 create or replace function api.api(in_client_code text, in_message jsonb)
 returns void
 volatile
+security definer
 as
 $$
 declare
@@ -180,6 +181,7 @@ language 'plpgsql';
 create or replace function api.connect_client(in_client_code text)
 returns void
 volatile
+security definer
 as
 $$
 declare
@@ -217,6 +219,7 @@ language 'plpgsql';
 create or replace function api.disconnect_all_clients()
 returns void
 volatile
+security definer
 as
 $$
 begin
@@ -239,6 +242,7 @@ language 'plpgsql';
 create or replace function api.disconnect_client(in_client_code text)
 returns void
 volatile
+security definer
 as
 $$
 declare
@@ -286,6 +290,7 @@ language 'plpgsql';
 create or replace function api.get_notification(in_notification_code text)
 returns jsonb
 volatile
+security definer
 as
 $$
 declare
@@ -6473,5 +6478,11 @@ execute function data.objects_after_insert();
 
 -- Initial data
 
+drop role if exists http;
+create role http login password 'http';
+grant usage on schema api to http;
+grant execute on all functions in schema api to http;
+
 select data.init();
+
 select test_project.init();

@@ -10,8 +10,8 @@ from prometheus_async.aio import time
 
 from db_settings import DB_HOST, DB_PORT, DB_NAME
 
-DB_USER = 'woodroof'
-DB_PASSWORD = ''
+DB_USER = 'http'
+DB_PASSWORD = 'http'
 
 PORT = 8000
 PROMETHEUS_CLIENT_PORT = 9001
