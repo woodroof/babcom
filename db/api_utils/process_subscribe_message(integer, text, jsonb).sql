@@ -6,7 +6,8 @@ volatile
 as
 $$
 declare
-  v_object_id integer := data.get_object_id(json.get_string(in_message, 'object_id'));
+  v_object_code text := json.get_string(in_message, 'object_id');
+  v_object_id integer;
   v_actor_id integer;
   v_visited_object_ids integer[];
   v_full_card_function text;
@@ -28,10 +29,27 @@ begin
     raise exception 'Client % has no active actor', in_client_id;
   end if;
 
-  perform 1
+  select id
+  into v_object_id
   from data.objects
-  where id = v_object_id
+  where code = v_object_code
   for update;
+
+  if v_object_id is null then
+    perform data.log('error', format('Attempt to subscribe for non-existing object'' changes with code %s. Redirecting to 404.', v_object_code));
+
+    v_object_id := data.get_integer_param('not_found_object_id');
+
+    select true
+    into v_object_exists
+    from data.objects
+    where id = v_object_id
+    for update;
+
+    if v_object_exists is null then
+      raise exception 'Object % not found', v_object_id;
+    end if;
+  end if;
 
   loop
     if v_visited_object_ids is not null and array_position(v_visited_object_ids, v_object_id) is not null then
