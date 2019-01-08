@@ -1253,7 +1253,6 @@ begin
       a.id,
       a.code,
       a.name,
-      case when a.type = 'hidden' then true else false end as hidden,
       attr.value,
       a.value_description_function
     from (
@@ -1295,9 +1294,9 @@ begin
     end if;
 
     if v_attribute.name is not null then
-      v_attribute_json := v_attribute_json || jsonb_build_object('name', v_attribute.name, 'value', v_attribute.value, 'hidden', v_attribute.hidden);
+      v_attribute_json := v_attribute_json || jsonb_build_object('name', v_attribute.name, 'value', v_attribute.value);
     else
-      v_attribute_json := v_attribute_json || jsonb_build_object('value', v_attribute.value, 'hidden', v_attribute.hidden);
+      v_attribute_json := v_attribute_json || jsonb_build_object('value', v_attribute.value);
     end if;
 
     v_attributes := v_attributes || jsonb_build_object(v_attribute.code, v_attribute_json);
@@ -6242,7 +6241,10 @@ begin
 Проверка 3: После запуска приложения пользователю не показывали какие-то диалоги.
 Приложение само запросило с сервера список акторов, само выбрало в качестве активного первый (в конце концов, в большинстве случаев список будет состоять из одного пункта, а мы не хотим заставлять пользователя делать лишние действия) и само же открыло объект этого выбранного актора.
 
-Проверка 4: Ниже есть ссылка с именем "Продолжить", ведущая на следующий тест. Приложение по нажатию на эту ссылку должно перейти к следующему объекту :)
+Проверка 4: Приложение выводит только заголовок, подзаголовок и атрибуты, присутствующие в шаблоне. В данном конкретном случае нигде не выведен тип объекта ("test").
+Считаем, что приложение честно не выводит атрибуты, отсутствующие в шаблоне и не являющиеся заголовком или подзаголовком, и верим, что атрибут с кодом "type" не обрабатывается особым образом :)
+
+Проверка 5: Ниже есть ссылка с именем "Продолжить", ведущая на следующий тест. Приложение по нажатию на эту ссылку должно перейти к следующему объекту.
 
 [Продолжить](babcom:test' || v_test_num || ')')
   );

@@ -29,7 +29,6 @@ begin
       a.id,
       a.code,
       a.name,
-      case when a.type = 'hidden' then true else false end as hidden,
       attr.value,
       a.value_description_function
     from (
@@ -71,9 +70,9 @@ begin
     end if;
 
     if v_attribute.name is not null then
-      v_attribute_json := v_attribute_json || jsonb_build_object('name', v_attribute.name, 'value', v_attribute.value, 'hidden', v_attribute.hidden);
+      v_attribute_json := v_attribute_json || jsonb_build_object('name', v_attribute.name, 'value', v_attribute.value);
     else
-      v_attribute_json := v_attribute_json || jsonb_build_object('value', v_attribute.value, 'hidden', v_attribute.hidden);
+      v_attribute_json := v_attribute_json || jsonb_build_object('value', v_attribute.value);
     end if;
 
     v_attributes := v_attributes || jsonb_build_object(v_attribute.code, v_attribute_json);
