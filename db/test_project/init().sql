@@ -20,6 +20,10 @@ declare
   v_float_attribute_id integer;
   v_integer2_attribute_id integer;
   v_float2_attribute_id integer;
+  v_short_name_attribute_id integer;
+  v_long_name_attribute_id integer;
+  v_short_name_value_integer_attribute_id integer;
+  v_long_name_value_description_integer_attribute_id integer;
   v_default_login_id integer;
   v_menu_id integer;
   v_notifications_id integer;
@@ -27,41 +31,57 @@ declare
   v_not_found_object_id integer;
   v_test_num integer := 2;
 begin
-  insert into data.attributes(code, description, type, card_type, can_be_overridden)
-  values('description', 'Текстовый блок с развёрнутым описанием очередного теста, string', 'normal', 'full', true)
+  insert into data.attributes(code, type, card_type, can_be_overridden)
+  values('description', 'normal', 'full', true)
   returning id into v_description_attribute_id;
 
-  insert into data.attributes(code, description, type, card_type, can_be_overridden)
-  values('description2', 'Дополнительное текстовое поле в первой безымянной группе, string', 'normal', 'full', true)
+  insert into data.attributes(code, type, card_type, can_be_overridden)
+  values('description2', 'normal', 'full', true)
   returning id into v_description2_attribute_id;
 
-  insert into data.attributes(code, description, type, card_type, can_be_overridden)
-  values('description3', 'Дополнительное текстовое поле во второй безымянной группе, string', 'normal', 'full', true)
+  insert into data.attributes(code, type, card_type, can_be_overridden)
+  values('description3', 'normal', 'full', true)
   returning id into v_description3_attribute_id;
 
-  insert into data.attributes(code, description, type, card_type, can_be_overridden)
-  values('empty1', 'Атрибут без значения в именованной группе, string', 'normal', 'full', true)
+  insert into data.attributes(code, type, card_type, can_be_overridden)
+  values('empty1', 'normal', 'full', true)
   returning id into v_empty1_attribute_id;
 
-  insert into data.attributes(code, description, type, card_type, can_be_overridden)
-  values('description4', 'Текстовое поле в именованной группе, string', 'normal', 'full', true)
+  insert into data.attributes(code, type, card_type, can_be_overridden)
+  values('description4', 'normal', 'full', true)
   returning id into v_description4_attribute_id;
 
-  insert into data.attributes(code, description, type, card_type, can_be_overridden)
-  values('integer', 'integer-атрибут', 'normal', 'full', true)
+  insert into data.attributes(code, type, card_type, can_be_overridden)
+  values('integer', 'normal', 'full', true)
   returning id into v_integer_attribute_id;
 
-  insert into data.attributes(code, description, type, card_type, can_be_overridden)
-  values('float', 'float-атрибут', 'normal', 'full', true)
+  insert into data.attributes(code, type, card_type, can_be_overridden)
+  values('float', 'normal', 'full', true)
   returning id into v_float_attribute_id;
 
-  insert into data.attributes(code, description, value_description_function, type, card_type, can_be_overridden)
-  values('integer2', 'integer-атрибут с описанием значения', 'test_project.test_value_description_function', 'normal', 'full', true)
+  insert into data.attributes(code, value_description_function, type, card_type, can_be_overridden)
+  values('integer2', 'test_project.test_value_description_function', 'normal', 'full', true)
   returning id into v_integer2_attribute_id;
 
-  insert into data.attributes(code, description, value_description_function, type, card_type, can_be_overridden)
-  values('float2', 'float-атрибут с описанием значения', 'test_project.test_value_description_function', 'normal', 'full', true)
+  insert into data.attributes(code, value_description_function, type, card_type, can_be_overridden)
+  values('float2', 'test_project.test_value_description_function', 'normal', 'full', true)
   returning id into v_float2_attribute_id;
+
+  insert into data.attributes(code, name, type, card_type, can_be_overridden)
+  values('short_name', 'Атрибут 1', 'normal', 'full', true)
+  returning id into v_short_name_attribute_id;
+
+  insert into data.attributes(code, name, type, card_type, can_be_overridden)
+  values('long_name', 'Атрибут с очень длинным именем, которое нельзя так просто обрезать — оно очень важно для понимания назначения значения, его смысла, глубинной сути, места во вселенной и связи со значениями других атрибутов', 'normal', 'full', true)
+  returning id into v_long_name_attribute_id;
+
+  insert into data.attributes(code, name, type, card_type, can_be_overridden)
+  values('short_name_value_integer', 'Атрибут 3', 'normal', 'full', true)
+  returning id into v_short_name_value_integer_attribute_id;
+
+  insert into data.attributes(code, name, value_description_function, type, card_type, can_be_overridden)
+  values('long_name_value_description_integer', 'Ещё один атрибут с длинным именем, которое почти наверняка не поместится в одну строку на современных телефонах', 'test_project.test_value_description_function', 'normal', 'full', true)
+  returning id into v_long_name_value_description_integer_attribute_id;
 
   -- Создадим актора по умолчанию, который является первым тестом
   insert into data.objects(code) values('test1') returning id into v_test_id;
@@ -90,6 +110,10 @@ begin
         {
           "name": "Короткое имя группы",
           "attributes": ["empty1", "description4"]
+        },
+        {
+          "name": "Тестовые данные",
+          "attributes": ["short_name", "long_name", "short_name_value_integer", "long_name_value_description_integer"]
         }
       ]
     }',
@@ -160,7 +184,7 @@ Markdown — формат, который все реализуют по-раз�
 Проверка 2: Начертание слова **жирный** должно отличаться большей насыщенностью линий, как и начертание фразы __жирный текст__.
 Проверка 3: Вложенное форматирование также должно обрабатываться правильно: ***жирное** слово внутри наклонного текста*, __*наклонное* слово внутри жирного текста__.
 Проверка 4: И, конечно же, ~~зачёркнутое~~ слово.
-Проверка 4: Наконец, на ссылки форматирование тоже должно распространяться. Так, ссылка "Далее" должна быть жирной.
+Проверка 5: Наконец, на ссылки форматирование тоже должно распространяться. Так, ссылка "Далее" должна быть жирной.
 
 **[Продолжить](babcom:test' || v_test_num || ')**')
   );
@@ -267,7 +291,7 @@ Markdown — формат, который все реализуют по-раз�
     v_test_id,
     v_description4_attribute_id,
     to_jsonb(text
-'Проверим вывод групп с именем и пустых атрибутов.
+'Проверим вывод пустых атрибутов и групп с именем.
 
 Проверка 1: Перед этим атрибутом в шаблоне идёт другой атрибут, но у него нет значения, имени и описания значения. Такой атрибут просто не должен выводиться, т.е. текст "Проверим вывод..." должен быть в самом верху группы, никаких дополнительных пропусков быть не должно.
 
@@ -275,6 +299,32 @@ Markdown — формат, который все реализуют по-раз�
 
 [Продолжить](babcom:test' || v_test_num || ')')
   );
+
+  insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
+  v_test_num := v_test_num + 1;
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_test_id, v_type_attribute_id, jsonb '"test"'),
+  (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
+  (
+    v_test_id,
+    v_description_attribute_id,
+    to_jsonb(text
+'Теперь имя будет и у группы, и у её атрибутов.
+
+Проверка 1: Ниже есть ещё одна группа с именем "Тестовые данные".
+Проверка 2: Первый атрибут в группе имеет имя "Атрибут 1" и не имеет значения и описания значения.
+Проверка 3: Второй атрибут имеет длинное имя, которое не влезает в одну строку, начинается с "Атрибут с очень" и не имеет значения и описания значения.
+Проверка 4: Третий атрибут имеет имя "Атрибут 3" и значение "100".
+Проверка 5: Четвёртый атрибут имеет имя, начинающееся с "Ещё один атрибут" и также не влезающее в одну строку. Атрибут имеет довольно длинное описание значения, начинающееся с "Lorem ipsum".
+Проверка 6: Слово ipsum должно быть жирным.
+Проверка 7: Все атрибуты идут именно в указанном порядке.
+
+[Продолжить](babcom:test' || v_test_num || ')')
+  ),
+  (v_test_id, v_short_name_attribute_id, null),
+  (v_test_id, v_long_name_attribute_id, null),
+  (v_test_id, v_short_name_value_integer_attribute_id, jsonb '100'),
+  (v_test_id, v_long_name_value_description_integer_attribute_id, jsonb '3');
 
   -- Тест N
   insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
