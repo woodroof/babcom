@@ -15,7 +15,6 @@ declare
   v_description2_attribute_id integer;
   v_description3_attribute_id integer;
   v_description4_attribute_id integer;
-  v_empty1_attribute_id integer;
   v_integer_attribute_id integer;
   v_float_attribute_id integer;
   v_integer2_attribute_id integer;
@@ -42,10 +41,6 @@ begin
   insert into data.attributes(code, type, card_type, can_be_overridden)
   values('description3', 'normal', 'full', true)
   returning id into v_description3_attribute_id;
-
-  insert into data.attributes(code, type, card_type, can_be_overridden)
-  values('empty1', 'normal', 'full', true)
-  returning id into v_empty1_attribute_id;
 
   insert into data.attributes(code, type, card_type, can_be_overridden)
   values('description4', 'normal', 'full', true)
@@ -109,7 +104,7 @@ begin
         },
         {
           "name": "Короткое имя группы",
-          "attributes": ["empty1", "description4"]
+          "attributes": ["description4"]
         },
         {
           "name": "Тестовые данные",
@@ -289,16 +284,11 @@ Markdown — формат, который все реализуют по-раз�
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_test_id, v_type_attribute_id, jsonb '"test"'),
   (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
-  (v_test_id, v_empty1_attribute_id, null),
   (
     v_test_id,
     v_description4_attribute_id,
     to_jsonb(text
-'Проверим вывод пустых атрибутов и групп с именем.
-
-Проверка 1: Перед этим атрибутом в шаблоне идёт другой атрибут, но у него нет значения, имени и описания значения. Такой атрибут просто не должен выводиться, т.е. текст "Проверим вывод..." должен быть в самом верху группы, никаких дополнительных пропусков быть не должно.
-
-Проверка 2: У этой группы есть имя. Мы должны видеть текст "Короткое имя группы".
+'Проверка: У этой группы есть имя. Мы должны видеть текст "Короткое имя группы".
 
 [Продолжить](babcom:test' || v_test_num || ')')
   );

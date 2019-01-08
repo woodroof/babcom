@@ -8,7 +8,11 @@ $$
 declare
   v_groups jsonb := json.get_array(json.get_object(in_template), 'groups');
   v_group jsonb;
+  v_attribute_code text;
+  v_attribute jsonb;
   v_attribute_name text;
+  v_attribute_value text;
+  v_attribute_value_description text;
   v_action_name text;
   v_name text;
   v_filtered_group jsonb;
@@ -26,12 +30,23 @@ begin
     v_filtered_attributes := null;
 
     if v_group ? 'attributes' then
-      for v_attribute_name in
+      for v_attribute_code in
         select json.get_string(value)
         from jsonb_array_elements(json.get_array(v_group, 'attributes'))
       loop
-        if in_attributes ? v_attribute_name then
-          v_filtered_attributes := array_append(v_filtered_attributes, v_attribute_name);
+        v_attribute := json.get_object_opt(in_attributes, v_attribute_code, null);
+
+        if v_attribute is not null then
+          -- Отфильтровываем атрибуты без имени, значения и описания значения
+          v_attribute_name := json.get_string_opt(v_attribute, 'name', null);
+          v_attribute_value := v_attribute->'value';
+          v_attribute_value_description := json.get_string_opt(v_attribute, 'value_description', null);
+
+          if v_attribute_name is not null or v_attribute_value is not null or v_attribute_value_description is not null then
+            assert data.is_hidden_attribute(data.get_attribute_id(v_attribute_code)) is false;
+
+            v_filtered_attributes := array_append(v_filtered_attributes, v_attribute_code);
+          end if;
         end if;
       end loop;
     end if;
