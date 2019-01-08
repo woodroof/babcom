@@ -1328,7 +1328,7 @@ begin
   v_template := data.filter_template(v_template, v_attributes, v_actions);
 
   v_object :=
-    jsonb_build_object('id', in_object_id, 'attributes', coalesce(v_attributes, jsonb '{}'), 'actions', coalesce(v_actions, jsonb '{}'), 'template', v_template);
+    jsonb_build_object('id', data.get_object_code(in_object_id), 'attributes', coalesce(v_attributes, jsonb '{}'), 'actions', coalesce(v_actions, jsonb '{}'), 'template', v_template);
 
   if v_attributes ? 'content' then
     assert in_card_type = 'full';
