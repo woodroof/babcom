@@ -1541,7 +1541,7 @@ $$
 declare
   v_ret_val boolean;
 begin
-  select type = 'SYSTEM'
+  select type = 'system'
   into v_ret_val
   from data.attributes
   where id = in_attribute_id;
