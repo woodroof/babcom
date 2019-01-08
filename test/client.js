@@ -70,7 +70,7 @@ function createCallback(key)
 
 function generateRequests()
 {
-	var parent = document.getElementById('requests');
+	var parent = document.getElementById('actions');
 	for (var key in requests)
 	{
 		var request = document.createElement('div');
@@ -85,4 +85,12 @@ function init()
 {
 	generateRequests();
 	createSocket();
+}
+
+function clearMessages()
+{
+	var messages = document.getElementById('messages');
+	while (messages.firstChild) {
+		messages.removeChild(messages.firstChild);
+	}
 }

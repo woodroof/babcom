@@ -30,6 +30,22 @@
 		margin-right: 5px;
 		width: 10em;
 	}
+	.clear
+	{
+		text-align: center;
+		border-style: solid;
+		border-width: 1px;
+		border-color: rgb(194, 102, 41);
+		cursor: pointer;
+		display: inline-block;
+		float: right; 
+		margin-right: 5px;
+		width: 10em;
+	}
+	.message
+	{
+		margin-bottom: 15px;
+	}
 	textarea
 	{
 		width: 100%;
@@ -38,7 +54,9 @@
 	}
 </style>
 <body onload="init()">
-	<div id="requests"></div>
+	<div id="actions">
+		<div class="clear" id="clear" onclick="clearMessages()">Очистить</div>
+	</div>
 	<textarea id="send_text"></textarea>
 	<div class="disabled_button" id="send_button">Отправить</div>
 	<div id="messages" />
