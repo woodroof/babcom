@@ -6104,6 +6104,7 @@ declare
   v_menu_id integer;
   v_notifications_id integer;
   v_test_id integer;
+  v_not_found_object_id integer;
   v_test_num integer := 2;
 begin
   insert into data.attributes(code, description, type, card_type, can_be_overridden)
@@ -6145,12 +6146,16 @@ begin
   -- Создадим актора по умолчанию, который является первым тестом
   insert into data.objects(code) values('test1') returning id into v_test_id;
 
+  -- Создадим объект для страницы 404
+  insert into data.objects(code) values('not_found') returning id into v_not_found_object_id;
+
   -- Логин по умолчанию
   insert into data.logins(code) values('default_login') returning id into v_default_login_id;
   insert into data.login_actors(login_id, actor_id) values(v_default_login_id, v_test_id);
 
   insert into data.params(code, value, description) values
   ('default_login_id', to_jsonb(v_default_login_id), 'Идентификатор логина по умолчанию'),
+  ('not_found_object_id', to_jsonb(v_not_found_object_id), 'Идентификатор объекта, отображаемого в случае, если актору недоступен какой-то объект (ну или он реально не существует)'),
   (
     'template',
     jsonb
@@ -6183,6 +6188,14 @@ begin
   (v_notifications_id, v_type_attribute_id, jsonb '"notifications"'),
   (v_notifications_id, v_is_visible_attribute_id, jsonb 'true'),
   (v_notifications_id, v_content_attribute_id, jsonb '[]');
+
+  -- 404
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_not_found_object_id, v_type_attribute_id, jsonb '"not_found"'),
+  (v_not_found_object_id, v_is_visible_attribute_id, jsonb 'true'),
+  (v_not_found_object_id, v_title_attribute_id, jsonb '"404"'),
+  (v_not_found_object_id, v_subtitle_attribute_id, jsonb '"Not found"'),
+  (v_not_found_object_id, v_description_attribute_id, jsonb '"Это не те дроиды, которых вы ищете."');
 
   -- Тесты
   insert into data.attribute_values(object_id, attribute_id, value) values
