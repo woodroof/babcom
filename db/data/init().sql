@@ -46,6 +46,16 @@ begin
     false
   ),
   (
+    'list_element_function',
+    null,
+    'Функция, вызываемая при открытии данного объекта из какого-то списка, string. Вызывается с параметрами (object_id, list_object_id, actor_id) и возвращает действие.
+Если атрибут отсутствует, то сообщение open_list_object всегда приводит к действию open_object.',
+    'system',
+    null,
+    null,
+    false
+  ),
+  (
     'mini_card_function',
     null,
     'Функция, вызываемая перед получением миникарточки объекта, string. Вызывается с параметрами (object_id, actor_id).',
@@ -70,7 +80,8 @@ begin
   (
     'touch_function',
     null,
-    'Функция, вызываемая при смахивании уведомления, string. Вызывается с параметрами (object_id, actor_id).',
+    'Функция, вызываемая при смахивании уведомления, string. Вызывается с параметрами (object_id, actor_id).
+Если атрибут отсутствует, то сообщение touch просто игнорируется.',
     'system',
     null,
     null,
