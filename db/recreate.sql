@@ -1592,7 +1592,7 @@ begin
   (
     'touch_function',
     null,
-    'Функция, вызываемая при смахивании уведомления, string. Вызывается с параметрами (object_id, actor_id).'
+    'Функция, вызываемая при смахивании уведомления, string. Вызывается с параметрами (object_id, actor_id).',
     'system',
     null,
     null,
