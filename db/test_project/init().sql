@@ -97,16 +97,20 @@ begin
     '{
       "groups": [
         {
+          "code": "group1",
           "attributes": ["description", "integer", "float", "integer2", "float2", "description2"]
         },
         {
+          "code": "group2",
           "attributes": ["description3"]
         },
         {
+          "code": "group3",
           "name": "Короткое имя группы",
           "attributes": ["description4"]
         },
         {
+          "code": "group4",
           "name": "Тестовые данные",
           "attributes": ["short_name", "long_name", "short_name_value_integer", "long_name_value_description_integer"]
         }
