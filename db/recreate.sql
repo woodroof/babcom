@@ -151,6 +151,8 @@ begin
         perform api_utils.process_unsubscribe_message(v_client_id, json.get_object(in_message, 'data'));
       elsif v_type = 'make_action' then
         perform api_utils.process_make_action_message(v_client_id, v_request_id, json.get_object(in_message, 'data'));
+      elseif v_type = 'touch' then
+        perform api_utils.process_touch_message(v_client_id, json.get_object(in_message, 'data'));
       else
         raise exception 'Unsupported message type "%"', v_type;
       end if;
@@ -672,6 +674,52 @@ begin
   v_object := data.get_object(v_object_id, v_actor_id, 'full', v_object_id);
 
   perform api_utils.create_notification(in_client_id, in_request_id, 'object', v_object);
+end;
+$$
+language 'plpgsql';
+
+-- drop function api_utils.process_touch_message(integer, jsonb);
+
+create or replace function api_utils.process_touch_message(in_client_id integer, in_message jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_object_code text := json.get_string(in_message, 'object_id');
+  v_object_id integer;
+  v_actor_id integer;
+  v_touch_function text;
+begin
+  assert in_client_id is not null;
+
+  select actor_id
+  into v_actor_id
+  from data.clients
+  where id = in_client_id
+  for update;
+
+  if v_actor_id is null then
+    raise exception 'Client % has no active actor', in_client_id;
+  end if;
+
+  select id
+  into v_object_id
+  from data.objects
+  where code = v_object_code
+  for update;
+
+  if v_object_id is null then
+    raise exception 'Attempt to touch non-existing object %', v_object_code;
+  end if;
+
+  -- Вызываем функцию смахивания уведомления, если есть
+  v_touch_function := json.get_string_opt(data.get_attribute_value(v_object_id, 'touch_function'), null);
+
+  if v_touch_function is not null then
+    execute format('select %s($1, $2)', v_touch_function)
+    using v_object_id, v_actor_id;
+  end if;
 end;
 $$
 language 'plpgsql';
@@ -1541,6 +1589,15 @@ begin
   ('subtitle', null, 'Подзаголовок, string', 'normal', null, null, true),
   ('temporary_object', null, 'Атрибут, наличие которого говорит о том, что открытый объект не нужно сохранять в истории', 'hidden', 'full', null, false),
   ('title', null, 'Заголовок, string', 'normal', null, null, true),
+  (
+    'touch_function',
+    null,
+    'Функция, вызываемая при смахивании уведомления, string. Вызывается с параметрами (object_id, actor_id).'
+    'system',
+    null,
+    null,
+    false
+  ),
   ('type', null, 'Тип объекта, string', 'hidden', null, null, true);
 end;
 $$

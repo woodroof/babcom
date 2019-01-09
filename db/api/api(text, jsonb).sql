@@ -40,6 +40,8 @@ begin
         perform api_utils.process_unsubscribe_message(v_client_id, json.get_object(in_message, 'data'));
       elsif v_type = 'make_action' then
         perform api_utils.process_make_action_message(v_client_id, v_request_id, json.get_object(in_message, 'data'));
+      elseif v_type = 'touch' then
+        perform api_utils.process_touch_message(v_client_id, json.get_object(in_message, 'data'));
       else
         raise exception 'Unsupported message type "%"', v_type;
       end if;

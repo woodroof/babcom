@@ -67,6 +67,15 @@ begin
   ('subtitle', null, 'Подзаголовок, string', 'normal', null, null, true),
   ('temporary_object', null, 'Атрибут, наличие которого говорит о том, что открытый объект не нужно сохранять в истории', 'hidden', 'full', null, false),
   ('title', null, 'Заголовок, string', 'normal', null, null, true),
+  (
+    'touch_function',
+    null,
+    'Функция, вызываемая при смахивании уведомления, string. Вызывается с параметрами (object_id, actor_id).'
+    'system',
+    null,
+    null,
+    false
+  ),
   ('type', null, 'Тип объекта, string', 'hidden', null, null, true);
 end;
 $$

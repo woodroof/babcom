@@ -7,6 +7,7 @@ var requests = {
 	'make_action': '{\n\t\t"action_code": "CODE",\n\t\t"params": null,\n\t\t"user_params": {\n\t\t}\n\t}',
 	'set_actor': '{\n\t\t"actor_id": "ID"\n\t}',
 	'subscribe': '{\n\t\t"object_id": "ID"\n\t}',
+	'touch': '{\n\t\t"object_id": "ID"\n\t}',
 	'unsubscribe': '{\n\t\t"object_id": "ID"\n\t}'
 };
 
