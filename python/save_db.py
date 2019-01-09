@@ -17,7 +17,7 @@ DB_EXTENSIONS = ('intarray', 'pgcrypto')
 EMPTY_STR_REGEX = re.compile(r"^ +$", re.MULTILINE)
 
 def append_file(file, source_file_path):
-	with open(source_file_path) as source_file:
+	with open(source_file_path, encoding="utf-8") as source_file:
 			file.write('\n')
 			file.write(source_file.read())
 
@@ -37,7 +37,7 @@ class DatabaseInfo:
 		self.triggers = []
 	
 	def create_recreate_script(self, db_path):
-		file = open(db_path / 'recreate.sql', 'w+')
+		file = open(db_path / 'recreate.sql', 'w+', encoding="utf-8")
 		file.write(r"""-- Cleaning database
 
 create schema if not exists database_cleanup;
@@ -94,7 +94,7 @@ def save_schema(connection, db_path, schema, db_info):
 
 	file_path = schema_dir_path / (schema_name + '.sql')
 	db_info.schemas.append(file_path)
-	file = open(file_path, "w+")
+	file = open(file_path, "w+", encoding="utf-8")
 	file.write('-- drop schema ' + schema_name + ';\n\n')
 	file.write('create schema ' + schema_name + ';\n')
 	if schema_comment:
@@ -113,7 +113,7 @@ def save_enum(schema_name, schema_dir_path, enum, db_info):
 
 	file_path = schema_dir_path / (enum_name + '.sql')
 	db_info.enums.append(file_path)
-	file = open(file_path, "w+")
+	file = open(file_path, "w+", encoding="utf-8")
 	file.write('-- drop type ' + schema_name + '.' + enum_name + ';\n\n')
 	file.write('create type ' + schema_name + '.' + enum_name + ' as enum(\n')
 	file.write(enum_values + ');\n')
@@ -129,7 +129,7 @@ def save_function(schema_name, schema_dir_path, func, db_info):
 
 	file_path = schema_dir_path / (func_name + '(' + func_arg_types + ')' + '.sql')
 	db_info.functions.append(file_path)
-	file = open(file_path, "w+")
+	file = open(file_path, "w+", encoding="utf-8")
 	file.write('-- drop function ' + schema_name + '.' + func_name + '(' + func_arg_types + ');\n\n')
 	file.write('create or replace function ' + schema_name + '.' + func_name + '(' + func_args.replace(' DEFAULT', ' default').replace(' NULL', ' null') + ')\n')
 	file.write('returns ' + func_result + '\n')
@@ -151,7 +151,7 @@ def save_table(schema_name, schema_dir_path, table, db_info):
 
 	file_path = schema_dir_path / (table_name + '.sql')
 	db_info.tables.append(file_path)
-	file = open(file_path, "w+")
+	file = open(file_path, "w+", encoding="utf-8")
 	file.write('-- drop table ' + schema_name + '.' + table_name + ';\n\n')
 	file.write('create table ' + schema_name + '.' + table_name + '(\n  ')
 	file.write(',\n  '.join(table_columns))
@@ -172,7 +172,7 @@ def save_foreign_key(schema_name, schema_dir_path, foreign_key, db_info):
 
 	file_path = schema_dir_path / (key_name + '.sql')
 	db_info.foreign_keys.append(file_path)
-	file = open(file_path, "w+")
+	file = open(file_path, "w+", encoding="utf-8")
 	file.write('alter table ' + schema_name + '.' + table_name + ' add constraint ' + key_name + '\n')
 	file.write(key_def.lower().replace(' key (', ' key(') + ';\n')
 
@@ -182,7 +182,7 @@ def save_index(schema_name, schema_dir_path, index, db_info):
 
 	file_path = schema_dir_path / (index_name + '.sql')
 	db_info.indexes.append(file_path)
-	file = open(file_path, "w+")
+	file = open(file_path, "w+", encoding="utf-8")
 	file.write('-- drop index ' + schema_name + '.' + index_name + ';\n\n')
 	file.write(index_definition.lower().replace(' using btree ', '') + ';\n')
 
@@ -227,7 +227,7 @@ def save_trigger(schema_name, schema_dir_path, trigger, db_info):
 
 	file_path = schema_dir_path / (trigger_name + '.sql')
 	db_info.triggers.append(file_path)
-	file = open(file_path, "w+")
+	file = open(file_path, "w+", encoding="utf-8")
 	file.write('-- drop trigger ' + trigger_name + ' on ' + schema_name + '.' + table_name + ';\n\n')
 	file.write('create trigger ' + trigger_name + '\n')
 	file.write(get_trigger_time(trigger_type) + ' ' + get_trigger_events(trigger_type) + '\n')
