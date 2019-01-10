@@ -7,12 +7,14 @@ security definer
 as
 $$
 declare
-  v_request_id text := json.get_string(in_message, 'request_id');
-  v_type text := json.get_string(in_message, 'type');
+  v_request_id text;
+  v_type text;
   v_client_id integer;
   v_login_id integer;
   v_check_result boolean;
 begin
+  v_request_id := json.get_string(in_message, 'request_id');
+
   assert in_client_code is not null;
 
   select id
@@ -25,6 +27,8 @@ begin
   if v_client_id is null then
     raise exception 'Client with code "%" is not connected', in_client_code;
   end if;
+
+  v_type := json.get_string(in_message, 'type');
 
   loop
     begin
@@ -64,6 +68,20 @@ exception when others or assert_failure then
     perform data.log(
       'error',
       format(E'Error: %s\nMessage:\n%s\nClient: %s\nCall stack:\n%s', v_exception_message, in_message, in_client_code, v_exception_call_stack));
+
+    -- Ошибка могла возникнуть до заполнения v_client_id
+    if v_client_id is null then
+      select id
+      into v_client_id
+      from data.clients
+      where
+        code = in_client_code and
+        is_connected = true;
+    end if;
+
+    if v_client_id is not null then
+      perform api_utils.create_notification(v_client_id, v_request_id, 'error', jsonb '{}');
+    end if;
   end;
 end;
 $$
