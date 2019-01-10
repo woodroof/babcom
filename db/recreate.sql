@@ -85,7 +85,8 @@ create type api_utils.output_message_type as enum(
   'actors',
   'diff',
   'object',
-  'object_list');
+  'object_list',
+  'ok');
 
 -- drop type data.attribute_type;
 
@@ -142,17 +143,17 @@ begin
       if v_type = 'get_actors' then
         perform api_utils.process_get_actors_message(v_client_id, v_request_id);
       elsif v_type = 'set_actor' then
-        perform api_utils.process_set_actor_message(v_client_id, json.get_object(in_message, 'data'));
+        perform api_utils.process_set_actor_message(v_client_id, v_request_id, json.get_object(in_message, 'data'));
       elsif v_type = 'subscribe' then
         perform api_utils.process_subscribe_message(v_client_id, v_request_id, json.get_object(in_message, 'data'));
       elsif v_type = 'get_more' then
         perform api_utils.process_get_more_message(v_client_id, v_request_id, json.get_object(in_message, 'data'));
       elsif v_type = 'unsubscribe' then
-        perform api_utils.process_unsubscribe_message(v_client_id, json.get_object(in_message, 'data'));
+        perform api_utils.process_unsubscribe_message(v_client_id, v_request_id, json.get_object(in_message, 'data'));
       elsif v_type = 'make_action' then
         perform api_utils.process_make_action_message(v_client_id, v_request_id, json.get_object(in_message, 'data'));
       elseif v_type = 'touch' then
-        perform api_utils.process_touch_message(v_client_id, json.get_object(in_message, 'data'));
+        perform api_utils.process_touch_message(v_client_id, v_request_id, json.get_object(in_message, 'data'));
       elseif v_type = 'open_list_object' then
         perform api_utils.process_open_list_object_message(v_client_id, v_request_id, json.get_object(in_message, 'data'));
       else
@@ -577,9 +578,9 @@ end;
 $$
 language 'plpgsql';
 
--- drop function api_utils.process_set_actor_message(integer, jsonb);
+-- drop function api_utils.process_set_actor_message(integer, text, jsonb);
 
-create or replace function api_utils.process_set_actor_message(in_client_id integer, in_message jsonb)
+create or replace function api_utils.process_set_actor_message(in_client_id integer, in_request_id text, in_message jsonb)
 returns void
 volatile
 as
@@ -629,6 +630,8 @@ begin
 
   delete from data.client_subscriptions
   where client_id = in_client_id;
+
+  perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
 end;
 $$
 language 'plpgsql';
@@ -751,9 +754,9 @@ end;
 $$
 language 'plpgsql';
 
--- drop function api_utils.process_touch_message(integer, jsonb);
+-- drop function api_utils.process_touch_message(integer, text, jsonb);
 
-create or replace function api_utils.process_touch_message(in_client_id integer, in_message jsonb)
+create or replace function api_utils.process_touch_message(in_client_id integer, in_request text, in_message jsonb)
 returns void
 volatile
 as
@@ -793,13 +796,15 @@ begin
     execute format('select %s($1, $2)', v_touch_function)
     using v_object_id, v_actor_id;
   end if;
+
+  perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
 end;
 $$
 language 'plpgsql';
 
--- drop function api_utils.process_unsubscribe_message(integer, jsonb);
+-- drop function api_utils.process_unsubscribe_message(integer, text, jsonb);
 
-create or replace function api_utils.process_unsubscribe_message(in_client_id integer, in_message jsonb)
+create or replace function api_utils.process_unsubscribe_message(in_client_id integer, in_request text, in_message jsonb)
 returns void
 volatile
 as
@@ -843,6 +848,8 @@ begin
 
   delete from data.client_subscriptions
   where id = v_subscription_id;
+
+  perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
 end;
 $$
 language 'plpgsql';

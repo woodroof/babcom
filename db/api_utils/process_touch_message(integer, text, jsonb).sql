@@ -1,6 +1,6 @@
--- drop function api_utils.process_touch_message(integer, jsonb);
+-- drop function api_utils.process_touch_message(integer, text, jsonb);
 
-create or replace function api_utils.process_touch_message(in_client_id integer, in_message jsonb)
+create or replace function api_utils.process_touch_message(in_client_id integer, in_request text, in_message jsonb)
 returns void
 volatile
 as
@@ -40,6 +40,8 @@ begin
     execute format('select %s($1, $2)', v_touch_function)
     using v_object_id, v_actor_id;
   end if;
+
+  perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
 end;
 $$
 language 'plpgsql';

@@ -5,4 +5,5 @@ create type api_utils.output_message_type as enum(
   'actors',
   'diff',
   'object',
-  'object_list');
+  'object_list',
+  'ok');

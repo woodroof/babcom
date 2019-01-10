@@ -1,6 +1,6 @@
--- drop function api_utils.process_unsubscribe_message(integer, jsonb);
+-- drop function api_utils.process_unsubscribe_message(integer, text, jsonb);
 
-create or replace function api_utils.process_unsubscribe_message(in_client_id integer, in_message jsonb)
+create or replace function api_utils.process_unsubscribe_message(in_client_id integer, in_request text, in_message jsonb)
 returns void
 volatile
 as
@@ -44,6 +44,8 @@ begin
 
   delete from data.client_subscriptions
   where id = v_subscription_id;
+
+  perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
 end;
 $$
 language 'plpgsql';

@@ -31,17 +31,17 @@ begin
       if v_type = 'get_actors' then
         perform api_utils.process_get_actors_message(v_client_id, v_request_id);
       elsif v_type = 'set_actor' then
-        perform api_utils.process_set_actor_message(v_client_id, json.get_object(in_message, 'data'));
+        perform api_utils.process_set_actor_message(v_client_id, v_request_id, json.get_object(in_message, 'data'));
       elsif v_type = 'subscribe' then
         perform api_utils.process_subscribe_message(v_client_id, v_request_id, json.get_object(in_message, 'data'));
       elsif v_type = 'get_more' then
         perform api_utils.process_get_more_message(v_client_id, v_request_id, json.get_object(in_message, 'data'));
       elsif v_type = 'unsubscribe' then
-        perform api_utils.process_unsubscribe_message(v_client_id, json.get_object(in_message, 'data'));
+        perform api_utils.process_unsubscribe_message(v_client_id, v_request_id, json.get_object(in_message, 'data'));
       elsif v_type = 'make_action' then
         perform api_utils.process_make_action_message(v_client_id, v_request_id, json.get_object(in_message, 'data'));
       elseif v_type = 'touch' then
-        perform api_utils.process_touch_message(v_client_id, json.get_object(in_message, 'data'));
+        perform api_utils.process_touch_message(v_client_id, v_request_id, json.get_object(in_message, 'data'));
       elseif v_type = 'open_list_object' then
         perform api_utils.process_open_list_object_message(v_client_id, v_request_id, json.get_object(in_message, 'data'));
       else
