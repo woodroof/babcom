@@ -522,7 +522,6 @@ declare
   v_content integer[];
   v_actor_id integer;
   v_list_element_function text;
-  v_data jsonb;
 begin
   assert in_client_id is not null;
 
@@ -564,16 +563,11 @@ begin
   v_list_element_function := json.get_string_opt(data.get_attribute_value(v_list_object_id, 'list_element_function'), null);
 
   if v_list_element_function is not null then
-    execute format('select %s($1, $2, $3)', v_list_element_function)
-    using v_object_id, v_list_object_id, v_actor_id
-    into v_data;
-
-    assert json.get_string(v_data, 'action') in ('open_object', 'go_back', 'do_nothing');
+    execute format('select %s($1, $2, $3, $4)', v_list_element_function)
+    using in_request_id, v_object_id, v_list_object_id, v_actor_id;
   else
-    v_data := jsonb_build_object('action', 'open_object', 'object_id', v_list_object_code);
+    perform api_utils.create_notification(in_client_id, in_request_id, 'action', jsonb_build_object('action', 'open_object', 'object_id', v_list_object_code));
   end if;
-
-  perform api_utils.create_notification(in_client_id, in_request_id, 'action', v_object);
 end;
 $$
 language 'plpgsql';
@@ -1650,7 +1644,7 @@ begin
   (
     'list_element_function',
     null,
-    'Функция, вызываемая при открытии данного объекта из какого-то списка, string. Вызывается с параметрами (object_id, list_object_id, actor_id) и возвращает действие.
+    'Функция, вызываемая при открытии данного объекта из какого-то списка, string. Вызывается с параметрами (request_id, object_id, list_object_id, actor_id). Функция должна либо бросить исключение, либо сгенерировать сообщение клиенту.
 Если атрибут отсутствует, то сообщение open_list_object всегда приводит к действию open_object.',
     'system',
     null,
@@ -6647,7 +6641,7 @@ create table data.actions(
   constraint actions_unique_code unique(code)
 );
 
-comment on column data.actions.function is 'Имя функции для выполнения действия. Функция вызывается с параметрами (request_id, actor_id, params, user_params).';
+comment on column data.actions.function is 'Имя функции для выполнения действия. Функция вызывается с параметрами (request_id, actor_id, params, user_params). Функция должна либо бросить исключение, либо сгенерировать сообщение клиенту.';
 
 -- drop table data.attribute_values;
 
