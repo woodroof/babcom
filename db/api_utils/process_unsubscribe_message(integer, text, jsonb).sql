@@ -1,6 +1,6 @@
 -- drop function api_utils.process_unsubscribe_message(integer, text, jsonb);
 
-create or replace function api_utils.process_unsubscribe_message(in_client_id integer, in_request text, in_message jsonb)
+create or replace function api_utils.process_unsubscribe_message(in_client_id integer, in_request_id text, in_message jsonb)
 returns void
 volatile
 as
