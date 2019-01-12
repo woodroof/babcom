@@ -484,9 +484,9 @@ end;
 $$
 language 'plpgsql';
 
--- drop function api_utils.process_make_action_message(integer, integer, jsonb);
+-- drop function api_utils.process_make_action_message(integer, text, jsonb);
 
-create or replace function api_utils.process_make_action_message(in_client_id integer, in_request_id integer, in_message jsonb)
+create or replace function api_utils.process_make_action_message(in_client_id integer, in_request_id text, in_message jsonb)
 returns void
 volatile
 as
@@ -521,7 +521,7 @@ begin
   end if;
 
   execute format('select %s($1, $2, $3, $4)', v_function)
-  using in_request_id, v_actor_id, v_params, v_user_params;
+  using in_client_id, in_request_id, v_params, v_user_params;
 end;
 $$
 language 'plpgsql';
@@ -6845,7 +6845,7 @@ create table data.actions(
   constraint actions_unique_code unique(code)
 );
 
-comment on column data.actions.function is 'Имя функции для выполнения действия. Функция вызывается с параметрами (request_id, actor_id, params, user_params). Функция должна либо бросить исключение, либо сгенерировать сообщение клиенту.';
+comment on column data.actions.function is 'Имя функции для выполнения действия. Функция вызывается с параметрами (client_id, request_id, params, user_params). Функция должна либо бросить исключение, либо сгенерировать сообщение клиенту.';
 
 -- drop table data.attribute_values;
 

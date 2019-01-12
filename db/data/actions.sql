@@ -8,4 +8,4 @@ create table data.actions(
   constraint actions_unique_code unique(code)
 );
 
-comment on column data.actions.function is 'Имя функции для выполнения действия. Функция вызывается с параметрами (request_id, actor_id, params, user_params). Функция должна либо бросить исключение, либо сгенерировать сообщение клиенту.';
+comment on column data.actions.function is 'Имя функции для выполнения действия. Функция вызывается с параметрами (client_id, request_id, params, user_params). Функция должна либо бросить исключение, либо сгенерировать сообщение клиенту.';
