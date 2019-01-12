@@ -6291,112 +6291,52 @@ declare
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
   v_content_attribute_id integer := data.get_attribute_id('content');
   v_description_attribute_id integer;
-  v_description2_attribute_id integer;
-  v_description3_attribute_id integer;
-  v_description4_attribute_id integer;
-  v_integer_attribute_id integer;
-  v_float_attribute_id integer;
-  v_integer2_attribute_id integer;
-  v_float2_attribute_id integer;
-  v_short_name_attribute_id integer;
-  v_long_name_attribute_id integer;
-  v_short_name_value_integer_attribute_id integer;
-  v_long_name_value_description_integer_attribute_id integer;
-  v_default_login_id integer;
+
   v_menu_id integer;
   v_notifications_id integer;
+
   v_test_id integer;
-  v_not_found_object_id integer;
   v_test_num integer := 2;
+
+  v_template_groups jsonb[];
 begin
+  -- Атрибут для какого-то текста
   insert into data.attributes(code, type, card_type, can_be_overridden)
   values('description', 'normal', 'full', true)
   returning id into v_description_attribute_id;
 
-  insert into data.attributes(code, type, card_type, can_be_overridden)
-  values('description2', 'normal', 'full', true)
-  returning id into v_description2_attribute_id;
-
-  insert into data.attributes(code, type, card_type, can_be_overridden)
-  values('description3', 'normal', 'full', true)
-  returning id into v_description3_attribute_id;
-
-  insert into data.attributes(code, type, card_type, can_be_overridden)
-  values('description4', 'normal', 'full', true)
-  returning id into v_description4_attribute_id;
-
-  insert into data.attributes(code, type, card_type, can_be_overridden)
-  values('integer', 'normal', 'full', true)
-  returning id into v_integer_attribute_id;
-
-  insert into data.attributes(code, type, card_type, can_be_overridden)
-  values('float', 'normal', 'full', true)
-  returning id into v_float_attribute_id;
-
-  insert into data.attributes(code, value_description_function, type, card_type, can_be_overridden)
-  values('integer2', 'test_project.test_value_description_function', 'normal', 'full', true)
-  returning id into v_integer2_attribute_id;
-
-  insert into data.attributes(code, value_description_function, type, card_type, can_be_overridden)
-  values('float2', 'test_project.test_value_description_function', 'normal', 'full', true)
-  returning id into v_float2_attribute_id;
-
-  insert into data.attributes(code, name, type, card_type, can_be_overridden)
-  values('short_name', 'Атрибут 1', 'normal', 'full', true)
-  returning id into v_short_name_attribute_id;
-
-  insert into data.attributes(code, name, type, card_type, can_be_overridden)
-  values('long_name', 'Атрибут с очень длинным именем, которое нельзя так просто обрезать — оно очень важно для понимания назначения значения, его смысла, глубинной сути, места во вселенной и связи со значениями других атрибутов', 'normal', 'full', true)
-  returning id into v_long_name_attribute_id;
-
-  insert into data.attributes(code, name, type, card_type, can_be_overridden)
-  values('short_name_value_integer', 'Атрибут 3', 'normal', 'full', true)
-  returning id into v_short_name_value_integer_attribute_id;
-
-  insert into data.attributes(code, name, value_description_function, type, card_type, can_be_overridden)
-  values('long_name_value_description_integer', 'Ещё один атрибут с длинным именем, которое почти наверняка не поместится в одну строку на современных телефонах', 'test_project.test_value_description_function', 'normal', 'full', true)
-  returning id into v_long_name_value_description_integer_attribute_id;
+  -- И первая группа в шаблоне
+  v_template_groups := array_append(v_template_groups, jsonb '{"code": "common", "attributes": ["description"]}');
 
   -- Создадим актора по умолчанию, который является первым тестом
   insert into data.objects(code) values('test1') returning id into v_test_id;
 
   -- Создадим объект для страницы 404
-  insert into data.objects(code) values('not_found') returning id into v_not_found_object_id;
+  declare
+    v_not_found_object_id integer;
+  begin
+    insert into data.objects(code) values('not_found') returning id into v_not_found_object_id;
+    insert into data.params(code, value, description)
+    values('not_found_object_id', to_jsonb(v_not_found_object_id), 'Идентификатор объекта, отображаемого в случае, если актору недоступен какой-то объект (ну или он реально не существует)');
+
+    insert into data.attribute_values(object_id, attribute_id, value) values
+    (v_not_found_object_id, v_type_attribute_id, jsonb '"not_found"'),
+    (v_not_found_object_id, v_is_visible_attribute_id, jsonb 'true'),
+    (v_not_found_object_id, v_title_attribute_id, jsonb '"404"'),
+    (v_not_found_object_id, v_subtitle_attribute_id, jsonb '"Not found"'),
+    (v_not_found_object_id, v_description_attribute_id, jsonb '"Это не те дроиды, которых вы ищете."');
+  end;
 
   -- Логин по умолчанию
-  insert into data.logins(code) values('default_login') returning id into v_default_login_id;
-  insert into data.login_actors(login_id, actor_id) values(v_default_login_id, v_test_id);
+  declare
+    v_default_login_id integer;
+  begin
+    insert into data.logins(code) values('default_login') returning id into v_default_login_id;
+    insert into data.login_actors(login_id, actor_id) values(v_default_login_id, v_test_id);
 
-  insert into data.params(code, value, description) values
-  ('default_login_id', to_jsonb(v_default_login_id), 'Идентификатор логина по умолчанию'),
-  ('not_found_object_id', to_jsonb(v_not_found_object_id), 'Идентификатор объекта, отображаемого в случае, если актору недоступен какой-то объект (ну или он реально не существует)'),
-  (
-    'template',
-    jsonb
-    '{
-      "groups": [
-        {
-          "code": "group1",
-          "attributes": ["description", "integer", "float", "integer2", "float2", "description2"]
-        },
-        {
-          "code": "group2",
-          "attributes": ["description3"]
-        },
-        {
-          "code": "group3",
-          "name": "Короткое имя группы",
-          "attributes": ["description4"]
-        },
-        {
-          "code": "group4",
-          "name": "Тестовые данные",
-          "attributes": ["short_name", "long_name", "short_name_value_integer", "long_name_value_description_integer"]
-        }
-      ]
-    }',
-    'Шаблон'
-  );
+    insert into data.params(code, value, description)
+    values('default_login_id', to_jsonb(v_default_login_id), 'Идентификатор логина по умолчанию');
+  end;
 
   -- Также для работы нам понадобится пустой объект меню
   insert into data.objects(code) values('menu') returning id into v_menu_id;
@@ -6411,15 +6351,14 @@ begin
   (v_notifications_id, v_is_visible_attribute_id, jsonb 'true'),
   (v_notifications_id, v_content_attribute_id, jsonb '[]');
 
-  -- 404
-  insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_not_found_object_id, v_type_attribute_id, jsonb '"not_found"'),
-  (v_not_found_object_id, v_is_visible_attribute_id, jsonb 'true'),
-  (v_not_found_object_id, v_title_attribute_id, jsonb '"404"'),
-  (v_not_found_object_id, v_subtitle_attribute_id, jsonb '"Not found"'),
-  (v_not_found_object_id, v_description_attribute_id, jsonb '"Это не те дроиды, которых вы ищете."');
+  -- Базовый тест:
+  -- - пустые заголовки, подзаголовки, меню, список уведомлений
+  -- - переводы строк
+  -- - экранирование
+  -- - автовыбор актора при старте приложения
+  -- - только атрибуты из шаблона
+  -- - ссылка
 
-  -- Тесты
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_test_id, v_type_attribute_id, jsonb '"test"'),
   (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
@@ -6430,6 +6369,7 @@ begin
 'Добрый день!
 Если приложение было запущено первый раз, то первое, что вы должны были увидеть (не считая возможных лоадеров) — это этот текст.
 У нас сейчас пустое меню, пустой список непрочитанных уведомлений, а список акторов состоит из одного объекта — того, который открыт прямо сейчас.
+Единственный актор в списке не имеет ни заголовка, ни подзаголовка.
 
 Проверка 1: Этот текст разбит на строки. В частности, новая строка начинается сразу после текста "Добрый день!".
 Так, если клиент выводит текст в разметке HTML, то полученные от сервера символы перевода строки должны преобразовываться в теги <br>.
@@ -6447,6 +6387,8 @@ begin
 
 [Продолжить](babcom:test' || v_test_num || ')')
   );
+
+  -- Форматирование
 
   insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
   v_test_num := v_test_num + 1;
@@ -6470,121 +6412,367 @@ Markdown — формат, который все реализуют по-раз�
 **[Продолжить](babcom:test' || v_test_num || ')**')
   );
 
-  insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
-  v_test_num := v_test_num + 1;
-  insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_test_id, v_type_attribute_id, jsonb '"test"'),
-  (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
-  (
-    v_test_id,
-    v_description_attribute_id,
-    to_jsonb(text
+  -- Несколько атрибутов в группе
+
+  declare
+    v_test_prefix text := 'test' || v_test_num || '_';
+    v_description_attr_id integer;
+    v_next_attr_id integer;
+  begin
+    insert into data.attributes(code, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'description', 'normal', 'full', true)
+    returning id into v_description_attr_id;
+
+    insert into data.attributes(code, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'next', 'normal', 'full', true)
+    returning id into v_next_attr_id;
+
+    v_template_groups :=
+      array_append(
+        v_template_groups,
+        format(
+          '{"code": "%s", "attributes": ["%s", "%s"]}',
+          v_test_prefix || 'group',
+          v_test_prefix || 'description',
+          v_test_prefix || 'next')::jsonb);
+
+    insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
+    v_test_num := v_test_num + 1;
+    insert into data.attribute_values(object_id, attribute_id, value) values
+    (v_test_id, v_type_attribute_id, jsonb '"test"'),
+    (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
+    (
+      v_test_id,
+      v_description_attr_id,
+      to_jsonb(text
+'Проверяем, как обрабатывается несколько атрибутов в одной группе.')
+    ),
+    (
+      v_test_id,
+      v_next_attr_id,
+      to_jsonb(text
+'Проверка: Эта строка находится в новом атрибуте. Она должна быть отделена от предыдущей, причём желательно, чтобы это разделение было визуально отлично от обычного начала новой строки.
+
+[Продолжить](babcom:test' || v_test_num || ')')
+    );
+  end;
+
+  -- Вывод чисел
+
+  declare
+    v_test_prefix text := 'test' || v_test_num || '_';
+    v_description_attr_id integer;
+    v_int_attr_id integer;
+    v_float_attr_id integer;
+    v_next_attr_id integer;
+  begin
+    insert into data.attributes(code, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'description', 'normal', 'full', true)
+    returning id into v_description_attr_id;
+
+    insert into data.attributes(code, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'integer', 'normal', 'full', true)
+    returning id into v_int_attr_id;
+
+    insert into data.attributes(code, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'float', 'normal', 'full', true)
+    returning id into v_float_attr_id;
+
+    insert into data.attributes(code, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'next', 'normal', 'full', true)
+    returning id into v_next_attr_id;
+
+    v_template_groups :=
+      array_append(
+        v_template_groups,
+        format(
+          '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s"]}',
+          v_test_prefix || 'group',
+          v_test_prefix || 'description',
+          v_test_prefix || 'integer',
+          v_test_prefix || 'float',
+          v_test_prefix || 'next')::jsonb);
+
+    insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
+    v_test_num := v_test_num + 1;
+    insert into data.attribute_values(object_id, attribute_id, value) values
+    (v_test_id, v_type_attribute_id, jsonb '"test"'),
+    (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
+    (
+      v_test_id,
+      v_description_attr_id,
+      to_jsonb(text
 'Проверяем вывод нетекстовых атрибутов.
 
 Проверка: Ниже выведены числа -42 и 0.0314159265 (именно так, а не в экспоненциальной записи!).')
-  ),
-  (v_test_id, v_integer_attribute_id, jsonb '-42'),
-  (v_test_id, v_float_attribute_id, jsonb '0.0314159265'),
-  (
-    v_test_id,
-    v_description2_attribute_id,
-    to_jsonb(text
-'[Продолжить](babcom:test' || v_test_num || ')')
-  );
+    ),
+    (v_test_id, v_int_attr_id, jsonb '-42'),
+    (v_test_id, v_float_attr_id, jsonb '0.0314159265'),
+    (
+      v_test_id,
+      v_next_attr_id,
+      to_jsonb('[Продолжить](babcom:test' || v_test_num || ')')
+    );
+  end;
 
-  insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
-  v_test_num := v_test_num + 1;
-  insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_test_id, v_type_attribute_id, jsonb '"test"'),
-  (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
-  (
-    v_test_id,
-    v_description_attribute_id,
-    to_jsonb(text
+  -- Описания значения атрибутов
+
+  declare
+    v_test_prefix text := 'test' || v_test_num || '_';
+    v_description_attr_id integer;
+    v_int_attr_id integer;
+    v_float_attr_id integer;
+    v_string_attr_id integer;
+    v_next_attr_id integer;
+  begin
+    insert into data.attributes(code, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'description', 'normal', 'full', true)
+    returning id into v_description_attr_id;
+
+    insert into data.attributes(code, value_description_function, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'integer', 'test_project.test_value_description_function', 'normal', 'full', true)
+    returning id into v_int_attr_id;
+
+    insert into data.attributes(code, value_description_function, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'float', 'test_project.test_value_description_function', 'normal', 'full', true)
+    returning id into v_float_attr_id;
+
+    insert into data.attributes(code, value_description_function, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'string', 'test_project.test_value_description_function', 'normal', 'full', true)
+    returning id into v_string_attr_id;
+
+    insert into data.attributes(code, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'next', 'normal', 'full', true)
+    returning id into v_next_attr_id;
+
+    v_template_groups :=
+      array_append(
+        v_template_groups,
+        format(
+          '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s", "%s"]}',
+          v_test_prefix || 'group',
+          v_test_prefix || 'description',
+          v_test_prefix || 'integer',
+          v_test_prefix || 'float',
+          v_test_prefix || 'string',
+          v_test_prefix || 'next')::jsonb);
+
+    insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
+    v_test_num := v_test_num + 1;
+    insert into data.attribute_values(object_id, attribute_id, value) values
+    (v_test_id, v_type_attribute_id, jsonb '"test"'),
+    (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
+    (
+      v_test_id,
+      v_description_attr_id,
+      to_jsonb(text
 'Проверяем вывод описаний значений атрибутов.
 
-Проверка: Ниже выведены строки "минус сорок два" и "π / 100".')
-  ),
-  (v_test_id, v_integer2_attribute_id, jsonb '-42'),
-  (v_test_id, v_float2_attribute_id, jsonb '0.0314159265'),
-  (
-    v_test_id,
-    v_description2_attribute_id,
-    to_jsonb(text
-'[Продолжить](babcom:test' || v_test_num || ')')
-  );
+Проверка: Ниже выведены строки "минус сорок два", "π / 100" и "∫x dx = ½x² + C".')
+    ),
+    (v_test_id, v_int_attr_id, jsonb '-42'),
+    (v_test_id, v_float_attr_id, jsonb '0.0314159265'),
+    (v_test_id, v_string_attr_id, jsonb '"integral"'),
+    (
+      v_test_id,
+      v_next_attr_id,
+      to_jsonb('[Продолжить](babcom:test' || v_test_num || ')')
+    );
+  end;
 
-  insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
-  v_test_num := v_test_num + 1;
-  insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_test_id, v_type_attribute_id, jsonb '"test"'),
-  (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
-  (
-    v_test_id,
-    v_description_attribute_id,
-    to_jsonb(text
+  -- Описания значения атрибутов с форматированием
+
+  declare
+    v_test_prefix text := 'test' || v_test_num || '_';
+    v_description_attr_id integer;
+    v_int1_attr_id integer;
+    v_int2_attr_id integer;
+    v_next_attr_id integer;
+  begin
+    insert into data.attributes(code, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'description', 'normal', 'full', true)
+    returning id into v_description_attr_id;
+
+    insert into data.attributes(code, value_description_function, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'integer1', 'test_project.test_value_description_function', 'normal', 'full', true)
+    returning id into v_int1_attr_id;
+
+    insert into data.attributes(code, value_description_function, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'integer2', 'test_project.test_value_description_function', 'normal', 'full', true)
+    returning id into v_int2_attr_id;
+
+    insert into data.attributes(code, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'next', 'normal', 'full', true)
+    returning id into v_next_attr_id;
+
+    v_template_groups :=
+      array_append(
+        v_template_groups,
+        format(
+          '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s"]}',
+          v_test_prefix || 'group',
+          v_test_prefix || 'description',
+          v_test_prefix || 'integer1',
+          v_test_prefix || 'integer2',
+          v_test_prefix || 'next')::jsonb);
+
+    insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
+    v_test_num := v_test_num + 1;
+    insert into data.attribute_values(object_id, attribute_id, value) values
+    (v_test_id, v_type_attribute_id, jsonb '"test"'),
+    (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
+    (
+      v_test_id,
+      v_description_attr_id,
+      to_jsonb(text
 'Проверяем вывод описаний значений атрибутов с форматированием.
 
 Проверка: Ниже выведена жирная строка "один" и наклонная строка "два".')
-  ),
-  (v_test_id, v_integer2_attribute_id, jsonb '1'),
-  (v_test_id, v_float2_attribute_id, jsonb '2'),
-  (
-    v_test_id,
-    v_description2_attribute_id,
-    to_jsonb(text
-'[Продолжить](babcom:test' || v_test_num || ')')
-  );
+    ),
+    (v_test_id, v_int1_attr_id, jsonb '1'),
+    (v_test_id, v_int2_attr_id, jsonb '2'),
+    (
+      v_test_id,
+      v_next_attr_id,
+      to_jsonb('[Продолжить](babcom:test' || v_test_num || ')')
+    );
+  end;
 
-  insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
-  v_test_num := v_test_num + 1;
-  insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_test_id, v_type_attribute_id, jsonb '"test"'),
-  (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
-  (
-    v_test_id,
-    v_description_attribute_id,
-    to_jsonb(text
-'Теперь мы проверяем, как обрабатывается несколько групп и несколько атрибутов в одной группе.')
-  ),
-  (
-    v_test_id,
-    v_description2_attribute_id,
-    to_jsonb(text
-'Проверка 1: Эта строка находится в новом атрибуте. Она должна быть отделена от предыдущей, причём желательно, чтобы это разделение было визуально отлично от обычного начала новой строки.')
-  ),
-  (
-    v_test_id,
-    v_description3_attribute_id,
-    to_jsonb(text
-'Проверка 2: Эта строка находится в новой группе. Должно быть явно видно, где закончилась предыдущая группа и началась новая.
+  -- Несколько групп
+
+  declare
+    v_test_prefix text := 'test' || v_test_num || '_';
+    v_description_attr_id integer;
+    v_next_attr_id integer;
+  begin
+    insert into data.attributes(code, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'description', 'normal', 'full', true)
+    returning id into v_description_attr_id;
+
+    insert into data.attributes(code, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'next', 'normal', 'full', true)
+    returning id into v_next_attr_id;
+
+    v_template_groups :=
+      array_append(
+        v_template_groups,
+        format(
+          '{"code": "%s", "attributes": ["%s"]}',
+          v_test_prefix || 'group1',
+          v_test_prefix || 'description')::jsonb);
+    v_template_groups :=
+      array_append(
+        v_template_groups,
+        format(
+          '{"code": "%s", "attributes": ["%s"]}',
+          v_test_prefix || 'group2',
+          v_test_prefix || 'next')::jsonb);
+
+    insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
+    v_test_num := v_test_num + 1;
+    insert into data.attribute_values(object_id, attribute_id, value) values
+    (v_test_id, v_type_attribute_id, jsonb '"test"'),
+    (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
+    (
+      v_test_id,
+      v_description_attr_id,
+      to_jsonb(text
+'Теперь мы проверяем, как обрабатывается несколько групп.')
+    ),
+    (
+      v_test_id,
+      v_next_attr_id,
+      to_jsonb(text
+'Проверка: Эта строка находится в новой группе. Должно быть явно видно, где закончилась предыдущая группа и началась новая.
 
 [Продолжить](babcom:test' || v_test_num || ')')
-  );
+    );
+  end;
 
-  insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
-  v_test_num := v_test_num + 1;
-  insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_test_id, v_type_attribute_id, jsonb '"test"'),
-  (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
-  (
-    v_test_id,
-    v_description4_attribute_id,
-    to_jsonb(text
+  -- Группы с именем
+
+  declare
+    v_test_prefix text := 'test' || v_test_num || '_';
+    v_description_attr_id integer;
+  begin
+    insert into data.attributes(code, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'description', 'normal', 'full', true)
+    returning id into v_description_attr_id;
+
+    v_template_groups :=
+      array_append(
+        v_template_groups,
+        format(
+          '{"code": "%s", "name": "Короткое имя группы", "attributes": ["%s"]}',
+          v_test_prefix || 'group',
+          v_test_prefix || 'description')::jsonb);
+
+    insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
+    v_test_num := v_test_num + 1;
+    insert into data.attribute_values(object_id, attribute_id, value) values
+    (v_test_id, v_type_attribute_id, jsonb '"test"'),
+    (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
+    (
+      v_test_id,
+      v_description_attr_id,
+      to_jsonb(text
 'Проверка: У этой группы есть имя. Мы должны видеть текст "Короткое имя группы".
 
 [Продолжить](babcom:test' || v_test_num || ')')
-  );
+    );
+  end;
 
-  insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
-  v_test_num := v_test_num + 1;
-  insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_test_id, v_type_attribute_id, jsonb '"test"'),
-  (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
-  (
-    v_test_id,
-    v_description_attribute_id,
-    to_jsonb(text
+  -- Имена у групп и атрибутов
+
+  declare
+    v_test_prefix text := 'test' || v_test_num || '_';
+    v_short_attr_id integer;
+    v_long_attr_id integer;
+    v_short_value_attr_id integer;
+    v_long_value_descr_attr_id integer;
+    v_next_attr_id integer;
+  begin
+    insert into data.attributes(code, name, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'short_name', 'Атрибут 1', 'normal', 'full', true)
+    returning id into v_short_attr_id;
+
+    insert into data.attributes(code, name, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'long_name', 'Атрибут с очень длинным именем, которое нельзя так просто обрезать — оно очень важно для понимания назначения значения, его смысла, глубинной сути, места во вселенной и связи со значениями других атрибутов', 'normal', 'full', true)
+    returning id into v_long_attr_id;
+
+    insert into data.attributes(code, name, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'short_name_value', 'Атрибут 3', 'normal', 'full', true)
+    returning id into v_short_value_attr_id;
+
+    insert into data.attributes(code, name, value_description_function, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'long_name_value_description', 'Ещё один атрибут с длинным именем, которое почти наверняка не поместится в одну строку на современных телефонах', 'test_project.test_value_description_function', 'normal', 'full', true)
+    returning id into v_long_value_descr_attr_id;
+
+    insert into data.attributes(code, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'next', 'normal', 'full', true)
+    returning id into v_next_attr_id;
+
+    v_template_groups :=
+      array_append(
+        v_template_groups,
+        format(
+          '{"code": "%s", "name": "Тестовые данные", "attributes": ["%s", "%s", "%s", "%s", "%s"]}',
+          v_test_prefix || 'group',
+          v_test_prefix || 'short_name',
+          v_test_prefix || 'long_name',
+          v_test_prefix || 'short_name_value',
+          v_test_prefix || 'long_name_value_description',
+          v_test_prefix || 'next')::jsonb);
+
+    insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
+    v_test_num := v_test_num + 1;
+    insert into data.attribute_values(object_id, attribute_id, value) values
+    (v_test_id, v_type_attribute_id, jsonb '"test"'),
+    (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
+    (
+      v_test_id,
+      v_description_attribute_id,
+      to_jsonb(text
 'Теперь имя будет и у группы, и у её атрибутов.
 
 Проверка 1: Ниже есть ещё одна группа с именем "Тестовые данные".
@@ -6593,29 +6781,24 @@ Markdown — формат, который все реализуют по-раз�
 Проверка 4: Третий атрибут имеет имя "Атрибут 3" и значение "100".
 Проверка 5: Четвёртый атрибут имеет имя, начинающееся с "Ещё один атрибут" и также не влезающее в одну строку. Атрибут имеет довольно длинное описание значения, начинающееся с "Lorem ipsum".
 Проверка 6: Слово ipsum должно быть жирным.
-Проверка 7: Все атрибуты идут именно в указанном порядке.
+Проверка 7: Все атрибуты идут именно в указанном порядке.')
+    ),
+    (v_test_id, v_short_attr_id, null),
+    (v_test_id, v_long_attr_id, null),
+    (v_test_id, v_short_value_attr_id, jsonb '100'),
+    (v_test_id, v_long_value_descr_attr_id, jsonb '"lorem ipsum"'),
+    (
+      v_test_id,
+      v_next_attr_id,
+      to_jsonb('[Продолжить](babcom:test' || v_test_num || ')')
+    );
+  end;
 
-[Продолжить](babcom:test' || v_test_num || ')')
-  ),
-  (v_test_id, v_short_name_attribute_id, null),
-  (v_test_id, v_long_name_attribute_id, null),
-  (v_test_id, v_short_name_value_integer_attribute_id, jsonb '100'),
-  (v_test_id, v_long_name_value_description_integer_attribute_id, jsonb '3');
+  -- todo
 
-  -- Тест N
-  insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
-  v_test_num := v_test_num + 1;
-  insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_test_id, v_type_attribute_id, jsonb '"test"'),
-  (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
-  (
-    v_test_id,
-    v_description_attribute_id,
-    to_jsonb(text
-'TEMPLATE
-
-[Продолжить](babcom:test' || v_test_num || ')')
-  );
+  -- Заполним шаблон
+  insert into data.params(code, value, description)
+  values ('template', jsonb_build_object('groups', to_jsonb(v_template_groups)), 'Шаблон');
 end;
 $$
 language 'plpgsql';
@@ -6637,10 +6820,12 @@ begin
     return '**один**';
   elsif in_value = jsonb '2' then
     return '*два*';
-  elsif in_value = jsonb '3' then
+  elsif in_value = jsonb '"lorem ipsum"' then
     return 'Lorem **ipsum** dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.';
   elsif in_value = jsonb '0.0314159265' then
     return 'π / 100';
+  elsif in_value = jsonb '"integral"' then
+    return '∫x dx = ½x² + C';
   end if;
 
   assert false;
