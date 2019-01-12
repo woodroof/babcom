@@ -6888,7 +6888,7 @@ Markdown — формат, который все реализуют по-раз�
   -- Группа только с действиями:
   -- - Выводятся в правильном порядке
   -- - Действие без имени и с именем
-  -- - Заблокированное действие
+  -- - Заблокированное действие и обычное
 
   declare
     v_test_prefix text := 'test' || v_test_num || '_';
@@ -6902,11 +6902,19 @@ Markdown — формат, который все реализуют по-раз�
       array_append(
         v_template_groups,
         format(
-          '{"code": "%s", "actions": ["%s", "%s", "%s"]}',
-          v_test_prefix || 'group',
+          '{"code": "%s", "actions": ["%s", "%s", "%s", "%s"]}',
+          v_test_prefix || 'group1',
           v_test_prefix || 'unnamed',
           v_test_prefix || 'named',
-          v_test_prefix || 'disabled')::jsonb);
+          v_test_prefix || 'unnamed_disabled',
+          v_test_prefix || 'named_disabled')::jsonb);
+    v_template_groups :=
+      array_append(
+        v_template_groups,
+        format(
+          '{"code": "%s", "attributes": ["%s"]}',
+          v_test_prefix || 'group2',
+          v_test_prefix || 'next')::jsonb);
 
     insert into data.actions (code, function)
     values ('do_nothing', 'test_project.do_nothing_action');
@@ -6921,19 +6929,116 @@ Markdown — формат, который все реализуют по-раз�
       v_test_id,
       v_description_attribute_id,
       to_jsonb(text
-'Ниже выведена группа, в которой нет атрибутов, только действия. Тест проверяет только отображение действий — все действия не имеют параметров, подтверждений, ничего не делают и возвращают do_nothing.
+'Ниже выведена группа, в которой нет атрибутов, только действия. Тест проверяет только отображение действий — все активные действия не имеют параметров, подтверждений, ничего не делают и возвращают do_nothing.
 
-Проверка 1: Первым идёт действие без имени, затем с именем "Действие", в самом конце — с именем "Заблокированное действие".
-Проверка 2: Заблокированное действие отличается внешне и не может быть выполнено (например, кнопка не нажимается).
-
-[Продолжить](babcom:test' || v_test_num || ')')
+Проверка 1: Первым идёт действие без имени, затем с именем "Действие", затем снова действие без имени, а в самом конце — с именем "Заблокированное действие".
+Проверка 2: Последние два действия заблокированы — отличаются внешне и не могут быть выполнены (например, кнопки не нажимаются).')
+    ),
+    (
+      v_test_id,
+      v_next_attr_id,
+      to_jsonb('[Продолжить](babcom:test' || v_test_num || ')')
     );
   end;
 
-  -- todo
+  -- Действия после атрибутов
 
-  -- действия выводятся после атрибутов
-  -- действие и атрибут с одинаковым кодом
+  declare
+    v_test_prefix text := 'test' || v_test_num || '_';
+    v_description_attr_id integer;
+    v_next_attr_id integer;
+  begin
+    insert into data.attributes(code, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'description', 'normal', 'full', true)
+    returning id into v_description_attr_id;
+
+    insert into data.attributes(code, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'next', 'normal', 'full', true)
+    returning id into v_next_attr_id;
+
+    v_template_groups :=
+      array_append(
+        v_template_groups,
+        format(
+          '{"code": "%s", "attributes": ["%s"], "actions": ["%s"]}',
+          v_test_prefix || 'group1',
+          v_test_prefix || 'description',
+          v_test_prefix || 'action')::jsonb);
+    v_template_groups :=
+      array_append(
+        v_template_groups,
+        format(
+          '{"code": "%s", "attributes": ["%s"]}',
+          v_test_prefix || 'group2',
+          v_test_prefix || 'next')::jsonb);
+
+    insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
+    v_test_num := v_test_num + 1;
+    insert into data.attribute_values(object_id, attribute_id, value) values
+    (v_test_id, v_type_attribute_id, jsonb '"test"'),
+    (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
+    (v_test_id, v_actions_function_attribute_id, jsonb '"test_project.one_simple_action"'),
+    (
+      v_test_id,
+      v_description_attr_id,
+      to_jsonb(text
+'В этой группе есть и атрибут, и действие.
+
+Проверка: Действие идёт после данного текста.')
+    ),
+    (
+      v_test_id,
+      v_next_attr_id,
+      to_jsonb('[Продолжить](babcom:test' || v_test_num || ')')
+    );
+  end;
+
+  -- Действие и атрибут имеют одинаковый код
+
+  declare
+    v_test_prefix text := 'test' || v_test_num || '_';
+    v_action_attr_id integer;
+  begin
+    insert into data.attributes(code, type, card_type, can_be_overridden)
+    values(v_test_prefix || 'action', 'normal', 'full', true)
+    returning id into v_action_attr_id;
+
+    v_template_groups :=
+      array_append(
+        v_template_groups,
+        format(
+          '{"code": "%s", "actions": ["%s"]}',
+          v_test_prefix || 'group1',
+          v_test_prefix || 'action')::jsonb);
+    v_template_groups :=
+      array_append(
+        v_template_groups,
+        format(
+          '{"code": "%s", "attributes": ["%s"]}',
+          v_test_prefix || 'group2',
+          v_test_prefix || 'action')::jsonb);
+
+    insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
+    v_test_num := v_test_num + 1;
+    insert into data.attribute_values(object_id, attribute_id, value) values
+    (v_test_id, v_type_attribute_id, jsonb '"test"'),
+    (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
+    (v_test_id, v_actions_function_attribute_id, jsonb '"test_project.one_simple_action"'),
+    (
+      v_test_id,
+      v_description_attribute_id,
+      to_jsonb(text
+'Коды атрибутов и коды действий независимы.
+
+Проверка 1: В следующей группе есть только действие.
+Проверка 2: В последней группе есть только ссылка на следующий тест.')
+    ),
+    (
+      v_test_id,
+      v_action_attr_id,
+      to_jsonb('[Продолжить](babcom:test' || v_test_num || ')')
+    );
+  end;
 
   -- заголовок
   -- заголовок и подзаголовок
@@ -6942,6 +7047,25 @@ Markdown — формат, который все реализуют по-раз�
   -- Заполним шаблон
   insert into data.params(code, value, description)
   values ('template', jsonb_build_object('groups', to_jsonb(v_template_groups)), 'Шаблон');
+end;
+$$
+language 'plpgsql';
+
+-- drop function test_project.one_simple_action(integer, integer);
+
+create or replace function test_project.one_simple_action(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_object_code text := data.get_object_code(in_object_id);
+begin
+  assert in_actor_id is not null;
+
+  return jsonb_build_object(
+    v_object_code || '_action',
+    jsonb '{"code": "do_nothing", "name": "Не тыкай сюда!", "disabled": false, "params": {}}');
 end;
 $$
 language 'plpgsql';
@@ -6963,8 +7087,10 @@ begin
     jsonb '{"code": "do_nothing", "disabled": false, "params": {}}',
     v_object_code || '_named',
     jsonb '{"code": "do_nothing", "name": "Действие", "disabled": false, "params": {}}',
-    v_object_code || '_disabled',
-    jsonb '{"code": "do_nothing", "name": "Заблокированное действие", "disabled": true}');
+    v_object_code || '_unnamed_disabled',
+    jsonb '{"disabled": true}',
+    v_object_code || '_named_disabled',
+    jsonb '{"name": "Заблокированное действие", "disabled": true}');
 end;
 $$
 language 'plpgsql';

@@ -15,8 +15,10 @@ begin
     jsonb '{"code": "do_nothing", "disabled": false, "params": {}}',
     v_object_code || '_named',
     jsonb '{"code": "do_nothing", "name": "Действие", "disabled": false, "params": {}}',
-    v_object_code || '_disabled',
-    jsonb '{"code": "do_nothing", "name": "Заблокированное действие", "disabled": true}');
+    v_object_code || '_unnamed_disabled',
+    jsonb '{"disabled": true}',
+    v_object_code || '_named_disabled',
+    jsonb '{"name": "Заблокированное действие", "disabled": true}');
 end;
 $$
 language 'plpgsql';
