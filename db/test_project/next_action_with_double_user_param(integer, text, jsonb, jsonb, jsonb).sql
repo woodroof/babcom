@@ -7,17 +7,12 @@ as
 $$
 declare
   v_object_code text := json.get_string(in_params);
-  v_param jsonb;
 begin
   perform data.get_active_actor_id(in_client_id);
+  perform json.get_number(in_user_params, 'param');
 
   assert in_request_id is not null;
   assert in_default_params is null;
-  assert in_user_params ? 'param';
-
-  v_param = in_user_params->'param';
-
-  assert jsonb_typeof(v_param) = 'number';
 
   perform api_utils.create_notification(
     in_client_id,

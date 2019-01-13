@@ -3174,6 +3174,316 @@ end;
 $$
 language 'plpgsql';
 
+-- drop function json.get_number(json, text);
+
+create or replace function json.get_number(in_json json, in_name text default null::text)
+returns double precision
+immutable
+as
+$$
+declare
+  v_param json;
+  v_param_type text;
+begin
+  if in_name is not null then
+    v_param := json.get_object(in_json)->in_name;
+  else
+    v_param := in_json;
+  end if;
+
+  v_param_type := json_typeof(v_param);
+
+  if in_name is not null then
+    if v_param_type is null then
+      perform error.raise_invalid_input_param_value('Attribute "%s" was not found', in_name);
+    end if;
+    if v_param_type != 'number' then
+      perform error.raise_invalid_input_param_value('Attribute "%s" is not a number', in_name);
+    end if;
+  elseif v_param_type is null or v_param_type != 'number' then
+    perform error.raise_invalid_input_param_value('Json is not a number');
+  end if;
+
+  return v_param;
+end;
+$$
+language 'plpgsql';
+
+-- drop function json.get_number(jsonb, text);
+
+create or replace function json.get_number(in_json jsonb, in_name text default null::text)
+returns double precision
+immutable
+as
+$$
+declare
+  v_param jsonb;
+  v_param_type text;
+begin
+  if in_name is not null then
+    v_param := json.get_object(in_json)->in_name;
+  else
+    v_param := in_json;
+  end if;
+
+  v_param_type := jsonb_typeof(v_param);
+
+  if in_name is not null then
+    if v_param_type is null then
+      perform error.raise_invalid_input_param_value('Attribute "%s" was not found', in_name);
+    end if;
+    if v_param_type != 'number' then
+      perform error.raise_invalid_input_param_value('Attribute "%s" is not a number', in_name);
+    end if;
+  elseif v_param_type is null or v_param_type != 'number' then
+    perform error.raise_invalid_input_param_value('Json is not a number');
+  end if;
+
+  return v_param;
+end;
+$$
+language 'plpgsql';
+
+-- drop function json.get_number_array(json, text);
+
+create or replace function json.get_number_array(in_json json, in_name text default null::text)
+returns double precision[]
+immutable
+as
+$$
+declare
+  v_array json := json.get_array(in_json, in_name);
+  v_array_len integer := json_array_length(v_array);
+  v_ret_val double precision[];
+begin
+  for i in 0 .. v_array_len - 1 loop
+    v_ret_val := array_append(v_ret_val, json.get_number(v_array->i));
+  end loop;
+
+  return v_ret_val;
+exception when invalid_parameter_value then
+  if in_name is not null then
+    perform error.raise_invalid_input_param_value('Attribute "%s" is not a number array', in_name);
+  else
+    perform error.raise_invalid_input_param_value('Json is not a number array');
+  end if;
+end;
+$$
+language 'plpgsql';
+
+-- drop function json.get_number_array(jsonb, text);
+
+create or replace function json.get_number_array(in_json jsonb, in_name text default null::text)
+returns double precision[]
+immutable
+as
+$$
+declare
+  v_array jsonb := json.get_array(in_json, in_name);
+  v_array_len integer := jsonb_array_length(v_array);
+  v_ret_val double precision[];
+begin
+  for i in 0 .. v_array_len - 1 loop
+    v_ret_val := array_append(v_ret_val, json.get_number(v_array->i));
+  end loop;
+
+  return v_ret_val;
+exception when invalid_parameter_value then
+  if in_name is not null then
+    perform error.raise_invalid_input_param_value('Attribute "%s" is not a number array', in_name);
+  else
+    perform error.raise_invalid_input_param_value('Json is not a number array');
+  end if;
+end;
+$$
+language 'plpgsql';
+
+-- drop function json.get_number_array_opt(json, double precision[]);
+
+create or replace function json.get_number_array_opt(in_json json, in_default double precision[])
+returns double precision[]
+immutable
+as
+$$
+declare
+  v_array json := json.get_array_opt(in_json, null);
+begin
+  if v_array is null then
+    return in_default;
+  end if;
+
+  return json.get_number_array(v_array);
+end;
+$$
+language 'plpgsql';
+
+-- drop function json.get_number_array_opt(json, text, double precision[]);
+
+create or replace function json.get_number_array_opt(in_json json, in_name text, in_default double precision[])
+returns double precision[]
+immutable
+as
+$$
+declare
+  v_array json := json.get_array_opt(in_json, in_name, null);
+begin
+  if v_array is null then
+    return in_default;
+  end if;
+
+  return json.get_number_array(in_json, in_name);
+end;
+$$
+language 'plpgsql';
+
+-- drop function json.get_number_array_opt(jsonb, double precision[]);
+
+create or replace function json.get_number_array_opt(in_json jsonb, in_default double precision[])
+returns double precision[]
+immutable
+as
+$$
+declare
+  v_array jsonb := json.get_array_opt(in_json, null);
+begin
+  if v_array is null then
+    return in_default;
+  end if;
+
+  return json.get_number_array(v_array);
+end;
+$$
+language 'plpgsql';
+
+-- drop function json.get_number_array_opt(jsonb, text, double precision[]);
+
+create or replace function json.get_number_array_opt(in_json jsonb, in_name text, in_default double precision[])
+returns double precision[]
+immutable
+as
+$$
+declare
+  v_array jsonb := json.get_array_opt(in_json, in_name, null);
+begin
+  if v_array is null then
+    return in_default;
+  end if;
+
+  return json.get_number_array(in_json, in_name);
+end;
+$$
+language 'plpgsql';
+
+-- drop function json.get_number_opt(json, double precision);
+
+create or replace function json.get_number_opt(in_json json, in_default double precision)
+returns double precision
+immutable
+as
+$$
+declare
+  v_json_type text;
+begin
+  v_json_type := json_typeof(in_json);
+
+  if v_json_type is null or v_json_type = 'null' then
+    return in_default;
+  end if;
+
+  if v_json_type != 'number' then
+    perform error.raise_invalid_input_param_value('Json is not a number');
+  end if;
+
+  return in_json;
+end;
+$$
+language 'plpgsql';
+
+-- drop function json.get_number_opt(json, text, double precision);
+
+create or replace function json.get_number_opt(in_json json, in_name text, in_default double precision)
+returns double precision
+immutable
+as
+$$
+declare
+  v_param json;
+  v_param_type text;
+begin
+  assert in_name is not null;
+
+  v_param := json.get_object(in_json)->in_name;
+
+  v_param_type := json_typeof(v_param);
+
+  if v_param_type is null or v_param_type = 'null' then
+    return in_default;
+  end if;
+
+  if v_param_type != 'number' then
+    perform error.raise_invalid_input_param_value('Attribute "%s" is not a number', in_name);
+  end if;
+
+  return v_param;
+end;
+$$
+language 'plpgsql';
+
+-- drop function json.get_number_opt(jsonb, double precision);
+
+create or replace function json.get_number_opt(in_json jsonb, in_default double precision)
+returns double precision
+immutable
+as
+$$
+declare
+  v_json_type text;
+begin
+  v_json_type := jsonb_typeof(in_json);
+
+  if v_json_type is null or v_json_type = 'null' then
+    return in_default;
+  end if;
+
+  if v_json_type != 'number' then
+    perform error.raise_invalid_input_param_value('Json is not a number');
+  end if;
+
+  return in_json;
+end;
+$$
+language 'plpgsql';
+
+-- drop function json.get_number_opt(jsonb, text, double precision);
+
+create or replace function json.get_number_opt(in_json jsonb, in_name text, in_default double precision)
+returns double precision
+immutable
+as
+$$
+declare
+  v_param jsonb;
+  v_param_type text;
+begin
+  assert in_name is not null;
+
+  v_param := json.get_object(in_json)->in_name;
+
+  v_param_type := jsonb_typeof(v_param);
+
+  if v_param_type is null or v_param_type = 'null' then
+    return in_default;
+  end if;
+
+  if v_param_type != 'number' then
+    perform error.raise_invalid_input_param_value('Attribute "%s" is not a number', in_name);
+  end if;
+
+  return v_param;
+end;
+$$
+language 'plpgsql';
+
 -- drop function json.get_object(json, text);
 
 create or replace function json.get_object(in_json json, in_name text default null::text)
@@ -4633,6 +4943,182 @@ begin
     foreach v_json in array array ['''{"key": []}''', '''{"key": "qwe"}''', '''{"key": {}}''', '''{"key": true}''', '''{"key": null}'''] loop
       perform test.assert_throw(
         'select json.get_integer(' || v_json || '::' || v_json_type || ', ''key'')',
+        '%key% is not a number');
+    end loop;
+  end loop;
+end;
+$$
+language 'plpgsql';
+
+-- drop function json_test.get_number_array_opt_should_throw_for_invalid_json_elem_type();
+
+create or replace function json_test.get_number_array_opt_should_throw_for_invalid_json_elem_type()
+returns void
+immutable
+as
+$$
+declare
+  v_json_type text;
+  v_json text;
+begin
+  foreach v_json_type in array array ['json', 'jsonb'] loop
+    foreach v_json in array array ['''[[]]''', '''["qwe"]''', '''[{}]''', '''[true]''', '''[null]'''] loop
+      perform test.assert_throw(
+        'select json.get_number_array_opt(' || v_json || '::' || v_json_type || ', null)',
+        'Json is not a number array');
+    end loop;
+  end loop;
+end;
+$$
+language 'plpgsql';
+
+-- drop function json_test.get_number_array_opt_should_throw_for_invalid_param_elem_type();
+
+create or replace function json_test.get_number_array_opt_should_throw_for_invalid_param_elem_type()
+returns void
+immutable
+as
+$$
+declare
+  v_json_type text;
+  v_json text;
+begin
+  foreach v_json_type in array array ['json', 'jsonb'] loop
+    foreach v_json in array array ['''{"key": [[]]}''', '''{"key": ["qwe"]}''', '''{"key": [{}]}''', '''{"key": [true]}''', '''{"key": [null]}'''] loop
+      perform test.assert_throw(
+        'select json.get_number_array_opt(' || v_json || '::' || v_json_type || ', ''key'', null)',
+        '%key% is not a number array');
+    end loop;
+  end loop;
+end;
+$$
+language 'plpgsql';
+
+-- drop function json_test.get_number_array_should_throw_for_invalid_json_elem_type();
+
+create or replace function json_test.get_number_array_should_throw_for_invalid_json_elem_type()
+returns void
+immutable
+as
+$$
+declare
+  v_json_type text;
+  v_json text;
+begin
+  foreach v_json_type in array array ['json', 'jsonb'] loop
+    foreach v_json in array array ['''[[]]''', '''["qwe"]''', '''[{}]''', '''[true]''', '''[null]'''] loop
+      perform test.assert_throw(
+        'select json.get_number_array(' || v_json || '::' || v_json_type || ')',
+        'Json is not a number array');
+    end loop;
+  end loop;
+end;
+$$
+language 'plpgsql';
+
+-- drop function json_test.get_number_array_should_throw_for_invalid_param_elem_type();
+
+create or replace function json_test.get_number_array_should_throw_for_invalid_param_elem_type()
+returns void
+immutable
+as
+$$
+declare
+  v_json_type text;
+  v_json text;
+begin
+  foreach v_json_type in array array ['json', 'jsonb'] loop
+    foreach v_json in array array ['''{"key": [[]]}''', '''{"key": ["qwe"]}''', '''{"key": [{}]}''', '''{"key": [true]}''', '''{"key": [null]}'''] loop
+      perform test.assert_throw(
+        'select json.get_number_array(' || v_json || '::' || v_json_type || ', ''key'')',
+        '%key% is not a number array');
+    end loop;
+  end loop;
+end;
+$$
+language 'plpgsql';
+
+-- drop function json_test.get_number_opt_should_throw_for_invalid_json_type();
+
+create or replace function json_test.get_number_opt_should_throw_for_invalid_json_type()
+returns void
+immutable
+as
+$$
+declare
+  v_json_type text;
+  v_json text;
+begin
+  foreach v_json_type in array array ['json', 'jsonb'] loop
+    foreach v_json in array array ['''[]''', '''"qwe"''', '''{}''', '''true'''] loop
+      perform test.assert_throw(
+        'select json.get_number_opt(' || v_json || '::' || v_json_type || ', null)',
+        'Json is not a number');
+    end loop;
+  end loop;
+end;
+$$
+language 'plpgsql';
+
+-- drop function json_test.get_number_opt_should_throw_for_invalid_param_type();
+
+create or replace function json_test.get_number_opt_should_throw_for_invalid_param_type()
+returns void
+immutable
+as
+$$
+declare
+  v_json_type text;
+  v_json text;
+begin
+  foreach v_json_type in array array ['json', 'jsonb'] loop
+    foreach v_json in array array ['''{"key": []}''', '''{"key": "qwe"}''', '''{"key": {}}''', '''{"key": true}'''] loop
+      perform test.assert_throw(
+        'select json.get_number_opt(' || v_json || '::' || v_json_type || ', ''key'', null)',
+        '%key% is not a number');
+    end loop;
+  end loop;
+end;
+$$
+language 'plpgsql';
+
+-- drop function json_test.get_number_should_throw_for_invalid_json_type();
+
+create or replace function json_test.get_number_should_throw_for_invalid_json_type()
+returns void
+immutable
+as
+$$
+declare
+  v_json_type text;
+  v_json text;
+begin
+  foreach v_json_type in array array ['json', 'jsonb'] loop
+    foreach v_json in array array ['''[]''', '''"qwe"''', '''{}''', '''true''', '''null'''] loop
+      perform test.assert_throw(
+        'select json.get_number(' || v_json || '::' || v_json_type || ')',
+        'Json is not a number');
+    end loop;
+  end loop;
+end;
+$$
+language 'plpgsql';
+
+-- drop function json_test.get_number_should_throw_for_invalid_param_type();
+
+create or replace function json_test.get_number_should_throw_for_invalid_param_type()
+returns void
+immutable
+as
+$$
+declare
+  v_json_type text;
+  v_json text;
+begin
+  foreach v_json_type in array array ['json', 'jsonb'] loop
+    foreach v_json in array array ['''{"key": []}''', '''{"key": "qwe"}''', '''{"key": {}}''', '''{"key": true}''', '''{"key": null}'''] loop
+      perform test.assert_throw(
+        'select json.get_number(' || v_json || '::' || v_json_type || ', ''key'')',
         '%key% is not a number');
     end loop;
   end loop;
@@ -7356,17 +7842,12 @@ as
 $$
 declare
   v_object_code text := json.get_string(in_params);
-  v_param jsonb;
 begin
   perform data.get_active_actor_id(in_client_id);
+  perform json.get_number(in_user_params, 'param');
 
   assert in_request_id is not null;
   assert in_default_params is null;
-  assert in_user_params ? 'param';
-
-  v_param = in_user_params->'param';
-
-  assert jsonb_typeof(v_param) = 'number';
 
   perform api_utils.create_notification(
     in_client_id,
