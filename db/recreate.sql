@@ -497,7 +497,9 @@ declare
   v_user_params jsonb := json.get_object_opt(in_message, 'user_params', null);
   v_actor_id integer;
   v_function text;
+  v_default_params jsonb;
 begin
+  assert in_message ? 'params';
   assert in_client_id is not null;
   assert in_request_id is not null;
 
@@ -511,8 +513,8 @@ begin
     raise exception 'Client % has no active actor', in_client_id;
   end if;
 
-  select function
-  into v_function
+  select function, default_params
+  into v_function, v_default_params
   from data.actions
   where code = v_action_code;
 
@@ -520,8 +522,8 @@ begin
     raise exception 'Function with code % not found', v_action_code;
   end if;
 
-  execute format('select %s($1, $2, $3, $4)', v_function)
-  using in_client_id, in_request_id, v_params, v_user_params;
+  execute format('select %s($1, $2, $3, $4, $5)', v_function)
+  using in_client_id, in_request_id, v_params, v_user_params, v_default_params;
 end;
 $$
 language 'plpgsql';
@@ -6301,19 +6303,20 @@ end;
 $$
 language 'plpgsql';
 
--- drop function test_project.do_nothing_action(integer, text, jsonb, jsonb);
+-- drop function test_project.do_nothing_action(integer, text, jsonb, jsonb, jsonb);
 
-create or replace function test_project.do_nothing_action(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb)
+create or replace function test_project.do_nothing_action(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
 returns void
 volatile
 as
 $$
-declare
-  v_actor_id integer := data.get_active_actor_id(in_client_id);
 begin
+  perform data.get_active_actor_id(in_client_id);
+
   assert in_request_id is not null;
-  assert in_params = jsonb '{}';
+  assert in_params = jsonb 'null';
   assert in_user_params is null;
+  assert in_default_params is null;
 
   perform api_utils.create_notification(in_client_id, in_request_id, 'action', jsonb '{"action": "do_nothing"}');
 end;
@@ -6350,7 +6353,7 @@ begin
   returning id into v_description_attribute_id;
 
   -- И первая группа в шаблоне
-  v_template_groups := array_append(v_template_groups, jsonb '{"code": "common", "attributes": ["description"]}');
+  v_template_groups := array_append(v_template_groups, jsonb '{"code": "common", "attributes": ["description"], "actions": ["action"]}');
 
   -- Создадим актора по умолчанию, который является первым тестом
   insert into data.objects(code) values('test1') returning id into v_test_id;
@@ -6421,13 +6424,15 @@ begin
 Проверка 2: Если клиент преобразует получаемый от сервера текст в какую-то разметку, то все полученные данные должны экранироваться.
 Если клиент использует HTML, то он должен экранировать три символа: амперсанд, меньше и больше. Так, в предыдущем пункте должен быть текст br, окружённый символами "меньше" и "больше", а в тексте далее должен быть явно виден символ "амперсанд" и не должно быть символа "больше": &gt;.
 
-Проверка 3: После запуска приложения пользователю не показывали какие-то диалоги.
+Проверка 3: Эта строка отделена от предыдущей пустой строкой (т.е. есть два перевода строки).
+
+Проверка 4: После запуска приложения пользователю не показывали какие-то диалоги.
 Приложение само запросило с сервера список акторов, само выбрало в качестве активного первый (в конце концов, в большинстве случаев список будет состоять из одного пункта, а мы не хотим заставлять пользователя делать лишние действия) и само же открыло объект этого выбранного актора.
 
-Проверка 4: Приложение выводит только заголовок, подзаголовок и атрибуты, присутствующие в шаблоне. В данном конкретном случае нигде не выведен тип объекта ("test").
+Проверка 5: Приложение выводит только заголовок, подзаголовок и атрибуты, присутствующие в шаблоне. В данном конкретном случае нигде не выведен тип объекта ("test").
 Считаем, что приложение честно не выводит атрибуты, отсутствующие в шаблоне и не являющиеся заголовком или подзаголовком, и верим, что атрибут с кодом "type" не обрабатывается особым образом :)
 
-Проверка 5: Ниже есть ссылка с именем "Продолжить", ведущая на следующий тест. Приложение по нажатию на эту ссылку должно перейти к следующему объекту.
+Проверка 6: Ниже есть ссылка с именем "Продолжить", ведущая на следующий тест. Приложение по нажатию на эту ссылку должно перейти к следующему объекту.
 
 [Продолжить](babcom:test' || v_test_num || ')')
   );
@@ -6495,7 +6500,7 @@ Markdown — формат, который все реализуют по-раз�
       v_test_id,
       v_next_attr_id,
       to_jsonb(text
-'Проверка: Эта строка находится в новом атрибуте. Она должна быть отделена от предыдущей, причём желательно, чтобы это разделение было визуально отлично от обычного начала новой строки.
+'**Проверка:** Эта строка находится в новом атрибуте. Она должна быть отделена от предыдущей, причём желательно, чтобы это разделение было визуально отлично от обычного начала новой строки.
 
 [Продолжить](babcom:test' || v_test_num || ')')
     );
@@ -6548,7 +6553,7 @@ Markdown — формат, который все реализуют по-раз�
       to_jsonb(text
 'Проверяем вывод нетекстовых атрибутов.
 
-Проверка: Ниже выведены числа -42 и 0.0314159265 (именно так, а не в экспоненциальной записи!).')
+**Проверка:** Ниже выведены числа -42 и 0.0314159265 (именно так, а не в экспоненциальной записи!).')
     ),
     (v_test_id, v_int_attr_id, jsonb '-42'),
     (v_test_id, v_float_attr_id, jsonb '0.0314159265'),
@@ -6612,7 +6617,7 @@ Markdown — формат, который все реализуют по-раз�
       to_jsonb(text
 'Проверяем вывод описаний значений атрибутов.
 
-Проверка: Ниже выведены строки "минус сорок два", "π / 100" и "∫x dx = ½x² + C".')
+**Проверка:** Ниже выведены строки "минус сорок два", "π / 100" и "∫x dx = ½x² + C".')
     ),
     (v_test_id, v_int_attr_id, jsonb '-42'),
     (v_test_id, v_float_attr_id, jsonb '0.0314159265'),
@@ -6671,7 +6676,7 @@ Markdown — формат, который все реализуют по-раз�
       to_jsonb(text
 'Проверяем вывод описаний значений атрибутов с форматированием.
 
-Проверка: Ниже выведена жирная строка "один" и наклонная строка "два".')
+**Проверка:** Ниже выведена жирная строка "один" и наклонная строка "два".')
     ),
     (v_test_id, v_int1_attr_id, jsonb '1'),
     (v_test_id, v_int2_attr_id, jsonb '2'),
@@ -6727,7 +6732,7 @@ Markdown — формат, который все реализуют по-раз�
       v_test_id,
       v_next_attr_id,
       to_jsonb(text
-'Проверка: Эта строка находится в новой группе. Должно быть явно видно, где закончилась предыдущая группа и началась новая.
+'**Проверка:** Эта строка находится в новой группе. Должно быть явно видно, где закончилась предыдущая группа и началась новая.
 
 [Продолжить](babcom:test' || v_test_num || ')')
     );
@@ -6760,7 +6765,7 @@ Markdown — формат, который все реализуют по-раз�
       v_test_id,
       v_description_attr_id,
       to_jsonb(text
-'Проверка: У этой группы есть имя. Мы должны видеть текст "Короткое имя группы".
+'**Проверка:** У этой группы есть имя. Мы должны видеть текст "Короткое имя группы".
 
 [Продолжить](babcom:test' || v_test_num || ')')
     );
@@ -6819,13 +6824,13 @@ Markdown — формат, который все реализуют по-раз�
       to_jsonb(text
 'Теперь имя будет и у группы, и у её атрибутов.
 
-Проверка 1: Ниже есть ещё одна группа с именем "Тестовые данные".
-Проверка 2: Первый атрибут в группе имеет имя "Атрибут 1" и не имеет значения и описания значения.
-Проверка 3: Второй атрибут имеет длинное имя, которое не влезает в одну строку, начинается с "Атрибут с очень" и не имеет значения и описания значения.
-Проверка 4: Третий атрибут имеет имя "Атрибут 3" и значение "100".
-Проверка 5: Четвёртый атрибут имеет имя, начинающееся с "Ещё один атрибут" и также не влезающее в одну строку. Атрибут имеет довольно длинное описание значения, начинающееся с "Lorem ipsum".
-Проверка 6: Слово ipsum должно быть жирным.
-Проверка 7: Все атрибуты идут именно в указанном порядке.')
+**Проверка 1:** Ниже есть ещё одна группа с именем "Тестовые данные".
+**Проверка 2:** Первый атрибут в группе имеет имя "Атрибут 1" и не имеет значения и описания значения.
+**Проверка 3:** Второй атрибут имеет длинное имя, которое не влезает в одну строку, начинается с "Атрибут с очень" и не имеет значения и описания значения.
+**Проверка 4:** Третий атрибут имеет имя "Атрибут 3" и значение "100".
+**Проверка 5:** Четвёртый атрибут имеет имя, начинающееся с "Ещё один атрибут" и также не влезающее в одну строку. Атрибут имеет довольно длинное описание значения, начинающееся с "Lorem ipsum".
+**Проверка 6:** Слово ipsum должно быть жирным.
+**Проверка 7:** Все атрибуты идут именно в указанном порядке.')
     ),
     (v_test_id, v_short_attr_id, null),
     (v_test_id, v_long_attr_id, null),
@@ -6924,15 +6929,15 @@ Markdown — формат, который все реализуют по-раз�
     insert into data.attribute_values(object_id, attribute_id, value) values
     (v_test_id, v_type_attribute_id, jsonb '"test"'),
     (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
-    (v_test_id, v_actions_function_attribute_id, jsonb '"test_project.simple_actions"'),
+    (v_test_id, v_actions_function_attribute_id, jsonb '"test_project.simple_actions_generator"'),
     (
       v_test_id,
       v_description_attribute_id,
       to_jsonb(text
 'Ниже выведена группа, в которой нет атрибутов, только действия. Тест проверяет только отображение действий — все активные действия не имеют параметров, подтверждений, ничего не делают и возвращают do_nothing.
 
-Проверка 1: Первым идёт действие без имени, затем с именем "Действие", затем снова действие без имени, а в самом конце — с именем "Заблокированное действие".
-Проверка 2: Последние два действия заблокированы — отличаются внешне и не могут быть выполнены (например, кнопки не нажимаются).')
+**Проверка 1:** Первым идёт действие без имени, затем с именем "Действие", затем снова действие без имени, а в самом конце — с именем "Заблокированное действие".
+**Проверка 2:** Последние два действия заблокированы — отличаются внешне и не могут быть выполнены (например, кнопки не нажимаются).')
     ),
     (
       v_test_id,
@@ -6945,13 +6950,8 @@ Markdown — формат, который все реализуют по-раз�
 
   declare
     v_test_prefix text := 'test' || v_test_num || '_';
-    v_description_attr_id integer;
     v_next_attr_id integer;
   begin
-    insert into data.attributes(code, type, card_type, can_be_overridden)
-    values(v_test_prefix || 'description', 'normal', 'full', true)
-    returning id into v_description_attr_id;
-
     insert into data.attributes(code, type, card_type, can_be_overridden)
     values(v_test_prefix || 'next', 'normal', 'full', true)
     returning id into v_next_attr_id;
@@ -6960,16 +6960,8 @@ Markdown — формат, который все реализуют по-раз�
       array_append(
         v_template_groups,
         format(
-          '{"code": "%s", "attributes": ["%s"], "actions": ["%s"]}',
-          v_test_prefix || 'group1',
-          v_test_prefix || 'description',
-          v_test_prefix || 'action')::jsonb);
-    v_template_groups :=
-      array_append(
-        v_template_groups,
-        format(
           '{"code": "%s", "attributes": ["%s"]}',
-          v_test_prefix || 'group2',
+          v_test_prefix || 'group',
           v_test_prefix || 'next')::jsonb);
 
     insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
@@ -6977,14 +6969,14 @@ Markdown — формат, который все реализуют по-раз�
     insert into data.attribute_values(object_id, attribute_id, value) values
     (v_test_id, v_type_attribute_id, jsonb '"test"'),
     (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
-    (v_test_id, v_actions_function_attribute_id, jsonb '"test_project.one_simple_action"'),
+    (v_test_id, v_actions_function_attribute_id, jsonb '"test_project.simple_action_generator"'),
     (
       v_test_id,
-      v_description_attr_id,
+      v_description_attribute_id,
       to_jsonb(text
 'В этой группе есть и атрибут, и действие.
 
-Проверка: Действие идёт после данного текста.')
+**Проверка:** Действие идёт после данного текста.')
     ),
     (
       v_test_id,
@@ -7023,15 +7015,15 @@ Markdown — формат, который все реализуют по-раз�
     insert into data.attribute_values(object_id, attribute_id, value) values
     (v_test_id, v_type_attribute_id, jsonb '"test"'),
     (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
-    (v_test_id, v_actions_function_attribute_id, jsonb '"test_project.one_simple_action"'),
+    (v_test_id, v_actions_function_attribute_id, jsonb '"test_project.object_action_generator"'),
     (
       v_test_id,
       v_description_attribute_id,
       to_jsonb(text
 'В этом тесте есть атрибуты и действия с совпадающими кодами, они должны обрабатываться независимо.
 
-Проверка 1: В следующей группе есть только действие.
-Проверка 2: В последней группе есть только ссылка на следующий тест.')
+**Проверка 1:** В следующей группе есть только действие.
+**Проверка 2:** В последней группе есть только ссылка на следующий тест.')
     ),
     (
       v_test_id,
@@ -7052,9 +7044,9 @@ Markdown — формат, который все реализуют по-раз�
     v_test_id,
     v_description_attribute_id,
     to_jsonb(text
-'Атрибуты title и subtitle не входят в шаблон и должны обрабатываться клиентом особым образом.
+'Атрибуты *title* и *subtitle* не входят в шаблон и должны обрабатываться клиентом особым образом.
 
-Проверка: У данного объекта есть заголовок "Jabberwocky".
+**Проверка:** У данного объекта есть заголовок "Jabberwocky".
 
 [Продолжить](babcom:test' || v_test_num || ')')
   );
@@ -7072,7 +7064,7 @@ Markdown — формат, который все реализуют по-раз�
     v_test_id,
     v_description_attribute_id,
     to_jsonb(text
-'Проверка: У данного объекта помимо заголовка есть ещё и подзаголовок "Ролевая игра".
+'**Проверка:** У данного объекта помимо заголовка есть ещё и подзаголовок "Ролевая игра".
 
 [Продолжить](babcom:test' || v_test_num || ')')
   );
@@ -7093,9 +7085,33 @@ Markdown — формат, который все реализуют по-раз�
 'Предполагается, что заголовок и подзаголовок — однострочники. Заголовок выводится крупным кеглем, а подзаголовок под ним — кеглем меньше. Возможно, даже другим шрифтом :)
 Экраны телефонов у всех разные, так что даже относительно короткие тексты могут не войти. Такие тексты не нужно скроллировать по горизонтали или выводить в несколько строк, достаточно просто обрезать.
 
-Проверка: У данного объекта и заголовок обрезаны.
+**Проверка:** У данного объекта и заголовок обрезаны.
 
 [Продолжить](babcom:test' || v_test_num || ')')
+  );
+
+  -- Действие без подтверждения и параметров
+
+  insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
+  insert into data.actions (code, function, default_params)
+  values (
+    'next_action_with_null_params',
+    'test_project.next_action_with_null_params',
+    format('{"object_code": "%s"}', 'test' || v_test_num)::jsonb);
+  v_test_num := v_test_num + 1;
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_test_id, v_type_attribute_id, jsonb '"test"'),
+  (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
+  (v_test_id, v_actions_function_attribute_id, jsonb '"test_project.next_action_with_null_params_generator"'),
+  (v_test_id, v_title_attribute_id, format('"Тест %s"', v_test_num - 1)::jsonb),
+  (
+    v_test_id,
+    v_description_attribute_id,
+    to_jsonb(text
+'Начинаем проверять обработку действий.
+Атрибут *params* должен передаваться в неизменном виде. В действии ниже атрибут *params* равен *null*.
+
+**Проверка 1:** Действие ниже перейдёт к следующему объекту.')
   );
 
   -- todo действия
@@ -7120,9 +7136,50 @@ end;
 $$
 language 'plpgsql';
 
--- drop function test_project.one_simple_action(integer, integer);
+-- drop function test_project.next_action_with_null_params(integer, text, jsonb, jsonb, jsonb);
 
-create or replace function test_project.one_simple_action(in_object_id integer, in_actor_id integer)
+create or replace function test_project.next_action_with_null_params(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_object_code text := json.get_string(in_default_params, 'object_code');
+begin
+  perform data.get_active_actor_id(in_client_id);
+
+  assert in_request_id is not null;
+  assert in_params = jsonb 'null';
+  assert in_user_params is null;
+
+  perform api_utils.create_notification(
+    in_client_id,
+    in_request_id,
+    'action',
+    format('{"action": "open_object", "object_id": "%s"}', v_object_code)::jsonb);
+end;
+$$
+language 'plpgsql';
+
+-- drop function test_project.next_action_with_null_params_generator(integer, integer);
+
+create or replace function test_project.next_action_with_null_params_generator(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+begin
+  assert data.get_object_code(in_object_id) is not null;
+  assert in_actor_id is not null;
+
+  return jsonb '{"action": {"code": "next_action_with_null_params", "name": "Далее", "disabled": false, "params": null}}';
+end;
+$$
+language 'plpgsql';
+
+-- drop function test_project.object_action_generator(integer, integer);
+
+create or replace function test_project.object_action_generator(in_object_id integer, in_actor_id integer)
 returns jsonb
 volatile
 as
@@ -7132,16 +7189,30 @@ declare
 begin
   assert in_actor_id is not null;
 
-  return jsonb_build_object(
-    v_object_code || '_action',
-    jsonb '{"code": "do_nothing", "name": "Не тыкай сюда!", "disabled": false, "params": {}}');
+  return format('{"%s_action": {"code": "do_nothing", "name": "Не тыкай сюда!", "disabled": false, "params": null}}', v_object_code)::jsonb;
 end;
 $$
 language 'plpgsql';
 
--- drop function test_project.simple_actions(integer, integer);
+-- drop function test_project.simple_action_generator(integer, integer);
 
-create or replace function test_project.simple_actions(in_object_id integer, in_actor_id integer)
+create or replace function test_project.simple_action_generator(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+begin
+  perform data.get_object_code(in_object_id);
+  assert in_actor_id is not null;
+
+  return jsonb '{"action": {"code": "do_nothing", "name": "Не тыкай сюда!", "disabled": false, "params": null}}';
+end;
+$$
+language 'plpgsql';
+
+-- drop function test_project.simple_actions_generator(integer, integer);
+
+create or replace function test_project.simple_actions_generator(in_object_id integer, in_actor_id integer)
 returns jsonb
 volatile
 as
@@ -7153,9 +7224,9 @@ begin
 
   return jsonb_build_object(
     v_object_code || '_unnamed',
-    jsonb '{"code": "do_nothing", "disabled": false, "params": {}}',
+    jsonb '{"code": "do_nothing", "disabled": false, "params": null}',
     v_object_code || '_named',
-    jsonb '{"code": "do_nothing", "name": "Действие", "disabled": false, "params": {}}',
+    jsonb '{"code": "do_nothing", "name": "Действие", "disabled": false, "params": null}',
     v_object_code || '_unnamed_disabled',
     jsonb '{"disabled": true}',
     v_object_code || '_named_disabled',
@@ -7202,11 +7273,12 @@ create table data.actions(
   id integer not null generated always as identity,
   code text not null,
   function text not null,
+  default_params jsonb,
   constraint actions_pk primary key(id),
   constraint actions_unique_code unique(code)
 );
 
-comment on column data.actions.function is 'Имя функции для выполнения действия. Функция вызывается с параметрами (client_id, request_id, params, user_params). Функция должна либо бросить исключение, либо сгенерировать сообщение клиенту.';
+comment on column data.actions.function is 'Имя функции для выполнения действия. Функция вызывается с параметрами (client_id, request_id, params, user_params, default_params), где params - параметры, передаваемые на клиент и возвращаемые с него в неизменном виде, user_params - параметры, вводимые пользователем, default_params - параметры, прописанные в данной таблице. Функция должна либо бросить исключение, либо сгенерировать сообщение клиенту.';
 
 -- drop table data.attribute_values;
 

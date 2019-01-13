@@ -11,7 +11,9 @@ declare
   v_user_params jsonb := json.get_object_opt(in_message, 'user_params', null);
   v_actor_id integer;
   v_function text;
+  v_default_params jsonb;
 begin
+  assert in_message ? 'params';
   assert in_client_id is not null;
   assert in_request_id is not null;
 
@@ -25,8 +27,8 @@ begin
     raise exception 'Client % has no active actor', in_client_id;
   end if;
 
-  select function
-  into v_function
+  select function, default_params
+  into v_function, v_default_params
   from data.actions
   where code = v_action_code;
 
@@ -34,8 +36,8 @@ begin
     raise exception 'Function with code % not found', v_action_code;
   end if;
 
-  execute format('select %s($1, $2, $3, $4)', v_function)
-  using in_client_id, in_request_id, v_params, v_user_params;
+  execute format('select %s($1, $2, $3, $4, $5)', v_function)
+  using in_client_id, in_request_id, v_params, v_user_params, v_default_params;
 end;
 $$
 language 'plpgsql';

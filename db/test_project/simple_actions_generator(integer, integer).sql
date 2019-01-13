@@ -1,6 +1,6 @@
--- drop function test_project.simple_actions(integer, integer);
+-- drop function test_project.simple_actions_generator(integer, integer);
 
-create or replace function test_project.simple_actions(in_object_id integer, in_actor_id integer)
+create or replace function test_project.simple_actions_generator(in_object_id integer, in_actor_id integer)
 returns jsonb
 volatile
 as
@@ -12,9 +12,9 @@ begin
 
   return jsonb_build_object(
     v_object_code || '_unnamed',
-    jsonb '{"code": "do_nothing", "disabled": false, "params": {}}',
+    jsonb '{"code": "do_nothing", "disabled": false, "params": null}',
     v_object_code || '_named',
-    jsonb '{"code": "do_nothing", "name": "Действие", "disabled": false, "params": {}}',
+    jsonb '{"code": "do_nothing", "name": "Действие", "disabled": false, "params": null}',
     v_object_code || '_unnamed_disabled',
     jsonb '{"disabled": true}',
     v_object_code || '_named_disabled',
