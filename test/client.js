@@ -29,10 +29,30 @@ function newMessage(msg)
 	messages.insertBefore(message, messages.firstChild);
 }
 
-function sendMessage()
+function setFullMessage(message_text)
 {
 	var text_field = document.getElementById('send_text');
-	socket.send(text_field.value);
+	text_field.value = message_text;
+}
+
+function createOldMessageCallback(message_text)
+{
+	return () => setFullMessage(message_text);
+}
+
+function sendMessage()
+{
+	var message_text = document.getElementById('send_text').value;
+
+	var message = document.createElement('div');
+	message.className = 'client_message';
+	message.innerHTML = '⇒ ' + JSON.parse(message_text)['type'];
+	message.onclick = createOldMessageCallback(message_text);
+
+	var messages = document.getElementById('messages');
+	messages.insertBefore(message, messages.firstChild);
+
+	socket.send(message_text);
 	return false;
 }
 
@@ -65,7 +85,7 @@ function setMessage(type, data)
 	text_field.value = '{\n\t"request_id": "1",\n\t"type": "' + type + '",\n\t"data": ' + data + '\n}';
 }
 
-function createCallback(key)
+function createRequestCallback(key)
 {
 	return () => setMessage(key, requests[key]);
 }
@@ -77,7 +97,7 @@ function generateRequests()
 	{
 		var request = document.createElement('div');
 		request.className = 'request';
-		request.onclick = createCallback(key);
+		request.onclick = createRequestCallback(key);
 		request.innerText = key;
 		parent.appendChild(request);
 	}
