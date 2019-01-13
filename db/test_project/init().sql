@@ -187,7 +187,7 @@ Markdown — формат, который все реализуют по-раз�
     v_test_prefix text := 'test' || v_test_num || '_';
     v_description_attr_id integer;
     v_int_attr_id integer;
-    v_float_attr_id integer;
+    v_double_attr_id integer;
     v_next_attr_id integer;
   begin
     insert into data.attributes(code, type, card_type, can_be_overridden)
@@ -199,8 +199,8 @@ Markdown — формат, который все реализуют по-раз�
     returning id into v_int_attr_id;
 
     insert into data.attributes(code, type, card_type, can_be_overridden)
-    values(v_test_prefix || 'float', 'normal', 'full', true)
-    returning id into v_float_attr_id;
+    values(v_test_prefix || 'double', 'normal', 'full', true)
+    returning id into v_double_attr_id;
 
     insert into data.attributes(code, type, card_type, can_be_overridden)
     values(v_test_prefix || 'next', 'normal', 'full', true)
@@ -214,7 +214,7 @@ Markdown — формат, который все реализуют по-раз�
           v_test_prefix || 'group',
           v_test_prefix || 'description',
           v_test_prefix || 'integer',
-          v_test_prefix || 'float',
+          v_test_prefix || 'double',
           v_test_prefix || 'next')::jsonb);
 
     insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
@@ -231,7 +231,7 @@ Markdown — формат, который все реализуют по-раз�
 **Проверка:** Ниже выведены числа -42 и 0.0314159265 (именно так, а не в экспоненциальной записи!).')
     ),
     (v_test_id, v_int_attr_id, jsonb '-42'),
-    (v_test_id, v_float_attr_id, jsonb '0.0314159265'),
+    (v_test_id, v_double_attr_id, jsonb '0.0314159265'),
     (
       v_test_id,
       v_next_attr_id,
@@ -245,7 +245,7 @@ Markdown — формат, который все реализуют по-раз�
     v_test_prefix text := 'test' || v_test_num || '_';
     v_description_attr_id integer;
     v_int_attr_id integer;
-    v_float_attr_id integer;
+    v_double_attr_id integer;
     v_string_attr_id integer;
     v_next_attr_id integer;
   begin
@@ -258,8 +258,8 @@ Markdown — формат, который все реализуют по-раз�
     returning id into v_int_attr_id;
 
     insert into data.attributes(code, value_description_function, type, card_type, can_be_overridden)
-    values(v_test_prefix || 'float', 'test_project.test_value_description_function', 'normal', 'full', true)
-    returning id into v_float_attr_id;
+    values(v_test_prefix || 'double', 'test_project.test_value_description_function', 'normal', 'full', true)
+    returning id into v_double_attr_id;
 
     insert into data.attributes(code, value_description_function, type, card_type, can_be_overridden)
     values(v_test_prefix || 'string', 'test_project.test_value_description_function', 'normal', 'full', true)
@@ -277,7 +277,7 @@ Markdown — формат, который все реализуют по-раз�
           v_test_prefix || 'group',
           v_test_prefix || 'description',
           v_test_prefix || 'integer',
-          v_test_prefix || 'float',
+          v_test_prefix || 'double',
           v_test_prefix || 'string',
           v_test_prefix || 'next')::jsonb);
 
@@ -295,7 +295,7 @@ Markdown — формат, который все реализуют по-раз�
 **Проверка:** Ниже выведены строки "минус сорок два", "π / 100" и "∫x dx = ½x² + C".')
     ),
     (v_test_id, v_int_attr_id, jsonb '-42'),
-    (v_test_id, v_float_attr_id, jsonb '0.0314159265'),
+    (v_test_id, v_double_attr_id, jsonb '0.0314159265'),
     (v_test_id, v_string_attr_id, jsonb '"integral"'),
     (
       v_test_id,
@@ -847,10 +847,110 @@ Markdown — формат, который все реализуют по-раз�
     to_jsonb(text
 'Действия с подтверждениями.
 
-**Проверка 1:** По нажатию на кнопку ниже появляется текст "Вы действительно хотите перейти к следующему объекту?" и кнопки "ОК" и "Отмена".
-**Проверка 2:** По нажатию на кнопку "Отмена" ничего не происходит.
-**Проверка 3:** По нажатию на кнопку "ОК" переходим к следующему тесту.')
+**Проверка 1:** По нажатию на кнопку ниже появляется диалог текстом "Вы действительно хотите перейти к следующему объекту?" и кнопками "ОК" и "Отмена".
+**Проверка 2:** По нажатию на кнопку "Отмена" диалог закрывается и более ничего не происходит.
+**Проверка 3:** По нажатию на кнопку "ОК" происходит переход к следующему тесту.')
   );
+
+  -- Действие со строковым параметром
+
+  insert into data.actions(code, function)
+  values('next_action_with_text_user_param', 'test_project.next_action_with_text_user_param');
+
+  insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
+  v_test_num := v_test_num + 1;
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_test_id, v_type_attribute_id, jsonb '"test"'),
+  (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
+  (v_test_id, v_actions_function_attribute_id, jsonb '"test_project.next_action_with_text_user_param_generator"'),
+  (v_test_id, v_title_attribute_id, format('"Тест %s"', v_test_num - 1)::jsonb),
+  (
+    v_test_id,
+    v_description_attribute_id,
+    to_jsonb(text
+'Действие со строковым параметром.
+
+**Проверка 1:** По нажатию на кнопку ниже появляется форма с именем параметра "Текстовая строка", полем для ввода строки и кнопками "ОК" и "Отмена".
+**Проверка 2:** По нажатию на кнопку "Отмена" форма закрывается и более ничего не происходит.
+**Проверка 3:** В поле можно ввести только одну строку, Enter не срабатывает.
+**Проверка 4:** По нажатию на кноку "ОК" происходит переход к следующему тесту.')
+  );
+
+  -- Действие с текстовым многострочным параметром
+
+  insert into data.actions(code, function)
+  values('next_action_with_multiline_user_param', 'test_project.next_action_with_multiline_user_param');
+
+  insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
+  v_test_num := v_test_num + 1;
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_test_id, v_type_attribute_id, jsonb '"test"'),
+  (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
+  (v_test_id, v_actions_function_attribute_id, jsonb '"test_project.next_action_with_multiline_user_param_generator"'),
+  (v_test_id, v_title_attribute_id, format('"Тест %s"', v_test_num - 1)::jsonb),
+  (
+    v_test_id,
+    v_description_attribute_id,
+    to_jsonb(text
+'Действие с многострочным текстовым параметром.
+
+**Проверка:** В поле можно ввести несколько строк текста.')
+  );
+
+  -- Действие, принимающее в качестве параметра целое число
+
+  insert into data.actions(code, function)
+  values('next_action_with_integer_user_param', 'test_project.next_action_with_integer_user_param');
+
+  insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
+  v_test_num := v_test_num + 1;
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_test_id, v_type_attribute_id, jsonb '"test"'),
+  (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
+  (v_test_id, v_actions_function_attribute_id, jsonb '"test_project.next_action_with_integer_user_param_generator"'),
+  (v_test_id, v_title_attribute_id, format('"Тест %s"', v_test_num - 1)::jsonb),
+  (
+    v_test_id,
+    v_description_attribute_id,
+    to_jsonb(text
+'Действие, принимающее в качестве параметра целое число.
+Здесь и далее: клиент может позволять вводить в поля значения, не удовлетворяющие ограничениям. Это может быть удобно, например, для вставки текста из буфера обмена и последующего редактирования значения.
+
+**Проверка 1:** Кнопка "ОК" формы заблокирована и разблокируется только после ввода корректного целого числа.
+**Проверка 2:** Как только поле ввода перестаёт содержать целое число, кнопка "ОК" снова блокируется.
+**Проверка 3:** Пользователю сообщают, почему кнопка "ОК" заблокирована.')
+  );
+
+  -- Действие, принимающее в качестве параметра число с плавающей запятой
+
+  insert into data.actions(code, function)
+  values('next_action_with_double_user_param', 'test_project.next_action_with_double_user_param');
+
+  insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
+  v_test_num := v_test_num + 1;
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_test_id, v_type_attribute_id, jsonb '"test"'),
+  (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
+  (v_test_id, v_actions_function_attribute_id, jsonb '"test_project.next_action_with_double_user_param_generator"'),
+  (v_test_id, v_title_attribute_id, format('"Тест %s"', v_test_num - 1)::jsonb),
+  (
+    v_test_id,
+    v_description_attribute_id,
+    to_jsonb(text
+'Действие, принимающее в качестве параметра число с плавающей запятой.
+Клиент вправе как разрешить, так и запретить ввод чисел в экспоненциальной записи.
+
+**Проверка 1:** Кнопка "ОК" формы заблокирована и разблокируется только после ввода корректного числа (целого или с плавающей запятой).
+**Проверка 2:** Как только поле ввода перестаёт содержать корректное число, кнопка "ОК" снова блокируется.
+**Проверка 3:** Пользователю сообщают, почему кнопка "ОК" заблокирована.')
+  );
+
+  -- с ограничениями
+  -- с min = max
+  -- с длинной 0
+  -- со значениями по умолчанию
+  -- несколько параметров
+  -- с параметрами и предупреждением
 
   -- todo действия
   -- todo и прочие тесты
