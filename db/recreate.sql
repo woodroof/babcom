@@ -6921,8 +6921,8 @@ Markdown — формат, который все реализуют по-раз�
           v_test_prefix || 'group2',
           v_test_prefix || 'next')::jsonb);
 
-    insert into data.actions (code, function)
-    values ('do_nothing', 'test_project.do_nothing_action');
+    insert into data.actions(code, function)
+    values('do_nothing', 'test_project.do_nothing_action');
 
     insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
     v_test_num := v_test_num + 1;
@@ -7090,11 +7090,11 @@ Markdown — формат, который все реализуют по-раз�
 [Продолжить](babcom:test' || v_test_num || ')')
   );
 
-  -- Действие без подтверждения и параметров
+  -- Действие без подтверждения и параметров, params null
 
   insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
-  insert into data.actions (code, function, default_params)
-  values (
+  insert into data.actions(code, function, default_params)
+  values(
     'next_action_with_null_params',
     'test_project.next_action_with_null_params',
     format('{"object_code": "%s"}', 'test' || v_test_num)::jsonb);
@@ -7110,6 +7110,49 @@ Markdown — формат, который все реализуют по-раз�
     to_jsonb(text
 'Начинаем проверять обработку действий.
 Атрибут *params* должен передаваться в неизменном виде. В действии ниже атрибут *params* равен *null*.
+
+**Проверка 1:** Действие ниже перейдёт к следующему объекту.')
+  );
+
+  -- Действие без подтверждения и параметров, params - объект
+
+  insert into data.actions(code, function)
+  values('next_action_with_object_params', 'test_project.next_action_with_object_params');
+
+  insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
+  v_test_num := v_test_num + 1;
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_test_id, v_type_attribute_id, jsonb '"test"'),
+  (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
+  (v_test_id, v_actions_function_attribute_id, jsonb '"test_project.next_action_with_object_params_generator"'),
+  (v_test_id, v_title_attribute_id, format('"Тест %s"', v_test_num - 1)::jsonb),
+  (
+    v_test_id,
+    v_description_attribute_id,
+    to_jsonb(text
+'Теперь атрибут *params* является объектом.
+
+**Проверка 1:** Действие ниже перейдёт к следующему объекту.')
+  );
+
+  -- Действие без подтверждения и параметров, params - массив
+
+  insert into data.actions(code, function)
+  values('next_action_with_array_params', 'test_project.next_action_with_array_params');
+
+  insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
+  v_test_num := v_test_num + 1;
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_test_id, v_type_attribute_id, jsonb '"test"'),
+  (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
+  (v_test_id, v_actions_function_attribute_id, jsonb '"test_project.next_action_with_array_params_generator"'),
+  (v_test_id, v_title_attribute_id, format('"Тест %s"', v_test_num - 1)::jsonb),
+  (
+    v_test_id,
+    v_description_attribute_id,
+    to_jsonb(text
+'И, наконец, атрибут *params* является массивом.
+Если этот тест и предыдущие два сработали, то считаем, что клиент честно передаёт *params* в неизменном виде, а не сделал специальную обработку null''а, объекта и массива :)
 
 **Проверка 1:** Действие ниже перейдёт к следующему объекту.')
   );
@@ -7131,7 +7174,55 @@ Markdown — формат, который все реализуют по-раз�
 
   -- Заполним шаблон
   insert into data.params(code, value, description)
-  values ('template', jsonb_build_object('groups', to_jsonb(v_template_groups)), 'Шаблон');
+  values('template', jsonb_build_object('groups', to_jsonb(v_template_groups)), 'Шаблон');
+end;
+$$
+language 'plpgsql';
+
+-- drop function test_project.next_action_with_array_params(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function test_project.next_action_with_array_params(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_array jsonb := json.get_array(in_params);
+  v_array_len integer := jsonb_array_length(v_array);
+  v_object_code text;
+begin
+  perform data.get_active_actor_id(in_client_id);
+
+  assert in_request_id is not null;
+  assert in_user_params is null;
+  assert in_default_params is null;
+
+  assert v_array_len = 1;
+
+  v_object_code := json.get_string(v_array->0);
+
+  perform api_utils.create_notification(
+    in_client_id,
+    in_request_id,
+    'action',
+    format('{"action": "open_object", "object_id": "%s"}', test_project.next_code(v_object_code))::jsonb);
+end;
+$$
+language 'plpgsql';
+
+-- drop function test_project.next_action_with_array_params_generator(integer, integer);
+
+create or replace function test_project.next_action_with_array_params_generator(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_object_code text := data.get_object_code(in_object_id);
+begin
+  assert in_actor_id is not null;
+
+  return format('{"action": {"code": "next_action_with_array_params", "name": "Далее", "disabled": false, "params": ["%s"]}}', v_object_code)::jsonb;
 end;
 $$
 language 'plpgsql';
@@ -7156,7 +7247,7 @@ begin
     in_client_id,
     in_request_id,
     'action',
-    format('{"action": "open_object", "object_id": "%s"}', v_object_code)::jsonb);
+    format('{"action": "open_object", "object_id": "%s"}', test_project.next_code(v_object_code))::jsonb);
 end;
 $$
 language 'plpgsql';
@@ -7169,10 +7260,68 @@ volatile
 as
 $$
 begin
-  assert data.get_object_code(in_object_id) is not null;
+  perform data.get_object_code(in_object_id);
   assert in_actor_id is not null;
 
   return jsonb '{"action": {"code": "next_action_with_null_params", "name": "Далее", "disabled": false, "params": null}}';
+end;
+$$
+language 'plpgsql';
+
+-- drop function test_project.next_action_with_object_params(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function test_project.next_action_with_object_params(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_object_code text := json.get_string(in_params, 'object_code');
+begin
+  perform data.get_active_actor_id(in_client_id);
+
+  assert in_request_id is not null;
+  assert in_user_params is null;
+  assert in_default_params is null;
+
+  perform api_utils.create_notification(
+    in_client_id,
+    in_request_id,
+    'action',
+    format('{"action": "open_object", "object_id": "%s"}', test_project.next_code(v_object_code))::jsonb);
+end;
+$$
+language 'plpgsql';
+
+-- drop function test_project.next_action_with_object_params_generator(integer, integer);
+
+create or replace function test_project.next_action_with_object_params_generator(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_object_code text := data.get_object_code(in_object_id);
+begin
+  assert in_actor_id is not null;
+
+  return format('{"action": {"code": "next_action_with_object_params", "name": "Далее", "disabled": false, "params": {"object_code": "%s"}}}', v_object_code)::jsonb;
+end;
+$$
+language 'plpgsql';
+
+-- drop function test_project.next_code(text);
+
+create or replace function test_project.next_code(in_code text)
+returns text
+volatile
+as
+$$
+declare
+  v_prefix text := trim(trailing '0123456789' from in_code);
+  v_suffix integer := substring(in_code from char_length(v_prefix) + 1)::integer;
+begin
+  return v_prefix || (v_suffix + 1)::text;
 end;
 $$
 language 'plpgsql';

@@ -596,8 +596,8 @@ Markdown — формат, который все реализуют по-раз�
           v_test_prefix || 'group2',
           v_test_prefix || 'next')::jsonb);
 
-    insert into data.actions (code, function)
-    values ('do_nothing', 'test_project.do_nothing_action');
+    insert into data.actions(code, function)
+    values('do_nothing', 'test_project.do_nothing_action');
 
     insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
     v_test_num := v_test_num + 1;
@@ -765,11 +765,11 @@ Markdown — формат, который все реализуют по-раз�
 [Продолжить](babcom:test' || v_test_num || ')')
   );
 
-  -- Действие без подтверждения и параметров
+  -- Действие без подтверждения и параметров, params null
 
   insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
-  insert into data.actions (code, function, default_params)
-  values (
+  insert into data.actions(code, function, default_params)
+  values(
     'next_action_with_null_params',
     'test_project.next_action_with_null_params',
     format('{"object_code": "%s"}', 'test' || v_test_num)::jsonb);
@@ -785,6 +785,49 @@ Markdown — формат, который все реализуют по-раз�
     to_jsonb(text
 'Начинаем проверять обработку действий.
 Атрибут *params* должен передаваться в неизменном виде. В действии ниже атрибут *params* равен *null*.
+
+**Проверка 1:** Действие ниже перейдёт к следующему объекту.')
+  );
+
+  -- Действие без подтверждения и параметров, params - объект
+
+  insert into data.actions(code, function)
+  values('next_action_with_object_params', 'test_project.next_action_with_object_params');
+
+  insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
+  v_test_num := v_test_num + 1;
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_test_id, v_type_attribute_id, jsonb '"test"'),
+  (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
+  (v_test_id, v_actions_function_attribute_id, jsonb '"test_project.next_action_with_object_params_generator"'),
+  (v_test_id, v_title_attribute_id, format('"Тест %s"', v_test_num - 1)::jsonb),
+  (
+    v_test_id,
+    v_description_attribute_id,
+    to_jsonb(text
+'Теперь атрибут *params* является объектом.
+
+**Проверка 1:** Действие ниже перейдёт к следующему объекту.')
+  );
+
+  -- Действие без подтверждения и параметров, params - массив
+
+  insert into data.actions(code, function)
+  values('next_action_with_array_params', 'test_project.next_action_with_array_params');
+
+  insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
+  v_test_num := v_test_num + 1;
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_test_id, v_type_attribute_id, jsonb '"test"'),
+  (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
+  (v_test_id, v_actions_function_attribute_id, jsonb '"test_project.next_action_with_array_params_generator"'),
+  (v_test_id, v_title_attribute_id, format('"Тест %s"', v_test_num - 1)::jsonb),
+  (
+    v_test_id,
+    v_description_attribute_id,
+    to_jsonb(text
+'И, наконец, атрибут *params* является массивом.
+Если этот тест и предыдущие два сработали, то считаем, что клиент честно передаёт *params* в неизменном виде, а не сделал специальную обработку null''а, объекта и массива :)
 
 **Проверка 1:** Действие ниже перейдёт к следующему объекту.')
   );
@@ -806,7 +849,7 @@ Markdown — формат, который все реализуют по-раз�
 
   -- Заполним шаблон
   insert into data.params(code, value, description)
-  values ('template', jsonb_build_object('groups', to_jsonb(v_template_groups)), 'Шаблон');
+  values('template', jsonb_build_object('groups', to_jsonb(v_template_groups)), 'Шаблон');
 end;
 $$
 language 'plpgsql';
