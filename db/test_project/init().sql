@@ -27,6 +27,10 @@ begin
   values('description', 'normal', 'full', true)
   returning id into v_description_attribute_id;
 
+  -- Атрибут для состояния теста
+  insert into data.attributes(code, type, can_be_overridden)
+  values('test_state', 'system', true);
+
   -- И первая группа в шаблоне
   v_template_groups := array_append(v_template_groups, jsonb '{"code": "common", "attributes": ["description"], "actions": ["action"]}');
 
@@ -945,18 +949,48 @@ Markdown — формат, который все реализуют по-раз�
 **Проверка 3:** Пользователю сообщают, почему кнопка "ОК" заблокирована.')
   );
 
-  -- с ограничениями
-  -- с min = max
-  -- с длинной 0
-  -- со значениями по умолчанию
-  -- несколько параметров
-  -- с параметрами и предупреждением
+  -- todo прочие тесты на действия:
+  --   - с ограничениями
+  --     - \n - один символ, emoji - тоже, модификаторы - на усмотрение
+  --   - с min = max
+  --   - с длиной 0
+  --   - со значениями по умолчанию
+  --   - несколько параметров
+  --   - с параметрами и предупреждением
 
-  -- todo действия
+  -- Тест на автоматическую смену актора по действию
+
+  insert into data.actions(code, function)
+  values('login', 'test_project.login_action');
+
+  insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
+  v_test_num := v_test_num + 1;
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_test_id, v_type_attribute_id, jsonb '"test"'),
+  (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
+  (v_test_id, v_actions_function_attribute_id, jsonb '"test_project.login_action_generator"'),
+  (v_test_id, v_title_attribute_id, format('"Тест %s"', v_test_num - 1)::jsonb),
+  (
+    v_test_id,
+    v_description_attribute_id,
+    to_jsonb(text
+'По действию ниже произойдёт изменение списка доступных акторов.
+
+**Проверка 1:** Клиент автоматически выберает нового актора, пользователю никакие списки не показываются.
+**Проверка 2:** Происходит переход на следующий тест.')
+  );
+
+  -- И далее в предыдущем тесте проверки на:
+  --   - изменение атрибутов по явному действию
+
+  -- todo прочие тесты на изменения объекта (атрибуты, действия)
+  -- todo прибавить к v_test_num нужное значение
+
+  -- todo списки
   -- todo и прочие тесты
 
   -- Финал!
-  insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
+  insert into data.objects(code) values('fin') returning id into v_test_id;
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_test_id, v_type_attribute_id, jsonb '"test"'),
   (v_test_id, v_is_visible_attribute_id, jsonb 'true'),

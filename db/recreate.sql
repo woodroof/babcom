@@ -1888,6 +1888,39 @@ end;
 $$
 language 'plpgsql';
 
+-- drop function data.set_login(integer, integer);
+
+create or replace function data.set_login(in_client_id integer, in_login_id integer)
+returns void
+volatile
+as
+$$
+declare
+  v_is_connected boolean;
+begin
+  update data.clients
+  set
+    login_id = in_login_id,
+    actor_id = null
+  returning is_connected
+  into v_is_connected;
+
+  assert v_is_connected is not null;
+
+  if v_is_connected is true then
+    delete from data.client_subscription_objects
+    where client_subscription_id in (
+      select id
+      from data.client_subscriptions
+      where client_id = in_client_id);
+
+    delete from data.client_subscriptions
+    where client_id = in_client_id;
+  end if;
+end;
+$$
+language 'plpgsql';
+
 -- drop function error.raise_invalid_input_param_value(text);
 
 create or replace function error.raise_invalid_input_param_value(in_message text)
@@ -6838,6 +6871,10 @@ begin
   values('description', 'normal', 'full', true)
   returning id into v_description_attribute_id;
 
+  -- Атрибут для состояния теста
+  insert into data.attributes(code, type, can_be_overridden)
+  values('test_state', 'system', true);
+
   -- И первая группа в шаблоне
   v_template_groups := array_append(v_template_groups, jsonb '{"code": "common", "attributes": ["description"], "actions": ["action"]}');
 
@@ -7756,18 +7793,48 @@ Markdown — формат, который все реализуют по-раз�
 **Проверка 3:** Пользователю сообщают, почему кнопка "ОК" заблокирована.')
   );
 
-  -- с ограничениями
-  -- с min = max
-  -- с длинной 0
-  -- со значениями по умолчанию
-  -- несколько параметров
-  -- с параметрами и предупреждением
+  -- todo прочие тесты на действия:
+  --   - с ограничениями
+  --     - \n - один символ, emoji - тоже, модификаторы - на усмотрение
+  --   - с min = max
+  --   - с длиной 0
+  --   - со значениями по умолчанию
+  --   - несколько параметров
+  --   - с параметрами и предупреждением
 
-  -- todo действия
+  -- Тест на автоматическую смену актора по действию
+
+  insert into data.actions(code, function)
+  values('login', 'test_project.login_action');
+
+  insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
+  v_test_num := v_test_num + 1;
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_test_id, v_type_attribute_id, jsonb '"test"'),
+  (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
+  (v_test_id, v_actions_function_attribute_id, jsonb '"test_project.login_action_generator"'),
+  (v_test_id, v_title_attribute_id, format('"Тест %s"', v_test_num - 1)::jsonb),
+  (
+    v_test_id,
+    v_description_attribute_id,
+    to_jsonb(text
+'По действию ниже произойдёт изменение списка доступных акторов.
+
+**Проверка 1:** Клиент автоматически выберает нового актора, пользователю никакие списки не показываются.
+**Проверка 2:** Происходит переход на следующий тест.')
+  );
+
+  -- И далее в предыдущем тесте проверки на:
+  --   - изменение атрибутов по явному действию
+
+  -- todo прочие тесты на изменения объекта (атрибуты, действия)
+  -- todo прибавить к v_test_num нужное значение
+
+  -- todo списки
   -- todo и прочие тесты
 
   -- Финал!
-  insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
+  insert into data.objects(code) values('fin') returning id into v_test_id;
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_test_id, v_type_attribute_id, jsonb '"test"'),
   (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
@@ -7781,6 +7848,80 @@ Markdown — формат, который все реализуют по-раз�
   -- Заполним шаблон
   insert into data.params(code, value, description)
   values('template', jsonb_build_object('groups', to_jsonb(v_template_groups)), 'Шаблон');
+end;
+$$
+language 'plpgsql';
+
+-- drop function test_project.login_action(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function test_project.login_action(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_title text := test_project.next_code(json.get_string(in_params));
+  v_login_id integer;
+  v_object_id integer;
+begin
+  perform data.get_active_actor_id(in_client_id);
+
+  assert in_request_id is not null;
+  assert in_user_params is null;
+  assert in_default_params is null;
+
+  -- Создадим новый логин
+  insert into data.logins
+  default values
+  returning id into v_login_id;
+
+  -- Создадим действия для тестов на изменение объекта
+  insert into data.actions(code, function)
+  values('diff', 'test_project.diff_action');
+
+  -- Создадим тест
+  insert into data.objects
+  default values
+  returning id into v_object_id;
+
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_object_id, data.get_attribute_id('type'), jsonb '"test"'),
+  (v_object_id, data.get_attribute_id('is_visible'), jsonb 'true'),
+  -- todo
+  --(v_object_id, data.get_attribute_id('actions_function'), jsonb '"test_project.diff_generator"'),
+  (v_object_id, data.get_attribute_id('title'), to_jsonb(v_title)),
+  (
+    v_object_id,
+    data.get_attribute_id('description'),
+    to_jsonb(text
+-- todo что-нибудь про заголовок в списке акторов, атрибут test_state
+'Ура!')
+  );
+
+  -- Привяжем тест к логину
+  insert into data.login_actors(login_id, actor_id)
+  values(v_login_id, v_object_id);
+
+  -- Заменим логин
+  perform data.set_login(in_client_id, v_login_id);
+
+  -- И отправим новый список акторов
+  perform api_utils.process_get_actors_message(in_client_id, in_request_id);
+end;
+$$
+language 'plpgsql';
+
+-- drop function test_project.login_action_generator(integer, integer);
+
+create or replace function test_project.login_action_generator(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_title text := json.get_string(data.get_attribute_value(in_object_id, 'title', in_actor_id));
+begin
+  return format('{"action": {"code": "login", "name": "Далее", "disabled": false, "params": "%s"}}', v_title)::jsonb;
 end;
 $$
 language 'plpgsql';
