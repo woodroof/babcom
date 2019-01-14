@@ -13,7 +13,7 @@ begin
   assert in_user_params is null;
   assert in_default_params is null;
 
-  perform api_utils.create_notification(in_client_id, in_request_id, 'action', jsonb '{"action": "do_nothing"}');
+  perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
 end;
 $$
 language 'plpgsql';
