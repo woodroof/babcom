@@ -673,6 +673,7 @@ declare
   v_is_visible boolean;
   v_subscription_exists boolean;
   v_object jsonb;
+  v_list jsonb;
 begin
   assert in_client_id is not null;
 
@@ -768,7 +769,13 @@ begin
 
   v_object := data.get_object(v_object_id, v_actor_id, 'full', v_object_id);
 
-  perform api_utils.create_notification(in_client_id, in_request_id, 'object', v_object);
+  -- Получаем список, если есть
+  if v_object->'attributes' ? 'content' then
+    v_list := data.get_next_list(in_client_id, in_object_id);
+    perform api_utils.create_notification(in_client_id, in_request_id, 'object', jsonb_build_object('object', v_object, 'list', v_list));
+  else
+    perform api_utils.create_notification(in_client_id, in_request_id, 'object', jsonb_build_object('object', v_object));
+  end if;
 end;
 $$
 language 'plpgsql';
@@ -1398,7 +1405,7 @@ begin
       continue;
     end if;
 
-    v_objects := array_append(v_objects, json.get_object(data.get_object(v_object.id, in_actor_id, 'mini', in_object_id), 'object'));
+    v_objects := array_append(v_objects, data.get_object(v_object.id, in_actor_id, 'mini', in_object_id));
 
     v_count := v_count + 1;
   end loop;
@@ -1412,7 +1419,56 @@ language 'plpgsql';
 
 create or replace function data.get_object(in_object_id integer, in_actor_id integer, in_card_type data.card_type, in_actions_object_id integer)
 returns jsonb
-volatile
+stable
+as
+$$
+declare
+  v_object_data jsonb := data.get_object_data(in_object_id, in_actor_id, in_card_type, in_actions_object_id);
+  v_attributes jsonb := json.get_object(v_object_data, 'attributes');
+  v_actions jsonb := json.get_object_opt(v_object_data, 'actions', null);
+  v_template jsonb := data.get_param('template');
+  v_object jsonb;
+  v_list jsonb;
+begin
+  -- Отфильтровываем из шаблона лишнее
+  v_template := data.filter_template(v_template, v_attributes, v_actions);
+
+  return jsonb_build_object('id', data.get_object_code(in_object_id), 'attributes', v_attributes, 'actions', coalesce(v_actions, jsonb '{}'), 'template', v_template);
+end;
+$$
+language 'plpgsql';
+
+-- drop function data.get_object_code(integer);
+
+create or replace function data.get_object_code(in_object_id integer)
+returns text
+stable
+as
+$$
+declare
+  v_object_code text;
+begin
+  assert in_object_id is not null;
+
+  select code
+  into v_object_code
+  from data.objects
+  where id = in_object_id;
+
+  if v_object_code is null then
+    raise exception 'Can''t find object %', in_object_id;
+  end if;
+
+  return v_object_code;
+end;
+$$
+language 'plpgsql';
+
+-- drop function data.get_object_data(integer, integer, data.card_type, integer);
+
+create or replace function data.get_object_data(in_object_id integer, in_actor_id integer, in_card_type data.card_type, in_actions_object_id integer)
+returns jsonb
+stable
 as
 $$
 declare
@@ -1425,9 +1481,6 @@ declare
     data.get_attribute_id(case when in_object_id = in_actions_object_id then 'actions_function' else 'list_actions_function' end);
   v_actions_function text;
   v_actions jsonb;
-  v_template jsonb := data.get_param('template');
-  v_object jsonb;
-  v_list jsonb;
 begin
   assert in_object_id is not null;
   assert in_actor_id is not null;
@@ -1509,46 +1562,7 @@ begin
     end if;
   end if;
 
-  -- Отфильтровываем из шаблона лишнее
-  v_template := data.filter_template(v_template, v_attributes, v_actions);
-
-  v_object :=
-    jsonb_build_object('id', data.get_object_code(in_object_id), 'attributes', coalesce(v_attributes, jsonb '{}'), 'actions', coalesce(v_actions, jsonb '{}'), 'template', v_template);
-
-  if v_attributes ? 'content' then
-    assert in_card_type = 'full';
-
-    v_list := data.get_next_list(in_client_id, in_object_id);
-    return jsonb_build_object('object', v_object, 'list', v_list);
-  end if;
-
-  return jsonb_build_object('object', v_object);
-end;
-$$
-language 'plpgsql';
-
--- drop function data.get_object_code(integer);
-
-create or replace function data.get_object_code(in_object_id integer)
-returns text
-stable
-as
-$$
-declare
-  v_object_code text;
-begin
-  assert in_object_id is not null;
-
-  select code
-  into v_object_code
-  from data.objects
-  where id = in_object_id;
-
-  if v_object_code is null then
-    raise exception 'Can''t find object %', in_object_id;
-  end if;
-
-  return v_object_code;
+  return jsonb_build_object('attributes', v_attributes, 'actions', v_actions);
 end;
 $$
 language 'plpgsql';
@@ -1655,7 +1669,8 @@ begin
   (
     'actions_function',
     null,
-    'Функция, вызываемая перед получением действий объекта, string. Вызывается с параметрами (object_id, actor_id) и возвращает действия.',
+    'Функция, вызываемая перед получением действий объекта, string. Вызывается с параметрами (object_id, actor_id) и возвращает действия.
+Функция не может изменять объекты базы данных, т.е. должна быть stable или immutable.',
     'system',
     null,
     null,
@@ -1684,7 +1699,8 @@ begin
   (
     'list_actions_function',
     null,
-    'Функция, вызываемая перед получением действий объекта списка, string. Вызывается с параметрами (object_id, list_object_id, actor_id) и возвращает действия.',
+    'Функция, вызываемая перед получением действий объекта списка, string. Вызывается с параметрами (object_id, list_object_id, actor_id) и возвращает действия.
+Функция не может изменять объекты базы данных, т.е. должна быть stable или immutable.',
     'system',
     null,
     null,
@@ -8476,7 +8492,8 @@ create table data.attributes(
 );
 
 comment on column data.attributes.card_type is 'Если null, то применимо ко всем типам карточек';
-comment on column data.attributes.value_description_function is 'Имя функции для получения описания значения атрибута. Функция вызывается с параметрами (attribute_id, value, actor_id).';
+comment on column data.attributes.value_description_function is 'Имя функции для получения описания значения атрибута. Функция вызывается с параметрами (attribute_id, value, actor_id).
+Функция не может изменять объекты базы данных, т.е. должна быть stable или immutable.';
 comment on column data.attributes.can_be_overridden is 'Если false, то значение атрибута не может переопределяться для объектов';
 
 -- drop table data.client_subscription_objects;

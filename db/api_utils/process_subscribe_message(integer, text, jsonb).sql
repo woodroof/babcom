@@ -16,6 +16,7 @@ declare
   v_is_visible boolean;
   v_subscription_exists boolean;
   v_object jsonb;
+  v_list jsonb;
 begin
   assert in_client_id is not null;
 
@@ -111,7 +112,13 @@ begin
 
   v_object := data.get_object(v_object_id, v_actor_id, 'full', v_object_id);
 
-  perform api_utils.create_notification(in_client_id, in_request_id, 'object', v_object);
+  -- Получаем список, если есть
+  if v_object->'attributes' ? 'content' then
+    v_list := data.get_next_list(in_client_id, in_object_id);
+    perform api_utils.create_notification(in_client_id, in_request_id, 'object', jsonb_build_object('object', v_object, 'list', v_list));
+  else
+    perform api_utils.create_notification(in_client_id, in_request_id, 'object', jsonb_build_object('object', v_object));
+  end if;
 end;
 $$
 language 'plpgsql';

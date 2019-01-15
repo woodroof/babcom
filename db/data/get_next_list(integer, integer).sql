@@ -83,7 +83,7 @@ begin
       continue;
     end if;
 
-    v_objects := array_append(v_objects, json.get_object(data.get_object(v_object.id, in_actor_id, 'mini', in_object_id), 'object'));
+    v_objects := array_append(v_objects, data.get_object(v_object.id, in_actor_id, 'mini', in_object_id));
 
     v_count := v_count + 1;
   end loop;
