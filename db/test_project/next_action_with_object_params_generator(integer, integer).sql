@@ -2,7 +2,7 @@
 
 create or replace function test_project.next_action_with_object_params_generator(in_object_id integer, in_actor_id integer)
 returns jsonb
-volatile
+stable
 as
 $$
 declare

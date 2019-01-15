@@ -1123,7 +1123,7 @@ language 'plpgsql';
 
 create or replace function data.get_active_actor_id(in_client_id integer)
 returns integer
-volatile
+stable
 as
 $$
 declare
@@ -1192,7 +1192,7 @@ language 'plpgsql';
 
 create or replace function data.get_attribute_value(in_object_id integer, in_attribute_name text)
 returns jsonb
-volatile
+stable
 as
 $$
 declare
@@ -1219,7 +1219,7 @@ language 'plpgsql';
 
 create or replace function data.get_attribute_value(in_object_id integer, in_attribute_name text, in_actor_id integer)
 returns jsonb
-volatile
+stable
 as
 $$
 declare
@@ -7919,7 +7919,7 @@ language 'plpgsql';
 
 create or replace function test_project.login_action_generator(in_object_id integer, in_actor_id integer)
 returns jsonb
-volatile
+stable
 as
 $$
 declare
@@ -7965,7 +7965,7 @@ language 'plpgsql';
 
 create or replace function test_project.next_action_with_array_params_generator(in_object_id integer, in_actor_id integer)
 returns jsonb
-volatile
+stable
 as
 $$
 declare
@@ -8007,7 +8007,7 @@ language 'plpgsql';
 
 create or replace function test_project.next_action_with_double_user_param_generator(in_object_id integer, in_actor_id integer)
 returns jsonb
-volatile
+stable
 as
 $$
 declare
@@ -8063,7 +8063,7 @@ language 'plpgsql';
 
 create or replace function test_project.next_action_with_integer_user_param_generator(in_object_id integer, in_actor_id integer)
 returns jsonb
-volatile
+stable
 as
 $$
 declare
@@ -8119,7 +8119,7 @@ language 'plpgsql';
 
 create or replace function test_project.next_action_with_multiline_user_param_generator(in_object_id integer, in_actor_id integer)
 returns jsonb
-volatile
+stable
 as
 $$
 declare
@@ -8177,7 +8177,7 @@ language 'plpgsql';
 
 create or replace function test_project.next_action_with_null_params_generator(in_object_id integer, in_actor_id integer)
 returns jsonb
-volatile
+stable
 as
 $$
 begin
@@ -8218,7 +8218,7 @@ language 'plpgsql';
 
 create or replace function test_project.next_action_with_object_params_generator(in_object_id integer, in_actor_id integer)
 returns jsonb
-volatile
+stable
 as
 $$
 declare
@@ -8261,7 +8261,7 @@ language 'plpgsql';
 
 create or replace function test_project.next_action_with_text_user_param_generator(in_object_id integer, in_actor_id integer)
 returns jsonb
-volatile
+stable
 as
 $$
 declare
@@ -8311,7 +8311,7 @@ language 'plpgsql';
 
 create or replace function test_project.next_code(in_code text)
 returns text
-volatile
+immutable
 as
 $$
 declare
@@ -8327,7 +8327,7 @@ language 'plpgsql';
 
 create or replace function test_project.object_action_generator(in_object_id integer, in_actor_id integer)
 returns jsonb
-volatile
+stable
 as
 $$
 declare
@@ -8344,7 +8344,7 @@ language 'plpgsql';
 
 create or replace function test_project.simple_action_generator(in_object_id integer, in_actor_id integer)
 returns jsonb
-volatile
+stable
 as
 $$
 begin
@@ -8360,7 +8360,7 @@ language 'plpgsql';
 
 create or replace function test_project.simple_actions_generator(in_object_id integer, in_actor_id integer)
 returns jsonb
-volatile
+stable
 as
 $$
 declare

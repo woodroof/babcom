@@ -2,7 +2,7 @@
 
 create or replace function data.get_attribute_value(in_object_id integer, in_attribute_name text)
 returns jsonb
-volatile
+stable
 as
 $$
 declare

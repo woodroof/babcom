@@ -2,7 +2,7 @@
 
 create or replace function data.get_active_actor_id(in_client_id integer)
 returns integer
-volatile
+stable
 as
 $$
 declare

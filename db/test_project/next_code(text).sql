@@ -2,7 +2,7 @@
 
 create or replace function test_project.next_code(in_code text)
 returns text
-volatile
+immutable
 as
 $$
 declare
