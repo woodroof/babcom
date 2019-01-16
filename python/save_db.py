@@ -353,7 +353,7 @@ select
       attisdropped = false
   ) as columns,
   (
-    select array_agg(c.conname || ' ' || (case when c.conbin is null then pg_get_constraintdef(c.oid) else 'check' || c.consrc end) order by c.conname)
+    select array_agg(c.conname || ' ' || (case when c.conbin is null then pg_get_constraintdef(c.oid) else 'check' || (case when c.consrc like '(%%' then c.consrc else '(' || c.consrc || ')' end) end) order by c.conname)
     from pg_constraint c
     where
       conrelid = t.oid and
