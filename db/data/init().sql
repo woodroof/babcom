@@ -26,7 +26,7 @@ begin
     null,
     false
   ),
-  ('content', null, 'Массив идентификаторов объектов списка, integer[]', 'hidden', 'full', null, false),
+  ('content', null, 'Массив идентификаторов объектов списка, integer[]', 'hidden', 'full', null, true),
   (
     'full_card_function',
     null,

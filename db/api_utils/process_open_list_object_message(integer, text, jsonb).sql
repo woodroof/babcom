@@ -11,6 +11,7 @@ declare
   v_object_id integer;
   v_list_object_id integer;
   v_content integer[];
+  v_is_visible boolean;
   v_actor_id integer;
   v_list_element_function text;
 begin
@@ -44,10 +45,16 @@ begin
     raise exception 'Attempt to open non-existing list object %', v_list_object_code;
   end if;
 
-  v_content := json.get_integer_array(data.get_attribute_value(v_object_id, 'content'));
+  v_content := json.get_integer_array(data.get_attribute_value(v_object_id, 'content', v_actor_id));
 
   if array_position(v_content, v_list_object_id) is null then
     raise exception 'Object % has no list object %', v_object_code, v_list_object_code;
+  end if;
+
+  v_is_visible := json.get_boolean(data.get_attribute_value(v_list_object_id, 'is_visible', v_actor_id));
+
+  if v_is_visible is false then
+    raise exception 'List object % is not visible', v_list_object_code;
   end if;
 
   -- Вызываем функцию открытия элемента списка, если есть

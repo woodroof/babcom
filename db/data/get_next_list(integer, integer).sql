@@ -30,8 +30,8 @@ begin
 
   assert v_actor_id is not null;
 
-  v_content = json.get_integer_array(data.get_attribute_value(in_object_id, 'content'));
-  assert intarray.uniq(intarray.sort(v_content)) = v_content;
+  v_content = json.get_integer_array(data.get_attribute_value(in_object_id, 'content', v_actor_id));
+  assert intarray.uniq(intarray.sort(v_content)) = intarray.sort(v_content);
 
   v_content_length := array_length(v_content, 1);
 
