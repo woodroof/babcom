@@ -7,7 +7,7 @@ as
 $$
 declare
   v_login_id integer;
-  v_actor_function text;
+  v_actor_function record;
   v_actor record;
   v_title text;
   v_subtitle text;
@@ -31,14 +31,14 @@ begin
   end if;
 
   for v_actor_function in
-    select json.get_string_opt(data.get_attribute_value(actor_id, 'actor_function'), null) as actor_function
+    select actor_id, json.get_string_opt(data.get_attribute_value(actor_id, 'actor_function'), null) as actor_function
     from data.login_actors
     where login_id = v_login_id
     for share
   loop
     if v_actor_function is not null then
-      execute format('select %s($1)', v_actor_function)
-      using v_actor_id;
+      execute format('select %s($1)', v_actor_function.actor_function)
+      using v_actor_function.actor_id;
     end if;
   end loop;
 
