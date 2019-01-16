@@ -1929,6 +1929,7 @@ begin
   set
     login_id = in_login_id,
     actor_id = null
+  where id = in_client_id
   returning is_connected
   into v_is_connected;
 
