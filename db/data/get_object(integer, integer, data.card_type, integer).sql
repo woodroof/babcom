@@ -10,8 +10,6 @@ declare
   v_attributes jsonb := json.get_object(v_object_data, 'attributes');
   v_actions jsonb := json.get_object_opt(v_object_data, 'actions', null);
   v_template jsonb := data.get_param('template');
-  v_object jsonb;
-  v_list jsonb;
 begin
   -- Отфильтровываем из шаблона лишнее
   v_template := data.filter_template(v_template, v_attributes, v_actions);

@@ -1043,6 +1043,162 @@ end;
 $$
 language 'plpgsql';
 
+-- drop function data.change_object(integer, jsonb, integer);
+
+create or replace function data.change_object(in_object_id integer, in_changes jsonb, in_actor_id integer default null::integer)
+returns jsonb
+volatile
+as
+$$
+-- В параметре in_changes приходит массив объектов с полями id, value_object_id, value
+-- Если присутствует, value_object_id меняет именно значение, задаваемое для указанного объекта
+-- Если value отсутствует (именно отсутствует, а не равно jsonb 'null'!), то указанное значение удаляется, в противном случае - устанавливается
+
+-- Возвращается массив с полями client_id и object
+declare
+  v_full_card_function text := json.get_string_opt(data.get_attribute_value(in_object_id, 'full_card_function'), null);
+  v_client_id integer;
+  v_actor_id integer;
+  v_original_values jsonb := jsonb '{}';
+  v_change record;
+  v_new_data jsonb;
+  v_template jsonb := data.get_param('template');
+  v_attributes jsonb;
+  v_actions jsonb;
+  v_filtered_template jsonb;
+  v_ret_val jsonb[];
+begin
+  perform json.get_object_array(in_changes);
+
+  perform *
+  from data.objects
+  where id = in_object_id
+  for update;
+
+  -- todo: Обработать изменение списка
+
+  -- Сохраним атрибуты и действия для всех клиентов, подписанных на получение изменений данного объекта
+  for v_client_id in
+  (
+    select client_id
+    from data.client_subscriptions
+    where object_id = in_object_id
+  )
+  loop
+    v_actor_id := data.get_active_actor_id(v_client_id);
+    v_original_values :=
+      v_original_values ||
+      jsonb_build_object(
+        v_client_id::text,
+        data.get_object_data(in_object_id, v_actor_id, 'full', in_object_id));
+  end loop;
+
+  -- Меняем состояние объекта
+  for v_change in
+  (
+    select
+      json.get_integer(value, 'id') as id,
+      json.get_integer_opt(value, 'value_object_id', null) as value_object_id,
+      value->'value' as value
+    from jsonb_array_elements(in_changes)
+  )
+  loop
+    if v_change.value is null then
+      perform data.delete_attribute_value(in_object_id, v_change.id, v_change.value_object_id, in_actor_id);
+    else
+      perform data.set_attribute_value(in_object_id, v_change.id, v_change.value, v_change.value_object_id, in_actor_id);
+    end if;
+  end loop;
+
+  -- Берём новые атрибуты и действия для тех же клиентов
+  for v_client_id in
+  (
+    select client_id
+    from data.client_subscriptions
+    where object_id = in_object_id
+  )
+  loop
+    v_actor_id := data.get_active_actor_id(v_client_id);
+
+    if v_full_card_function is not null then
+      execute format('select %s($1, $2)', v_full_card_function)
+      using in_object_id, v_actor_id;
+    end if;
+
+    v_new_data := data.get_object_data(in_object_id, v_actor_id, 'full', in_object_id);
+
+    -- Сравниваем и при нахождении различий включаем в diff
+    if v_new_data != v_original_values->(v_client_id::text) then
+      v_attributes := json.get_object(v_new_data, 'attributes');
+      v_actions := json.get_object_opt(v_new_data, 'actions', null);
+      v_filtered_template := data.filter_template(v_template, v_attributes, v_actions);
+      v_ret_val :=
+        array_append(
+          v_ret_val,
+          jsonb_build_object(
+            'client_id',
+            v_client_id,
+            'object',
+            jsonb_build_object(
+              'id',
+              data.get_object_code(in_object_id),
+              'attributes',
+              v_attributes,
+              'actions',
+              coalesce(v_actions, jsonb '{}'),
+              'template',
+              v_filtered_template)));
+    end if;
+  end loop;
+
+  return to_jsonb(v_ret_val);
+end;
+$$
+language 'plpgsql';
+
+-- drop function data.delete_attribute_value(integer, integer, integer, integer, text);
+
+create or replace function data.delete_attribute_value(in_object_id integer, in_attribute_id integer, in_value_object_id integer, in_actor_id integer, in_reason text default null::text)
+returns void
+volatile
+as
+$$
+-- Не используйте эту функцию напрямую, вместо неё следует вызывать data.change_object
+declare
+  v_attribute_value_id integer;
+begin
+  assert in_object_id is not null;
+  assert in_attribute_id is not null;
+
+  if in_value_object_id is null then
+    select id
+    into v_attribute_value_id
+    from data.attribute_values
+    where
+      object_id = in_object_id and
+      attribute_id = in_attribute_id and
+      value_object_id is null;
+  else
+    select id
+    into v_attribute_value_id
+    from data.attribute_values
+    where
+      object_id = in_object_id and
+      attribute_id = in_attribute_id and
+      value_object_id = in_value_object_id;
+  end if;
+
+  insert into data.attribute_values_journal(object_id, attribute_id, value_object_id, value, start_time, start_reason, start_actor_id, end_time, end_reason, end_actor_id)
+  select object_id, attribute_id, value_object_id, value, start_time, start_reason, start_actor_id, now(), in_reason, in_actor_id
+  from data.attribute_values
+  where id = v_attribute_value_id;
+
+  delete from data.attribute_values
+  where id = v_attribute_value_id;
+end;
+$$
+language 'plpgsql';
+
 -- drop function data.filter_template(jsonb, jsonb, jsonb);
 
 create or replace function data.filter_template(in_template jsonb, in_attributes jsonb, in_actions jsonb)
@@ -1434,8 +1590,6 @@ declare
   v_attributes jsonb := json.get_object(v_object_data, 'attributes');
   v_actions jsonb := json.get_object_opt(v_object_data, 'actions', null);
   v_template jsonb := data.get_param('template');
-  v_object jsonb;
-  v_list jsonb;
 begin
   -- Отфильтровываем из шаблона лишнее
   v_template := data.filter_template(v_template, v_attributes, v_actions);
@@ -1911,6 +2065,78 @@ begin
       union
       select v_connection_id
     );
+end;
+$$
+language 'plpgsql';
+
+-- drop function data.set_attribute_value(integer, integer, jsonb, integer, integer, text);
+
+create or replace function data.set_attribute_value(in_object_id integer, in_attribute_id integer, in_value jsonb, in_value_object_id integer, in_actor_id integer, in_reason text default null::text)
+returns void
+volatile
+as
+$$
+-- Не используйте эту функцию напрямую, вместо неё следует вызывать data.change_object
+declare
+  v_attribute_value record;
+begin
+  assert in_object_id is not null;
+  assert in_attribute_id is not null;
+  assert in_value is not null;
+
+  if in_value_object_id is null then
+    select id, object_id, attribute_id, value_object_id, value, start_time, start_reason, start_actor_id
+    into v_attribute_value
+    from data.attribute_values
+    where
+      object_id = in_object_id and
+      attribute_id = in_attribute_id and
+      value_object_id is null;
+  else
+    select id, object_id, attribute_id, value_object_id, value, start_time, start_reason, start_actor_id
+    into v_attribute_value
+    from data.attribute_values
+    where
+      object_id = in_object_id and
+      attribute_id = in_attribute_id and
+      value_object_id = in_value_object_id;
+  end if;
+
+  if v_attribute_value is null then
+    insert into data.attribute_values(object_id, attribute_id, value_object_id, value, start_reason, start_actor_id)
+    values(in_object_id, in_attribute_id, in_value_object_id, in_value, in_reason, in_actor_id);
+  else
+    insert into data.attribute_values_journal(
+      object_id,
+      attribute_id,
+      value_object_id,
+      value,
+      start_time,
+      start_reason,
+      start_actor_id,
+      end_time,
+      end_reason,
+      end_actor_id)
+    values(
+      in_object_id,
+      in_attribute_id,
+      in_value_object_id,
+      v_attribute_value.value,
+      v_attribute_value.start_time,
+      v_attribute_value.start_reason,
+      v_attribute_value.start_actor_id,
+      now(),
+      in_reason,
+      in_actor_id);
+
+    update data.attribute_values
+    set
+      value = in_value,
+      start_time = now(),
+      start_reason = in_reason,
+      start_actor_id = in_actor_id
+    where id = v_attribute_value.id;
+  end if;
 end;
 $$
 language 'plpgsql';
@@ -6850,6 +7076,77 @@ end;
 $$
 language 'plpgsql';
 
+-- drop function test_project.diff_action(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function test_project.diff_action(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_title text := test_project.next_code(json.get_string(in_params, 'title'));
+  v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_changes jsonb;
+  v_change record;
+  v_message_sent boolean := false;
+begin
+  assert in_request_id is not null;
+  assert in_user_params is null;
+  assert in_default_params is null;
+
+  v_changes :=
+    data.change_object(
+      v_object_id,
+      format(
+        '[{"id": %s, "value": "%s"}, {"id": %s, "value": "%s"}]',
+        data.get_attribute_id('title'),
+        v_title,
+        data.get_attribute_id('description'),
+-- todo Описание для следующего теста
+'Ура!')::jsonb,
+      v_actor_id);
+  for v_change in
+  (
+    select
+      json.get_integer(value, 'client_id') as client_id,
+      json.get_object(value, 'object') as object
+    from jsonb_array_elements(v_changes)
+  )
+  loop
+    if v_change.client_id = in_client_id then
+      assert v_message_sent is false;
+
+      v_message_sent := true;
+
+      perform api_utils.create_notification(v_change.client_id, in_request_id, 'diff', jsonb_build_object('object_id', v_object_id, 'object', v_change.object));
+    else
+      perform api_utils.create_notification(v_change.client_id, null, 'diff', jsonb_build_object('object_id', v_object_id, 'object', v_change.object));
+    end if;
+  end loop;
+
+  if v_message_sent is false then
+    perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+  end if;
+end;
+$$
+language 'plpgsql';
+
+-- drop function test_project.diff_action_generator(integer, integer);
+
+create or replace function test_project.diff_action_generator(in_object_id integer, in_actor_id integer)
+returns jsonb
+stable
+as
+$$
+declare
+  v_title text := json.get_string(data.get_attribute_value(in_object_id, 'title', in_actor_id));
+begin
+  return format('{"action": {"code": "diff", "name": "Далее", "disabled": false, "params": {"title": "%s", "object_id": %s}}}', v_title, in_object_id)::jsonb;
+end;
+$$
+language 'plpgsql';
+
 -- drop function test_project.do_nothing_action(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function test_project.do_nothing_action(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -6898,10 +7195,6 @@ begin
   insert into data.attributes(code, type, card_type, can_be_overridden)
   values('description', 'normal', 'full', true)
   returning id into v_description_attribute_id;
-
-  -- Атрибут для состояния теста
-  insert into data.attributes(code, type, can_be_overridden)
-  values('test_state', 'system', true);
 
   -- И первая группа в шаблоне
   v_template_groups := array_append(v_template_groups, jsonb '{"code": "common", "attributes": ["description"], "actions": ["action"]}');
@@ -7832,8 +8125,9 @@ Markdown — формат, который все реализуют по-раз�
 
   -- Тест на автоматическую смену актора по действию
 
-  insert into data.actions(code, function)
-  values('login', 'test_project.login_action');
+  insert into data.actions(code, function) values
+  ('login', 'test_project.login_action'),
+  ('diff', 'test_project.diff_action');
 
   insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
   v_test_num := v_test_num + 1;
@@ -7848,14 +8142,13 @@ Markdown — формат, который все реализуют по-раз�
     to_jsonb(text
 'По действию ниже произойдёт изменение списка доступных акторов.
 
-**Проверка 1:** Клиент автоматически выберает нового актора, пользователю никакие списки не показываются.
-**Проверка 2:** Происходит переход на следующий тест.')
+**Проверка:** По действию происходит открытие следующего теста.')
   );
 
   -- И далее в предыдущем тесте проверки на:
-  --   - изменение атрибутов по явному действию
+  --   - изменение атрибута и заголовка по явному действию
 
-  -- todo прочие тесты на изменения объекта (атрибуты, действия)
+  -- todo прочие тесты на изменения объекта (группы, действия)
   -- todo прибавить к v_test_num нужное значение
 
   -- todo списки
@@ -7903,10 +8196,6 @@ begin
   default values
   returning id into v_login_id;
 
-  -- Создадим действия для тестов на изменение объекта
-  insert into data.actions(code, function)
-  values('diff', 'test_project.diff_action');
-
   -- Создадим тест
   insert into data.objects
   default values
@@ -7915,15 +8204,17 @@ begin
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_object_id, data.get_attribute_id('type'), jsonb '"test"'),
   (v_object_id, data.get_attribute_id('is_visible'), jsonb 'true'),
-  -- todo
-  --(v_object_id, data.get_attribute_id('actions_function'), jsonb '"test_project.diff_generator"'),
+  (v_object_id, data.get_attribute_id('actions_function'), jsonb '"test_project.diff_action_generator"'),
   (v_object_id, data.get_attribute_id('title'), to_jsonb(v_title)),
   (
     v_object_id,
     data.get_attribute_id('description'),
     to_jsonb(text
--- todo что-нибудь про заголовок в списке акторов, атрибут test_state
-'Ура!')
+'Новый актор!
+
+**Проверка 1:** Мы перешли к данному объекту автоматически, никакие списки не показывались.
+**Проверка 2:** В списке акторов теперь красуется одинокий актор с заголовком "' || v_title || '"
+**Проверка 3:** Действие ниже приводит к изменению описания данного объекта.')
   );
 
   -- Привяжем тест к логину

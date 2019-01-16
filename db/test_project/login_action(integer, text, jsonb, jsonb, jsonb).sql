@@ -21,10 +21,6 @@ begin
   default values
   returning id into v_login_id;
 
-  -- Создадим действия для тестов на изменение объекта
-  insert into data.actions(code, function)
-  values('diff', 'test_project.diff_action');
-
   -- Создадим тест
   insert into data.objects
   default values
@@ -33,15 +29,17 @@ begin
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_object_id, data.get_attribute_id('type'), jsonb '"test"'),
   (v_object_id, data.get_attribute_id('is_visible'), jsonb 'true'),
-  -- todo
-  --(v_object_id, data.get_attribute_id('actions_function'), jsonb '"test_project.diff_generator"'),
+  (v_object_id, data.get_attribute_id('actions_function'), jsonb '"test_project.diff_action_generator"'),
   (v_object_id, data.get_attribute_id('title'), to_jsonb(v_title)),
   (
     v_object_id,
     data.get_attribute_id('description'),
     to_jsonb(text
--- todo что-нибудь про заголовок в списке акторов, атрибут test_state
-'Ура!')
+'Новый актор!
+
+**Проверка 1:** Мы перешли к данному объекту автоматически, никакие списки не показывались.
+**Проверка 2:** В списке акторов теперь красуется одинокий актор с заголовком "' || v_title || '"
+**Проверка 3:** Действие ниже приводит к изменению описания данного объекта.')
   );
 
   -- Привяжем тест к логину
