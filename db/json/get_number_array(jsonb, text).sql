@@ -8,7 +8,7 @@ $$
 declare
   v_array jsonb := json.get_array(in_json, in_name);
   v_array_len integer := jsonb_array_length(v_array);
-  v_ret_val double precision[];
+  v_ret_val double precision[] := array[]::double precision[];
 begin
   for i in 0 .. v_array_len - 1 loop
     v_ret_val := array_append(v_ret_val, json.get_number(v_array->i));

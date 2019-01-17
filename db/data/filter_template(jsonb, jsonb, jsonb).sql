@@ -16,7 +16,7 @@ declare
   v_action_name text;
   v_name text;
   v_filtered_group jsonb;
-  v_filtered_groups jsonb[];
+  v_filtered_groups jsonb[] := array[]::jsonb[];
   v_filtered_attributes text[];
   v_filtered_actions text[];
 begin

@@ -17,7 +17,7 @@ declare
   v_is_visible boolean;
   v_count integer := 0;
   v_has_more boolean := false;
-  v_objects jsonb[];
+  v_objects jsonb[] := array[]::jsonb[];
 begin
   assert data.is_instance(in_object_id);
   assert v_page_size > 0;

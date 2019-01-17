@@ -8,7 +8,7 @@ $$
 declare
   v_array json := json.get_array(in_json, in_name);
   v_array_len integer := json_array_length(v_array);
-  v_ret_val text[];
+  v_ret_val text[] := array[]::text[];
 begin
   for i in 0 .. v_array_len - 1 loop
     v_ret_val := array_append(v_ret_val, json.get_string(v_array->i));

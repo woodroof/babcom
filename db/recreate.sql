@@ -1275,7 +1275,7 @@ declare
   v_action_name text;
   v_name text;
   v_filtered_group jsonb;
-  v_filtered_groups jsonb[];
+  v_filtered_groups jsonb[] := array[]::jsonb[];
   v_filtered_attributes text[];
   v_filtered_actions text[];
 begin
@@ -1596,7 +1596,7 @@ declare
   v_is_visible boolean;
   v_count integer := 0;
   v_has_more boolean := false;
-  v_objects jsonb[];
+  v_objects jsonb[] := array[]::jsonb[];
 begin
   assert data.is_instance(in_object_id);
   assert v_page_size > 0;
@@ -2671,7 +2671,7 @@ $$
 declare
   v_array json := json.get_array(in_json, in_name);
   v_array_len integer := json_array_length(v_array);
-  v_ret_val bigint[];
+  v_ret_val bigint[] := array[]::bigint[];
 begin
   for i in 0 .. v_array_len - 1 loop
     v_ret_val := array_append(v_ret_val, json.get_bigint(v_array->i));
@@ -2698,7 +2698,7 @@ $$
 declare
   v_array jsonb := json.get_array(in_json, in_name);
   v_array_len integer := jsonb_array_length(v_array);
-  v_ret_val bigint[];
+  v_ret_val bigint[] := array[]::bigint[];
 begin
   for i in 0 .. v_array_len - 1 loop
     v_ret_val := array_append(v_ret_val, json.get_bigint(v_array->i));
@@ -3009,7 +3009,7 @@ $$
 declare
   v_array json := json.get_array(in_json, in_name);
   v_array_len integer := json_array_length(v_array);
-  v_ret_val boolean[];
+  v_ret_val boolean[] := array[]::boolean[];
 begin
   for i in 0 .. v_array_len - 1 loop
     v_ret_val := array_append(v_ret_val, json.get_boolean(v_array->i));
@@ -3036,7 +3036,7 @@ $$
 declare
   v_array jsonb := json.get_array(in_json, in_name);
   v_array_len integer := jsonb_array_length(v_array);
-  v_ret_val boolean[];
+  v_ret_val boolean[] := array[]::boolean[];
 begin
   for i in 0 .. v_array_len - 1 loop
     v_ret_val := array_append(v_ret_val, json.get_boolean(v_array->i));
@@ -3341,7 +3341,7 @@ $$
 declare
   v_array json := json.get_array(in_json, in_name);
   v_array_len integer := json_array_length(v_array);
-  v_ret_val integer[];
+  v_ret_val integer[] := array[]::integer[];
 begin
   for i in 0 .. v_array_len - 1 loop
     v_ret_val := array_append(v_ret_val, json.get_integer(v_array->i));
@@ -3368,7 +3368,7 @@ $$
 declare
   v_array jsonb := json.get_array(in_json, in_name);
   v_array_len integer := jsonb_array_length(v_array);
-  v_ret_val integer[];
+  v_ret_val integer[] := array[]::integer[];
 begin
   for i in 0 .. v_array_len - 1 loop
     v_ret_val := array_append(v_ret_val, json.get_integer(v_array->i));
@@ -3679,7 +3679,7 @@ $$
 declare
   v_array json := json.get_array(in_json, in_name);
   v_array_len integer := json_array_length(v_array);
-  v_ret_val double precision[];
+  v_ret_val double precision[] := array[]::double precision[];
 begin
   for i in 0 .. v_array_len - 1 loop
     v_ret_val := array_append(v_ret_val, json.get_number(v_array->i));
@@ -3706,7 +3706,7 @@ $$
 declare
   v_array jsonb := json.get_array(in_json, in_name);
   v_array_len integer := jsonb_array_length(v_array);
-  v_ret_val double precision[];
+  v_ret_val double precision[] := array[]::double precision[];
 begin
   for i in 0 .. v_array_len - 1 loop
     v_ret_val := array_append(v_ret_val, json.get_number(v_array->i));
@@ -4369,7 +4369,7 @@ $$
 declare
   v_array json := json.get_array(in_json, in_name);
   v_array_len integer := json_array_length(v_array);
-  v_ret_val text[];
+  v_ret_val text[] := array[]::text[];
 begin
   for i in 0 .. v_array_len - 1 loop
     v_ret_val := array_append(v_ret_val, json.get_string(v_array->i));
@@ -4396,7 +4396,7 @@ $$
 declare
   v_array jsonb := json.get_array(in_json, in_name);
   v_array_len integer := jsonb_array_length(v_array);
-  v_ret_val text[];
+  v_ret_val text[] := array[]::text[];
 begin
   for i in 0 .. v_array_len - 1 loop
     v_ret_val := array_append(v_ret_val, json.get_string(v_array->i));
@@ -7991,6 +7991,10 @@ declare
 
   v_template_groups jsonb[];
 begin
+  -- Базовые настройки
+  insert into data.params(code, value, description)
+  values('page_size', jsonb '20', 'Размер страницы');
+
   -- Атрибут для какого-то текста
   insert into data.attributes(code, type, card_type, can_be_overridden)
   values('description', 'normal', 'full', true)

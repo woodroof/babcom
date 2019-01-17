@@ -22,6 +22,10 @@ declare
 
   v_template_groups jsonb[];
 begin
+  -- Базовые настройки
+  insert into data.params(code, value, description)
+  values('page_size', jsonb '20', 'Размер страницы');
+
   -- Атрибут для какого-то текста
   insert into data.attributes(code, type, card_type, can_be_overridden)
   values('description', 'normal', 'full', true)
