@@ -9866,3 +9866,5 @@ grant execute on all functions in schema api to http;
 select data.init();
 
 select test_project.init();
+
+analyze;
