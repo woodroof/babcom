@@ -5,11 +5,11 @@ returns void
 volatile
 as
 $$
--- Не используйте эту функцию напрямую, вместо неё следует вызывать data.change_object
+-- Как правило вместо этой функции следует вызывать data.change_object
 declare
   v_attribute_value_id integer;
 begin
-  assert in_object_id is not null;
+  assert data.is_instance(in_object_id);
   assert in_attribute_id is not null;
 
   if in_value_object_id is null then
@@ -29,6 +29,8 @@ begin
       attribute_id = in_attribute_id and
       value_object_id = in_value_object_id;
   end if;
+
+  assert v_attribute_value_id is not null;
 
   insert into data.attribute_values_journal(object_id, attribute_id, value_object_id, value, start_time, start_reason, start_actor_id, end_time, end_reason, end_actor_id)
   select object_id, attribute_id, value_object_id, value, start_time, start_reason, start_actor_id, now(), in_reason, in_actor_id

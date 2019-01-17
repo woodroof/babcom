@@ -24,6 +24,7 @@ declare
   v_ret_val jsonb[];
 begin
   perform json.get_object_array(in_changes);
+  assert in_actor_id is null or data.is_instance(in_actor_id);
 
   perform *
   from data.objects

@@ -12,5 +12,6 @@ create table data.attribute_values_journal(
   end_time timestamp with time zone not null,
   end_reason text,
   end_actor_id integer,
+  constraint attribute_values_journal_object_check check(data.is_instance(object_id)),
   constraint attribute_values_journal_pk primary key(id)
 );

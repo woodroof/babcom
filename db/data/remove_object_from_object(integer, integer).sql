@@ -9,8 +9,8 @@ declare
   v_connection_id integer;
   v_ids integer[];
 begin
-  assert in_object_id is not null;
-  assert in_parent_object_id is not null;
+  assert data.is_instance(in_object_id);
+  assert data.is_instance(in_parent_object_id);
 
   if in_object_id = in_parent_object_id then
     raise exception 'Attempt to remove object % from itself', in_object_id;

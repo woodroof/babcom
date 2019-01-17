@@ -11,13 +11,14 @@ declare
   v_attribute record;
   v_attribute_json jsonb;
   v_value_description text;
-  v_actions_function_attribute_id integer :=
-    data.get_attribute_id(case when in_object_id = in_actions_object_id then 'actions_function' else 'list_actions_function' end);
+  v_actions_function_attribute text :=
+    (case when in_object_id = in_actions_object_id then 'actions_function' else 'list_actions_function' end);
   v_actions_function text;
   v_actions jsonb;
 begin
-  assert in_object_id is not null;
-  assert in_actor_id is not null;
+  assert data.is_instance(in_object_id);
+  assert data.is_instance(in_actor_id);
+  assert in_object_id = in_actions_object_id or data.is_instance(in_actions_object_id);
   assert in_card_type is not null;
 
   -- Получаем видимые и hidden-атрибуты для указанной карточки
@@ -32,8 +33,26 @@ begin
       select
         av.attribute_id,
         av.value,
-        case when lag(av.attribute_id) over (partition by av.object_id, av.attribute_id order by json.get_integer_opt(pr.value, 0) desc) is null then true else false end as needed
-      from data.attribute_values av
+        case
+          when lag(av.attribute_id) over (partition by av.attribute_id order by av.priority desc, json.get_integer_opt(pr.value, 0) desc) is null
+          then true
+          else false
+        end as needed
+      from
+      (
+        select attribute_id, value, value_object_id, 1 as priority
+        from data.attribute_values
+        where object_id = in_object_id
+        union all
+        select attribute_id, value, null, 0
+        from data.attribute_values
+        where
+          object_id in (
+            select class_id
+            from data.objects
+            where id = in_object_id
+          )
+      ) av
       left join data.object_objects oo on
         av.value_object_id = oo.parent_object_id and
         oo.object_id = in_actor_id
@@ -41,18 +60,12 @@ begin
         pr.object_id = av.value_object_id and
         pr.attribute_id = v_priority_attribute_id and
         pr.value_object_id is null
-      where
-        av.object_id = in_object_id and
-        (
-          av.value_object_id is null or
-          oo.id is not null
-        )
     ) attr
     join data.attributes a
       on a.id = attr.attribute_id
       and (a.card_type is null or a.card_type = in_card_type)
       and a.type != 'system'
-      and attr.needed = true
+    where attr.needed = true
     order by a.code
   loop
     v_attribute_json := jsonb '{}';
@@ -76,13 +89,7 @@ begin
   end loop;
 
   -- Получаем действия объекта
-  select json.get_string_opt(value, null)
-  into v_actions_function
-  from data.attribute_values
-  where
-    object_id = in_actions_object_id and
-    attribute_id = v_actions_function_attribute_id and
-    value_object_id is null;
+  v_actions_function := json.get_string_opt(data.get_attribute_value(in_actions_object_id, v_actions_function_attribute), null);
 
   if v_actions_function is not null then
     if in_object_id = in_actions_object_id then

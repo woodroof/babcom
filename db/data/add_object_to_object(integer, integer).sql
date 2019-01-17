@@ -10,8 +10,8 @@ declare
   v_cycle boolean;
   v_row record;
 begin
-  assert in_object_id is not null;
-  assert in_parent_object_id is not null;
+  assert data.is_instance(in_object_id);
+  assert data.is_instance(in_parent_object_id);
 
   if in_object_id = in_parent_object_id then
     raise exception 'Attempt to add object % to itself', in_object_id;

@@ -106,6 +106,12 @@ create type data.card_type as enum(
   'full',
   'mini');
 
+-- drop type data.object_type;
+
+create type data.object_type as enum(
+  'class',
+  'instance');
+
 -- drop type data.severity;
 
 create type data.severity as enum(
@@ -903,8 +909,8 @@ declare
   v_cycle boolean;
   v_row record;
 begin
-  assert in_object_id is not null;
-  assert in_parent_object_id is not null;
+  assert data.is_instance(in_object_id);
+  assert data.is_instance(in_parent_object_id);
 
   if in_object_id = in_parent_object_id then
     raise exception 'Attempt to add object % to itself', in_object_id;
@@ -1118,6 +1124,7 @@ declare
   v_ret_val jsonb[];
 begin
   perform json.get_object_array(in_changes);
+  assert in_actor_id is null or data.is_instance(in_actor_id);
 
   perform *
   from data.objects
@@ -1212,11 +1219,11 @@ returns void
 volatile
 as
 $$
--- Не используйте эту функцию напрямую, вместо неё следует вызывать data.change_object
+-- Как правило вместо этой функции следует вызывать data.change_object
 declare
   v_attribute_value_id integer;
 begin
-  assert in_object_id is not null;
+  assert data.is_instance(in_object_id);
   assert in_attribute_id is not null;
 
   if in_value_object_id is null then
@@ -1236,6 +1243,8 @@ begin
       attribute_id = in_attribute_id and
       value_object_id = in_value_object_id;
   end if;
+
+  assert v_attribute_value_id is not null;
 
   insert into data.attribute_values_journal(object_id, attribute_id, value_object_id, value, start_time, start_reason, start_actor_id, end_time, end_reason, end_actor_id)
   select object_id, attribute_id, value_object_id, value, start_time, start_reason, start_actor_id, now(), in_reason, in_actor_id
@@ -1417,8 +1426,9 @@ $$
 declare
   v_attribute_id integer := data.get_attribute_id(in_attribute_name);
   v_attribute_value jsonb;
+  v_class_id integer;
 begin
-  assert in_object_id is not null;
+  assert data.is_instance(in_object_id);
   assert data.can_attribute_be_overridden(v_attribute_id) is false;
 
   select value
@@ -1428,6 +1438,23 @@ begin
     object_id = in_object_id and
     attribute_id = v_attribute_id and
     value_object_id is null;
+
+  if v_attribute_value is null then
+    select class_id
+    into v_class_id
+    from data.objects
+    where id = in_object_id;
+
+    if v_class_id is not null then
+      select value
+      into v_attribute_value
+      from data.attribute_values
+      where
+        object_id = v_class_id and
+        attribute_id = v_attribute_id and
+        value_object_id is null;
+    end if;
+  end if;
 
   return v_attribute_value;
 end;
@@ -1445,9 +1472,10 @@ declare
   v_attribute_id integer := data.get_attribute_id(in_attribute_name);
   v_priority_attribute_id integer := data.get_attribute_id('priority');
   v_attribute_value jsonb;
+  v_class_id integer;
 begin
-  assert in_object_id is not null;
-  assert in_actor_id is not null;
+  assert data.is_instance(in_object_id);
+  assert data.is_instance(in_actor_id);
   assert data.can_attribute_be_overridden(v_attribute_id) is true;
 
   select av.value
@@ -1469,6 +1497,23 @@ begin
     )
   order by json.get_integer_opt(pr.value, 0) desc
   limit 1;
+
+  if v_attribute_value is null then
+    select class_id
+    into v_class_id
+    from data.objects
+    where id = in_object_id;
+
+    if v_class_id is not null then
+      select value
+      into v_attribute_value
+      from data.attribute_values
+      where
+        object_id = v_class_id and
+        attribute_id = v_attribute_id and
+        value_object_id is null;
+    end if;
+  end if;
 
   return v_attribute_value;
 end;
@@ -1553,7 +1598,7 @@ declare
   v_has_more boolean := false;
   v_objects jsonb[];
 begin
-  assert in_object_id is not null;
+  assert data.is_instance(in_object_id);
   assert v_page_size > 0;
 
   select actor_id
@@ -1610,7 +1655,7 @@ begin
 
     -- Проверяем видимость
     v_is_visible := json.get_boolean_opt(data.get_attribute_value(v_object.id, 'is_visible', in_actor_id), null);
-    if v_is_visible is null then
+    if v_is_visible is null or v_is_visible is false then
       insert into data.client_subscription_objects(client_subscription_id, object_id, index, is_visible)
       values(v_client_subscription_id, v_object.id, v_object.index, false);
 
@@ -1687,13 +1732,14 @@ declare
   v_attribute record;
   v_attribute_json jsonb;
   v_value_description text;
-  v_actions_function_attribute_id integer :=
-    data.get_attribute_id(case when in_object_id = in_actions_object_id then 'actions_function' else 'list_actions_function' end);
+  v_actions_function_attribute text :=
+    (case when in_object_id = in_actions_object_id then 'actions_function' else 'list_actions_function' end);
   v_actions_function text;
   v_actions jsonb;
 begin
-  assert in_object_id is not null;
-  assert in_actor_id is not null;
+  assert data.is_instance(in_object_id);
+  assert data.is_instance(in_actor_id);
+  assert in_object_id = in_actions_object_id or data.is_instance(in_actions_object_id);
   assert in_card_type is not null;
 
   -- Получаем видимые и hidden-атрибуты для указанной карточки
@@ -1708,8 +1754,26 @@ begin
       select
         av.attribute_id,
         av.value,
-        case when lag(av.attribute_id) over (partition by av.object_id, av.attribute_id order by json.get_integer_opt(pr.value, 0) desc) is null then true else false end as needed
-      from data.attribute_values av
+        case
+          when lag(av.attribute_id) over (partition by av.attribute_id order by av.priority desc, json.get_integer_opt(pr.value, 0) desc) is null
+          then true
+          else false
+        end as needed
+      from
+      (
+        select attribute_id, value, value_object_id, 1 as priority
+        from data.attribute_values
+        where object_id = in_object_id
+        union all
+        select attribute_id, value, null, 0
+        from data.attribute_values
+        where
+          object_id in (
+            select class_id
+            from data.objects
+            where id = in_object_id
+          )
+      ) av
       left join data.object_objects oo on
         av.value_object_id = oo.parent_object_id and
         oo.object_id = in_actor_id
@@ -1717,18 +1781,12 @@ begin
         pr.object_id = av.value_object_id and
         pr.attribute_id = v_priority_attribute_id and
         pr.value_object_id is null
-      where
-        av.object_id = in_object_id and
-        (
-          av.value_object_id is null or
-          oo.id is not null
-        )
     ) attr
     join data.attributes a
       on a.id = attr.attribute_id
       and (a.card_type is null or a.card_type = in_card_type)
       and a.type != 'system'
-      and attr.needed = true
+    where attr.needed = true
     order by a.code
   loop
     v_attribute_json := jsonb '{}';
@@ -1752,13 +1810,7 @@ begin
   end loop;
 
   -- Получаем действия объекта
-  select json.get_string_opt(value, null)
-  into v_actions_function
-  from data.attribute_values
-  where
-    object_id = in_actions_object_id and
-    attribute_id = v_actions_function_attribute_id and
-    value_object_id is null;
+  v_actions_function := json.get_string_opt(data.get_attribute_value(in_actions_object_id, v_actions_function_attribute), null);
 
   if v_actions_function is not null then
     if in_object_id = in_actions_object_id then
@@ -1987,6 +2039,30 @@ end;
 $$
 language 'plpgsql';
 
+-- drop function data.is_instance(integer);
+
+create or replace function data.is_instance(in_object_id integer)
+returns boolean
+stable
+as
+$$
+declare
+  v_type data.object_type;
+begin
+  assert in_object_id is not null;
+
+  select type
+  into v_type
+  from data.objects
+  where id = in_object_id;
+
+  assert v_type is not null;
+
+  return v_type = 'instance';
+end;
+$$
+language 'plpgsql';
+
 -- drop function data.is_system_attribute(integer);
 
 create or replace function data.is_system_attribute(in_attribute_id integer)
@@ -2019,6 +2095,8 @@ volatile
 as
 $$
 begin
+  assert in_actor_id is null or data.is_instance(in_actor_id);
+
   insert into data.log(severity, message, actor_id)
   values(in_severity, in_message, in_actor_id);
 end;
@@ -2052,8 +2130,8 @@ declare
   v_connection_id integer;
   v_ids integer[];
 begin
-  assert in_object_id is not null;
-  assert in_parent_object_id is not null;
+  assert data.is_instance(in_object_id);
+  assert data.is_instance(in_parent_object_id);
 
   if in_object_id = in_parent_object_id then
     raise exception 'Attempt to remove object % from itself', in_object_id;
@@ -2134,11 +2212,11 @@ returns void
 volatile
 as
 $$
--- Не используйте эту функцию напрямую, вместо неё следует вызывать data.change_object
+-- Как правило вместо этой функции следует вызывать data.change_object
 declare
   v_attribute_value record;
 begin
-  assert in_object_id is not null;
+  assert data.is_instance(in_object_id);
   assert in_attribute_id is not null;
   assert in_value is not null;
 
@@ -2151,6 +2229,8 @@ begin
       attribute_id = in_attribute_id and
       value_object_id is null;
   else
+    assert data.can_attribute_be_overridden(attribute_id);
+
     select id, object_id, attribute_id, value_object_id, value, start_time, start_reason, start_actor_id
     into v_attribute_value
     from data.attribute_values
@@ -9472,8 +9552,8 @@ create table data.attribute_values(
   start_time timestamp with time zone not null default now(),
   start_reason text,
   start_actor_id integer,
-  constraint attribute_values_override_check check((value_object_id is null) or data.can_attribute_be_overridden(attribute_id)),
-  constraint attribute_values_pk primary key(id)
+  constraint attribute_values_pk primary key(id),
+  constraint attribute_values_value_object_check check((value_object_id is null) or (data.is_instance(object_id) and data.can_attribute_be_overridden(attribute_id) and data.is_instance(value_object_id)))
 );
 
 comment on column data.attribute_values.value_object_id is 'Объект, для которого переопределено значение атрибута. В случае, если видно несколько переопределённых значений, выбирается значение для объекта с наивысшим приоритетом.';
@@ -9492,6 +9572,7 @@ create table data.attribute_values_journal(
   end_time timestamp with time zone not null,
   end_reason text,
   end_actor_id integer,
+  constraint attribute_values_journal_object_check check(data.is_instance(object_id)),
   constraint attribute_values_journal_pk primary key(id)
 );
 
@@ -9524,6 +9605,7 @@ create table data.client_subscription_objects(
   index integer not null,
   is_visible boolean not null,
   constraint client_subscription_objects_index_check check(index > 0),
+  constraint client_subscription_objects_object_check check(data.is_instance(object_id)),
   constraint client_subscription_objects_pk primary key(id),
   constraint client_subscription_objects_unique_csi_i unique(client_subscription_id, index),
   constraint client_subscription_objects_unique_oi_csi unique(object_id, client_subscription_id)
@@ -9535,6 +9617,7 @@ create table data.client_subscriptions(
   id integer not null generated always as identity,
   client_id integer not null,
   object_id integer not null,
+  constraint client_subscriptions_object_check check(data.is_instance(object_id)),
   constraint client_subscriptions_pk primary key(id),
   constraint client_subscriptions_unique_object_client unique(object_id, client_id)
 );
@@ -9547,6 +9630,7 @@ create table data.clients(
   is_connected boolean not null,
   login_id integer,
   actor_id integer,
+  constraint clients_actor_check check((actor_id is null) or data.is_instance(actor_id)),
   constraint clients_pk primary key(id),
   constraint clients_unique_code unique(code)
 );
@@ -9559,6 +9643,7 @@ create table data.log(
   event_time timestamp with time zone not null default now(),
   message text not null,
   actor_id integer,
+  constraint log_actor_check check((actor_id is null) or data.is_instance(actor_id)),
   constraint log_pk primary key(id)
 );
 
@@ -9568,6 +9653,7 @@ create table data.login_actors(
   id integer not null generated always as identity,
   login_id integer not null,
   actor_id integer not null,
+  constraint login_actors_actor_check check(data.is_instance(actor_id)),
   constraint login_actors_pk primary key(id),
   constraint login_actors_unique_login_actor unique(login_id, actor_id)
 );
@@ -9601,6 +9687,8 @@ create table data.object_objects(
   intermediate_object_ids integer[],
   start_time timestamp with time zone not null default now(),
   constraint object_objects_intermediate_object_ids_check check(intarray.uniq(intarray.sort(intermediate_object_ids)) = intarray.sort(intermediate_object_ids)),
+  constraint object_objects_object_check check(data.is_instance(object_id)),
+  constraint object_objects_parent_object_check check(data.is_instance(parent_object_id)),
   constraint object_objects_pk primary key(id)
 );
 
@@ -9622,7 +9710,11 @@ create table data.object_objects_journal(
 
 create table data.objects(
   id integer not null generated always as identity,
-  code text not null default (pgcrypto.gen_random_uuid())::text,
+  code text default (pgcrypto.gen_random_uuid())::text,
+  type data.object_type not null default 'instance'::data.object_type,
+  class_id integer,
+  constraint objects_class_reference_check check((class_id is null) or ((type = 'instance'::data.object_type) and (not data.is_instance(class_id)))),
+  constraint objects_code_check check((code is not null) = (type = 'instance'::data.object_type)),
   constraint objects_pk primary key(id),
   constraint objects_unique_code unique(code)
 );
@@ -9708,6 +9800,9 @@ foreign key(object_id) references data.objects(id);
 
 alter table data.object_objects_journal add constraint object_objects_journal_fk_parent_object
 foreign key(parent_object_id) references data.objects(id);
+
+alter table data.objects add constraint objects_fk_objects
+foreign key(class_id) references data.objects(id);
 
 -- Creating indexes
 
