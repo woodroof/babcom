@@ -8,6 +8,8 @@ $$
 declare
   v_result jsonb;
 begin
+  assert in_attribute_id is not null;
+
   v_result := jsonb_build_object('id', in_attribute_id);
   if in_value_object_id is not null then 
     v_result := v_result || jsonb_build_object('value_object_id', in_value_object_id);
