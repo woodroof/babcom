@@ -60,6 +60,9 @@ begin
         pr.object_id = av.value_object_id and
         pr.attribute_id = v_priority_attribute_id and
         pr.value_object_id is null
+      where
+        av.value_object_id is null or
+        oo.id is not null
     ) attr
     join data.attributes a
       on a.id = attr.attribute_id
