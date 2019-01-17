@@ -77,6 +77,7 @@ begin
   ),
   ('redirect', null, 'Содержит идентификатор объекта, который должен быть возвращён вместо запрошенного при получении полной карточки объекта, integer.', 'system', null, null, true),
   ('subtitle', null, 'Подзаголовок, string', 'normal', null, null, true),
+  ('template', null, 'Шаблон объекта, object', 'system', null, null, true),
   ('temporary_object', null, 'Атрибут, наличие которого говорит о том, что открытый объект не нужно сохранять в истории', 'hidden', 'full', null, false),
   ('title', null, 'Заголовок, string', 'normal', null, null, true),
   (

@@ -9,8 +9,12 @@ declare
   v_object_data jsonb := data.get_object_data(in_object_id, in_actor_id, in_card_type, in_actions_object_id);
   v_attributes jsonb := json.get_object(v_object_data, 'attributes');
   v_actions jsonb := json.get_object_opt(v_object_data, 'actions', null);
-  v_template jsonb := data.get_param('template');
+  v_template jsonb := json.get_object_opt(data.get_attribute_value(in_object_id, 'template', in_actor_id), null);
 begin
+  if v_template is null then
+    v_template := data.get_param('template');
+  end if;
+
   -- Отфильтровываем из шаблона лишнее
   v_template := data.filter_template(v_template, v_attributes, v_actions);
 

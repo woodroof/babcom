@@ -17,10 +17,10 @@ declare
   v_original_values jsonb := jsonb '{}';
   v_change record;
   v_new_data jsonb;
-  v_template jsonb := data.get_param('template');
+  v_default_template jsonb := data.get_param('template');
   v_attributes jsonb;
   v_actions jsonb;
-  v_filtered_template jsonb;
+  v_object_template jsonb;
   v_ret_val jsonb[];
 begin
   perform json.get_object_array(in_changes);
@@ -87,7 +87,13 @@ begin
     if v_new_data != v_original_values->(v_client_id::text) then
       v_attributes := json.get_object(v_new_data, 'attributes');
       v_actions := json.get_object_opt(v_new_data, 'actions', null);
-      v_filtered_template := data.filter_template(v_template, v_attributes, v_actions);
+
+      v_object_template := data.get_attribute_value(in_object_id, 'template', v_actor_id);
+      if v_object_template is null then
+        v_object_template := v_default_template;
+      end if;
+      v_object_template := data.filter_template(v_object_template, v_attributes, v_actions);
+
       v_ret_val :=
         array_append(
           v_ret_val,
@@ -103,7 +109,7 @@ begin
               'actions',
               coalesce(v_actions, jsonb '{}'),
               'template',
-              v_filtered_template)));
+              v_object_template)));
     end if;
   end loop;
 
