@@ -162,7 +162,8 @@ begin
     'template',
     jsonb_build_object('groups', to_jsonb(v_template_groups)),
     'Шаблон'
-  );
+  ),
+  ('page_size', to_jsonb(10), 'Размер страницы');
 
   -- Также для работы нам понадобится объект меню
   insert into data.objects(code) values('menu') returning id into v_menu_id;

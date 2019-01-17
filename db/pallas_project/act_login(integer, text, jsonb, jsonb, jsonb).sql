@@ -26,7 +26,7 @@ begin
       in_client_id,
       in_request_id,
       'action',
-      format('{"action": "show_message ", "action_data": ("title": "%s", "message": "%s"}}', 'Ошибка', 'Пароль не найден')::jsonb); 
+      format('{"action": "show_message ", "action_data": {"title": "%s", "message": "%s"}}', 'Ошибка', 'Пароль не найден')::jsonb); 
   end if;
 end;
 $$

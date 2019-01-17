@@ -14,7 +14,7 @@ begin
     in_client_id,
     in_request_id,
     'action',
-    format('{"action": "open_object", "action_data": ("object_id": "%s")}', v_object_code)::jsonb);
+    format('{"action": "open_object", "action_data": {"object_id": "%s"}}', v_object_code)::jsonb);
 end;
 $$
 language 'plpgsql';

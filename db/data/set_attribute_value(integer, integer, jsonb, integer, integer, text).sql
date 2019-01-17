@@ -22,7 +22,7 @@ begin
       attribute_id = in_attribute_id and
       value_object_id is null;
   else
-    assert data.can_attribute_be_overridden(attribute_id);
+    assert data.can_attribute_be_overridden(in_attribute_id);
 
     select id, object_id, attribute_id, value_object_id, value, start_time, start_reason, start_actor_id
     into v_attribute_value
