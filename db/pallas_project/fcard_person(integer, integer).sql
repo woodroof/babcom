@@ -8,34 +8,33 @@ $$
 declare
   v_value jsonb;
   v_is_master boolean;
+  v_changes jsonb[];
 begin
+  perform * from data.objects where id = in_object_id for update;
+
   v_is_master := json.get_boolean(data.get_attribute_value(in_actor_id, 'person_is_master'));
   if v_is_master or in_object_id = in_actor_id then
     v_value := data.get_attribute_value(in_object_id, 'system_money');
     if json.get_bigint_opt(v_value, null) is not null then
-    null;
-     -- perform data.set_attribute_value(in_object_id, 'money', v_value, in_actor_id);
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('money', in_actor_id, v_value));
     end if;
     v_value := data.get_attribute_value(in_object_id, 'system_person_deposit_money');
     if json.get_bigint_opt(v_value, null) is not null then
-    null;
-      --perform data.set_attribute_value(in_object_id, 'person_deposit_money', v_value, in_actor_id);
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('person_deposit_money', in_actor_id, v_value));
     end if;
     v_value := data.get_attribute_value(in_object_id, 'system_person_coin');
     if json.get_integer_opt(v_value, null) is not null then
-    null;
-      --perform data.set_attribute_value(in_object_id, 'person_coin', v_value, in_actor_id);
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('person_coin', in_actor_id, v_value));
     end if;
     v_value := data.get_attribute_value(in_object_id, 'system_person_opa_rating');
     if json.get_integer_opt(v_value, null) is not null then
-    null;
-      --perform data.set_attribute_value(in_object_id, 'person_opa_rating', v_value, in_actor_id);
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('person_opa_rating', in_actor_id, v_value));
     end if;
     v_value := data.get_attribute_value(in_object_id, 'system_person_un_rating');
     if json.get_integer_opt(v_value, null) is not null then
-      null;
-      --perform data.set_attribute_value(in_object_id, 'person_un_rating', v_value, in_actor_id);
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('person_un_rating', in_actor_id, v_value));
     end if;
+    perform data.change_object(in_object_id, to_jsonb(v_changes), in_actor_id);
   end if;
 end;
 $$

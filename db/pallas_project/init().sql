@@ -19,6 +19,8 @@ declare
   v_person_state_attribute_id integer;
   v_system_money_attribute_id integer;
   v_money_attribute_id integer;
+  v_system_person_deposit_money_attribute_id integer;
+  v_person_deposit_money_attribute_id integer;
   v_system_person_coin_attribute_id integer;
   v_person_coin_attribute_id integer;
   v_system_person_opa_rating_attribute_id integer;
@@ -60,11 +62,11 @@ begin
 
   insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
   values ('system_person_deposit_money', 'Остаток средств на накопительном счёте', 'system', null, null, false)
-  returning id into v_system_money_attribute_id;
+  returning id into v_system_person_deposit_money_attribute_id;
 
   insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
   values ('person_deposit_money', 'Остаток средств на накопительном счёте', 'normal', 'full', null, true)
-  returning id into v_money_attribute_id;
+  returning id into v_person_deposit_money_attribute_id;
 
   insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
   values ('system_person_coin', 'Остаток коинов', 'system', null, null, false)
@@ -218,7 +220,8 @@ begin
   (v_person_id, v_system_person_opa_rating_attribute_id, jsonb '1'),
   (v_person_id, v_system_person_un_rating_attribute_id, jsonb '150'),
   (v_person_id, v_person_is_master_attribute_id, jsonb 'false'),
-  (v_person_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_person"');
+  (v_person_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_person"'),
+  (v_person_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_menu"');
 
   insert into data.object_objects(parent_object_id, object_id) values
   (v_all_person_group_id, v_person_id),

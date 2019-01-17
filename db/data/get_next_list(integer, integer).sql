@@ -6,7 +6,7 @@ volatile
 as
 $$
 declare
-  v_page_size integer := data.get_integer_param(page_size);
+  v_page_size integer := data.get_integer_param('page_size');
   v_actor_id integer;
   v_last_object_id integer;
   v_content integer[];

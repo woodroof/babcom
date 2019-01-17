@@ -114,7 +114,7 @@ begin
 
   -- Получаем список, если есть
   if v_object->'attributes' ? 'content' then
-    v_list := data.get_next_list(in_client_id, in_object_id);
+    v_list := data.get_next_list(in_client_id, v_object_id);
     perform api_utils.create_notification(in_client_id, in_request_id, 'object', jsonb_build_object('object', v_object, 'list', v_list));
   else
     perform api_utils.create_notification(in_client_id, in_request_id, 'object', jsonb_build_object('object', v_object));

@@ -782,7 +782,7 @@ begin
 
   -- Получаем список, если есть
   if v_object->'attributes' ? 'content' then
-    v_list := data.get_next_list(in_client_id, in_object_id);
+    v_list := data.get_next_list(in_client_id, v_object_id);
     perform api_utils.create_notification(in_client_id, in_request_id, 'object', jsonb_build_object('object', v_object, 'list', v_list));
   else
     perform api_utils.create_notification(in_client_id, in_request_id, 'object', jsonb_build_object('object', v_object));
@@ -1019,6 +1019,51 @@ begin
     oo.object_id != oo.parent_object_id
   union
   select in_parent_object_id, in_object_id, null;
+end;
+$$
+language 'plpgsql';
+
+-- drop function data.attribute_change2jsonb(integer, integer, jsonb);
+
+create or replace function data.attribute_change2jsonb(in_attribute_id integer, in_value_object_id integer, in_value jsonb)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_result jsonb;
+begin
+  v_result := jsonb_build_object('id', in_attribute_id);
+  if in_value_object_id is not null then 
+    v_result := v_result || jsonb_build_object('value_object_id', in_value_object_id);
+  end if;
+  if in_value is not null then
+    v_result := v_result || jsonb_build_object('value', in_value);
+  end if;
+  return v_result;
+end;
+$$
+language 'plpgsql';
+
+-- drop function data.attribute_change2jsonb(text, integer, jsonb);
+
+create or replace function data.attribute_change2jsonb(in_attribute_code text, in_value_object_id integer, in_value jsonb)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_result jsonb;
+  v_attribute_id integer := data.get_attribute_id(in_attribute_code);
+begin
+  v_result := jsonb_build_object('id', v_attribute_id);
+  if in_value_object_id is not null then 
+    v_result := v_result || jsonb_build_object('value_object_id', in_value_object_id);
+  end if;
+  if in_value is not null then
+    v_result := v_result || jsonb_build_object('value', in_value);
+  end if;
+  return v_result;
 end;
 $$
 language 'plpgsql';
@@ -1495,7 +1540,7 @@ volatile
 as
 $$
 declare
-  v_page_size integer := data.get_integer_param(page_size);
+  v_page_size integer := data.get_integer_param('page_size');
   v_actor_id integer;
   v_last_object_id integer;
   v_content integer[];
@@ -5967,12 +6012,16 @@ declare
   v_debatle_status_attribute_id integer := data.get_attribute_id('debatle_status');
   v_system_debatle_person1_attribute_id integer := data.get_attribute_id('system_debatle_person1');
   v_actions_function_attribute_id integer := data.get_attribute_id('actions_function');
+  v_content_attribute_id integer := data.get_attribute_id('content');
 
   v_debatles_all_id integer := data.get_object_id('debatles_all');
   v_debatles_my_id integer := data.get_object_id('debatles_my');
   v_master_group_id integer := data.get_object_id('master');
 
   v_content integer[];
+
+  v_temp_object_code text;
+  v_temp_object_id integer;
 begin
   assert in_request_id is not null;
   -- создаём новый дебатл
@@ -5988,14 +6037,20 @@ begin
   perform * from data.objects where id = v_debatles_all_id for update;
   perform * from data.objects where id = v_debatles_my_id for update;
   -- Достаём, меняем, кладём назад
-  v_content := json.get_integer_array_opt(data.get_attribute_value(v_debatles_all_id,'content', v_master_group_id));
+  v_content := json.get_integer_array_opt(data.get_attribute_value(v_debatles_all_id, 'content', v_master_group_id));
   v_content := array_append(v_content, v_debatle_id);
-  --perform data.set_attribute_value(v_debatles_all_id, 'content', v_content::jsonb, v_master_group_id);
+  perform data.change_object(v_debatles_all_id, 
+                             jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_content))),
+                             v_actor_id);
   v_content := json.get_integer_array_opt(data.get_attribute_value(v_debatles_my_id,'content', v_actor_id));
   v_content := array_append(v_content, v_debatle_id);
-  --perform data.set_attribute_value(v_debatles_my_id, 'content', v_content::jsonb, v_actor_id);
+  perform data.change_object(v_debatles_my_id, 
+                             jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_actor_id, to_jsonb(v_content))),
+                             v_actor_id);
 
 -- Сформировать объект со списком групп и показать его
+  insert into objects default values returning id, code into v_temp_object_id, v_temp_object_code;
+
 
   perform api_utils.create_notification(
     in_client_id,
@@ -6102,7 +6157,7 @@ begin
   else
     if pallas_project.is_in_group(in_actor_id, 'all_person') then
       v_actions_list := v_actions_list || ', "' || 'debatles":' || 
-        '{"code": "act_open_object", "disabled": false, "params": {"object_code": "debatles"}, "user_params": []}';
+        '{"code": "act_open_object", "name": "Дебатлы", "disabled": false, "params": {"object_code": "debatles"}, "user_params": []}';
     end if;
   end if;
 
@@ -6124,14 +6179,17 @@ declare
   v_person2_id integer;
   v_judge_id integer;
   v_is_master boolean;
+  v_changes jsonb[];
 begin
+  perform * from data.objects where id = in_object_id for update;
+
   v_person1_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person1'), null);
   v_person2_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person2'), null);
   v_judge_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_judge'), null);
 
-  perform data.set_attribute_value(in_object_id, 'debatle_person1', data.get_attribute_value(v_person1_id, 'title', in_actor_id));
-  perform data.set_attribute_value(in_object_id, 'debatle_person2', data.get_attribute_value(v_person2_id, 'title', in_actor_id));
-  perform data.set_attribute_value(in_object_id, 'debatle_judge', data.get_attribute_value(v_judge_id, 'title', in_actor_id));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_person1', null, data.get_attribute_value(v_person1_id, 'title', in_actor_id)));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_person2', null, data.get_attribute_value(v_person2_id, 'title', in_actor_id)));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_judge', null, data.get_attribute_value(v_judge_id, 'title', in_actor_id)));
 
   v_is_master := json.get_boolean(data.get_attribute_value(in_actor_id, 'person_is_master'));
 
@@ -6149,6 +6207,8 @@ null;
     end if;
 */
     end if;
+
+  perform data.change_object(in_object_id, to_jsonb(v_changes), in_actor_id);
 end;
 $$
 language 'plpgsql';
@@ -6163,34 +6223,33 @@ $$
 declare
   v_value jsonb;
   v_is_master boolean;
+  v_changes jsonb[];
 begin
+  perform * from data.objects where id = in_object_id for update;
+
   v_is_master := json.get_boolean(data.get_attribute_value(in_actor_id, 'person_is_master'));
   if v_is_master or in_object_id = in_actor_id then
     v_value := data.get_attribute_value(in_object_id, 'system_money');
     if json.get_bigint_opt(v_value, null) is not null then
-    null;
-     -- perform data.set_attribute_value(in_object_id, 'money', v_value, in_actor_id);
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('money', in_actor_id, v_value));
     end if;
     v_value := data.get_attribute_value(in_object_id, 'system_person_deposit_money');
     if json.get_bigint_opt(v_value, null) is not null then
-    null;
-      --perform data.set_attribute_value(in_object_id, 'person_deposit_money', v_value, in_actor_id);
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('person_deposit_money', in_actor_id, v_value));
     end if;
     v_value := data.get_attribute_value(in_object_id, 'system_person_coin');
     if json.get_integer_opt(v_value, null) is not null then
-    null;
-      --perform data.set_attribute_value(in_object_id, 'person_coin', v_value, in_actor_id);
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('person_coin', in_actor_id, v_value));
     end if;
     v_value := data.get_attribute_value(in_object_id, 'system_person_opa_rating');
     if json.get_integer_opt(v_value, null) is not null then
-    null;
-      --perform data.set_attribute_value(in_object_id, 'person_opa_rating', v_value, in_actor_id);
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('person_opa_rating', in_actor_id, v_value));
     end if;
     v_value := data.get_attribute_value(in_object_id, 'system_person_un_rating');
     if json.get_integer_opt(v_value, null) is not null then
-      null;
-      --perform data.set_attribute_value(in_object_id, 'person_un_rating', v_value, in_actor_id);
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('person_un_rating', in_actor_id, v_value));
     end if;
+    perform data.change_object(in_object_id, to_jsonb(v_changes), in_actor_id);
   end if;
 end;
 $$
@@ -6217,6 +6276,8 @@ declare
   v_person_state_attribute_id integer;
   v_system_money_attribute_id integer;
   v_money_attribute_id integer;
+  v_system_person_deposit_money_attribute_id integer;
+  v_person_deposit_money_attribute_id integer;
   v_system_person_coin_attribute_id integer;
   v_person_coin_attribute_id integer;
   v_system_person_opa_rating_attribute_id integer;
@@ -6258,11 +6319,11 @@ begin
 
   insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
   values ('system_person_deposit_money', 'Остаток средств на накопительном счёте', 'system', null, null, false)
-  returning id into v_system_money_attribute_id;
+  returning id into v_system_person_deposit_money_attribute_id;
 
   insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
   values ('person_deposit_money', 'Остаток средств на накопительном счёте', 'normal', 'full', null, true)
-  returning id into v_money_attribute_id;
+  returning id into v_person_deposit_money_attribute_id;
 
   insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
   values ('system_person_coin', 'Остаток коинов', 'system', null, null, false)
@@ -6416,7 +6477,8 @@ begin
   (v_person_id, v_system_person_opa_rating_attribute_id, jsonb '1'),
   (v_person_id, v_system_person_un_rating_attribute_id, jsonb '150'),
   (v_person_id, v_person_is_master_attribute_id, jsonb 'false'),
-  (v_person_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_person"');
+  (v_person_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_person"'),
+  (v_person_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_menu"');
 
   insert into data.object_objects(parent_object_id, object_id) values
   (v_all_person_group_id, v_person_id),
