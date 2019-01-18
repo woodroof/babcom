@@ -29,6 +29,7 @@ begin
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_object_id, data.get_attribute_id('type'), jsonb '"test"'),
   (v_object_id, data.get_attribute_id('is_visible'), jsonb 'true'),
+  (v_object_id, data.get_attribute_id('test_state'), jsonb '"state1"'),
   (v_object_id, data.get_attribute_id('actions_function'), jsonb '"test_project.diff_action_generator"'),
   (v_object_id, data.get_attribute_id('title'), to_jsonb(v_title)),
   (

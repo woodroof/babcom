@@ -7933,41 +7933,58 @@ declare
   v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_title text := test_project.next_code(json.get_string(in_params, 'title'));
   v_object_id integer := json.get_integer(in_params, 'object_id');
-  v_changes jsonb;
-  v_change record;
+  v_state text := json.get_string(data.get_attribute_value(v_object_id, 'test_state'));
+  v_changes jsonb := jsonb '[]';
+  v_diffs jsonb;
+  v_diff record;
   v_message_sent boolean := false;
 begin
   assert in_request_id is not null;
   assert test_project.is_user_params_empty(in_user_params);
   assert in_default_params is null;
 
-  v_changes :=
-    data.change_object(
-      v_object_id,
-      format(
-        '[{"id": %s, "value": "%s"}, {"id": %s, "value": "%s"}]',
-        data.get_attribute_id('title'),
-        v_title,
-        data.get_attribute_id('description'),
--- todo Описание для следующего теста
-'Ура!')::jsonb,
-      v_actor_id);
-  for v_change in
+  if v_state = 'state1' then
+    v_changes := v_changes || data.attribute_change2jsonb('test_state', null, jsonb '"state2"');
+    v_changes := v_changes || data.attribute_change2jsonb('title', null, to_jsonb(v_title));
+    v_changes := v_changes || data.attribute_change2jsonb('description', null, to_jsonb(
+'**Проверка 1:** Заголовок изменился на "' || v_title || '".
+**Проверка 2:** Название кнопки поменялось на "Вперёд!".
+**Проверка 3:** Действие в очередной раз полностью меняет отображаемые данные.'));
+  elsif v_state = 'state2' then
+    v_changes := v_changes || data.attribute_change2jsonb('test_state', null, jsonb '"state3"');
+    v_changes := v_changes || data.attribute_change2jsonb('title', null, to_jsonb(v_title));
+    v_changes := v_changes || data.attribute_change2jsonb('subtitle', null, jsonb '"Тест на удаление и добавление атрибутов"');
+    v_changes := v_changes || data.attribute_change2jsonb('description', null, null);
+    v_changes := v_changes || data.attribute_change2jsonb('template', null, jsonb '{"groups": [{"code": "not_so_common", "attributes": ["description2"], "actions": ["action"]}]}');
+    v_changes := v_changes || data.attribute_change2jsonb('description2', null, to_jsonb(text
+'В этот раз мы не изменяли значение атрибута, а удалили старый и добавили новый.
+
+**Проверка 1:** Под заголовком гордо красуется подзаголовок.
+**Проверка 2:** Старого текста нигде нет.
+
+Дальше пока ничего нет, увы :('));
+  end if;
+
+  assert v_changes != jsonb '[]';
+
+  v_diffs := data.change_object(v_object_id, v_changes, v_actor_id);
+
+  for v_diff in
   (
     select
       json.get_integer(value, 'client_id') as client_id,
       json.get_object(value, 'object') as object
-    from jsonb_array_elements(v_changes)
+    from jsonb_array_elements(v_diffs)
   )
   loop
-    if v_change.client_id = in_client_id then
+    if v_diff.client_id = in_client_id then
       assert v_message_sent is false;
 
       v_message_sent := true;
 
-      perform api_utils.create_notification(v_change.client_id, in_request_id, 'diff', jsonb_build_object('object_id', v_object_id, 'object', v_change.object));
+      perform api_utils.create_notification(v_diff.client_id, in_request_id, 'diff', jsonb_build_object('object_id', v_object_id, 'object', v_diff.object));
     else
-      perform api_utils.create_notification(v_change.client_id, null, 'diff', jsonb_build_object('object_id', v_object_id, 'object', v_change.object));
+      perform api_utils.create_notification(v_diff.client_id, null, 'diff', jsonb_build_object('object_id', v_object_id, 'object', v_diff.object));
     end if;
   end loop;
 
@@ -7986,9 +8003,11 @@ stable
 as
 $$
 declare
+  v_state text := json.get_string(data.get_attribute_value(in_object_id, 'test_state'));
+  v_name text := case when v_state = 'state2' then 'Вперёд!' else 'Далее' end;
   v_title text := json.get_string(data.get_attribute_value(in_object_id, 'title', in_actor_id));
 begin
-  return format('{"action": {"code": "diff", "name": "Далее", "disabled": false, "params": {"title": "%s", "object_id": %s}}}', v_title, in_object_id)::jsonb;
+  return format('{"action": {"code": "diff", "name": "%s", "disabled": false, "params": {"title": "%s", "object_id": %s}}}', v_name, v_title, in_object_id)::jsonb;
 end;
 $$
 language 'plpgsql';
@@ -8045,6 +8064,11 @@ begin
   insert into data.attributes(code, type, card_type, can_be_overridden)
   values('description', 'normal', 'full', true)
   returning id into v_description_attribute_id;
+
+  -- Накидаем атрибутов для различного использования
+  insert into data.attributes(code, type, card_type, can_be_overridden) values
+  ('description2', 'normal', null, true),
+  ('test_state', 'system', null, false);
 
   -- И первая группа в шаблоне
   v_template_groups := array_append(v_template_groups, jsonb '{"code": "common", "attributes": ["description"], "actions": ["action"]}');
@@ -9067,6 +9091,7 @@ begin
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_object_id, data.get_attribute_id('type'), jsonb '"test"'),
   (v_object_id, data.get_attribute_id('is_visible'), jsonb 'true'),
+  (v_object_id, data.get_attribute_id('test_state'), jsonb '"state1"'),
   (v_object_id, data.get_attribute_id('actions_function'), jsonb '"test_project.diff_action_generator"'),
   (v_object_id, data.get_attribute_id('title'), to_jsonb(v_title)),
   (

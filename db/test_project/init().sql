@@ -31,6 +31,11 @@ begin
   values('description', 'normal', 'full', true)
   returning id into v_description_attribute_id;
 
+  -- Накидаем атрибутов для различного использования
+  insert into data.attributes(code, type, card_type, can_be_overridden) values
+  ('description2', 'normal', null, true),
+  ('test_state', 'system', null, false);
+
   -- И первая группа в шаблоне
   v_template_groups := array_append(v_template_groups, jsonb '{"code": "common", "attributes": ["description"], "actions": ["action"]}');
 
