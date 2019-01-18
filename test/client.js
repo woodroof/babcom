@@ -40,19 +40,36 @@ function createOldMessageCallback(message_text)
 	return () => setFullMessage(message_text);
 }
 
+function addClientMessage(message_title, message_body)
+{
+	var message = document.createElement('div');
+	message.className = 'client_message';
+	message.innerText = '⇒ ' + message_title;
+	message.onclick = createOldMessageCallback(message_body);
+
+	var message_line = document.createElement('div');
+	message_line.appendChild(message);
+
+	var messages = document.getElementById('messages');
+	messages.insertBefore(message_line, messages.firstChild);
+}
+
 function sendMessage()
 {
 	var message_text = document.getElementById('send_text').value;
 
-	var message = document.createElement('div');
-	message.className = 'client_message';
-	message.innerHTML = '⇒ ' + JSON.parse(message_text)['type'];
-	message.onclick = createOldMessageCallback(message_text);
+	try
+	{
+		var parsed_message = JSON.parse(message_text);
 
-	var messages = document.getElementById('messages');
-	messages.insertBefore(message, messages.firstChild);
+		addClientMessage(parsed_message['type'], message_text);
 
-	socket.send(message_text);
+		socket.send(message_text);
+	}
+	catch (err)
+	{
+		addClientMessage('<invalid json>', message_text);
+	}
 	return false;
 }
 
