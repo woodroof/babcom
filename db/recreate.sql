@@ -1556,6 +1556,34 @@ end;
 $$
 language 'plpgsql';
 
+-- drop function data.get_class_id(text);
+
+create or replace function data.get_class_id(in_class_code text)
+returns integer
+stable
+as
+$$
+declare
+  v_class_id integer;
+begin
+  assert in_class_code is not null;
+
+  select id
+  into v_class_id
+  from data.objects
+  where
+    code = in_class_code and
+    type = 'class';
+
+  if v_class_id is null then
+    raise exception 'Can''t find class "%"', in_class_code;
+  end if;
+
+  return v_class_id;
+end;
+$$
+language 'plpgsql';
+
 -- drop function data.get_integer_param(text);
 
 create or replace function data.get_integer_param(in_code text)
@@ -1710,7 +1738,9 @@ begin
   select code
   into v_object_code
   from data.objects
-  where id = in_object_id;
+  where
+    id = in_object_id and
+    type = 'instance';
 
   if v_object_code is null then
     raise exception 'Can''t find object %', in_object_id;
@@ -1849,7 +1879,9 @@ begin
   select id
   into v_object_id
   from data.objects
-  where code = in_object_code;
+  where
+    code = in_object_code and
+    type = 'instance';
 
   if v_object_id is null then
     raise exception 'Can''t find object "%"', in_object_code;
@@ -9810,7 +9842,6 @@ create table data.objects(
   type data.object_type not null default 'instance'::data.object_type,
   class_id integer,
   constraint objects_class_reference_check check((class_id is null) or ((type = 'instance'::data.object_type) and (not data.is_instance(class_id)))),
-  constraint objects_code_check check((code is not null) = (type = 'instance'::data.object_type)),
   constraint objects_pk primary key(id),
   constraint objects_unique_code unique(code)
 );

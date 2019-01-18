@@ -6,7 +6,6 @@ create table data.objects(
   type data.object_type not null default 'instance'::data.object_type,
   class_id integer,
   constraint objects_class_reference_check check((class_id is null) or ((type = 'instance'::data.object_type) and (not data.is_instance(class_id)))),
-  constraint objects_code_check check((code is not null) = (type = 'instance'::data.object_type)),
   constraint objects_pk primary key(id),
   constraint objects_unique_code unique(code)
 );

@@ -13,7 +13,9 @@ begin
   select id
   into v_object_id
   from data.objects
-  where code = in_object_code;
+  where
+    code = in_object_code and
+    type = 'instance';
 
   if v_object_id is null then
     raise exception 'Can''t find object "%"', in_object_code;
