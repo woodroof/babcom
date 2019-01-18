@@ -9200,12 +9200,14 @@ begin
     "name": "Далее",
     "disabled": false,
     "params": "%s",
-    "user_params": {
-      "code": "param",
-      "description": "Число",
-      "type": "float",
-      "restrictions": {}
-    }
+    "user_params": [
+      {
+        "code": "param",
+        "description": "Число",
+        "type": "float",
+        "restrictions": {}
+      }
+    ]
   }
 }', v_object_code)::jsonb;
 end;
@@ -9256,12 +9258,14 @@ begin
     "name": "Далее",
     "disabled": false,
     "params": "%s",
-    "user_params": {
-      "code": "param",
-      "description": "Целое число",
-      "type": "integer",
-      "restrictions": {}
-    }
+    "user_params": [
+      {
+        "code": "param",
+        "description": "Целое число",
+        "type": "integer",
+        "restrictions": {}
+      }
+    ]
   }
 }', v_object_code)::jsonb;
 end;
@@ -9312,14 +9316,16 @@ begin
     "name": "Далее",
     "disabled": false,
     "params": "%s",
-    "user_params": {
-      "code": "param",
-      "description": "Текстовый блок",
-      "type": "string",
-      "restrictions": {
-        "multiline": true
+    "user_params": [
+      {
+        "code": "param",
+        "description": "Текстовый блок",
+        "type": "string",
+        "restrictions": {
+          "multiline": true
+        }
       }
-    }
+    ]
   }
 }', v_object_code)::jsonb;
 end;
@@ -9454,14 +9460,16 @@ begin
     "name": "Далее",
     "disabled": false,
     "params": "%s",
-    "user_params": {
-      "code": "param",
-      "description": "Текстовая строка",
-      "type": "string",
-      "restrictions": {
-        "multiline": false
+    "user_params": [
+      {
+        "code": "param",
+        "description": "Текстовая строка",
+        "type": "string",
+        "restrictions": {
+          "multiline": false
+        }
       }
-    }
+    ]
   }
 }', v_object_code)::jsonb;
 end;

@@ -17,12 +17,14 @@ begin
     "name": "Далее",
     "disabled": false,
     "params": "%s",
-    "user_params": {
-      "code": "param",
-      "description": "Целое число",
-      "type": "integer",
-      "restrictions": {}
-    }
+    "user_params": [
+      {
+        "code": "param",
+        "description": "Целое число",
+        "type": "integer",
+        "restrictions": {}
+      }
+    ]
   }
 }', v_object_code)::jsonb;
 end;

@@ -17,14 +17,16 @@ begin
     "name": "Далее",
     "disabled": false,
     "params": "%s",
-    "user_params": {
-      "code": "param",
-      "description": "Текстовый блок",
-      "type": "string",
-      "restrictions": {
-        "multiline": true
+    "user_params": [
+      {
+        "code": "param",
+        "description": "Текстовый блок",
+        "type": "string",
+        "restrictions": {
+          "multiline": true
+        }
       }
-    }
+    ]
   }
 }', v_object_code)::jsonb;
 end;
