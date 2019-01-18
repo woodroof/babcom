@@ -13,7 +13,7 @@ begin
   perform data.get_active_actor_id(in_client_id);
 
   assert in_request_id is not null;
-  assert in_user_params is null;
+  assert test_project.is_user_params_empty(in_user_params);
   assert in_default_params is null;
 
   assert v_array_len = 1;

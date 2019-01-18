@@ -12,7 +12,7 @@ begin
 
   assert in_request_id is not null;
   assert in_params = jsonb 'null';
-  assert in_user_params is null;
+  assert test_project.is_user_params_empty(in_user_params);
 
   perform api_utils.create_notification(
     in_client_id,

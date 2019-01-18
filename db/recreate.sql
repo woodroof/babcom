@@ -7938,7 +7938,7 @@ declare
   v_message_sent boolean := false;
 begin
   assert in_request_id is not null;
-  assert in_user_params is null;
+  assert test_project.is_user_params_empty(in_user_params);
   assert in_default_params is null;
 
   v_changes :=
@@ -8005,7 +8005,7 @@ begin
 
   assert in_request_id is not null;
   assert in_params = jsonb 'null';
-  assert in_user_params is null;
+  assert test_project.is_user_params_empty(in_user_params);
   assert in_default_params is null;
 
   perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
@@ -9023,6 +9023,19 @@ end;
 $$
 language 'plpgsql';
 
+-- drop function test_project.is_user_params_empty(jsonb);
+
+create or replace function test_project.is_user_params_empty(in_user_params jsonb)
+returns boolean
+stable
+as
+$$
+begin
+  return in_user_params is null or in_user_params = jsonb 'null' or in_user_params = jsonb '{}';
+end;
+$$
+language 'plpgsql';
+
 -- drop function test_project.login_action(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function test_project.login_action(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -9038,7 +9051,7 @@ begin
   perform data.get_active_actor_id(in_client_id);
 
   assert in_request_id is not null;
-  assert in_user_params is null;
+  assert test_project.is_user_params_empty(in_user_params);
   assert in_default_params is null;
 
   -- Создадим новый логин
@@ -9110,7 +9123,7 @@ begin
   perform data.get_active_actor_id(in_client_id);
 
   assert in_request_id is not null;
-  assert in_user_params is null;
+  assert test_project.is_user_params_empty(in_user_params);
   assert in_default_params is null;
 
   assert v_array_len = 1;
@@ -9327,7 +9340,7 @@ begin
 
   assert in_request_id is not null;
   assert in_params = jsonb 'null';
-  assert in_user_params is null;
+  assert test_project.is_user_params_empty(in_user_params);
 
   perform api_utils.create_notification(
     in_client_id,
@@ -9367,7 +9380,7 @@ begin
   perform data.get_active_actor_id(in_client_id);
 
   assert in_request_id is not null;
-  assert in_user_params is null;
+  assert test_project.is_user_params_empty(in_user_params);
   assert in_default_params is null;
 
   perform api_utils.create_notification(
