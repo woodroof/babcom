@@ -44,9 +44,19 @@ begin
   (v_object_id, data.get_attribute_id('is_visible'), jsonb 'true'),
   (v_object_id, data.get_attribute_id('title'), jsonb '"Duo"'),
   (v_object_id, data.get_attribute_id('subtitle'), jsonb '"Второй элемент списка"'),
-  (v_object_id, data.get_attribute_id('template'), jsonb '{"groups": [{"code": "main", "attributes": ["description2"]}]}'),
+  (v_object_id, data.get_attribute_id('short_card_attribute'), null),
+  (v_object_id, data.get_attribute_id('attribute_with_description'), jsonb '"значение"'),
+  (v_object_id, data.get_attribute_id('attribute'), jsonb '"значение"'),
+  (v_object_id, data.get_attribute_id('template'), jsonb '{"groups": [{"code": "main", "attributes": ["description2"]}, {"code": "additional", "name": "Группа элемента списка", "attributes": ["short_card_attribute", "attribute_with_description", "attribute"], "actions": ["action"]}]}'),
   (v_object_id, data.get_attribute_id('description2'), to_jsonb(text
-'TODO: две группы, разные наборы атрибутов, разные наборы действий'));
+'**Проверка 1:** В этом объекте списка две группы.
+**Проверка 2:** У второй группы есть имя "Группа элемента списка".
+**Проверка 3:** Во второй группе есть три атрибута.
+**Проверка 4:** У первого есть имя, но нет значения.
+**Проверка 5:** У второго есть только описание значения.
+**Проверка 6:** У третьего есть имя и значение.
+**Проверка 7:** Под атрибутами есть действие.
+**Проверка 8:** При выборе действия выполняется именно оно.'));
 
   -- Третий объект
 

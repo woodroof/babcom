@@ -13,6 +13,7 @@ declare
   v_content_attribute_id integer := data.get_attribute_id('content');
   v_actions_function_attribute_id integer := data.get_attribute_id('actions_function');
   v_full_card_function_attribute_id integer := data.get_attribute_id('full_card_function');
+  v_list_actions_function_attribute_id integer := data.get_attribute_id('list_actions_function');
   v_description_attribute_id integer;
 
   v_menu_id integer;
@@ -33,9 +34,12 @@ begin
   returning id into v_description_attribute_id;
 
   -- Накидаем атрибутов для различного использования
-  insert into data.attributes(code, type, card_type, can_be_overridden) values
-  ('description2', 'normal', null, true),
-  ('test_state', 'system', null, false);
+  insert into data.attributes(code, type, name, card_type, can_be_overridden, value_description_function) values
+  ('description2', 'normal', null, null, true, null),
+  ('test_state', 'system', null, null, false, null),
+  ('short_card_attribute', 'normal', 'Атрибут миникарточки', 'mini', true, null),
+  ('attribute', 'normal', 'Обычный атрибут', null, true, null),
+  ('attribute_with_description', 'normal', null, null, true, 'test_project.test_value_description_function');
 
   -- И первая группа в шаблоне
   v_template_groups := array_append(v_template_groups, jsonb '{"code": "common", "attributes": ["description"], "actions": ["action"]}');
@@ -884,8 +888,10 @@ Markdown — формат, который все реализуют по-раз�
 
 **Проверка 1:** По нажатию на кнопку ниже появляется форма с именем параметра "Текстовая строка", полем для ввода строки и кнопками "ОК" и "Отмена".
 **Проверка 2:** По нажатию на кнопку "Отмена" форма закрывается и более ничего не происходит.
-**Проверка 3:** В поле можно ввести только одну строку, Enter не срабатывает.
-**Проверка 4:** По нажатию на кноку "ОК" происходит переход к следующему тесту.')
+**Проверка 3:** В поле можно ввести только одну строку, Enter не создаёт новую строку, а отправляет форму.
+В варианте для мобильных приложений — справа внизу у клавиатуры есть значок "Отправить форму" и нет значка перевода строки.
+**Проверка 4:** Вставка текста с переводами строк из буфера обмена не создаёт новые строки.
+**Проверка 5:** По нажатию на кноку "ОК" происходит переход к следующему тесту.')
   );
 
   -- Действие с текстовым многострочным параметром
@@ -1026,6 +1032,7 @@ Markdown — формат, который все реализуют по-раз�
   (v_test_id, v_type_attribute_id, jsonb '"test"'),
   (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
   (v_test_id, v_full_card_function_attribute_id, jsonb '"test_project.simple_list_generator"'),
+  (v_test_id, v_list_actions_function_attribute_id, jsonb '"test_project.do_nothing_list_action_generator"'),
   (v_test_id, v_title_attribute_id, format('"Тест %s"', v_test_num - 1)::jsonb),
   (v_test_id, v_subtitle_attribute_id, jsonb '"Непустые списки"'),
   (

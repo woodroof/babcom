@@ -8134,6 +8134,27 @@ end;
 $$
 language 'plpgsql';
 
+-- drop function test_project.do_nothing_list_action_generator(integer, integer, integer);
+
+create or replace function test_project.do_nothing_list_action_generator(in_object_id integer, in_list_object_id integer, in_actor_id integer)
+returns jsonb
+stable
+as
+$$
+declare
+  v_title_attribute jsonb := data.get_attribute_value(in_list_object_id, 'title', in_actor_id);
+begin
+  assert data.is_instance(in_object_id);
+
+  if v_title_attribute = jsonb '"Duo"' then
+    return jsonb '{"action": {"code": "do_nothing", "name": "Я кнопка", "disabled": false, "params": null}}';
+  end if;
+
+  return jsonb '{}';
+end;
+$$
+language 'plpgsql';
+
 -- drop function test_project.get_suffix(text);
 
 create or replace function test_project.get_suffix(in_code text)
@@ -8164,6 +8185,7 @@ declare
   v_content_attribute_id integer := data.get_attribute_id('content');
   v_actions_function_attribute_id integer := data.get_attribute_id('actions_function');
   v_full_card_function_attribute_id integer := data.get_attribute_id('full_card_function');
+  v_list_actions_function_attribute_id integer := data.get_attribute_id('list_actions_function');
   v_description_attribute_id integer;
 
   v_menu_id integer;
@@ -8184,9 +8206,12 @@ begin
   returning id into v_description_attribute_id;
 
   -- Накидаем атрибутов для различного использования
-  insert into data.attributes(code, type, card_type, can_be_overridden) values
-  ('description2', 'normal', null, true),
-  ('test_state', 'system', null, false);
+  insert into data.attributes(code, type, name, card_type, can_be_overridden, value_description_function) values
+  ('description2', 'normal', null, null, true, null),
+  ('test_state', 'system', null, null, false, null),
+  ('short_card_attribute', 'normal', 'Атрибут миникарточки', 'mini', true, null),
+  ('attribute', 'normal', 'Обычный атрибут', null, true, null),
+  ('attribute_with_description', 'normal', null, null, true, 'test_project.test_value_description_function');
 
   -- И первая группа в шаблоне
   v_template_groups := array_append(v_template_groups, jsonb '{"code": "common", "attributes": ["description"], "actions": ["action"]}');
@@ -9035,8 +9060,10 @@ Markdown — формат, который все реализуют по-раз�
 
 **Проверка 1:** По нажатию на кнопку ниже появляется форма с именем параметра "Текстовая строка", полем для ввода строки и кнопками "ОК" и "Отмена".
 **Проверка 2:** По нажатию на кнопку "Отмена" форма закрывается и более ничего не происходит.
-**Проверка 3:** В поле можно ввести только одну строку, Enter не срабатывает.
-**Проверка 4:** По нажатию на кноку "ОК" происходит переход к следующему тесту.')
+**Проверка 3:** В поле можно ввести только одну строку, Enter не создаёт новую строку, а отправляет форму.
+В варианте для мобильных приложений — справа внизу у клавиатуры есть значок "Отправить форму" и нет значка перевода строки.
+**Проверка 4:** Вставка текста с переводами строк из буфера обмена не создаёт новые строки.
+**Проверка 5:** По нажатию на кноку "ОК" происходит переход к следующему тесту.')
   );
 
   -- Действие с текстовым многострочным параметром
@@ -9177,6 +9204,7 @@ Markdown — формат, который все реализуют по-раз�
   (v_test_id, v_type_attribute_id, jsonb '"test"'),
   (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
   (v_test_id, v_full_card_function_attribute_id, jsonb '"test_project.simple_list_generator"'),
+  (v_test_id, v_list_actions_function_attribute_id, jsonb '"test_project.do_nothing_list_action_generator"'),
   (v_test_id, v_title_attribute_id, format('"Тест %s"', v_test_num - 1)::jsonb),
   (v_test_id, v_subtitle_attribute_id, jsonb '"Непустые списки"'),
   (
@@ -9839,9 +9867,19 @@ begin
   (v_object_id, data.get_attribute_id('is_visible'), jsonb 'true'),
   (v_object_id, data.get_attribute_id('title'), jsonb '"Duo"'),
   (v_object_id, data.get_attribute_id('subtitle'), jsonb '"Второй элемент списка"'),
-  (v_object_id, data.get_attribute_id('template'), jsonb '{"groups": [{"code": "main", "attributes": ["description2"]}]}'),
+  (v_object_id, data.get_attribute_id('short_card_attribute'), null),
+  (v_object_id, data.get_attribute_id('attribute_with_description'), jsonb '"значение"'),
+  (v_object_id, data.get_attribute_id('attribute'), jsonb '"значение"'),
+  (v_object_id, data.get_attribute_id('template'), jsonb '{"groups": [{"code": "main", "attributes": ["description2"]}, {"code": "additional", "name": "Группа элемента списка", "attributes": ["short_card_attribute", "attribute_with_description", "attribute"], "actions": ["action"]}]}'),
   (v_object_id, data.get_attribute_id('description2'), to_jsonb(text
-'TODO: две группы, разные наборы атрибутов, разные наборы действий'));
+'**Проверка 1:** В этом объекте списка две группы.
+**Проверка 2:** У второй группы есть имя "Группа элемента списка".
+**Проверка 3:** Во второй группе есть три атрибута.
+**Проверка 4:** У первого есть имя, но нет значения.
+**Проверка 5:** У второго есть только описание значения.
+**Проверка 6:** У третьего есть имя и значение.
+**Проверка 7:** Под атрибутами есть действие.
+**Проверка 8:** При выборе действия выполняется именно оно.'));
 
   -- Третий объект
 
@@ -9883,6 +9921,8 @@ begin
     return '**один**';
   elsif in_value = jsonb '2' then
     return '*два*';
+  elsif in_value = jsonb '"значение"' then
+    return 'описание значения';
   elsif in_value = jsonb '"lorem ipsum"' then
     return 'Lorem **ipsum** dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.';
   elsif in_value = jsonb '0.0314159265' then
