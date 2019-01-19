@@ -8162,6 +8162,7 @@ declare
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
   v_content_attribute_id integer := data.get_attribute_id('content');
   v_actions_function_attribute_id integer := data.get_attribute_id('actions_function');
+  v_full_card_function_attribute_id integer := data.get_attribute_id('full_card_function');
   v_description_attribute_id integer;
 
   v_menu_id integer;
@@ -8174,7 +8175,7 @@ declare
 begin
   -- Базовые настройки
   insert into data.params(code, value, description)
-  values('page_size', jsonb '20', 'Размер страницы');
+  values('page_size', jsonb '5', 'Размер страницы');
 
   -- Атрибут для какого-то текста
   insert into data.attributes(code, type, card_type, can_be_overridden)
@@ -9162,9 +9163,36 @@ Markdown — формат, который все реализуют по-раз�
     to_jsonb(text
 'Объекты с пустыми списками должны отличаться от объектов без списков.
 
-**Проверка**: В самом низу мы видим какую-то заглушку, которая говорит нам, что тут список вроде бы и есть, но его нет.
+**Проверка:** В самом низу мы видим какую-то заглушку, которая говорит нам, что тут список вроде бы и есть, но его нет.
 
 [Продолжить](babcom:test' || v_test_num || ')')
+  );
+
+  -- Вывод списка
+
+  insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
+  v_test_num := v_test_num + 1;
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_test_id, v_type_attribute_id, jsonb '"test"'),
+  (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
+  (v_test_id, v_full_card_function_attribute_id, jsonb '"test_project.simple_list_generator"'),
+  (v_test_id, v_title_attribute_id, format('"Тест %s"', v_test_num - 1)::jsonb),
+  (v_test_id, v_subtitle_attribute_id, jsonb '"Непустые списки"'),
+  (
+    v_test_id,
+    v_description_attribute_id,
+    to_jsonb(text
+'Теперь мы возвращаем список из трёх элементов.
+Атрибут со списком также возвращается, но не отображается, т.к. отсутствует в шаблоне, да и вообще является массивом.
+
+**Проверка 1:** Ниже текста есть список с тремя элементами.
+**Проверка 2:** Должно быть понятно, что это именно элементы списка, а не новые группы.
+**Проверка 3:** Должно быть понятно, где заканчивается один элемент списка и начинается другой.
+**Проверка 4:** Должно быть понятно, что элементы списка кликабельны.
+**Проверка 5:** У первого элемента есть заголовок "Uno" и текст "Первый элемент списка".
+**Проверка 6:** У второго элемента есть заголовок "Duo", подзаголовок "Второй элемент списка" и текст с дополнительными проверками.
+**Проверка 7:** При выборе первого или второго элемента ничего не происходит.
+**Проверка 8:** У третьего элемента есть заголовок "Далее" и какой-то текст.')
   );
 
   -- todo прочие тесты на списки
@@ -9676,6 +9704,34 @@ end;
 $$
 language 'plpgsql';
 
+-- drop function test_project.next_or_do_nothing_list_action(integer, text, integer, integer);
+
+create or replace function test_project.next_or_do_nothing_list_action(in_client_id integer, in_request_id text, in_object_id integer, in_list_object_id integer)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_object_code text := data.get_object_code(in_object_id);
+  v_list_object_code text := data.get_object_code(in_list_object_id);
+  v_list_object_title text := json.get_string_opt(data.get_attribute_value(in_list_object_id, 'title', v_actor_id), null);
+begin
+  assert in_request_id is not null;
+
+  if v_list_object_title = 'Далее' then
+    perform api_utils.create_notification(
+      in_client_id,
+      in_request_id,
+      'action',
+      format('{"action": "open_object", "action_data": {"object_id": "%s"}}', test_project.next_code(v_object_code))::jsonb);
+  else
+    perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+  end if;
+end;
+$$
+language 'plpgsql';
+
 -- drop function test_project.object_action_generator(integer, integer);
 
 create or replace function test_project.object_action_generator(in_object_id integer, in_actor_id integer)
@@ -9732,6 +9788,79 @@ begin
     jsonb '{"name": "Заблокированное действие", "disabled": true}',
     v_object_code || '_invisible',
     jsonb '{"code": "do_nothing", "name": "Невидимое действие", "disabled": false, "params": null}');
+end;
+$$
+language 'plpgsql';
+
+-- drop function test_project.simple_list_generator(integer, integer);
+
+create or replace function test_project.simple_list_generator(in_object_id integer, in_actor_id integer)
+returns void
+volatile
+as
+$$
+declare
+  v_content jsonb := data.get_attribute_value(in_object_id, 'content', in_actor_id);
+  v_object_id integer;
+  v_object_code text;
+begin
+  if v_content is not null then
+    return;
+  end if;
+
+  v_content := jsonb '[]';
+
+  -- Первый объект
+
+  insert into data.objects
+  default values
+  returning id, code into v_object_id, v_object_code;
+
+  v_content := v_content || to_jsonb(v_object_code);
+
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_object_id, data.get_attribute_id('type'), jsonb '"list_object"'),
+  (v_object_id, data.get_attribute_id('is_visible'), jsonb 'true'),
+  (v_object_id, data.get_attribute_id('title'), jsonb '"Uno"'),
+  (v_object_id, data.get_attribute_id('template'), jsonb '{"groups": [{"code": "main", "attributes": ["description2"]}]}'),
+  (v_object_id, data.get_attribute_id('description2'), jsonb '"Первый элемент списка"');
+
+  -- Второй объект
+
+  insert into data.objects
+  default values
+  returning id, code into v_object_id, v_object_code;
+
+  v_content := v_content || to_jsonb(v_object_code);
+
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_object_id, data.get_attribute_id('type'), jsonb '"list_object"'),
+  (v_object_id, data.get_attribute_id('is_visible'), jsonb 'true'),
+  (v_object_id, data.get_attribute_id('title'), jsonb '"Duo"'),
+  (v_object_id, data.get_attribute_id('subtitle'), jsonb '"Второй элемент списка"'),
+  (v_object_id, data.get_attribute_id('template'), jsonb '{"groups": [{"code": "main", "attributes": ["description2"]}]}'),
+  (v_object_id, data.get_attribute_id('description2'), to_jsonb(text
+'TODO: две группы, разные наборы атрибутов, разные наборы действий'));
+
+  -- Третий объект
+
+  insert into data.objects
+  default values
+  returning id, code into v_object_id, v_object_code;
+
+  v_content := v_content || to_jsonb(v_object_code);
+
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_object_id, data.get_attribute_id('type'), jsonb '"list_object"'),
+  (v_object_id, data.get_attribute_id('is_visible'), jsonb 'true'),
+  (v_object_id, data.get_attribute_id('title'), jsonb '"Далее"'),
+  (v_object_id, data.get_attribute_id('template'), jsonb '{"groups": [{"code": "main", "attributes": ["description2"]}]}'),
+  (v_object_id, data.get_attribute_id('description2'), jsonb '"Ничтоже сумняшеся выбираем этот элемент для перехода к следующему тесту"');
+
+  -- Заполняем параметры оригинального объекта
+
+  perform data.set_attribute_value(in_object_id, data.get_attribute_id('content'), v_content, null, in_actor_id);
+  perform data.set_attribute_value(in_object_id, data.get_attribute_id('list_element_function'), jsonb '"test_project.next_or_do_nothing_list_action"', null, in_actor_id);
 end;
 $$
 language 'plpgsql';
