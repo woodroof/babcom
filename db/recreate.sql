@@ -6190,14 +6190,14 @@ as
 $$
 declare
   v_title text := json.get_string(in_user_params, 'title');
-  v_debatle_code text := pgcrypto.gen_random_uuid()::text;
+  v_debatle_code text;
   v_debatle_id  integer;
+  v_debatle_class_id integer := data.get_class_id('debatle');
   v_actor_id  integer :=data.get_active_actor_id(in_client_id);
 
-  v_title_attribute_id integer := data.get_attribute_id('title');
+  v_debatle_theme_attribute_id integer := data.get_attribute_id('system_debatle_theme');
   v_debatle_status_attribute_id integer := data.get_attribute_id('debatle_status');
   v_system_debatle_person1_attribute_id integer := data.get_attribute_id('system_debatle_person1');
-  v_actions_function_attribute_id integer := data.get_attribute_id('actions_function');
   v_content_attribute_id integer := data.get_attribute_id('content');
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
 
@@ -6205,34 +6205,35 @@ declare
   v_debatles_my_id integer := data.get_object_id('debatles_my');
   v_master_group_id integer := data.get_object_id('master');
 
-  v_content integer[];
+  v_content text[];
 
   v_temp_object_code text;
   v_temp_object_id integer;
 begin
   assert in_request_id is not null;
   -- создаём новый дебатл
-  insert into data.objects(code) values (v_debatle_code) returning id into v_debatle_id;
+  insert into data.objects(class_id) values (v_debatle_class_id) returning id, code into v_debatle_id, v_debatle_code;
 
-  insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_debatle_id, v_title_attribute_id, to_jsonb(v_title)),
-  (v_debatle_id, v_debatle_status_attribute_id, jsonb '"new"'),
-  (v_debatle_id, v_is_visible_attribute_id, jsonb 'true'),
-  (v_debatle_id, v_system_debatle_person1_attribute_id, to_jsonb(v_actor_id));
+  insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
+  (v_debatle_id, v_debatle_theme_attribute_id, to_jsonb(v_title), null),
+  (v_debatle_id, v_debatle_status_attribute_id, jsonb '"new"', null),
+  (v_debatle_id, v_is_visible_attribute_id, jsonb 'true', v_actor_id),
+  (v_debatle_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
+  (v_debatle_id, v_system_debatle_person1_attribute_id, to_jsonb(v_actor_id), null);
 
   -- Добавляем его в список всех и в список моих для того, кто создаёт
   -- Блокируем списки
   perform * from data.objects where id = v_debatles_all_id for update;
   perform * from data.objects where id = v_debatles_my_id for update;
   -- Достаём, меняем, кладём назад
-  v_content := json.get_integer_array_opt(data.get_attribute_value(v_debatles_all_id, 'content', v_master_group_id), v_content);
-  v_content := array_append(v_content, v_debatle_id);
+  v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_all_id, 'content', v_master_group_id), v_content);
+  v_content := array_append(v_content, v_debatle_code);
   perform data.change_object(v_debatles_all_id, 
                              jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_content))),
                              v_actor_id);
-  v_content := array[]::integer[];
-  v_content := json.get_integer_array_opt(data.get_attribute_value(v_debatles_my_id,'content', v_actor_id), v_content);
-  v_content := array_append(v_content, v_debatle_id);
+  v_content := array[]::text[];
+  v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_my_id,'content', v_actor_id), v_content);
+  v_content := array_append(v_content, v_debatle_code);
   perform data.change_object(v_debatles_my_id, 
                              jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_actor_id, to_jsonb(v_content))),
                              v_actor_id);
@@ -6242,6 +6243,112 @@ begin
     in_request_id,
     'action',
     format('{"action": "open_object", "action_data": {"object_id": "%s"}}', v_debatle_code)::jsonb);
+end;
+$$
+language 'plpgsql';
+
+-- drop function pallas_project.act_debatle_change_person(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_debatle_change_person(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_debatle_code text := json.get_string(in_params, 'debatle_code');
+  v_edited_person text := json.get_string_opt(in_params, 'edited_person', '~~~');
+  v_debatle_id integer := data.get_object_id(v_debatle_code);
+  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+
+  v_debatle_status text;
+  v_system_debatle_person1 integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person1'), -1);
+  v_system_debatle_person2 integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person2'), -1);
+  v_system_debatle_judje integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_judge'), -1);
+  v_debatle_title text := json.get_string_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_theme'), '');
+
+  v_content_attribute_id integer := data.get_attribute_id('content');
+  v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
+  v_title_attribute_id integer := data.get_attribute_id('title');
+  v_debatle_temp_person_list_edited_person_attribute_id integer := data.get_attribute_id('debatle_temp_person_list_edited_person');
+  v_system_debatle_temp_person_list_debatle_id_attribute_id integer := data.get_attribute_id('system_debatle_temp_person_list_debatle_id');
+
+  v_debatle_temp_person_list_class_id integer := data.get_class_id('debatle_temp_person_list');
+  v_content text[];
+
+  v_temp_object_code text;
+  v_temp_object_id integer;
+begin
+  assert in_request_id is not null;
+
+  v_debatle_status := json.get_string_opt(data.get_attribute_value(v_debatle_id, 'debatle_status'), '~~~');
+  if v_debatle_status not in ('new', 'future') then
+    perform api_utils.create_notification(
+      in_client_id,
+      in_request_id,
+      'action',
+      format('{"action": "show_message ", "action_data": {"title": "%s", "message": "%s"}}', 'Ошибка', 'Участников дебатла нельзя изменить на этом этапе')::jsonb); 
+    return;
+  end if;
+
+  if v_edited_person not in ('instigator', 'opponent', 'judge') then
+    perform api_utils.create_notification(
+      in_client_id,
+      in_request_id,
+      'action',
+      format('{"action": "show_message ", "action_data": {"title": "%s", "message": "%s"}}', 'Ошибка', 'Непонятно, какую из персон менять. Наверное что-то пошло не так. Обратитесь к мастеру.')::jsonb); 
+    return;
+  end if;
+
+  -- создаём темповый список персон
+  insert into data.objects(class_id) values (v_debatle_temp_person_list_class_id) returning id, code into v_temp_object_id, v_temp_object_code;
+
+  select array_agg(o.code) into v_content
+  from data.object_objects oo
+    left join data.objects o on o.id = oo.object_id 
+  where oo.parent_object_id = data.get_object_id('player')
+    and oo.object_id not in (oo.parent_object_id, v_system_debatle_person1, v_system_debatle_person2, v_system_debatle_judje);
+
+  if v_content is null then
+   perform api_utils.create_notification(
+      in_client_id,
+      in_request_id,
+      'action',
+      format('{"action": "show_message ", "action_data": {"title": "%s", "message": "%s"}}', 'Ошибка', 'Нет подходящих персон для изменения дебатла')::jsonb); 
+    return;
+  end if;
+
+  insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
+  (v_temp_object_id, v_title_attribute_id, to_jsonb(format('Изменение дебатла "%s"', v_debatle_title)), v_actor_id),
+  (v_temp_object_id, v_is_visible_attribute_id, jsonb 'true', v_actor_id),
+  (v_temp_object_id, v_debatle_temp_person_list_edited_person_attribute_id, to_jsonb(v_edited_person), null),
+  (v_temp_object_id, v_content_attribute_id, to_jsonb(v_content), null),
+  (v_temp_object_id, v_system_debatle_temp_person_list_debatle_id_attribute_id, to_jsonb(v_debatle_id), null);
+
+  perform api_utils.create_notification(
+    in_client_id,
+    in_request_id,
+    'action',
+    format('{"action": "open_object", "action_data": {"object_id": "%s"}}', v_temp_object_code)::jsonb);
+end;
+$$
+language 'plpgsql';
+
+-- drop function pallas_project.act_go_back(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_go_back(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+begin
+  assert in_request_id is not null;
+
+  perform api_utils.create_notification(
+    in_client_id,
+    in_request_id,
+    'action',
+    '{"action": "go_back", "action_data": {}}'::jsonb);
 end;
 $$
 language 'plpgsql';
@@ -6262,6 +6369,36 @@ begin
   assert in_user_params is not null;
 
   select id into v_login_id from data.logins where code = v_password;
+
+  if v_login_id is not null then
+  -- Заменим логин
+    perform data.set_login(in_client_id, v_login_id);
+    -- И отправим новый список акторов
+    perform api_utils.process_get_actors_message(in_client_id, in_request_id);
+  else
+  -- Вернём ошибку, если на нашли логин в табличке
+    perform api_utils.create_notification(
+      in_client_id,
+      in_request_id,
+      'action',
+      format('{"action": "show_message ", "action_data": {"title": "%s", "message": "%s"}}', 'Ошибка', 'Пароль не найден')::jsonb); 
+  end if;
+end;
+$$
+language 'plpgsql';
+
+-- drop function pallas_project.act_logout(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_logout(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_login_id integer := data.get_param('default_login_id');
+
+begin
+  assert in_request_id is not null;
 
   if v_login_id is not null then
   -- Заменим логин
@@ -6312,30 +6449,61 @@ declare
   v_actions_list text := '';
   v_person1_id integer;
   v_is_master boolean;
+  v_debatle_code text;
+  v_debatle_status text;
 begin
   assert in_actor_id is not null;
 
   v_is_master := pallas_project.is_in_group(in_actor_id, 'master');
-  v_person1_id := data.get_attribute_value(in_object_id, 'system_debatle_person1');
+  v_debatle_code := data.get_object_code(in_object_id);
+  v_person1_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person1'), null);
+  v_debatle_status := json.get_string_opt(data.get_attribute_value(in_object_id, 'debatle_status'), null);
 
-  if v_is_master then
-    v_actions_list := v_actions_list || 
-      format(', "debatle_change_instigator": {"code": "debatle_change_person", "name": "Изменить зачинщика", "disabled": false, '||
-              '"params": {"debatle_id": %s, "person_number": 1}}',
-              in_object_id);
+  if v_debatle_status in ('new', 'future') then
+    if v_is_master then
+      v_actions_list := v_actions_list || 
+        format(', "debatle_change_instigator": {"code": "debatle_change_person", "name": "Изменить зачинщика", "disabled": false, '||
+                '"params": {"debatle_code": "%s", "edited_person": "instigator"}}',
+                v_debatle_code);
+    end if;
+    if in_actor_id = v_person1_id or v_is_master then
+      v_actions_list := v_actions_list || 
+        format(', "debatle_change_opponent": {"code": "debatle_change_person", "name": "Изменить оппонента", "disabled": false, '||
+                '"params": {"debatle_code": "%s", "edited_person": "opponent"}}',
+                v_debatle_code);
+    end if;
+    if v_is_master then
+      v_actions_list := v_actions_list || 
+        format(', "debatle_change_judge": {"code": "debatle_change_person", "name": "Изменить судью", "disabled": false, '||
+                '"params": {"debatle_code": "%s", "edited_person": "judge"}}',
+                v_debatle_code);
+    end if;
   end if;
-  if in_actor_id = v_person1_id or v_is_master then
-    v_actions_list := v_actions_list || 
-      format(', "debatle_change_opponent": {"code": "debatle_change_person", "name": "Изменить оппонента", "disabled": false, '||
-              '"params": {"debatle_id": %s, "person_number": 2}}',
-              in_object_id);
-  end if;
-  if v_is_master then
-    v_actions_list := v_actions_list || 
-      format(', "debatle_change_judge": {"code": "debatle_change_person", "name": "Изменить судью", "disabled": false, '||
-              '"params": {"debatle_id": %s, "person_number": 3}}',
-              in_object_id);
-  end if;
+  return jsonb ('{'||trim(v_actions_list,',')||'}');
+end;
+$$
+language 'plpgsql';
+
+-- drop function pallas_project.actgenerator_debatle_temp_person_list(integer, integer);
+
+create or replace function pallas_project.actgenerator_debatle_temp_person_list(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_actions_list text := '';
+  v_person1_id integer;
+  v_is_master boolean;
+  v_debatle_code text;
+  v_debatle_status text;
+begin
+  assert in_actor_id is not null;
+
+  v_actions_list := v_actions_list || 
+                ', "debatle_change_person_back": {"code": "go_back", "name": "Отмена", "disabled": false, '||
+                '"params": {}}';
+
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;
 $$
@@ -6357,6 +6525,26 @@ begin
     v_actions_list := v_actions_list || 
       ', "create_debatle_step1": {"code": "create_debatle_step1", "name": "Инициировать дебатл", "disabled": false, '||
       '"params": {}, "user_params": [{"code": "title", "description": "Введите тему дебатла", "type": "string" }]}';
+    v_actions_list := v_actions_list || 
+      ', "get_my_debatles": {"code": "act_open_object", "name": "Мои дебатлы", "disabled": false, '||
+      '"params": {"object_code": "debatles_my"}}';
+    v_actions_list := v_actions_list || 
+      ', "get_closed_debatles": {"code": "act_open_object", "name": "Завершенные дебатлы", "disabled": false, '||
+      '"params": {"object_code": "debatles_closed"}}';
+  end if;
+  if pallas_project.is_in_group(in_actor_id, 'master') then
+    v_actions_list := v_actions_list || 
+      ', "get_new_debatles": {"code": "act_open_object", "name": "Неподтверждённые дебатлы", "disabled": false, '||
+      '"params": {"object_code": "debatles_new"}}';
+    v_actions_list := v_actions_list || 
+      ', "get_current_debatles": {"code": "act_open_object", "name": "Теукщие дебатлы", "disabled": false, '||
+      '"params": {"object_code": "debatles_current"}}';
+    v_actions_list := v_actions_list || 
+      ', "get_future_debatles": {"code": "act_open_object", "name": "Будущие дебатлы", "disabled": false, '||
+      '"params": {"object_code": "debatles_future"}}';
+    v_actions_list := v_actions_list || 
+      ', "get_all_debatles": {"code": "act_open_object", "name": "Все дебатлы", "disabled": false, '||
+      '"params": {"object_code": "debatles_all"}}';
   end if;
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;
@@ -6376,13 +6564,15 @@ declare
 begin
   assert in_actor_id is not null;
 
-  if data.get_object_code(in_actor_id) = 'test1' then
+  if data.get_object_code(in_actor_id) = 'anonimous' then
     v_actions_list := v_actions_list || ', "' || 'login":' || 
       '{"code": "login", "name": "Войти", "disabled": false, "params": {}, "user_params": [{"code": "password", "description": "Введите пароль", "type": "string" }]}';
   else
     if pallas_project.is_in_group(in_actor_id, 'all_person') then
       v_actions_list := v_actions_list || ', "' || 'debatles":' || 
         '{"code": "act_open_object", "name": "Дебатлы", "disabled": false, "params": {"object_code": "debatles"}}';
+      v_actions_list := v_actions_list || ', "' || 'logout":' || 
+        '{"code": "logout", "name": "Выход", "disabled": false, "params": {}}';
     end if;
   end if;
 
@@ -6403,35 +6593,35 @@ declare
   v_person1_id integer;
   v_person2_id integer;
   v_judge_id integer;
-  v_is_master boolean;
+  v_debatle_theme text;
+
   v_changes jsonb[];
 begin
   perform * from data.objects where id = in_object_id for update;
 
+  v_debatle_theme := json.get_string_opt(data.get_attribute_value(in_object_id, 'system_debatle_theme'), null);
   v_person1_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person1'), null);
   v_person2_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person2'), null);
   v_judge_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_judge'), null);
 
-  v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_person1', null, data.get_attribute_value(v_person1_id, 'title', in_actor_id)));
-  v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_person2', null, data.get_attribute_value(v_person2_id, 'title', in_actor_id)));
-  v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_judge', null, data.get_attribute_value(v_judge_id, 'title', in_actor_id)));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('title', null, to_jsonb(format('Дебатл: %s', v_debatle_theme))));
+  if v_person1_id is not null then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_person1', null, data.get_attribute_value(v_person1_id, 'title', in_actor_id)));
+  end if;
+  if v_person2_id is not null then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_person2', null, data.get_attribute_value(v_person2_id, 'title', in_actor_id)));
+  end if;
+  if v_judge_id is not null then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_judge', null, data.get_attribute_value(v_judge_id, 'title', in_actor_id)));
+  end if;
 
-  v_is_master := json.get_boolean(data.get_attribute_value(in_actor_id, 'person_is_master'));
+
 
   --TODO 
   -- разобрать json с аудиториями и вывести списком через запятую
   -- посчитать стоимость голосования в зависимости от того, кто смотрит (астерам и марсианам по курсу коина, оон-овцам просто 1 коин)
   -- выводить количество голосов только когда статус Голосование завершено
   -- разобрать бонусы и штрафы.показывать только судье, мастерам и участникам (при этом участникам без кнопок изменения)
-
-if v_is_master or in_actor_id in (v_person1_id, v_person2_id, v_judge_id) then
-null;
-/*    v_value := data.get_attribute_value(in_object_id, 'system_money');
-    if json.get_bigint(v_value) is not null then
-      perform data.set_attribute_value(in_object_id, 'money', v_value, in_actor_id);
-    end if;
-*/
-    end if;
 
   perform data.change_object(in_object_id, to_jsonb(v_changes), in_actor_id);
 end;
@@ -6452,7 +6642,7 @@ declare
 begin
   perform * from data.objects where id = in_object_id for update;
 
-  v_is_master := json.get_boolean(data.get_attribute_value(in_actor_id, 'person_is_master'));
+  v_is_master := pallas_project.is_in_group(in_actor_id, 'master');
   if v_is_master or in_object_id = in_actor_id then
     v_value := data.get_attribute_value(in_object_id, 'system_money');
     if json.get_bigint_opt(v_value, null) is not null then
@@ -6474,6 +6664,8 @@ begin
     if json.get_integer_opt(v_value, null) is not null then
       v_changes := array_append(v_changes, data.attribute_change2jsonb('person_un_rating', in_actor_id, v_value));
     end if;
+  end if;
+  if array_length(v_changes,1) > 0 then
     perform data.change_object(in_object_id, to_jsonb(v_changes), in_actor_id);
   end if;
 end;
@@ -6495,10 +6687,14 @@ declare
   v_content_attribute_id integer := data.get_attribute_id('content');
   v_priority_attribute_id integer := data.get_attribute_id('priority');
   v_full_card_function_attribute_id integer := data.get_attribute_id('full_card_function');
+  v_mini_card_function_attribute_id integer := data.get_attribute_id('mini_card_function');
   v_actions_function_attribute_id integer := data.get_attribute_id('actions_function');
+  v_template_attribute_id integer := data.get_attribute_id('template');
 
   v_description_attribute_id integer;
+  v_system_person_name_attribute_id integer;
   v_person_state_attribute_id integer;
+  v_person_occupation_attribute_id integer; 
   v_system_money_attribute_id integer;
   v_money_attribute_id integer;
   v_system_person_deposit_money_attribute_id integer;
@@ -6517,18 +6713,24 @@ declare
   v_mars_group_id integer;
   v_opa_group_id integer;
   v_master_group_id integer;
+  v_player_group_id integer;
 
   v_default_login_id integer;
   v_menu_id integer;
   v_notifications_id integer;
   v_test_id integer;
   v_person_id integer;
+  v_person_class_id integer;
 
   v_template_groups jsonb[];
 begin
   insert into data.attributes(code, description, type, card_type, can_be_overridden)
   values('description', 'Текстовый блок с развёрнутым описанием объекта, string', 'normal', 'full', true)
   returning id into v_description_attribute_id;
+
+  insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden)
+  values ('person_occupation', null, 'Должность', 'normal', null, null, false)
+  returning id into v_person_occupation_attribute_id;
 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden)
   values ('person_state', null, 'Гражданство', 'normal', 'full', 'pallas_project.vd_person_state', false)
@@ -6574,89 +6776,30 @@ begin
   values ('person_un_rating', 'Рейтинг в ООН', 'normal', 'full', null, true)
   returning id into v_person_un_rating_attribute_id;
 
-  insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
-  values ('person_is_master', 'Признак мастерского персонажа', 'system', null, null, false)
-  returning id into v_person_is_master_attribute_id;
-
-  v_template_groups :=
-    array_append(
-      v_template_groups,
-      format(
-        '{"code": "%s", "attributes": ["%s"]}',
-        'default_group1',
-        'description')::jsonb);
-  v_template_groups :=
-    array_append(
-      v_template_groups,
-      format(
-        '{"code": "%s", "actions": ["%s", "%s"]}',
-        'menu_group1',
-        'login',
-        'debatles')::jsonb);
-  v_template_groups :=
-    array_append(
-      v_template_groups,
-      format(
-        '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s", "%s", "%s"]}',
-        'person_group1',
-        'person_state',
-        'money',
-        'person_deposit_money',
-        'person_coin',
-        'person_opa_rating',
-        'person_un_rating')::jsonb);
-  v_template_groups :=
-    array_append(
-      v_template_groups,
-      format(
-        '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"]}',
-        'debatle_group1',
-        'debatle_status',
-        'debatle_person1',
-        'debatle_person2',
-        'debatle_judge',
-        'debatle_target_audience',
-        'debatle_person1_votes',
-        'debatle_person2_votes',
-        'debatle_vote_price',
-        'debatle_person1_bonuses',
-        'debatle_person1_fines',
-        'debatle_person2_bonuses',
-        'debatle_person2_fines')::jsonb);
-
-
   -- Создадим актора по умолчанию, который является первым тестом
-  insert into data.objects(code) values('test1') returning id into v_test_id;
+  insert into data.objects(code) values('anonimous') returning id into v_test_id;
 
   -- Логин по умолчанию
   insert into data.logins(code) values('default_login') returning id into v_default_login_id;
   insert into data.login_actors(login_id, actor_id) values(v_default_login_id, v_test_id);
 
- -- Первый персонаж:
-  insert into data.objects(code) values('person1') returning id into v_person_id;
-    -- Логин
-  insert into data.logins(code) values('p1') returning id into v_default_login_id;
-  insert into data.login_actors(login_id, actor_id) values(v_default_login_id, v_person_id);
-
   insert into data.params(code, value, description) values
   ('default_login_id', to_jsonb(v_default_login_id), 'Идентификатор логина по умолчанию'),
-  (
-    'template',
-    jsonb_build_object('groups', to_jsonb(v_template_groups)),
-    'Шаблон'
-  ),
-  ('page_size', to_jsonb(10), 'Размер страницы');
+  ('page_size', to_jsonb(10), 'Размер страницы'),
+  ('template', jsonb_build_object('groups', array[]::text[]), 'Шаблон');
 
   -- Также для работы нам понадобится объект меню
   insert into data.objects(code) values('menu') returning id into v_menu_id;
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_menu_id, v_type_attribute_id, jsonb '"menu"'),
   (v_menu_id, v_is_visible_attribute_id, jsonb 'true'),
-  (v_menu_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_menu"');
-
-  insert into data.actions(code, function) values
-  ('act_open_object', 'pallas_project.act_open_object'),
-  ('login', 'pallas_project.act_login');
+  (v_menu_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_menu"'),
+  (v_menu_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
+                                      '{"code": "%s", "actions": ["%s", "%s", "%s"]}',
+                                      'menu_group1',
+                                      'login',
+                                      'debatles',
+                                      'logout')::jsonb]));
 
   -- И пустой список уведомлений
   insert into data.objects(code) values('notifications') returning id into v_notifications_id;
@@ -6664,6 +6807,33 @@ begin
   (v_notifications_id, v_type_attribute_id, jsonb '"notifications"'),
   (v_notifications_id, v_is_visible_attribute_id, jsonb 'true'),
   (v_notifications_id, v_content_attribute_id, jsonb '[]');
+
+  insert into data.actions(code, function) values
+  ('act_open_object', 'pallas_project.act_open_object'),
+  ('login', 'pallas_project.act_login'),
+  ('logout', 'pallas_project.act_logout'),
+  ('go_back', 'pallas_project.act_go_back');
+
+  --Объект класса для персон
+  insert into data.objects(code, type) values('person', 'class') returning id into v_person_class_id;
+
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_person_class_id, v_type_attribute_id, jsonb '"person"'),
+  (v_person_class_id, v_is_visible_attribute_id, jsonb 'true'),
+  (v_person_class_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_person"'),
+  (v_person_class_id, v_mini_card_function_attribute_id, jsonb '"pallas_project.mcard_person"'),
+  (v_person_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_menu"'),
+  (v_person_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
+                                                      '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"]}',
+                                                      'person_group1',
+                                                      'person_state',
+                                                      'person_occupation',
+                                                      'money',
+                                                      'person_deposit_money',
+                                                      'person_coin',
+                                                      'person_opa_rating',
+                                                      'person_un_rating',
+                                                      'description')::jsonb]));
 
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_test_id, v_type_attribute_id, jsonb '"test"'),
@@ -6681,34 +6851,68 @@ begin
   insert into data.objects(code) values ('mars') returning id into v_mars_group_id;
   insert into data.objects(code) values ('opa') returning id into v_opa_group_id;
   insert into data.objects(code) values ('master') returning id into v_master_group_id;
+  insert into data.objects(code) values ('player') returning id into v_player_group_id;
 
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_all_person_group_id, v_priority_attribute_id, jsonb '10'),
+  (v_player_group_id, v_priority_attribute_id, jsonb '15'),
   (v_aster_group_id, v_priority_attribute_id, jsonb '20'),
   (v_un_group_id, v_priority_attribute_id, jsonb '30'),
   (v_mars_group_id, v_priority_attribute_id, jsonb '40'),
   (v_opa_group_id, v_priority_attribute_id, jsonb '50'),
   (v_master_group_id, v_priority_attribute_id, jsonb '190');
 
-
   -- Данные персон
+  insert into data.objects(code, class_id) values('person1', v_person_class_id) returning id into v_person_id;
+    -- Логин
+  insert into data.logins(code) values('p1') returning id into v_default_login_id;
+  insert into data.login_actors(login_id, actor_id) values(v_default_login_id, v_person_id);
   insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_person_id, v_type_attribute_id, jsonb '"person"'),
-  (v_person_id, v_is_visible_attribute_id, jsonb 'true'),
   (v_person_id, v_title_attribute_id, jsonb '"Джерри Адамс"'),
   (v_person_id, v_priority_attribute_id, jsonb '200'),
   (v_person_id, v_person_state_attribute_id, jsonb '"un"'),
+  (v_person_id, v_person_occupation_attribute_id, jsonb '"Секретарь администрации"'),
   (v_person_id, v_system_money_attribute_id, jsonb '0'),
   (v_person_id, v_system_person_coin_attribute_id, jsonb '50'),
   (v_person_id, v_system_person_opa_rating_attribute_id, jsonb '1'),
-  (v_person_id, v_system_person_un_rating_attribute_id, jsonb '150'),
-  (v_person_id, v_person_is_master_attribute_id, jsonb 'false'),
-  (v_person_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_person"'),
-  (v_person_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_menu"');
+  (v_person_id, v_system_person_un_rating_attribute_id, jsonb '150');
 
   insert into data.object_objects(parent_object_id, object_id) values
   (v_all_person_group_id, v_person_id),
-  (v_un_group_id, v_person_id);
+  (v_un_group_id, v_person_id),
+  (v_player_group_id, v_person_id);
+
+  insert into data.objects(code, class_id) values('person2', v_person_class_id) returning id into v_person_id;
+    -- Логин
+  insert into data.logins(code) values('p2') returning id into v_default_login_id;
+  insert into data.login_actors(login_id, actor_id) values(v_default_login_id, v_person_id);
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_person_id, v_title_attribute_id, jsonb '"Саша"'),
+  (v_person_id, v_person_occupation_attribute_id, jsonb '"Мастер"'),
+  (v_person_id, v_priority_attribute_id, jsonb '200');
+
+  insert into data.object_objects(parent_object_id, object_id) values
+  (v_all_person_group_id, v_person_id),
+  (v_master_group_id, v_person_id);
+
+insert into data.objects(code, class_id) values('person3', v_person_class_id) returning id into v_person_id;
+    -- Логин
+  insert into data.logins(code) values('p3') returning id into v_default_login_id;
+  insert into data.login_actors(login_id, actor_id) values(v_default_login_id, v_person_id);
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_person_id, v_title_attribute_id, jsonb '"Сьюзан Сидорова"'),
+  (v_person_id, v_priority_attribute_id, jsonb '200'),
+  (v_person_id, v_person_state_attribute_id, jsonb '"aster"'),
+  (v_person_id, v_person_occupation_attribute_id, jsonb '"Шахтёр"'),
+  (v_person_id, v_system_money_attribute_id, jsonb '65000'),
+  (v_person_id, v_system_person_opa_rating_attribute_id, jsonb '5'),
+  (v_person_id, v_system_person_un_rating_attribute_id, jsonb '0');
+
+  insert into data.object_objects(parent_object_id, object_id) values
+  (v_all_person_group_id, v_person_id),
+  (v_opa_group_id, v_person_id),
+  (v_player_group_id, v_person_id),
+  (v_aster_group_id, v_person_id);
 
   perform pallas_project.init_debatles();
 end;
@@ -6727,44 +6931,56 @@ declare
   v_title_attribute_id integer := data.get_attribute_id('title');
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
   v_actions_function_attribute_id integer := data.get_attribute_id('actions_function');
+  v_template_attribute_id integer := data.get_attribute_id('template');
+  v_full_card_function_attribute_id integer := data.get_attribute_id('full_card_function');
+  v_mini_card_function_attribute_id integer := data.get_attribute_id('mini_card_function');
+  v_list_element_function_attribute_id integer := data.get_attribute_id('list_element_function');
+  v_temporary_object_attribute_id integer := data.get_attribute_id('temporary_object');
+
 
   v_debatles_id integer;
+  v_debatle_list_class_id integer;
   v_debatles_all_id integer;
   v_debatles_new_id integer;
   v_debatles_my_id integer;
   v_debatles_future_id integer;
   v_debatles_closed_id integer;
+  v_debatles_current_id integer;
+
+  v_debatle_class_id integer;
+  v_debatle_temp_person_list_class_id integer;
 
   v_master_group_id integer := data.get_object_id('master');
 
 begin
   -- Атрибуты для дебатла
-  insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden) values
-  ('debatle_status', 'Статус дебатла', 'normal', null, 'pallas_project.vd_debatle_status', false),
-  ('system_debatle_person1', 'Идентификатор первого участника дебатла', 'system', null, null, false),
-  ('debatle_person1', 'Первый участник дебатла', 'normal', 'full', null, false),
-  ('system_debatle_person2', 'Идентификатор второго участника дебатла', 'system', null, null, false),
-  ('debatle_person2', 'Второй участник дебатла', 'normal', 'full', null, false),
-  ('system_debatle_judge', 'Идентификатор судьи', 'system', null, null, false),
-  ('debatle_judge', 'Судья', 'normal', 'full', null, false),
-  ('system_debatle_target_audience', 'Аудитория дебатла', 'system', null, null, false),
-  ('debatle_target_audience', 'Аудитория дебатла', 'normal', 'full', null, true),
-  ('system_debatle_person1_votes', 'Количество голосов за первого участника', 'system', null, null, false),
-  ('debatle_person1_votes', 'Количество голосов за первого участника', 'normal', 'full', null, true),
-  ('system_debatle_person2_votes', 'Количество голосов за второго участника', 'system', null, null, false),
-  ('debatle_person2_votes', 'Количество голосов за второго участника', 'normal', 'full', null, true),
-  ('debatle_vote_price', 'Стоимость голосования', 'normal', 'full', null, true),
-  ('system_debatle_person1_bonuses', 'Бонусы первого участника', 'system', null, null, false),
-  ('debatle_person1_bonuses', 'Бонусы первого участника', 'normal', 'full', null, true),
-  ('system_debatle_person1_fines' , 'Штрафы первого участника', 'system', null, null, false),
-  ('debatle_person1_fines', 'Штрафы первого участника', 'normal', 'full', null, true),
-  ('system_debatle_person2_bonuses', 'Бонусы второго участника', 'system', null, null, false),
-  ('debatle_person2_bonuses', 'Бонусы второго участника', 'normal', 'full', null, true),
-  ('system_debatle_person2_fines' , 'Штрафы второго участника', 'system', null, null, false),
-  ('debatle_person2_fines', 'Штрафы второго участника', 'normal', 'full', null, true);
-
-  insert into data.actions(code, function) values
-  ('create_debatle_step1', 'pallas_project.act_create_debatle_step1');
+  insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
+  ('system_debatle_theme', null, 'Тема дебатла', 'system', null, null, false),
+  ('debatle_status', 'Статус дебатла', null, 'normal', null, 'pallas_project.vd_debatle_status', false),
+  ('system_debatle_person1', null, 'Идентификатор первого участника дебатла', 'system', null, null, false),
+  ('debatle_person1', 'Первый участник дебатла', null, 'normal', 'full', null, false),
+  ('system_debatle_person2', null, 'Идентификатор второго участника дебатла', 'system', null, null, false),
+  ('debatle_person2', 'Второй участник дебатла', null, 'normal', 'full', null, false),
+  ('system_debatle_judge', null, 'Идентификатор судьи', 'system', null, null, false),
+  ('debatle_judge', 'Судья', null, 'normal', 'full', null, false),
+  ('system_debatle_target_audience', null, 'Аудитория дебатла', 'system', null, null, false),
+  ('debatle_target_audience', 'Аудитория дебатла', null, 'normal', 'full', null, true),
+  ('system_debatle_person1_votes', null, 'Количество голосов за первого участника', 'system', null, null, false),
+  ('debatle_person1_votes', 'Количество голосов за первого участника', null, 'normal', 'full', null, true),
+  ('system_debatle_person2_votes', null, 'Количество голосов за второго участника', 'system', null, null, false),
+  ('debatle_person2_votes', 'Количество голосов за второго участника', null, 'normal', 'full', null, true),
+  ('debatle_vote_price', 'Стоимость голосования', null, 'normal', 'full', null, true),
+  ('system_debatle_person1_bonuses', null, 'Бонусы первого участника', 'system', null, null, false),
+  ('debatle_person1_bonuses', 'Бонусы первого участника', null, 'normal', 'full', null, true),
+  ('system_debatle_person1_fines' , null, 'Штрафы первого участника', 'system', null, null, false),
+  ('debatle_person1_fines', 'Штрафы первого участника', null, 'normal', 'full', null, true),
+  ('system_debatle_person2_bonuses', null, 'Бонусы второго участника', 'system', null, null, false),
+  ('debatle_person2_bonuses', 'Бонусы второго участника', null, 'normal', 'full', null, true),
+  ('system_debatle_person2_fines', null, 'Штрафы второго участника', 'system', null, null, false),
+  ('debatle_person2_fines', 'Штрафы второго участника', null, 'normal', 'full', null, true),
+  -- для временных объектов 
+  ('debatle_temp_person_list_edited_person', null, 'Редактируемая персона в дебатле', 'normal', 'full', 'pallas_project.vd_debatle_temp_person_list_edited_person', false),
+  ('system_debatle_temp_person_list_debatle_id', null, 'Идентификатор дебатла для списка редактирования персон', 'system', null, null, false);
 
 -- Объект - страница для работы с дебатлами
   insert into data.objects(code) values('debatles') returning id into v_debatles_id;
@@ -6773,38 +6989,105 @@ begin
   (v_debatles_id, v_type_attribute_id, jsonb '"debatles"'),
   (v_debatles_id, v_is_visible_attribute_id, jsonb 'true'),
   (v_debatles_id, v_title_attribute_id, jsonb '"Дебатлы"'),
-  (v_debatles_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatles"');
+  (v_debatles_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatles"'),
+  (v_debatles_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
+                                          '{"code": "%s", "attributes": ["%s"], "actions": ["%s", "%s", "%s", "%s", "%s", "%s", "%s"]}',
+                                          'debatles_group1',
+                                          'description',
+                                          'create_debatle_step1',
+                                          'get_new_debatles',
+                                          'get_current_debatles',
+                                          'get_future_debatles',
+                                          'get_my_debatles',
+                                          'get_closed_debatles',
+                                          'get_all_debatles')::jsonb]));
+
+    -- Объект-класс для списка дебатлов
+  insert into data.objects(code, type) values('debatle_list', 'class') returning id into v_debatle_list_class_id;
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_debatle_list_class_id, v_type_attribute_id, jsonb '"debatle_list"'),
+  (v_debatle_list_class_id, v_template_attribute_id, jsonb_build_object('groups', array[]::text[]));
+
 
   -- Списки дебатлов
-  insert into data.objects(code) values ('debatles_all') returning id into v_debatles_all_id;
+  insert into data.objects(code, class_id) values ('debatles_all', v_debatle_list_class_id) returning id into v_debatles_all_id;
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
-  (v_debatles_all_id, v_type_attribute_id, jsonb '"debatle_list"', null),
   (v_debatles_all_id, v_title_attribute_id, jsonb '"Все дебатлы"', null),
   (v_debatles_all_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id);
 
-  insert into data.objects(code) values ('debatles_new') returning id into v_debatles_new_id;
+  insert into data.objects(code, class_id) values ('debatles_new', v_debatle_list_class_id) returning id into v_debatles_new_id;
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
-  (v_debatles_new_id, v_type_attribute_id, jsonb '"debatle_list"', null),
-  (v_debatles_new_id, v_title_attribute_id, jsonb '"Несогласованные дебатлы"', null),
+  (v_debatles_new_id, v_title_attribute_id, jsonb '"Неподтверждённые дебатлы"', null),
   (v_debatles_new_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id);
 
-  insert into data.objects(code) values ('debatles_my') returning id into v_debatles_my_id;
+  insert into data.objects(code, class_id) values ('debatles_my', v_debatle_list_class_id) returning id into v_debatles_my_id;
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
-  (v_debatles_my_id, v_type_attribute_id, jsonb '"debatle_list"', null),
   (v_debatles_my_id, v_title_attribute_id, jsonb '"Мои дебатлы"', null),
   (v_debatles_my_id, v_is_visible_attribute_id, jsonb 'true', null);
 
-  insert into data.objects(code) values ('debatles_future') returning id into v_debatles_future_id;
+  insert into data.objects(code, class_id) values ('debatles_future', v_debatle_list_class_id) returning id into v_debatles_future_id;
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
-  (v_debatles_future_id, v_type_attribute_id, jsonb '"debatle_list"', null),
-  (v_debatles_future_id, v_title_attribute_id, jsonb '"Cогласованные дебатлы"', null),
+  (v_debatles_future_id, v_title_attribute_id, jsonb '"Будущие дебатлы"', null),
   (v_debatles_future_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id);
 
-  insert into data.objects(code) values ('debatles_closed') returning id into v_debatles_closed_id;
+  insert into data.objects(code, class_id) values ('debatles_current', v_debatle_list_class_id) returning id into v_debatles_current_id;
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
-  (v_debatles_closed_id, v_type_attribute_id, jsonb '"debatle_list"', null),
+  (v_debatles_current_id, v_title_attribute_id, jsonb '"Текущие дебатлы"', null),
+  (v_debatles_current_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id);
+
+  insert into data.objects(code, class_id) values ('debatles_closed', v_debatle_list_class_id) returning id into v_debatles_closed_id;
+  insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_debatles_closed_id, v_title_attribute_id, jsonb '"Завершенные дебатлы"', null),
   (v_debatles_closed_id, v_is_visible_attribute_id, jsonb 'true', null);
+
+  -- Объект-класс для дебатла
+  insert into data.objects(code, type) values('debatle', 'class') returning id into v_debatle_class_id;
+
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_debatle_class_id, v_type_attribute_id, jsonb '"debatle"'),
+  (v_debatle_class_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_debatle"'),
+  (v_debatle_class_id, v_mini_card_function_attribute_id, jsonb '"pallas_project.mcard_debatle"'),
+  (v_debatle_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatle"'),
+  (v_debatle_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
+                                                      '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"], "actions": ["%s", "%s", "%s"]}',
+                                                      'debatle_group1',
+                                                      'debatle_theme',
+                                                      'debatle_status',
+                                                      'debatle_person1',
+                                                      'debatle_person2',
+                                                      'debatle_judge',
+                                                      'debatle_target_audience',
+                                                      'debatle_person1_votes',
+                                                      'debatle_person2_votes',
+                                                      'debatle_vote_price',
+                                                      'debatle_person1_bonuses',
+                                                      'debatle_person1_fines',
+                                                      'debatle_person2_bonuses',
+                                                      'debatle_person2_fines',
+                                                      'debatle_change_instigator',
+                                                      'debatle_change_opponent',
+                                                      'debatle_change_judge')::jsonb]));
+
+  -- Объект-класс для временных списков персон для редактирования дебатла
+  insert into data.objects(code, type) values('debatle_temp_person_list', 'class') returning id into v_debatle_temp_person_list_class_id;
+
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_debatle_temp_person_list_class_id, v_type_attribute_id, jsonb '"debatle_temp_person_list"'),
+  (v_debatle_temp_person_list_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatle_temp_person_list"'),
+  (v_debatle_temp_person_list_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_debatle_temp_person_list"'),
+  (v_debatle_temp_person_list_class_id, v_temporary_object_attribute_id, jsonb 'true'),
+  (v_debatle_temp_person_list_class_id, v_template_attribute_id, jsonb_build_object('groups', format(
+                                                      '[{"code": "%s", "actions": ["%s"]}, {"code": "%s", "attributes": ["%s"]}]',
+                                                      'group1',
+                                                      'debatle_change_person_back',
+                                                      'group2',
+                                                      'debatle_temp_person_list_edited_person')::jsonb));
+
+  insert into data.actions(code, function) values
+  ('create_debatle_step1', 'pallas_project.act_create_debatle_step1'),
+  ('debatle_change_person', 'pallas_project.act_debatle_change_person');
+
+
 end;
 $$
 language 'plpgsql';
@@ -6833,6 +7116,90 @@ end;
 $$
 language 'plpgsql';
 
+-- drop function pallas_project.lef_debatle_temp_person_list(integer, text, integer, integer);
+
+create or replace function pallas_project.lef_debatle_temp_person_list(in_client_id integer, in_request_id text, object_id integer, list_object_id integer)
+returns void
+volatile
+as
+$$
+declare
+  v_edited_person text := json.get_string_value(data.get_attribute_value(object_id, 'debatle_temp_person_list_edited_person'));
+  v_debatle_id integer := json.get_integer_value(data.get_attribute_value(object_id, 'system_debatle_temp_person_list_debatle_id'));
+  v_changes jsonb[];
+begin
+  assert in_request_id is not null;
+
+  if v_edited_person not in ('instigator', 'opponent', 'judge') then
+    perform api_utils.create_notification(
+      in_client_id,
+      in_request_id,
+      'action',
+      format('{"action": "show_message ", "action_data": {"title": "%s", "message": "%s"}}', 'Ошибка', 'Непонятно, какую из персон менять. Наверное что-то пошло не так. Обратитесь к мастеру.')::jsonb); 
+    return;
+  end if;
+
+  perform * from data.objects where id = v_debatle_id for update;
+
+  if v_edited_person = 'instigator' then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person1', null, list_object_id));
+  elsif v_edited_person = 'opponent' then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person2', null, list_object_id));
+  elsif v_edited_person = 'judge' then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_judge', null, list_object_id));
+  end if;
+
+  perform data.change_object(in_object_id, to_jsonb(v_changes), in_actor_id);
+
+  perform api_utils.create_notification(
+    in_client_id,
+    in_request_id,
+    'action',
+    '{"action": "go_back", "action_data": {}}'::jsonb);
+end;
+$$
+language 'plpgsql';
+
+-- drop function pallas_project.mcard_debatle(integer, integer);
+
+create or replace function pallas_project.mcard_debatle(in_object_id integer, in_actor_id integer)
+returns void
+volatile
+as
+$$
+declare
+  v_debatle_theme text;
+  v_changes jsonb[];
+begin
+  perform * from data.objects where id = in_object_id for update;
+
+  v_debatle_theme := json.get_string_opt(data.get_attribute_value(in_object_id, 'system_debatle_theme'), null);  
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('title', null, to_jsonb(format('%s', v_debatle_theme))));
+
+  perform data.change_object(in_object_id, to_jsonb(v_changes), in_actor_id);
+end;
+$$
+language 'plpgsql';
+
+-- drop function pallas_project.mcard_person(integer, integer);
+
+create or replace function pallas_project.mcard_person(in_object_id integer, in_actor_id integer)
+returns void
+volatile
+as
+$$
+declare
+  v_value jsonb;
+  v_is_master boolean;
+  v_changes jsonb[];
+begin
+
+  null;
+
+end;
+$$
+language 'plpgsql';
+
 -- drop function pallas_project.vd_debatle_status(integer, jsonb, integer);
 
 create or replace function pallas_project.vd_debatle_status(in_attribute_id integer, in_value jsonb, in_actor_id integer)
@@ -6844,9 +7211,9 @@ declare
   v_text_value text := json.get_string(in_value);
 begin
   case when v_text_value = 'new' then
-    return 'Не согласованный';
+    return 'Неподтверждённый';
   when v_text_value = 'future' then
-    return 'Согласованный';
+    return 'Будущий';
   when v_text_value = 'vote' then
     return 'Идёт голосование';
   when v_text_value = 'vote_over' then
@@ -6855,6 +7222,30 @@ begin
     return 'Завершен';
   else
     return 'Неизвестно';
+  end case;
+end;
+$$
+language 'plpgsql';
+
+-- drop function pallas_project.vd_debatle_temp_person_list_edited_person(integer, jsonb, integer);
+
+create or replace function pallas_project.vd_debatle_temp_person_list_edited_person(in_attribute_id integer, in_value jsonb, in_actor_id integer)
+returns text
+immutable
+as
+$$
+declare
+  v_text_value text := json.get_string(in_value);
+begin
+  case when v_text_value = 'instigator' then
+    return 'Выберите зачинщика дебатла';
+  when v_text_value = 'opponent' then
+    return 'Выберите оппонента для дебатла';
+  when v_text_value = 'judge' then
+    return 'Выберите судью дебатла';
+  when v_text_value = 'vote_over' then
+  else
+    return 'Что-то пошло не так';
   end case;
 end;
 $$
