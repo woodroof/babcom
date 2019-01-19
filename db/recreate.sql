@@ -44,6 +44,10 @@ comment on schema api is 'Функции, вызываемые web-сервер�
 
 create schema api_utils;
 
+-- drop schema array_utils;
+
+create schema array_utils;
+
 -- drop schema data;
 
 create schema data;
@@ -550,7 +554,7 @@ declare
   v_list_object_code text := json.get_string(in_message, 'list_object_id');
   v_object_id integer;
   v_list_object_id integer;
-  v_content integer[];
+  v_content text[];
   v_is_visible boolean;
   v_actor_id integer;
   v_list_element_function text;
@@ -570,7 +574,9 @@ begin
   select id
   into v_object_id
   from data.objects
-  where code = v_object_code;
+  where
+    code = v_object_code and
+    type = 'instance';
 
   if v_object_id is null then
     raise exception 'Attempt to open list object in non-existing object %', v_object_code;
@@ -579,15 +585,17 @@ begin
   select id
   into v_list_object_id
   from data.objects
-  where code = v_list_object_code;
+  where
+    code = v_list_object_code and
+    type = 'instance';
 
   if v_object_id is null then
     raise exception 'Attempt to open non-existing list object %', v_list_object_code;
   end if;
 
-  v_content := json.get_integer_array(data.get_attribute_value(v_object_id, 'content', v_actor_id));
+  v_content := json.get_string_array(data.get_attribute_value(v_object_id, 'content', v_actor_id));
 
-  if array_position(v_content, v_list_object_id) is null then
+  if array_position(v_content, v_list_object_code) is null then
     raise exception 'Object % has no list object %', v_object_code, v_list_object_code;
   end if;
 
@@ -598,11 +606,11 @@ begin
   end if;
 
   -- Вызываем функцию открытия элемента списка, если есть
-  v_list_element_function := json.get_string_opt(data.get_attribute_value(v_list_object_id, 'list_element_function'), null);
+  v_list_element_function := json.get_string_opt(data.get_attribute_value(v_object_id, 'list_element_function'), null);
 
   if v_list_element_function is not null then
     execute format('select %s($1, $2, $3, $4)', v_list_element_function)
-    using in_request_id, v_object_id, v_list_object_id, v_actor_id;
+    using in_client_id, in_request_id, v_object_id, v_list_object_id;
   else
     perform api_utils.create_notification(
       in_client_id,
@@ -707,7 +715,9 @@ begin
   select id
   into v_object_id
   from data.objects
-  where code = v_object_code
+  where
+    code = v_object_code and
+    type = 'instance'
   for update;
 
   if v_object_id is null then
@@ -718,7 +728,9 @@ begin
     select true
     into v_object_exists
     from data.objects
-    where id = v_object_id
+    where
+      id = v_object_id and
+      type = 'instance'
     for update;
 
     if v_object_exists is null then
@@ -750,7 +762,9 @@ begin
       select true
       into v_object_exists
       from data.objects
-      where id = v_object_id
+      where
+       id = v_object_id and
+       type = 'instance'
       for update;
 
       if v_object_exists is null then
@@ -893,6 +907,55 @@ begin
   where id = v_subscription_id;
 
   perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+end;
+$$
+language 'plpgsql';
+
+-- drop function array_utils.is_unique(integer[]);
+
+create or replace function array_utils.is_unique(in_array integer[])
+returns boolean
+immutable
+as
+$$
+begin
+  return intarray.uniq(intarray.sort(in_array)) = intarray.sort(in_array);
+end;
+$$
+language 'plpgsql';
+
+-- drop function array_utils.is_unique(text[]);
+
+create or replace function array_utils.is_unique(in_array text[])
+returns boolean
+immutable
+as
+$$
+declare
+  v_sorted_unique text[];
+  v_sorted text[];
+begin
+  if in_array is null then
+    return null;
+  end if;
+
+  select coalesce(array_agg(v.value), array[]::text[])
+  from (
+    select distinct value
+    from unnest(in_array) a(value)
+    order by value
+  ) v
+  into v_sorted_unique;
+
+  select coalesce(array_agg(v.value), array[]::text[])
+  from (
+    select value
+    from unnest(in_array) a(value)
+    order by value
+  ) v
+  into v_sorted;
+
+  return v_sorted_unique = v_sorted;
 end;
 $$
 language 'plpgsql';
@@ -1614,7 +1677,7 @@ declare
   v_page_size integer := data.get_integer_param('page_size');
   v_actor_id integer;
   v_last_object_id integer;
-  v_content integer[];
+  v_content text[];
   v_content_length integer;
   v_client_subscription_id integer;
   v_object record;
@@ -1635,8 +1698,8 @@ begin
 
   assert v_actor_id is not null;
 
-  v_content = json.get_integer_array(data.get_attribute_value(in_object_id, 'content', v_actor_id));
-  assert intarray.uniq(intarray.sort(v_content)) = intarray.sort(v_content);
+  v_content = json.get_string_array(data.get_attribute_value(in_object_id, 'content', v_actor_id));
+  assert array_utils.is_unique(v_content);
 
   v_content_length := array_length(v_content, 1);
 
@@ -1653,17 +1716,20 @@ begin
 
   for v_object in
     select
-      c.value id,
+      o.id id,
       c.num as index
     from (
       select
         row_number() over() as num,
         value
       from unnest(v_content) s(value)) c
-    where c.value not in (
-      select object_id
-      from data.client_subscription_objects
-      where client_subscription_id = v_client_subscription_id)
+    join data.objects o
+      on o.code = c.value
+    where
+      o.id not in (
+        select object_id
+        from data.client_subscription_objects
+        where client_subscription_id = v_client_subscription_id)
     order by c.num
   loop
     if v_count = v_page_size then
@@ -1676,11 +1742,11 @@ begin
 
     if v_mini_card_function is not null then
       execute format('select %s($1, $2)', v_mini_card_function)
-      using v_object.id, in_actor_id;
+      using v_object.id, v_actor_id;
     end if;
 
     -- Проверяем видимость
-    v_is_visible := json.get_boolean_opt(data.get_attribute_value(v_object.id, 'is_visible', in_actor_id), null);
+    v_is_visible := json.get_boolean_opt(data.get_attribute_value(v_object.id, 'is_visible', v_actor_id), null);
     if v_is_visible is null or v_is_visible is false then
       insert into data.client_subscription_objects(client_subscription_id, object_id, index, is_visible)
       values(v_client_subscription_id, v_object.id, v_object.index, false);
@@ -1688,7 +1754,7 @@ begin
       continue;
     end if;
 
-    v_objects := array_append(v_objects, data.get_object(v_object.id, in_actor_id, 'mini', in_object_id));
+    v_objects := array_append(v_objects, data.get_object(v_object.id, v_actor_id, 'mini', in_object_id));
 
     v_count := v_count + 1;
   end loop;
@@ -2008,7 +2074,7 @@ begin
   (
     'list_element_function',
     null,
-    'Функция, вызываемая при открытии данного объекта из какого-то списка, string. Вызывается с параметрами (request_id, object_id, list_object_id, actor_id). Функция должна либо бросить исключение, либо сгенерировать сообщение клиенту.
+    'Функция, вызываемая при открытии какого-то объекта из данного объекта-списка, string. Вызывается с параметрами (client_id, request_id, object_id, list_object_id). Функция должна либо бросить исключение, либо сгенерировать сообщение клиенту.
 Если атрибут отсутствует, то сообщение open_list_object всегда приводит к действию open_object.',
     'system',
     null,

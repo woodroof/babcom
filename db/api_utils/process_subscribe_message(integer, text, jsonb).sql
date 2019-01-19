@@ -33,7 +33,9 @@ begin
   select id
   into v_object_id
   from data.objects
-  where code = v_object_code
+  where
+    code = v_object_code and
+    type = 'instance'
   for update;
 
   if v_object_id is null then
@@ -44,7 +46,9 @@ begin
     select true
     into v_object_exists
     from data.objects
-    where id = v_object_id
+    where
+      id = v_object_id and
+      type = 'instance'
     for update;
 
     if v_object_exists is null then
@@ -76,7 +80,9 @@ begin
       select true
       into v_object_exists
       from data.objects
-      where id = v_object_id
+      where
+       id = v_object_id and
+       type = 'instance'
       for update;
 
       if v_object_exists is null then
