@@ -1,7 +1,7 @@
 -- drop function test_project.get_suffix(text);
 
 create or replace function test_project.get_suffix(in_code text)
-returns text
+returns integer
 immutable
 as
 $$

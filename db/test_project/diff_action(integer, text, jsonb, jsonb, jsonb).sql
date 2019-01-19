@@ -9,6 +9,7 @@ declare
   v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_title text := test_project.next_code(json.get_string(in_params, 'title'));
   v_object_id integer := json.get_integer(in_params, 'object_id');
+  v_object_code text := data.get_object_code(v_object_id);
   v_state text := json.get_string(data.get_attribute_value(v_object_id, 'test_state'));
   v_changes jsonb := jsonb '[]';
   v_diffs jsonb;
@@ -59,9 +60,9 @@ begin
 
       v_message_sent := true;
 
-      perform api_utils.create_notification(v_diff.client_id, in_request_id, 'diff', jsonb_build_object('object_id', v_object_id, 'object', v_diff.object));
+      perform api_utils.create_notification(v_diff.client_id, in_request_id, 'diff', jsonb_build_object('object_id', v_object_code, 'object', v_diff.object));
     else
-      perform api_utils.create_notification(v_diff.client_id, null, 'diff', jsonb_build_object('object_id', v_object_id, 'object', v_diff.object));
+      perform api_utils.create_notification(v_diff.client_id, null, 'diff', jsonb_build_object('object_id', v_object_code, 'object', v_diff.object));
     end if;
   end loop;
 
