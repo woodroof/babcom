@@ -7989,14 +7989,15 @@ begin
     v_changes := v_changes || data.attribute_change2jsonb('title', null, to_jsonb(v_title));
     v_changes := v_changes || data.attribute_change2jsonb('subtitle', null, jsonb '"Тест на удаление и добавление атрибутов"');
     v_changes := v_changes || data.attribute_change2jsonb('description', null, null);
-    v_changes := v_changes || data.attribute_change2jsonb('template', null, jsonb '{"groups": [{"code": "not_so_common", "attributes": ["description2"], "actions": ["action"]}]}');
+    v_changes := v_changes || data.attribute_change2jsonb('template', null, jsonb '{"groups": [{"code": "not_so_common", "attributes": ["description2"]}]}');
     v_changes := v_changes || data.attribute_change2jsonb('description2', null, to_jsonb(text
-'В этот раз мы не изменяли значение атрибута, а удалили старый и добавили новый.
+'В этот раз мы не изменяли значение атрибута, а удалили старый и добавили новый. Также какое-то действие возвращается, но оно отсутствует в шаблоне.
 
 **Проверка 1:** Под заголовком гордо красуется подзаголовок.
 **Проверка 2:** Старого текста нигде нет.
+**Проверка 3:** Действий тоже нет.
 
-Дальше пока ничего нет, увы :('));
+[Продолжить](babcom:test' || (test_project.get_suffix(v_title) + 1) || ')'));
   end if;
 
   assert v_changes != jsonb '[]';
@@ -8062,6 +8063,21 @@ begin
   assert in_default_params is null;
 
   perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+end;
+$$
+language 'plpgsql';
+
+-- drop function test_project.get_suffix(text);
+
+create or replace function test_project.get_suffix(in_code text)
+returns text
+immutable
+as
+$$
+declare
+  v_prefix text := trim(trailing '0123456789' from in_code);
+begin
+  return substring(in_code from char_length(v_prefix) + 1)::integer;
 end;
 $$
 language 'plpgsql';
@@ -9054,12 +9070,36 @@ Markdown — формат, который все реализуют по-раз�
   );
 
   -- И далее в предыдущем тесте проверки на:
-  --   - изменение атрибута и заголовка по явному действию
+  --  - изменение атрибута, заголовка и действия по явному действию
+  --  - удаление и добавление атрибутов
+  --  - удаление действия из шаблона
 
-  -- todo прочие тесты на изменения объекта (группы, действия)
-  -- todo прибавить к v_test_num нужное значение
+  -- todo прочие тесты на изменения объекта
 
-  -- todo списки
+  v_test_num := v_test_num + 3;
+
+  -- Вывод пустого списка
+
+  insert into data.objects(code) values('test' || v_test_num) returning id into v_test_id;
+  v_test_num := v_test_num + 1;
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_test_id, v_type_attribute_id, jsonb '"test"'),
+  (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
+  (v_test_id, v_content_attribute_id, jsonb '[]'),
+  (v_test_id, v_title_attribute_id, format('"Тест %s"', v_test_num - 1)::jsonb),
+  (v_test_id, v_subtitle_attribute_id, jsonb '"Пустые списки"'),
+  (
+    v_test_id,
+    v_description_attribute_id,
+    to_jsonb(text
+'Объекты с пустыми списками должны отличаться от объектов без списков.
+
+**Проверка**: В самом низу мы видим какую-то заглушку, которая говорит нам, что тут список вроде бы и есть, но его нет.
+
+[Продолжить](babcom:test' || v_test_num || ')')
+  );
+
+  -- todo прочие тесты на списки
   -- todo и прочие тесты
 
   -- Финал!
