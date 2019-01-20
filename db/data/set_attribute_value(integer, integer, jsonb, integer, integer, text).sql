@@ -38,6 +38,8 @@ begin
     insert into data.attribute_values(object_id, attribute_id, value_object_id, value, start_reason, start_actor_id)
     values(in_object_id, in_attribute_id, in_value_object_id, in_value, in_reason, in_actor_id);
   else
+    assert in_value is null != v_attribute_value.value is null or in_value is not null and in_value != v_attribute_value.value;
+
     insert into data.attribute_values_journal(
       object_id,
       attribute_id,
