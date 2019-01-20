@@ -41,7 +41,7 @@ begin
 
   assert v_changes != jsonb '[]';
 
-  if not data.change_current_object(in_client_id, v_object_id, v_changes) then
+  if not data.change_current_object(in_client_id, in_request_id, v_object_id, v_changes) then
     perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
   end if;
 end;

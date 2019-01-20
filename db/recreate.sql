@@ -1153,9 +1153,9 @@ end;
 $$
 language 'plpgsql';
 
--- drop function data.change_current_object(integer, integer, jsonb);
+-- drop function data.change_current_object(integer, text, integer, jsonb);
 
-create or replace function data.change_current_object(in_client_id integer, in_object_id integer, in_changes jsonb)
+create or replace function data.change_current_object(in_client_id integer, in_request_id text, in_object_id integer, in_changes jsonb)
 returns boolean
 volatile
 as
@@ -1164,11 +1164,16 @@ $$
 -- Если функция вернула false, то скорее всего внешнему коду нужно сгенерировать событие ok или action
 declare
   v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_object_code text := data.get_object_code(in_object_id);
   v_subscription_exists boolean;
   v_diffs jsonb;
   v_diff record;
   v_message_sent boolean := false;
 begin
+  assert in_client_id is not null;
+  assert in_request_id is not null;
+  assert in_changes is not null;
+
   select true
   into v_subscription_exists
   from data.client_subscriptions
@@ -2503,7 +2508,7 @@ begin
     insert into data.attribute_values(object_id, attribute_id, value_object_id, value, start_reason, start_actor_id)
     values(in_object_id, in_attribute_id, in_value_object_id, in_value, in_reason, in_actor_id);
   else
-    assert in_value is null != v_attribute_value.value is null or in_value is not null and in_value != v_attribute_value.value;
+    assert (in_value is null) != (v_attribute_value.value is null) or in_value is not null and in_value != v_attribute_value.value;
 
     insert into data.attribute_values_journal(
       object_id,
@@ -8988,7 +8993,7 @@ begin
 
   assert v_changes != jsonb '[]';
 
-  if not data.change_current_object(in_client_id, v_object_id, v_changes) then
+  if not data.change_current_object(in_client_id, in_request_id, v_object_id, v_changes) then
     perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
   end if;
 end;

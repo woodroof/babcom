@@ -1,6 +1,6 @@
--- drop function data.change_current_object(integer, integer, jsonb);
+-- drop function data.change_current_object(integer, text, integer, jsonb);
 
-create or replace function data.change_current_object(in_client_id integer, in_object_id integer, in_changes jsonb)
+create or replace function data.change_current_object(in_client_id integer, in_request_id text, in_object_id integer, in_changes jsonb)
 returns boolean
 volatile
 as
@@ -9,11 +9,16 @@ $$
 -- Если функция вернула false, то скорее всего внешнему коду нужно сгенерировать событие ok или action
 declare
   v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_object_code text := data.get_object_code(in_object_id);
   v_subscription_exists boolean;
   v_diffs jsonb;
   v_diff record;
   v_message_sent boolean := false;
 begin
+  assert in_client_id is not null;
+  assert in_request_id is not null;
+  assert in_changes is not null;
+
   select true
   into v_subscription_exists
   from data.client_subscriptions
