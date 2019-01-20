@@ -71,7 +71,7 @@ begin
     perform api_utils.create_open_object_action_notification(
       in_client_id,
       in_request_id,
-      jsonb_build_object('object_id', v_list_object_code));
+      v_list_object_code);
   end if;
 end;
 $$
