@@ -18,7 +18,7 @@ begin
 
   assert v_is_connected is not null;
 
-  if v_is_connected is true then
+  if v_is_connected then
     delete from data.client_subscription_objects
     where client_subscription_id in (
       select id

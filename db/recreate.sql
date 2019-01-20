@@ -601,7 +601,7 @@ begin
 
   v_is_visible := json.get_boolean(data.get_attribute_value(v_list_object_id, 'is_visible', v_actor_id));
 
-  if v_is_visible is false then
+  if not v_is_visible then
     raise exception 'List object % is not visible', v_list_object_code;
   end if;
 
@@ -791,7 +791,7 @@ begin
     object_id = v_object_id and
     client_id = in_client_id;
 
-  if v_subscription_exists is true then
+  if v_subscription_exists then
     raise exception 'Can''t create second subscription to object %', v_object_id;
   end if;
 
@@ -1415,7 +1415,7 @@ begin
           v_attribute_value_description := json.get_string_opt(v_attribute, 'value_description', null);
 
           if v_attribute_name is not null or v_attribute_value is not null or v_attribute_value_description is not null then
-            assert data.is_hidden_attribute(data.get_attribute_id(v_attribute_code)) is false;
+            assert not data.is_hidden_attribute(data.get_attribute_id(v_attribute_code));
 
             v_filtered_attributes := array_append(v_filtered_attributes, v_attribute_code);
           end if;
@@ -1567,7 +1567,7 @@ declare
   v_class_id integer;
 begin
   assert data.is_instance(in_object_id);
-  assert data.can_attribute_be_overridden(in_attribute_id) is false;
+  assert not data.can_attribute_be_overridden(in_attribute_id);
 
   select value
   into v_attribute_value
@@ -1613,7 +1613,7 @@ declare
 begin
   assert data.is_instance(in_object_id);
   assert data.is_instance(in_actor_id);
-  assert data.can_attribute_be_overridden(in_attribute_id) is true;
+  assert data.can_attribute_be_overridden(in_attribute_id);
 
   select av.value
   into v_attribute_value
@@ -1899,7 +1899,7 @@ begin
 
     -- Проверяем видимость
     v_is_visible := json.get_boolean_opt(data.get_attribute_value(v_object.id, 'is_visible', v_actor_id), null);
-    if v_is_visible is null or v_is_visible is false then
+    if v_is_visible is null or not v_is_visible then
       insert into data.client_subscription_objects(client_subscription_id, object_id, index, is_visible)
       values(v_client_subscription_id, v_object.id, v_object.index, false);
 
@@ -2561,7 +2561,7 @@ begin
 
   assert v_is_connected is not null;
 
-  if v_is_connected is true then
+  if v_is_connected then
     delete from data.client_subscription_objects
     where client_subscription_id in (
       select id

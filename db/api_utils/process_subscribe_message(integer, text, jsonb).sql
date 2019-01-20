@@ -109,7 +109,7 @@ begin
     object_id = v_object_id and
     client_id = in_client_id;
 
-  if v_subscription_exists is true then
+  if v_subscription_exists then
     raise exception 'Can''t create second subscription to object %', v_object_id;
   end if;
 

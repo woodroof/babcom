@@ -57,7 +57,7 @@ begin
 
   v_is_visible := json.get_boolean(data.get_attribute_value(v_list_object_id, 'is_visible', v_actor_id));
 
-  if v_is_visible is false then
+  if not v_is_visible then
     raise exception 'List object % is not visible', v_list_object_code;
   end if;
 

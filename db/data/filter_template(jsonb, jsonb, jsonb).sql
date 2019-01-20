@@ -43,7 +43,7 @@ begin
           v_attribute_value_description := json.get_string_opt(v_attribute, 'value_description', null);
 
           if v_attribute_name is not null or v_attribute_value is not null or v_attribute_value_description is not null then
-            assert data.is_hidden_attribute(data.get_attribute_id(v_attribute_code)) is false;
+            assert not data.is_hidden_attribute(data.get_attribute_id(v_attribute_code));
 
             v_filtered_attributes := array_append(v_filtered_attributes, v_attribute_code);
           end if;

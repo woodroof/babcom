@@ -10,7 +10,7 @@ declare
   v_class_id integer;
 begin
   assert data.is_instance(in_object_id);
-  assert data.can_attribute_be_overridden(in_attribute_id) is false;
+  assert not data.can_attribute_be_overridden(in_attribute_id);
 
   select value
   into v_attribute_value

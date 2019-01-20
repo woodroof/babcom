@@ -79,7 +79,7 @@ begin
 
     -- Проверяем видимость
     v_is_visible := json.get_boolean_opt(data.get_attribute_value(v_object.id, 'is_visible', v_actor_id), null);
-    if v_is_visible is null or v_is_visible is false then
+    if v_is_visible is null or not v_is_visible then
       insert into data.client_subscription_objects(client_subscription_id, object_id, index, is_visible)
       values(v_client_subscription_id, v_object.id, v_object.index, false);
 
