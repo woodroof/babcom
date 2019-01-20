@@ -41,7 +41,7 @@ begin
     using v_object_id, v_actor_id;
   end if;
 
-  perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+  perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
 language 'plpgsql';

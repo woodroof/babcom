@@ -51,7 +51,7 @@ begin
   delete from data.client_subscriptions
   where client_id = in_client_id;
 
-  perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+  perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
 language 'plpgsql';

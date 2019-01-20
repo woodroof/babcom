@@ -14,11 +14,10 @@ begin
   assert test_project.is_user_params_empty(in_user_params);
   assert in_default_params is null;
 
-  perform api_utils.create_notification(
+  perform api_utils.create_open_object_action_notification(
     in_client_id,
     in_request_id,
-    'action',
-    format('{"action": "open_object", "action_data": {"object_id": "%s"}}', test_project.next_code(v_object_code))::jsonb);
+    test_project.next_code(v_object_code));
 end;
 $$
 language 'plpgsql';

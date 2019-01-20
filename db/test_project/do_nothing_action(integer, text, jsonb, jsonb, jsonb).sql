@@ -13,7 +13,7 @@ begin
   assert test_project.is_user_params_empty(in_user_params);
   assert in_default_params is null;
 
-  perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+  perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
 language 'plpgsql';

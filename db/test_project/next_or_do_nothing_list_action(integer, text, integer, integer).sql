@@ -14,13 +14,12 @@ begin
   assert in_request_id is not null;
 
   if v_list_object_title = 'Далее' then
-    perform api_utils.create_notification(
+    perform api_utils.create_open_object_action_notification(
       in_client_id,
       in_request_id,
-      'action',
-      format('{"action": "open_object", "action_data": {"object_id": "%s"}}', test_project.next_code(v_object_code))::jsonb);
+      test_project.next_code(v_object_code));
   else
-    perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
   end if;
 end;
 $$

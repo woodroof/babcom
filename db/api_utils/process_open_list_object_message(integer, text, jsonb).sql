@@ -68,11 +68,10 @@ begin
     execute format('select %s($1, $2, $3, $4)', v_list_element_function)
     using in_client_id, in_request_id, v_object_id, v_list_object_id;
   else
-    perform api_utils.create_notification(
+    perform api_utils.create_open_object_action_notification(
       in_client_id,
       in_request_id,
-      'action',
-      jsonb_build_object('action', 'open_object', 'action_data', jsonb_build_object('object_id', v_list_object_code)));
+      jsonb_build_object('object_id', v_list_object_code));
   end if;
 end;
 $$

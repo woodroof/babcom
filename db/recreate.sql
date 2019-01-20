@@ -86,6 +86,13 @@ create schema test_project;
 
 -- Creating enums
 
+-- drop type api_utils.action_type;
+
+create type api_utils.action_type as enum(
+  'go_back',
+  'open_object',
+  'show_message');
+
 -- drop type api_utils.output_message_type;
 
 create type api_utils.output_message_type as enum(
@@ -363,6 +370,42 @@ end;
 $$
 language 'plpgsql';
 
+-- drop function api_utils.create_action_notification(integer, text, api_utils.action_type, jsonb);
+
+create or replace function api_utils.create_action_notification(in_client_id integer, in_request_id text, in_action_type api_utils.action_type, in_action_data jsonb)
+returns void
+volatile
+as
+$$
+begin
+  perform jsonb.get_object(in_action_data);
+
+  perform api_utils.create_notification(
+    in_client_id,
+    in_request_id,
+    'action',
+    jsonb_build_object('action', in_action_type, 'action_data', in_action_data));
+end;
+$$
+language 'plpgsql';
+
+-- drop function api_utils.create_go_back_action_notification(integer, text);
+
+create or replace function api_utils.create_go_back_action_notification(in_client_id integer, in_request_id text)
+returns void
+volatile
+as
+$$
+begin
+  perform api_utils.create_action_notification(
+    in_client_id,
+    in_request_id,
+    'go_back',
+    jsonb '{}');
+end;
+$$
+language 'plpgsql';
+
 -- drop function api_utils.create_notification(integer, text, api_utils.output_message_type, jsonb);
 
 create or replace function api_utils.create_notification(in_client_id integer, in_request_id text, in_type api_utils.output_message_type, in_data jsonb)
@@ -386,6 +429,67 @@ begin
   returning code into v_notification_code;
 
   perform pg_notify('api_channel', v_notification_code);
+end;
+$$
+language 'plpgsql';
+
+-- drop function api_utils.create_ok_notification(integer, text);
+
+create or replace function api_utils.create_ok_notification(in_client_id integer, in_request_id text)
+returns void
+volatile
+as
+$$
+begin
+  perform api_utils.create_notification(
+    in_client_id,
+    in_request_id,
+    'ok',
+    jsonb '{}');
+end;
+$$
+language 'plpgsql';
+
+-- drop function api_utils.create_open_object_action_notification(integer, text, text);
+
+create or replace function api_utils.create_open_object_action_notification(in_client_id integer, in_request_id text, in_object_code text)
+returns void
+volatile
+as
+$$
+begin
+  perform data.get_object_id(in_object_code);
+
+  perform api_utils.create_action_notification(
+    in_client_id,
+    in_request_id,
+    'open_object',
+    jsonb_build_object('object_id', in_object_code));
+end;
+$$
+language 'plpgsql';
+
+-- drop function api_utils.create_show_message_action_notification(integer, text, text, text);
+
+create or replace function api_utils.create_show_message_action_notification(in_client_id integer, in_request_id text, in_title text, in_description text)
+returns void
+volatile
+as
+$$
+declare
+  v_action_data jsonb := jsonb_build_object('description', in_description);
+begin
+  assert in_description is not null and trim(leading E' \t\n' from in_description) != '';
+
+  if in_title is not null then
+    v_action_data := v_action_data || jsonb_build_object('title', in_title);
+  end if;
+
+  perform api_utils.create_action_notification(
+    in_client_id,
+    in_request_id,
+    'show_message',
+    v_action_data);
 end;
 $$
 language 'plpgsql';
@@ -612,11 +716,10 @@ begin
     execute format('select %s($1, $2, $3, $4)', v_list_element_function)
     using in_client_id, in_request_id, v_object_id, v_list_object_id;
   else
-    perform api_utils.create_notification(
+    perform api_utils.create_open_object_action_notification(
       in_client_id,
       in_request_id,
-      'action',
-      jsonb_build_object('action', 'open_object', 'action_data', jsonb_build_object('object_id', v_list_object_code)));
+      jsonb_build_object('object_id', v_list_object_code));
   end if;
 end;
 $$
@@ -675,7 +778,7 @@ begin
   delete from data.client_subscriptions
   where client_id = in_client_id;
 
-  perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+  perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
 language 'plpgsql';
@@ -854,7 +957,7 @@ begin
     using v_object_id, v_actor_id;
   end if;
 
-  perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+  perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
 language 'plpgsql';
@@ -906,7 +1009,7 @@ begin
   delete from data.client_subscriptions
   where id = v_subscription_id;
 
-  perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+  perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
 language 'plpgsql';
@@ -9020,7 +9123,7 @@ begin
   assert v_changes != jsonb '[]';
 
   if not data.change_current_object(in_client_id, in_request_id, v_object_id, v_changes) then
-    perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
   end if;
 end;
 $$
@@ -9058,7 +9161,7 @@ begin
   assert test_project.is_user_params_empty(in_user_params);
   assert in_default_params is null;
 
-  perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+  perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
 language 'plpgsql';
@@ -10283,11 +10386,10 @@ begin
 
   v_object_code := json.get_string(v_array->0);
 
-  perform api_utils.create_notification(
+  perform api_utils.create_open_object_action_notification(
     in_client_id,
     in_request_id,
-    'action',
-    format('{"action": "open_object", "action_data": {"object_id": "%s"}}', test_project.next_code(v_object_code))::jsonb);
+    test_project.next_code(v_object_code));
 end;
 $$
 language 'plpgsql';
@@ -10325,11 +10427,10 @@ begin
   assert in_request_id is not null;
   assert in_default_params is null;
 
-  perform api_utils.create_notification(
+  perform api_utils.create_open_object_action_notification(
     in_client_id,
     in_request_id,
-    'action',
-    format('{"action": "open_object", "action_data": {"object_id": "%s"}}', test_project.next_code(v_object_code))::jsonb);
+    test_project.next_code(v_object_code));
 end;
 $$
 language 'plpgsql';
@@ -10383,11 +10484,10 @@ begin
   assert in_request_id is not null;
   assert in_default_params is null;
 
-  perform api_utils.create_notification(
+  perform api_utils.create_open_object_action_notification(
     in_client_id,
     in_request_id,
-    'action',
-    format('{"action": "open_object", "action_data": {"object_id": "%s"}}', test_project.next_code(v_object_code))::jsonb);
+    test_project.next_code(v_object_code));
 end;
 $$
 language 'plpgsql';
@@ -10441,11 +10541,10 @@ begin
   assert in_request_id is not null;
   assert in_default_params is null;
 
-  perform api_utils.create_notification(
+  perform api_utils.create_open_object_action_notification(
     in_client_id,
     in_request_id,
-    'action',
-    format('{"action": "open_object", "action_data": {"object_id": "%s"}}', test_project.next_code(v_object_code))::jsonb);
+    test_project.next_code(v_object_code));
 end;
 $$
 language 'plpgsql';
@@ -10501,11 +10600,10 @@ begin
   assert in_params = jsonb 'null';
   assert test_project.is_user_params_empty(in_user_params);
 
-  perform api_utils.create_notification(
+  perform api_utils.create_open_object_action_notification(
     in_client_id,
     in_request_id,
-    'action',
-    format('{"action": "open_object", "action_data": {"object_id": "%s"}}', test_project.next_code(v_object_code))::jsonb);
+    test_project.next_code(v_object_code));
 end;
 $$
 language 'plpgsql';
@@ -10542,11 +10640,10 @@ begin
   assert test_project.is_user_params_empty(in_user_params);
   assert in_default_params is null;
 
-  perform api_utils.create_notification(
+  perform api_utils.create_open_object_action_notification(
     in_client_id,
     in_request_id,
-    'action',
-    format('{"action": "open_object", "action_data": {"object_id": "%s"}}', test_project.next_code(v_object_code))::jsonb);
+    test_project.next_code(v_object_code));
 end;
 $$
 language 'plpgsql';
@@ -10585,11 +10682,10 @@ begin
   assert in_default_params is null;
   assert position(E'\n' in v_param) = 0;
 
-  perform api_utils.create_notification(
+  perform api_utils.create_open_object_action_notification(
     in_client_id,
     in_request_id,
-    'action',
-    format('{"action": "open_object", "action_data": {"object_id": "%s"}}', test_project.next_code(v_object_code))::jsonb);
+    test_project.next_code(v_object_code));
 end;
 $$
 language 'plpgsql';
@@ -10678,13 +10774,12 @@ begin
   assert in_request_id is not null;
 
   if v_list_object_title = 'Далее' then
-    perform api_utils.create_notification(
+    perform api_utils.create_open_object_action_notification(
       in_client_id,
       in_request_id,
-      'action',
-      format('{"action": "open_object", "action_data": {"object_id": "%s"}}', test_project.next_code(v_object_code))::jsonb);
+      test_project.next_code(v_object_code));
   else
-    perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
   end if;
 end;
 $$
