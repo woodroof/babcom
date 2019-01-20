@@ -33,7 +33,7 @@ begin
   assert v_attribute_value_id is not null;
 
   insert into data.attribute_values_journal(object_id, attribute_id, value_object_id, value, start_time, start_reason, start_actor_id, end_time, end_reason, end_actor_id)
-  select object_id, attribute_id, value_object_id, value, start_time, start_reason, start_actor_id, now(), in_reason, in_actor_id
+  select object_id, attribute_id, value_object_id, value, start_time, start_reason, start_actor_id, clock_timestamp(), in_reason, in_actor_id
   from data.attribute_values
   where id = v_attribute_value_id;
 

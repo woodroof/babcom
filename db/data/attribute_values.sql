@@ -6,7 +6,7 @@ create table data.attribute_values(
   attribute_id integer not null,
   value_object_id integer,
   value jsonb,
-  start_time timestamp with time zone not null default now(),
+  start_time timestamp with time zone not null default clock_timestamp(),
   start_reason text,
   start_actor_id integer,
   constraint attribute_values_pk primary key(id),

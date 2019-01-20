@@ -1153,6 +1153,58 @@ end;
 $$
 language 'plpgsql';
 
+-- drop function data.change_current_object(integer, integer, jsonb);
+
+create or replace function data.change_current_object(in_client_id integer, in_object_id integer, in_changes jsonb)
+returns boolean
+volatile
+as
+$$
+-- Функция возвращает, отправляли ли сообщение клиенту in_client_id
+-- Если функция вернула false, то скорее всего внешнему коду нужно сгенерировать событие ok или action
+declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_subscription_exists boolean;
+  v_diffs jsonb;
+  v_diff record;
+  v_message_sent boolean := false;
+begin
+  select true
+  into v_subscription_exists
+  from data.client_subscriptions
+  where
+    client_id = in_client_id and
+    object_id = in_object_id;
+
+  -- Если стреляет этот ассерт, то нам нужно вызывать другую функцию
+  assert v_subscription_exists;
+
+  v_diffs := data.change_object(in_object_id, in_changes, v_actor_id);
+
+  for v_diff in
+  (
+    select
+      json.get_integer(value, 'client_id') as client_id,
+      json.get_object(value, 'object') as object
+    from jsonb_array_elements(v_diffs)
+  )
+  loop
+    if v_diff.client_id = in_client_id then
+      assert not v_message_sent;
+
+      v_message_sent := true;
+
+      perform api_utils.create_notification(v_diff.client_id, in_request_id, 'diff', jsonb_build_object('object_id', v_object_code, 'object', v_diff.object));
+    else
+      perform api_utils.create_notification(v_diff.client_id, null, 'diff', jsonb_build_object('object_id', v_object_code, 'object', v_diff.object));
+    end if;
+  end loop;
+
+  return v_message_sent;
+end;
+$$
+language 'plpgsql';
+
 -- drop function data.change_object(integer, jsonb, integer);
 
 create or replace function data.change_object(in_object_id integer, in_changes jsonb, in_actor_id integer default null::integer)
@@ -1308,7 +1360,7 @@ begin
   assert v_attribute_value_id is not null;
 
   insert into data.attribute_values_journal(object_id, attribute_id, value_object_id, value, start_time, start_reason, start_actor_id, end_time, end_reason, end_actor_id)
-  select object_id, attribute_id, value_object_id, value, start_time, start_reason, start_actor_id, now(), in_reason, in_actor_id
+  select object_id, attribute_id, value_object_id, value, start_time, start_reason, start_actor_id, clock_timestamp(), in_reason, in_actor_id
   from data.attribute_values
   where id = v_attribute_value_id;
 
@@ -1447,6 +1499,32 @@ begin
       data.get_param(in_code));
 exception when invalid_parameter_value then
   raise exception 'Param "%" is not an array', in_code;
+end;
+$$
+language 'plpgsql';
+
+-- drop function data.get_attribute_code(integer);
+
+create or replace function data.get_attribute_code(in_attribute_id integer)
+returns text
+stable
+as
+$$
+declare
+  v_attribute_code text;
+begin
+  assert in_attribute_id is not null;
+
+  select code
+  into v_attribute_code
+  from data.attributes
+  where id = in_attribute_id;
+
+  if v_attribute_code is null then
+    raise exception 'Can''t find attribute "%"', in_attribute_id;
+  end if;
+
+  return v_attribute_code;
 end;
 $$
 language 'plpgsql';
@@ -1601,6 +1679,56 @@ as
 $$
 begin
   return data.get_attribute_value(in_object_id, data.get_attribute_id(in_attribute_code), in_actor_id);
+end;
+$$
+language 'plpgsql';
+
+-- drop function data.get_attribute_value_modification_date(integer, integer, integer);
+
+create or replace function data.get_attribute_value_modification_date(in_object_id integer, in_attribute_id integer, in_value_object_id integer)
+returns timestamp with time zone
+stable
+as
+$$
+declare
+  v_date timestamp with time zone;
+begin
+  -- Странно пользоваться этой функцией, если мы работаем с атрибутами классов
+  assert data.is_instance(in_object_id);
+  perform data.get_attribute_code(in_attribute_id);
+
+  if in_value_object_id is null then
+    select start_time
+    into v_date
+    from data.attribute_values
+    where
+      object_id = in_object_id and
+      attribute_id = in_attribute_id and
+      value_object_id is null;
+  else
+    select start_time
+    into v_date
+    from data.attribute_values
+    where
+      object_id = in_object_id and
+      attribute_id = in_attribute_id and
+      value_object_id = in_value_object_id;
+  end if;
+
+  return v_date;
+end;
+$$
+language 'plpgsql';
+
+-- drop function data.get_attribute_value_modification_date(integer, text, integer);
+
+create or replace function data.get_attribute_value_modification_date(in_object_id integer, in_attribute_code text, in_value_object_id integer)
+returns timestamp with time zone
+stable
+as
+$$
+begin
+  return data.get_attribute_value_modification_date(in_object_id, data.get_attribute_id(in_attribute_code), in_value_object_id);
 end;
 $$
 language 'plpgsql';
@@ -2325,7 +2453,7 @@ begin
   ) i;
 
   insert into data.object_objects_journal(parent_object_id, object_id, intermediate_object_ids, start_time, end_time)
-  select parent_object_id, object_id, intermediate_object_ids, start_time, now()
+  select parent_object_id, object_id, intermediate_object_ids, start_time, clock_timestamp()
   from data.object_objects
   where id = any(v_ids);
 
@@ -2345,6 +2473,7 @@ $$
 -- Как правило вместо этой функции следует вызывать data.change_object
 declare
   v_attribute_value record;
+  v_end_time timestamp with time zone;
 begin
   assert data.is_instance(in_object_id);
   assert in_attribute_id is not null;
@@ -2393,14 +2522,15 @@ begin
       v_attribute_value.start_time,
       v_attribute_value.start_reason,
       v_attribute_value.start_actor_id,
-      now(),
+      clock_timestamp(),
       in_reason,
-      in_actor_id);
+      in_actor_id)
+    returning end_time into v_end_time;
 
     update data.attribute_values
     set
       value = in_value,
-      start_time = now(),
+      start_time = v_end_time,
       start_reason = in_reason,
       start_actor_id = in_actor_id
     where id = v_attribute_value.id;
@@ -2439,6 +2569,45 @@ begin
     delete from data.client_subscriptions
     where client_id = in_client_id;
   end if;
+end;
+$$
+language 'plpgsql';
+
+-- drop function data.should_attribute_value_be_changed(integer, integer, integer, integer, integer);
+
+create or replace function data.should_attribute_value_be_changed(in_object_id integer, in_source_attribute_id integer, in_source_value_object_id integer, in_destination_attribute_id integer, in_destination_value_object_id integer)
+returns boolean
+stable
+as
+$$
+declare
+  v_source_attribute_modification_date timestamp with time zone :=
+    data.get_attribute_value_modification_date(in_object_id, in_source_attribute_id, in_source_value_object_id);
+  v_destination_attribute_modification_date timestamp with time zone :=
+    data.get_attribute_value_modification_date(in_object_id, in_destination_attribute_id, in_destination_value_object_id);
+begin
+  return
+    v_destination_attribute_modification_date is null and v_source_attribute_modification_date is not null or
+    v_source_attribute_modification_date is null and v_destination_attribute_modification_date is not null or
+    v_source_attribute_modification_date != v_destination_attribute_modification_date;
+end;
+$$
+language 'plpgsql';
+
+-- drop function data.should_attribute_value_be_changed(integer, text, integer, text, integer);
+
+create or replace function data.should_attribute_value_be_changed(in_object_id integer, in_source_attribute_code text, in_source_value_object_id integer, in_destination_attribute_code text, in_destination_value_object_id integer)
+returns boolean
+stable
+as
+$$
+begin
+  return data.should_attribute_value_be_changed(
+    in_object_id,
+    data.get_attribute_id(in_source_attribute_code),
+    in_source_value_object_id,
+    data.get_attribute_id(in_destination_attribute_code),
+    in_destination_value_object_id);
 end;
 $$
 language 'plpgsql';
@@ -8445,15 +8614,11 @@ volatile
 as
 $$
 declare
-  v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_title text := test_project.next_code(json.get_string(in_params, 'title'));
   v_object_id integer := json.get_integer(in_params, 'object_id');
   v_object_code text := data.get_object_code(v_object_id);
   v_state text := json.get_string(data.get_attribute_value(v_object_id, 'test_state'));
   v_changes jsonb := jsonb '[]';
-  v_diffs jsonb;
-  v_diff record;
-  v_message_sent boolean := false;
 begin
   assert in_request_id is not null;
   assert test_project.is_user_params_empty(in_user_params);
@@ -8484,28 +8649,7 @@ begin
 
   assert v_changes != jsonb '[]';
 
-  v_diffs := data.change_object(v_object_id, v_changes, v_actor_id);
-
-  for v_diff in
-  (
-    select
-      json.get_integer(value, 'client_id') as client_id,
-      json.get_object(value, 'object') as object
-    from jsonb_array_elements(v_diffs)
-  )
-  loop
-    if v_diff.client_id = in_client_id then
-      assert v_message_sent is false;
-
-      v_message_sent := true;
-
-      perform api_utils.create_notification(v_diff.client_id, in_request_id, 'diff', jsonb_build_object('object_id', v_object_code, 'object', v_diff.object));
-    else
-      perform api_utils.create_notification(v_diff.client_id, null, 'diff', jsonb_build_object('object_id', v_object_code, 'object', v_diff.object));
-    end if;
-  end loop;
-
-  if v_message_sent is false then
+  if not data.change_current_object(in_client_id, v_object_id, v_changes) then
     perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
   end if;
 end;
@@ -10374,7 +10518,7 @@ create table data.attribute_values(
   attribute_id integer not null,
   value_object_id integer,
   value jsonb,
-  start_time timestamp with time zone not null default now(),
+  start_time timestamp with time zone not null default clock_timestamp(),
   start_reason text,
   start_actor_id integer,
   constraint attribute_values_pk primary key(id),
@@ -10465,7 +10609,7 @@ create table data.clients(
 create table data.log(
   id integer not null generated always as identity,
   severity data.severity not null,
-  event_time timestamp with time zone not null default now(),
+  event_time timestamp with time zone not null default clock_timestamp(),
   message text not null,
   actor_id integer,
   constraint log_actor_check check((actor_id is null) or data.is_instance(actor_id)),
@@ -10510,7 +10654,7 @@ create table data.object_objects(
   parent_object_id integer not null,
   object_id integer not null,
   intermediate_object_ids integer[],
-  start_time timestamp with time zone not null default now(),
+  start_time timestamp with time zone not null default clock_timestamp(),
   constraint object_objects_intermediate_object_ids_check check(intarray.uniq(intarray.sort(intermediate_object_ids)) = intarray.sort(intermediate_object_ids)),
   constraint object_objects_object_check check(data.is_instance(object_id)),
   constraint object_objects_parent_object_check check(data.is_instance(parent_object_id)),

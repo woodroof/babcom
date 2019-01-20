@@ -8,6 +8,7 @@ $$
 -- Как правило вместо этой функции следует вызывать data.change_object
 declare
   v_attribute_value record;
+  v_end_time timestamp with time zone;
 begin
   assert data.is_instance(in_object_id);
   assert in_attribute_id is not null;
@@ -56,14 +57,15 @@ begin
       v_attribute_value.start_time,
       v_attribute_value.start_reason,
       v_attribute_value.start_actor_id,
-      now(),
+      clock_timestamp(),
       in_reason,
-      in_actor_id);
+      in_actor_id)
+    returning end_time into v_end_time;
 
     update data.attribute_values
     set
       value = in_value,
-      start_time = now(),
+      start_time = v_end_time,
       start_reason = in_reason,
       start_actor_id = in_actor_id
     where id = v_attribute_value.id;

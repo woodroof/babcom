@@ -6,15 +6,11 @@ volatile
 as
 $$
 declare
-  v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_title text := test_project.next_code(json.get_string(in_params, 'title'));
   v_object_id integer := json.get_integer(in_params, 'object_id');
   v_object_code text := data.get_object_code(v_object_id);
   v_state text := json.get_string(data.get_attribute_value(v_object_id, 'test_state'));
   v_changes jsonb := jsonb '[]';
-  v_diffs jsonb;
-  v_diff record;
-  v_message_sent boolean := false;
 begin
   assert in_request_id is not null;
   assert test_project.is_user_params_empty(in_user_params);
@@ -45,28 +41,7 @@ begin
 
   assert v_changes != jsonb '[]';
 
-  v_diffs := data.change_object(v_object_id, v_changes, v_actor_id);
-
-  for v_diff in
-  (
-    select
-      json.get_integer(value, 'client_id') as client_id,
-      json.get_object(value, 'object') as object
-    from jsonb_array_elements(v_diffs)
-  )
-  loop
-    if v_diff.client_id = in_client_id then
-      assert v_message_sent is false;
-
-      v_message_sent := true;
-
-      perform api_utils.create_notification(v_diff.client_id, in_request_id, 'diff', jsonb_build_object('object_id', v_object_code, 'object', v_diff.object));
-    else
-      perform api_utils.create_notification(v_diff.client_id, null, 'diff', jsonb_build_object('object_id', v_object_code, 'object', v_diff.object));
-    end if;
-  end loop;
-
-  if v_message_sent is false then
+  if not data.change_current_object(in_client_id, v_object_id, v_changes) then
     perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
   end if;
 end;

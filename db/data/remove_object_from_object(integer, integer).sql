@@ -74,7 +74,7 @@ begin
   ) i;
 
   insert into data.object_objects_journal(parent_object_id, object_id, intermediate_object_ids, start_time, end_time)
-  select parent_object_id, object_id, intermediate_object_ids, start_time, now()
+  select parent_object_id, object_id, intermediate_object_ids, start_time, clock_timestamp()
   from data.object_objects
   where id = any(v_ids);
 
