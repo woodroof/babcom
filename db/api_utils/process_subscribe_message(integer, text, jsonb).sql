@@ -113,10 +113,10 @@ begin
     raise exception 'Can''t create second subscription to object %', v_object_id;
   end if;
 
+  v_object := data.get_object(v_object_id, v_actor_id, 'full', v_object_id);
+
   insert into data.client_subscriptions(client_id, object_id)
   values(in_client_id, v_object_id);
-
-  v_object := data.get_object(v_object_id, v_actor_id, 'full', v_object_id);
 
   -- Получаем список, если есть
   if v_object->'attributes' ? 'content' then
