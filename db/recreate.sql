@@ -1477,27 +1477,26 @@ end;
 $$
 language 'plpgsql';
 
--- drop function data.get_attribute_value(integer, text);
+-- drop function data.get_attribute_value(integer, integer);
 
-create or replace function data.get_attribute_value(in_object_id integer, in_attribute_name text)
+create or replace function data.get_attribute_value(in_object_id integer, in_attribute_id integer)
 returns jsonb
 stable
 as
 $$
 declare
-  v_attribute_id integer := data.get_attribute_id(in_attribute_name);
   v_attribute_value jsonb;
   v_class_id integer;
 begin
   assert data.is_instance(in_object_id);
-  assert data.can_attribute_be_overridden(v_attribute_id) is false;
+  assert data.can_attribute_be_overridden(in_attribute_id) is false;
 
   select value
   into v_attribute_value
   from data.attribute_values
   where
     object_id = in_object_id and
-    attribute_id = v_attribute_id and
+    attribute_id = in_attribute_id and
     value_object_id is null;
 
   if v_attribute_value is null then
@@ -1512,7 +1511,7 @@ begin
       from data.attribute_values
       where
         object_id = v_class_id and
-        attribute_id = v_attribute_id and
+        attribute_id = in_attribute_id and
         value_object_id is null;
     end if;
   end if;
@@ -1522,22 +1521,21 @@ end;
 $$
 language 'plpgsql';
 
--- drop function data.get_attribute_value(integer, text, integer);
+-- drop function data.get_attribute_value(integer, integer, integer);
 
-create or replace function data.get_attribute_value(in_object_id integer, in_attribute_name text, in_actor_id integer)
+create or replace function data.get_attribute_value(in_object_id integer, in_attribute_id integer, in_actor_id integer)
 returns jsonb
 stable
 as
 $$
 declare
-  v_attribute_id integer := data.get_attribute_id(in_attribute_name);
   v_priority_attribute_id integer := data.get_attribute_id('priority');
   v_attribute_value jsonb;
   v_class_id integer;
 begin
   assert data.is_instance(in_object_id);
   assert data.is_instance(in_actor_id);
-  assert data.can_attribute_be_overridden(v_attribute_id) is true;
+  assert data.can_attribute_be_overridden(in_attribute_id) is true;
 
   select av.value
   into v_attribute_value
@@ -1551,7 +1549,7 @@ begin
     pr.value_object_id is null
   where
     av.object_id = in_object_id and
-    av.attribute_id = v_attribute_id and
+    av.attribute_id = in_attribute_id and
     (
       av.value_object_id is null or
       oo.id is not null
@@ -1571,12 +1569,38 @@ begin
       from data.attribute_values
       where
         object_id = v_class_id and
-        attribute_id = v_attribute_id and
+        attribute_id = in_attribute_id and
         value_object_id is null;
     end if;
   end if;
 
   return v_attribute_value;
+end;
+$$
+language 'plpgsql';
+
+-- drop function data.get_attribute_value(integer, text);
+
+create or replace function data.get_attribute_value(in_object_id integer, in_attribute_code text)
+returns jsonb
+stable
+as
+$$
+begin
+  return data.get_attribute_value(in_object_id, data.get_attribute_id(in_attribute_code));
+end;
+$$
+language 'plpgsql';
+
+-- drop function data.get_attribute_value(integer, text, integer);
+
+create or replace function data.get_attribute_value(in_object_id integer, in_attribute_code text, in_actor_id integer)
+returns jsonb
+stable
+as
+$$
+begin
+  return data.get_attribute_value(in_object_id, data.get_attribute_id(in_attribute_code), in_actor_id);
 end;
 $$
 language 'plpgsql';
