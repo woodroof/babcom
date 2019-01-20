@@ -6,7 +6,7 @@ volatile
 as
 $$
 begin
-  perform jsonb.get_object(in_action_data);
+  perform json.get_object(in_action_data);
 
   perform api_utils.create_notification(
     in_client_id,
