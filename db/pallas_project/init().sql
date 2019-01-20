@@ -103,7 +103,7 @@ begin
   returning id into v_person_un_rating_attribute_id;
 
   -- Создадим актора по умолчанию, который является первым тестом
-  insert into data.objects(code) values('anonimous') returning id into v_test_id;
+  insert into data.objects(code) values('anonymous') returning id into v_test_id;
 
   -- Логин по умолчанию
   insert into data.logins(code) values('default_login') returning id into v_default_login_id;
@@ -119,6 +119,7 @@ begin
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_menu_id, v_type_attribute_id, jsonb '"menu"'),
   (v_menu_id, v_is_visible_attribute_id, jsonb 'true'),
+  (v_menu_id, v_full_card_function_attribute_id, jsonb'"pallas_project.fcard_menu"'),
   (v_menu_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_menu"'),
   (v_menu_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
                                       '{"code": "%s", "actions": ["%s", "%s", "%s"]}',

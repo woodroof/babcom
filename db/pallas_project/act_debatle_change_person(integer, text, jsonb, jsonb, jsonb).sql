@@ -37,7 +37,7 @@ begin
       in_client_id,
       in_request_id,
       'action',
-      format('{"action": "show_message ", "action_data": {"title": "%s", "message": "%s"}}', 'Ошибка', 'Участников дебатла нельзя изменить на этом этапе')::jsonb); 
+      format('{"action": "show_message", "action_data": {"title": "%s", "message": "%s"}}', 'Ошибка', 'Участников дебатла нельзя изменить на этом этапе')::jsonb); 
     return;
   end if;
 
@@ -46,7 +46,7 @@ begin
       in_client_id,
       in_request_id,
       'action',
-      format('{"action": "show_message ", "action_data": {"title": "%s", "message": "%s"}}', 'Ошибка', 'Непонятно, какую из персон менять. Наверное что-то пошло не так. Обратитесь к мастеру.')::jsonb); 
+      format('{"action": "show_message", "action_data": {"title": "%s", "message": "%s"}}', 'Ошибка', 'Непонятно, какую из персон менять. Наверное что-то пошло не так. Обратитесь к мастеру.')::jsonb); 
     return;
   end if;
 
@@ -64,7 +64,7 @@ begin
       in_client_id,
       in_request_id,
       'action',
-      format('{"action": "show_message ", "action_data": {"title": "%s", "message": "%s"}}', 'Ошибка', 'Нет подходящих персон для изменения дебатла')::jsonb); 
+      format('{"action": "show_message", "action_data": {"title": "%s", "message": "%s"}}', 'Ошибка', 'Нет подходящих персон для изменения дебатла')::jsonb); 
     return;
   end if;
 

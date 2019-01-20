@@ -8,7 +8,9 @@ $$
 declare
   v_text_value text := json.get_string(in_value);
 begin
-  case when v_text_value = 'new' then
+  case when v_text_value = 'draft' then
+    return 'Черновик';
+  when v_text_value = 'new' then
     return 'Неподтверждённый';
   when v_text_value = 'future' then
     return 'Будущий';
@@ -18,6 +20,8 @@ begin
     return 'Голосование завершено';
   when v_text_value = 'closed' then
     return 'Завершен';
+  when v_text_value = 'deleted' then
+    return 'Удалён';
   else
     return 'Неизвестно';
   end case;

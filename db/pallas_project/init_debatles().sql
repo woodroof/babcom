@@ -25,6 +25,8 @@ declare
   v_debatles_future_id integer;
   v_debatles_closed_id integer;
   v_debatles_current_id integer;
+  v_debatles_draft_id integer;
+  v_debatles_deleted_id integer;
 
   v_debatle_class_id integer;
   v_debatle_temp_person_list_class_id integer;
@@ -68,18 +70,13 @@ begin
   (v_debatles_id, v_type_attribute_id, jsonb '"debatles"'),
   (v_debatles_id, v_is_visible_attribute_id, jsonb 'true'),
   (v_debatles_id, v_title_attribute_id, jsonb '"Дебатлы"'),
+  (v_debatles_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_debatles"'),
   (v_debatles_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatles"'),
   (v_debatles_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
-                                          '{"code": "%s", "attributes": ["%s"], "actions": ["%s", "%s", "%s", "%s", "%s", "%s", "%s"]}',
+                                          '{"code": "%s", "attributes": ["%s"], "actions": ["%s"]}',
                                           'debatles_group1',
                                           'description',
-                                          'create_debatle_step1',
-                                          'get_new_debatles',
-                                          'get_current_debatles',
-                                          'get_future_debatles',
-                                          'get_my_debatles',
-                                          'get_closed_debatles',
-                                          'get_all_debatles')::jsonb]));
+                                          'create_debatle_step1')::jsonb]));
 
     -- Объект-класс для списка дебатлов
   insert into data.objects(code, type) values('debatle_list', 'class') returning id into v_debatle_list_class_id;
@@ -93,6 +90,11 @@ begin
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_debatles_all_id, v_title_attribute_id, jsonb '"Все дебатлы"', null),
   (v_debatles_all_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id);
+
+  insert into data.objects(code, class_id) values ('debatles_draft', v_debatle_list_class_id) returning id into v_debatles_draft_id;
+  insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
+  (v_debatles_draft_id, v_title_attribute_id, jsonb '"Дебатлы черновики"', null),
+  (v_debatles_draft_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id);
 
   insert into data.objects(code, class_id) values ('debatles_new', v_debatle_list_class_id) returning id into v_debatles_new_id;
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
@@ -112,12 +114,19 @@ begin
   insert into data.objects(code, class_id) values ('debatles_current', v_debatle_list_class_id) returning id into v_debatles_current_id;
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_debatles_current_id, v_title_attribute_id, jsonb '"Текущие дебатлы"', null),
-  (v_debatles_current_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id);
+  (v_debatles_current_id, v_is_visible_attribute_id, jsonb 'true', null);
 
   insert into data.objects(code, class_id) values ('debatles_closed', v_debatle_list_class_id) returning id into v_debatles_closed_id;
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_debatles_closed_id, v_title_attribute_id, jsonb '"Завершенные дебатлы"', null),
   (v_debatles_closed_id, v_is_visible_attribute_id, jsonb 'true', null);
+
+  insert into data.objects(code, class_id) values ('debatles_deleted', v_debatle_list_class_id) returning id into v_debatles_deleted_id;
+  insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
+  (v_debatles_deleted_id, v_title_attribute_id, jsonb '"Удалённые дебатлы"', null),
+  (v_debatles_deleted_id, v_is_visible_attribute_id, jsonb 'true', null);
+
+
 
   -- Объект-класс для дебатла
   insert into data.objects(code, type) values('debatle', 'class') returning id into v_debatle_class_id;
@@ -145,7 +154,8 @@ begin
                                                       'debatle_person2_fines',
                                                       'debatle_change_instigator',
                                                       'debatle_change_opponent',
-                                                      'debatle_change_judge')::jsonb]));
+                                                      'debatle_change_judge',
+                                                      'debatle_change_theme')::jsonb]));
 
   -- Объект-класс для временных списков персон для редактирования дебатла
   insert into data.objects(code, type) values('debatle_temp_person_list', 'class') returning id into v_debatle_temp_person_list_class_id;
@@ -164,7 +174,8 @@ begin
 
   insert into data.actions(code, function) values
   ('create_debatle_step1', 'pallas_project.act_create_debatle_step1'),
-  ('debatle_change_person', 'pallas_project.act_debatle_change_person');
+  ('debatle_change_person', 'pallas_project.act_debatle_change_person'),
+  ('debatle_change_theme', 'pallas_project.act_debatle_change_theme');
 
 
 end;

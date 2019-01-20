@@ -11,7 +11,7 @@ declare
 begin
   assert in_actor_id is not null;
 
-  if data.get_object_code(in_actor_id) = 'anonimous' then
+  if data.get_object_code(in_actor_id) = 'anonymous' then
     v_actions_list := v_actions_list || ', "' || 'login":' || 
       '{"code": "login", "name": "Войти", "disabled": false, "params": {}, "user_params": [{"code": "password", "description": "Введите пароль", "type": "string" }]}';
   else

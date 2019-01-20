@@ -6,8 +6,9 @@ volatile
 as
 $$
 declare
-  v_edited_person text := json.get_string_value(data.get_attribute_value(object_id, 'debatle_temp_person_list_edited_person'));
-  v_debatle_id integer := json.get_integer_value(data.get_attribute_value(object_id, 'system_debatle_temp_person_list_debatle_id'));
+  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+  v_edited_person text := json.get_string(data.get_attribute_value(object_id, 'debatle_temp_person_list_edited_person'));
+  v_debatle_id integer := json.get_integer(data.get_attribute_value(object_id, 'system_debatle_temp_person_list_debatle_id'));
   v_changes jsonb[];
 begin
   assert in_request_id is not null;
@@ -24,14 +25,14 @@ begin
   perform * from data.objects where id = v_debatle_id for update;
 
   if v_edited_person = 'instigator' then
-    v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person1', null, list_object_id));
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person1', null, to_jsonb(list_object_id)));
   elsif v_edited_person = 'opponent' then
-    v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person2', null, list_object_id));
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person2', null, to_jsonb(list_object_id)));
   elsif v_edited_person = 'judge' then
-    v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_judge', null, list_object_id));
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_judge', null, to_jsonb(list_object_id)));
   end if;
 
-  perform data.change_object(in_object_id, to_jsonb(v_changes), in_actor_id);
+  perform data.change_object(v_debatle_id, to_jsonb(v_changes), v_actor_id);
 
   perform api_utils.create_notification(
     in_client_id,
