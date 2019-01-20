@@ -14,7 +14,7 @@ begin
   return
     v_destination_attribute_modification_date is null and v_source_attribute_modification_date is not null or
     v_source_attribute_modification_date is null and v_destination_attribute_modification_date is not null or
-    v_source_attribute_modification_date != v_destination_attribute_modification_date;
+    v_source_attribute_modification_date > v_destination_attribute_modification_date;
 end;
 $$
 language plpgsql;
