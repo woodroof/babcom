@@ -17,4 +17,4 @@ begin
   return jsonb '{}';
 end;
 $$
-language 'plpgsql';
+language plpgsql;

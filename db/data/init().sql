@@ -93,4 +93,4 @@ begin
   ('type', null, 'Тип объекта, string', 'hidden', null, null, true);
 end;
 $$
-language 'plpgsql';
+language plpgsql;

@@ -1072,4 +1072,4 @@ Markdown — формат, который все реализуют по-раз�
   values('template', jsonb_build_object('groups', to_jsonb(v_template_groups)), 'Шаблон');
 end;
 $$
-language 'plpgsql';
+language plpgsql;

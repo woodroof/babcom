@@ -40,4 +40,4 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

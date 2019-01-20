@@ -41,4 +41,4 @@ begin
     '{"action": "go_back", "action_data": {}}'::jsonb);
 end;
 $$
-language 'plpgsql';
+language plpgsql;

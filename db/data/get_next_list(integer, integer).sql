@@ -94,4 +94,4 @@ begin
   return jsonb_build_object('objects', to_jsonb(v_objects), 'has_more', v_has_more);
 end;
 $$
-language 'plpgsql';
+language plpgsql;

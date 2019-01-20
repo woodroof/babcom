@@ -32,4 +32,4 @@ begin
   return v_sorted_unique = v_sorted;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

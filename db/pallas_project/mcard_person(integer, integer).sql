@@ -15,4 +15,4 @@ begin
 
 end;
 $$
-language 'plpgsql';
+language plpgsql;

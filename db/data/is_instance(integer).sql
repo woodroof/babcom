@@ -20,4 +20,4 @@ begin
   return v_type = 'instance';
 end;
 $$
-language 'plpgsql';
+language plpgsql;

@@ -11,4 +11,4 @@ begin
   raise '%', in_message using errcode = 'invalid_parameter_value';
 end;
 $$
-language 'plpgsql';
+language plpgsql;

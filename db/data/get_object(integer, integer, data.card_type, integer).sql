@@ -21,4 +21,4 @@ begin
   return jsonb_build_object('id', data.get_object_code(in_object_id), 'attributes', v_attributes, 'actions', coalesce(v_actions, jsonb '{}'), 'template', v_template);
 end;
 $$
-language 'plpgsql';
+language plpgsql;

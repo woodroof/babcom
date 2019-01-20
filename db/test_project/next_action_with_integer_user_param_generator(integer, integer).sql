@@ -29,4 +29,4 @@ begin
 }', v_object_code)::jsonb;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

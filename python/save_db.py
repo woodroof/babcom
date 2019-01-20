@@ -59,7 +59,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 select database_cleanup.clean();
 
@@ -140,7 +140,7 @@ def save_function(schema_name, schema_dir_path, func, db_info):
 	file.write('$$\n')
 	file.write(EMPTY_STR_REGEX.sub('', func_body.replace('\t', '  ')))
 	file.write('\n$$\n')
-	file.write("language 'plpgsql';\n")
+	file.write("language plpgsql;\n")
 
 def save_table(schema_name, schema_dir_path, table, db_info):
 	table_name = table[0]

@@ -44,4 +44,4 @@ begin
   perform data.log('info', format('Disconnected client with code "%s"', in_client_code));
 end;
 $$
-language 'plpgsql';
+language plpgsql;

@@ -12,4 +12,4 @@ begin
   return v_prefix || (v_suffix + 1)::text;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

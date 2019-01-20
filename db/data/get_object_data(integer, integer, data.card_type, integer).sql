@@ -109,4 +109,4 @@ begin
   return jsonb_build_object('attributes', v_attributes, 'actions', v_actions);
 end;
 $$
-language 'plpgsql';
+language plpgsql;

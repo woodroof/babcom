@@ -43,4 +43,4 @@ begin
   perform data.change_object(in_object_id, to_jsonb(v_changes), in_actor_id);
 end;
 $$
-language 'plpgsql';
+language plpgsql;

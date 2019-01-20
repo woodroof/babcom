@@ -21,4 +21,4 @@ begin
   return in_json#>>'{}';
 end;
 $$
-language 'plpgsql';
+language plpgsql;

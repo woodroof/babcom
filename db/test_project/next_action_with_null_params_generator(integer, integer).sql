@@ -12,4 +12,4 @@ begin
   return jsonb '{"action": {"code": "next_action_with_null_params", "name": "Далее", "disabled": false, "params": null}}';
 end;
 $$
-language 'plpgsql';
+language plpgsql;

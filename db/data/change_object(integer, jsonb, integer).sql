@@ -116,4 +116,4 @@ begin
   return to_jsonb(v_ret_val);
 end;
 $$
-language 'plpgsql';
+language plpgsql;

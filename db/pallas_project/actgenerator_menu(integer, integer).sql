@@ -26,4 +26,4 @@ begin
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;
 $$
-language 'plpgsql';
+language plpgsql;

@@ -11,4 +11,4 @@ begin
   return substring(in_code from char_length(v_prefix) + 1)::integer;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

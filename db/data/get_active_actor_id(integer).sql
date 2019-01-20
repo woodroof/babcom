@@ -20,4 +20,4 @@ begin
   return v_actor_id;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

@@ -26,4 +26,4 @@ begin
   return v_param#>>'{}';
 end;
 $$
-language 'plpgsql';
+language plpgsql;

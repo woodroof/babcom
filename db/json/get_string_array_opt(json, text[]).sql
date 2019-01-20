@@ -15,4 +15,4 @@ begin
   return json.get_string_array(v_array);
 end;
 $$
-language 'plpgsql';
+language plpgsql;

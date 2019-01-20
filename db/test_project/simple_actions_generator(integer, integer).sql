@@ -23,4 +23,4 @@ begin
     jsonb '{"code": "do_nothing", "name": "Невидимое действие", "disabled": false, "params": null}');
 end;
 $$
-language 'plpgsql';
+language plpgsql;

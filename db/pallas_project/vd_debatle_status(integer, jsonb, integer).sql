@@ -27,4 +27,4 @@ begin
   end case;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

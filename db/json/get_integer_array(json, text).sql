@@ -23,4 +23,4 @@ exception when invalid_parameter_value then
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

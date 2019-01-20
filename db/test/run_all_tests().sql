@@ -347,4 +347,4 @@ begin
   return true;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

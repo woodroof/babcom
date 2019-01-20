@@ -13,4 +13,4 @@ begin
   return format('{"action": {"code": "next_action_with_array_params", "name": "Далее", "disabled": false, "params": ["%s"]}}', v_object_code)::jsonb;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

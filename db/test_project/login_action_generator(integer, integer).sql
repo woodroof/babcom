@@ -11,4 +11,4 @@ begin
   return format('{"action": {"code": "login", "name": "Далее", "disabled": false, "params": "%s"}}', v_title)::jsonb;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

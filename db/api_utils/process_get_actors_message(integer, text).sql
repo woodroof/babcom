@@ -68,4 +68,4 @@ begin
   perform api_utils.create_notification(in_client_id, in_request_id, 'actors', jsonb_build_object('actors', to_jsonb(v_actors)));
 end;
 $$
-language 'plpgsql';
+language plpgsql;

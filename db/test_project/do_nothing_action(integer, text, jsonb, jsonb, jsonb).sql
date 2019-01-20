@@ -16,4 +16,4 @@ begin
   perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
-language 'plpgsql';
+language plpgsql;

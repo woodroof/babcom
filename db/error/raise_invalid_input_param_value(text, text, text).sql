@@ -13,4 +13,4 @@ begin
   raise '%', format(in_format, in_param1, in_param2) using errcode = 'invalid_parameter_value';
 end;
 $$
-language 'plpgsql';
+language plpgsql;

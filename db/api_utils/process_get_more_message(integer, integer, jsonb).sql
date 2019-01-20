@@ -32,4 +32,4 @@ begin
   perform api_utils.create_notification(in_client_id, in_request_id, 'object_list', jsonb_build_object('list', v_list));
 end;
 $$
-language 'plpgsql';
+language plpgsql;

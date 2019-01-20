@@ -15,4 +15,4 @@ begin
     jsonb_build_object('object_id', in_object_code));
 end;
 $$
-language 'plpgsql';
+language plpgsql;

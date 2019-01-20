@@ -23,4 +23,4 @@ begin
   perform pg_notify('api_channel', v_notification_code);
 end;
 $$
-language 'plpgsql';
+language plpgsql;

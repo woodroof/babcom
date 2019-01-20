@@ -82,4 +82,4 @@ begin
   where id = any(v_ids);
 end;
 $$
-language 'plpgsql';
+language plpgsql;

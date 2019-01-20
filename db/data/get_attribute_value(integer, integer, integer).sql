@@ -54,4 +54,4 @@ begin
   return v_attribute_value;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

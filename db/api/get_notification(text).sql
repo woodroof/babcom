@@ -36,4 +36,4 @@ begin
     v_message);
 end;
 $$
-language 'plpgsql';
+language plpgsql;

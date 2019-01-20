@@ -33,4 +33,4 @@ begin
   return v_date;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

@@ -15,4 +15,4 @@ exception when invalid_parameter_value then
   raise exception 'Param "%" is not a string', in_code;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

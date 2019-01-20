@@ -15,4 +15,4 @@ begin
   return json.get_integer_array(in_json, in_name);
 end;
 $$
-language 'plpgsql';
+language plpgsql;

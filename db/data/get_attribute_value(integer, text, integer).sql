@@ -9,4 +9,4 @@ begin
   return data.get_attribute_value(in_object_id, data.get_attribute_id(in_attribute_code), in_actor_id);
 end;
 $$
-language 'plpgsql';
+language plpgsql;

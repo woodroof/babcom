@@ -19,4 +19,4 @@ begin
   perform data.log('info', 'All clients were disconnected');
 end;
 $$
-language 'plpgsql';
+language plpgsql;

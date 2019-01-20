@@ -20,4 +20,4 @@ begin
   return v_result;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

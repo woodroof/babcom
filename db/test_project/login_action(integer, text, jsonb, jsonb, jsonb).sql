@@ -54,4 +54,4 @@ begin
   perform api_utils.process_get_actors_message(in_client_id, in_request_id);
 end;
 $$
-language 'plpgsql';
+language plpgsql;

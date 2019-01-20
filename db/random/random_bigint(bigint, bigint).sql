@@ -20,4 +20,4 @@ begin
   return floor(in_min_value + v_random_double * (in_max_value - in_min_value + 1));
 end;
 $$
-language 'plpgsql';
+language plpgsql;

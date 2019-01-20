@@ -53,4 +53,4 @@ begin
   return v_message_sent;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

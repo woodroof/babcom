@@ -46,4 +46,4 @@ begin
     format('{"action": "open_object", "action_data": {"object_id": "%s"}}', v_debatle_code)::jsonb);
 end;
 $$
-language 'plpgsql';
+language plpgsql;

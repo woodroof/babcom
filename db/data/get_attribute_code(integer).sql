@@ -22,4 +22,4 @@ begin
   return v_attribute_code;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

@@ -9,4 +9,4 @@ begin
   return data.get_attribute_value_modification_date(in_object_id, data.get_attribute_id(in_attribute_code), in_value_object_id);
 end;
 $$
-language 'plpgsql';
+language plpgsql;

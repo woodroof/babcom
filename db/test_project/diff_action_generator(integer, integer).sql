@@ -13,4 +13,4 @@ begin
   return format('{"action": {"code": "diff", "name": "%s", "disabled": false, "params": {"title": "%s", "object_id": %s}}}', v_name, v_title, in_object_id)::jsonb;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

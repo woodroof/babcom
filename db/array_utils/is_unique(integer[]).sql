@@ -9,4 +9,4 @@ begin
   return intarray.uniq(intarray.sort(in_array)) = intarray.sort(in_array);
 end;
 $$
-language 'plpgsql';
+language plpgsql;

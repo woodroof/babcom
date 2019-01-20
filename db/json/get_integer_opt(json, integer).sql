@@ -28,4 +28,4 @@ begin
   return v_ret_val;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

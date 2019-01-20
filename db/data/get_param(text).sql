@@ -22,4 +22,4 @@ begin
   return v_value;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

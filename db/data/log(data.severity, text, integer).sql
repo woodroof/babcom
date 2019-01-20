@@ -12,4 +12,4 @@ begin
   values(in_severity, in_message, in_actor_id);
 end;
 $$
-language 'plpgsql';
+language plpgsql;

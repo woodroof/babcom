@@ -14,4 +14,4 @@ begin
     in_destination_value_object_id);
 end;
 $$
-language 'plpgsql';
+language plpgsql;

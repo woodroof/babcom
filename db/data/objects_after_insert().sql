@@ -14,4 +14,4 @@ begin
   return null;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

@@ -24,4 +24,4 @@ begin
   return v_object_code;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

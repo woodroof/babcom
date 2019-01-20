@@ -21,4 +21,4 @@ begin
     test_project.next_code(v_object_code));
 end;
 $$
-language 'plpgsql';
+language plpgsql;

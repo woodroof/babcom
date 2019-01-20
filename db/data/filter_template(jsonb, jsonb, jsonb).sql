@@ -86,4 +86,4 @@ begin
   return jsonb_build_object('groups', to_jsonb(v_filtered_groups));
 end;
 $$
-language 'plpgsql';
+language plpgsql;

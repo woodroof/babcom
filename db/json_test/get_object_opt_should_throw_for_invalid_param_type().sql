@@ -18,4 +18,4 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

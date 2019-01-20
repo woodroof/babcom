@@ -19,7 +19,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 select database_cleanup.clean();
 
@@ -219,7 +219,7 @@ exception when others or assert_failure then
   end;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function api.connect_client(text);
 
@@ -257,7 +257,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function api.disconnect_all_clients();
 
@@ -280,7 +280,7 @@ begin
   perform data.log('info', 'All clients were disconnected');
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function api.disconnect_client(text);
 
@@ -328,7 +328,7 @@ begin
   perform data.log('info', format('Disconnected client with code "%s"', in_client_code));
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function api.get_notification(text);
 
@@ -368,7 +368,7 @@ begin
     v_message);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function api_utils.create_action_notification(integer, text, api_utils.action_type, jsonb);
 
@@ -387,7 +387,7 @@ begin
     jsonb_build_object('action', in_action_type, 'action_data', in_action_data));
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function api_utils.create_go_back_action_notification(integer, text);
 
@@ -404,7 +404,7 @@ begin
     jsonb '{}');
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function api_utils.create_notification(integer, text, api_utils.output_message_type, jsonb);
 
@@ -431,7 +431,7 @@ begin
   perform pg_notify('api_channel', v_notification_code);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function api_utils.create_ok_notification(integer, text);
 
@@ -448,7 +448,7 @@ begin
     jsonb '{}');
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function api_utils.create_open_object_action_notification(integer, text, text);
 
@@ -467,7 +467,7 @@ begin
     jsonb_build_object('object_id', in_object_code));
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function api_utils.create_show_message_action_notification(integer, text, text, text);
 
@@ -492,7 +492,7 @@ begin
     v_action_data);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function api_utils.process_get_actors_message(integer, text);
 
@@ -564,7 +564,7 @@ begin
   perform api_utils.create_notification(in_client_id, in_request_id, 'actors', jsonb_build_object('actors', to_jsonb(v_actors)));
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function api_utils.process_get_more_message(integer, integer, jsonb);
 
@@ -600,7 +600,7 @@ begin
   perform api_utils.create_notification(in_client_id, in_request_id, 'object_list', jsonb_build_object('list', v_list));
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function api_utils.process_make_action_message(integer, text, jsonb);
 
@@ -644,7 +644,7 @@ begin
   using in_client_id, in_request_id, v_params, v_user_params, v_default_params;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function api_utils.process_open_list_object_message(integer, text, jsonb);
 
@@ -723,7 +723,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function api_utils.process_set_actor_message(integer, text, jsonb);
 
@@ -781,7 +781,7 @@ begin
   perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function api_utils.process_subscribe_message(integer, text, jsonb);
 
@@ -912,7 +912,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function api_utils.process_touch_message(integer, text, jsonb);
 
@@ -960,7 +960,7 @@ begin
   perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function api_utils.process_unsubscribe_message(integer, text, jsonb);
 
@@ -1012,7 +1012,7 @@ begin
   perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function array_utils.is_unique(integer[]);
 
@@ -1025,7 +1025,7 @@ begin
   return intarray.uniq(intarray.sort(in_array)) = intarray.sort(in_array);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function array_utils.is_unique(text[]);
 
@@ -1061,7 +1061,7 @@ begin
   return v_sorted_unique = v_sorted;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.add_object_to_object(integer, integer);
 
@@ -1193,7 +1193,7 @@ begin
   select in_parent_object_id, in_object_id, null;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.attribute_change2jsonb(integer, integer, jsonb);
 
@@ -1217,7 +1217,7 @@ begin
   return v_result;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.attribute_change2jsonb(text, integer, jsonb);
 
@@ -1230,7 +1230,7 @@ begin
   return data.attribute_change2jsonb(data.get_attribute_id(in_attribute_code), in_value_object_id, in_value);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.can_attribute_be_overridden(integer);
 
@@ -1254,7 +1254,7 @@ begin
   return v_ret_val;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.change_current_object(integer, text, integer, jsonb);
 
@@ -1311,7 +1311,7 @@ begin
   return v_message_sent;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.change_object(integer, jsonb, integer);
 
@@ -1431,7 +1431,7 @@ begin
   return to_jsonb(v_ret_val);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.change_object_and_notify(integer, jsonb, integer);
 
@@ -1457,7 +1457,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.delete_attribute_value(integer, integer, integer, integer, text);
 
@@ -1502,7 +1502,7 @@ begin
   where id = v_attribute_value_id;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.filter_template(jsonb, jsonb, jsonb);
 
@@ -1592,7 +1592,7 @@ begin
   return jsonb_build_object('groups', to_jsonb(v_filtered_groups));
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.get_active_actor_id(integer);
 
@@ -1616,7 +1616,7 @@ begin
   return v_actor_id;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.get_array_param(text);
 
@@ -1635,7 +1635,7 @@ exception when invalid_parameter_value then
   raise exception 'Param "%" is not an array', in_code;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.get_attribute_code(integer);
 
@@ -1661,7 +1661,7 @@ begin
   return v_attribute_code;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.get_attribute_id(text);
 
@@ -1687,7 +1687,7 @@ begin
   return v_attribute_id;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.get_attribute_value(integer, integer);
 
@@ -1731,7 +1731,7 @@ begin
   return v_attribute_value;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.get_attribute_value(integer, integer, integer);
 
@@ -1789,7 +1789,7 @@ begin
   return v_attribute_value;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.get_attribute_value(integer, text);
 
@@ -1802,7 +1802,7 @@ begin
   return data.get_attribute_value(in_object_id, data.get_attribute_id(in_attribute_code));
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.get_attribute_value(integer, text, integer);
 
@@ -1815,7 +1815,7 @@ begin
   return data.get_attribute_value(in_object_id, data.get_attribute_id(in_attribute_code), in_actor_id);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.get_attribute_value_modification_date(integer, integer, integer);
 
@@ -1852,7 +1852,7 @@ begin
   return v_date;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.get_attribute_value_modification_date(integer, text, integer);
 
@@ -1865,7 +1865,7 @@ begin
   return data.get_attribute_value_modification_date(in_object_id, data.get_attribute_id(in_attribute_code), in_value_object_id);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.get_bigint_param(text);
 
@@ -1884,7 +1884,7 @@ exception when invalid_parameter_value then
   raise exception 'Param "%" is not a bigint', in_code;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.get_boolean_param(text);
 
@@ -1903,7 +1903,7 @@ exception when invalid_parameter_value then
   raise exception 'Param "%" is not a boolean', in_code;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.get_class_id(text);
 
@@ -1931,7 +1931,7 @@ begin
   return v_class_id;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.get_integer_param(text);
 
@@ -1950,7 +1950,7 @@ exception when invalid_parameter_value then
   raise exception 'Param "%" is not an integer', in_code;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.get_next_list(integer, integer);
 
@@ -2048,7 +2048,7 @@ begin
   return jsonb_build_object('objects', to_jsonb(v_objects), 'has_more', v_has_more);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.get_object(integer, integer, data.card_type, integer);
 
@@ -2073,7 +2073,7 @@ begin
   return jsonb_build_object('id', data.get_object_code(in_object_id), 'attributes', v_attributes, 'actions', coalesce(v_actions, jsonb '{}'), 'template', v_template);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.get_object_code(integer);
 
@@ -2101,7 +2101,7 @@ begin
   return v_object_code;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.get_object_data(integer, integer, data.card_type, integer);
 
@@ -2214,7 +2214,7 @@ begin
   return jsonb_build_object('attributes', v_attributes, 'actions', v_actions);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.get_object_id(text);
 
@@ -2242,7 +2242,7 @@ begin
   return v_object_id;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.get_object_param(text);
 
@@ -2261,7 +2261,7 @@ exception when invalid_parameter_value then
   raise exception 'Param "%" is not an object', in_code;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.get_param(text);
 
@@ -2287,7 +2287,7 @@ begin
   return v_value;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.get_string_param(text);
 
@@ -2306,7 +2306,7 @@ exception when invalid_parameter_value then
   raise exception 'Param "%" is not a string', in_code;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.init();
 
@@ -2403,7 +2403,7 @@ begin
   ('type', null, 'Тип объекта, string', 'hidden', null, null, true);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.is_hidden_attribute(integer);
 
@@ -2427,7 +2427,7 @@ begin
   return v_ret_val;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.is_instance(integer);
 
@@ -2451,7 +2451,7 @@ begin
   return v_type = 'instance';
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.is_system_attribute(integer);
 
@@ -2475,7 +2475,7 @@ begin
   return v_ret_val;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.log(data.severity, text, integer);
 
@@ -2491,7 +2491,7 @@ begin
   values(in_severity, in_message, in_actor_id);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.objects_after_insert();
 
@@ -2509,7 +2509,7 @@ begin
   return null;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.remove_object_from_object(integer, integer);
 
@@ -2595,7 +2595,7 @@ begin
   where id = any(v_ids);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.set_attribute_value(integer, integer, jsonb, integer, integer, text);
 
@@ -2673,7 +2673,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.set_login(integer, integer);
 
@@ -2707,7 +2707,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.should_attribute_value_be_changed(integer, integer, integer, integer, integer);
 
@@ -2728,7 +2728,7 @@ begin
     v_source_attribute_modification_date != v_destination_attribute_modification_date;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function data.should_attribute_value_be_changed(integer, text, integer, text, integer);
 
@@ -2746,7 +2746,7 @@ begin
     in_destination_value_object_id);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function error.raise_invalid_input_param_value(text);
 
@@ -2761,7 +2761,7 @@ begin
   raise '%', in_message using errcode = 'invalid_parameter_value';
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function error.raise_invalid_input_param_value(text, text);
 
@@ -2777,7 +2777,7 @@ begin
   raise '%', format(in_format, in_param) using errcode = 'invalid_parameter_value';
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function error.raise_invalid_input_param_value(text, text, text);
 
@@ -2794,7 +2794,7 @@ begin
   raise '%', format(in_format, in_param1, in_param2) using errcode = 'invalid_parameter_value';
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_array(json, text);
 
@@ -2829,7 +2829,7 @@ begin
   return v_param;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_array(jsonb, text);
 
@@ -2864,7 +2864,7 @@ begin
   return v_param;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_array_opt(json, json);
 
@@ -2896,7 +2896,7 @@ begin
   return in_json;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_array_opt(json, text, json);
 
@@ -2933,7 +2933,7 @@ begin
   return v_param;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_array_opt(jsonb, jsonb);
 
@@ -2965,7 +2965,7 @@ begin
   return in_json;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_array_opt(jsonb, text, jsonb);
 
@@ -3002,7 +3002,7 @@ begin
   return v_param;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_bigint(json, text);
 
@@ -3048,7 +3048,7 @@ begin
   return v_ret_val;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_bigint(jsonb, text);
 
@@ -3094,7 +3094,7 @@ begin
   return v_ret_val;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_bigint_array(json, text);
 
@@ -3121,7 +3121,7 @@ exception when invalid_parameter_value then
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_bigint_array(jsonb, text);
 
@@ -3148,7 +3148,7 @@ exception when invalid_parameter_value then
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_bigint_array_opt(json, bigint[]);
 
@@ -3167,7 +3167,7 @@ begin
   return json.get_bigint_array(v_array);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_bigint_array_opt(json, text, bigint[]);
 
@@ -3186,7 +3186,7 @@ begin
   return json.get_bigint_array(in_json, in_name);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_bigint_array_opt(jsonb, bigint[]);
 
@@ -3205,7 +3205,7 @@ begin
   return json.get_bigint_array(v_array);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_bigint_array_opt(jsonb, text, bigint[]);
 
@@ -3224,7 +3224,7 @@ begin
   return json.get_bigint_array(in_json, in_name);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_bigint_opt(json, bigint);
 
@@ -3256,7 +3256,7 @@ begin
   return v_ret_val;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_bigint_opt(json, text, bigint);
 
@@ -3293,7 +3293,7 @@ begin
   return v_ret_val;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_bigint_opt(jsonb, bigint);
 
@@ -3325,7 +3325,7 @@ begin
   return v_ret_val;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_bigint_opt(jsonb, text, bigint);
 
@@ -3362,7 +3362,7 @@ begin
   return v_ret_val;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_boolean(json, text);
 
@@ -3397,7 +3397,7 @@ begin
   return v_param;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_boolean(jsonb, text);
 
@@ -3432,7 +3432,7 @@ begin
   return v_param;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_boolean_array(json, text);
 
@@ -3459,7 +3459,7 @@ exception when invalid_parameter_value then
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_boolean_array(jsonb, text);
 
@@ -3486,7 +3486,7 @@ exception when invalid_parameter_value then
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_boolean_array_opt(json, boolean[]);
 
@@ -3505,7 +3505,7 @@ begin
   return json.get_boolean_array(v_array);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_boolean_array_opt(json, text, boolean[]);
 
@@ -3524,7 +3524,7 @@ begin
   return json.get_boolean_array(in_json, in_name);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_boolean_array_opt(jsonb, boolean[]);
 
@@ -3543,7 +3543,7 @@ begin
   return json.get_boolean_array(v_array);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_boolean_array_opt(jsonb, text, boolean[]);
 
@@ -3562,7 +3562,7 @@ begin
   return json.get_boolean_array(in_json, in_name);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_boolean_opt(json, boolean);
 
@@ -3587,7 +3587,7 @@ begin
   return in_json;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_boolean_opt(json, text, boolean);
 
@@ -3617,7 +3617,7 @@ begin
   return v_param;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_boolean_opt(jsonb, boolean);
 
@@ -3642,7 +3642,7 @@ begin
   return in_json;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_boolean_opt(jsonb, text, boolean);
 
@@ -3672,7 +3672,7 @@ begin
   return v_param;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_integer(json, text);
 
@@ -3718,7 +3718,7 @@ begin
   return v_ret_val;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_integer(jsonb, text);
 
@@ -3764,7 +3764,7 @@ begin
   return v_ret_val;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_integer_array(json, text);
 
@@ -3791,7 +3791,7 @@ exception when invalid_parameter_value then
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_integer_array(jsonb, text);
 
@@ -3818,7 +3818,7 @@ exception when invalid_parameter_value then
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_integer_array_opt(json, integer[]);
 
@@ -3837,7 +3837,7 @@ begin
   return json.get_integer_array(v_array);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_integer_array_opt(json, text, integer[]);
 
@@ -3856,7 +3856,7 @@ begin
   return json.get_integer_array(in_json, in_name);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_integer_array_opt(jsonb, integer[]);
 
@@ -3875,7 +3875,7 @@ begin
   return json.get_integer_array(v_array);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_integer_array_opt(jsonb, text, integer[]);
 
@@ -3894,7 +3894,7 @@ begin
   return json.get_integer_array(in_json, in_name);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_integer_opt(json, integer);
 
@@ -3926,7 +3926,7 @@ begin
   return v_ret_val;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_integer_opt(json, text, integer);
 
@@ -3963,7 +3963,7 @@ begin
   return v_ret_val;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_integer_opt(jsonb, integer);
 
@@ -3995,7 +3995,7 @@ begin
   return v_ret_val;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_integer_opt(jsonb, text, integer);
 
@@ -4032,7 +4032,7 @@ begin
   return v_ret_val;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_number(json, text);
 
@@ -4067,7 +4067,7 @@ begin
   return v_param;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_number(jsonb, text);
 
@@ -4102,7 +4102,7 @@ begin
   return v_param;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_number_array(json, text);
 
@@ -4129,7 +4129,7 @@ exception when invalid_parameter_value then
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_number_array(jsonb, text);
 
@@ -4156,7 +4156,7 @@ exception when invalid_parameter_value then
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_number_array_opt(json, double precision[]);
 
@@ -4175,7 +4175,7 @@ begin
   return json.get_number_array(v_array);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_number_array_opt(json, text, double precision[]);
 
@@ -4194,7 +4194,7 @@ begin
   return json.get_number_array(in_json, in_name);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_number_array_opt(jsonb, double precision[]);
 
@@ -4213,7 +4213,7 @@ begin
   return json.get_number_array(v_array);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_number_array_opt(jsonb, text, double precision[]);
 
@@ -4232,7 +4232,7 @@ begin
   return json.get_number_array(in_json, in_name);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_number_opt(json, double precision);
 
@@ -4257,7 +4257,7 @@ begin
   return in_json;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_number_opt(json, text, double precision);
 
@@ -4287,7 +4287,7 @@ begin
   return v_param;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_number_opt(jsonb, double precision);
 
@@ -4312,7 +4312,7 @@ begin
   return in_json;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_number_opt(jsonb, text, double precision);
 
@@ -4342,7 +4342,7 @@ begin
   return v_param;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_object(json, text);
 
@@ -4377,7 +4377,7 @@ begin
   return v_param;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_object(jsonb, text);
 
@@ -4412,7 +4412,7 @@ begin
   return v_param;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_object_array(json, text);
 
@@ -4438,7 +4438,7 @@ exception when invalid_parameter_value then
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_object_array(jsonb, text);
 
@@ -4464,7 +4464,7 @@ exception when invalid_parameter_value then
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_object_array_opt(json, json);
 
@@ -4493,7 +4493,7 @@ begin
   return json.get_object_array(v_array);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_object_array_opt(json, text, json);
 
@@ -4524,7 +4524,7 @@ begin
   return json.get_object_array(in_json, in_name);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_object_array_opt(jsonb, jsonb);
 
@@ -4553,7 +4553,7 @@ begin
   return json.get_object_array(v_array);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_object_array_opt(jsonb, text, jsonb);
 
@@ -4584,7 +4584,7 @@ begin
   return json.get_object_array(in_json, in_name);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_object_opt(json, json);
 
@@ -4616,7 +4616,7 @@ begin
   return in_json;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_object_opt(json, text, json);
 
@@ -4653,7 +4653,7 @@ begin
   return v_param;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_object_opt(jsonb, jsonb);
 
@@ -4685,7 +4685,7 @@ begin
   return in_json;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_object_opt(jsonb, text, jsonb);
 
@@ -4722,7 +4722,7 @@ begin
   return v_param;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_string(json, text);
 
@@ -4757,7 +4757,7 @@ begin
   return v_param#>>'{}';
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_string(jsonb, text);
 
@@ -4792,7 +4792,7 @@ begin
   return v_param#>>'{}';
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_string_array(json, text);
 
@@ -4819,7 +4819,7 @@ exception when invalid_parameter_value then
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_string_array(jsonb, text);
 
@@ -4846,7 +4846,7 @@ exception when invalid_parameter_value then
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_string_array_opt(json, text, text[]);
 
@@ -4865,7 +4865,7 @@ begin
   return json.get_string_array(in_json, in_name);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_string_array_opt(json, text[]);
 
@@ -4884,7 +4884,7 @@ begin
   return json.get_string_array(v_array);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_string_array_opt(jsonb, text, text[]);
 
@@ -4903,7 +4903,7 @@ begin
   return json.get_string_array(in_json, in_name);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_string_array_opt(jsonb, text[]);
 
@@ -4922,7 +4922,7 @@ begin
   return json.get_string_array(v_array);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_string_opt(json, text);
 
@@ -4947,7 +4947,7 @@ begin
   return in_json#>>'{}';
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_string_opt(json, text, text);
 
@@ -4977,7 +4977,7 @@ begin
   return v_param#>>'{}';
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_string_opt(jsonb, text);
 
@@ -5002,7 +5002,7 @@ begin
   return in_json#>>'{}';
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json.get_string_opt(jsonb, text, text);
 
@@ -5032,7 +5032,7 @@ begin
   return v_param#>>'{}';
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_array_opt_should_throw_for_invalid_json_type();
 
@@ -5054,7 +5054,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_array_opt_should_throw_for_invalid_param_type();
 
@@ -5076,7 +5076,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_array_should_throw_for_invalid_json_type();
 
@@ -5098,7 +5098,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_array_should_throw_for_invalid_param_type();
 
@@ -5120,7 +5120,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_bigint_array_opt_should_throw_for_invalid_json_elem_type();
 
@@ -5142,7 +5142,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_bigint_array_opt_should_throw_for_invalid_param_elem_type();
 
@@ -5164,7 +5164,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_bigint_array_should_throw_for_invalid_json_elem_type();
 
@@ -5186,7 +5186,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_bigint_array_should_throw_for_invalid_param_elem_type();
 
@@ -5208,7 +5208,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_bigint_opt_should_throw_for_float_json();
 
@@ -5228,7 +5228,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_bigint_opt_should_throw_for_float_param();
 
@@ -5248,7 +5248,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_bigint_opt_should_throw_for_invalid_json_type();
 
@@ -5270,7 +5270,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_bigint_opt_should_throw_for_invalid_param_type();
 
@@ -5292,7 +5292,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_bigint_should_throw_for_float_json();
 
@@ -5312,7 +5312,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_bigint_should_throw_for_float_param();
 
@@ -5332,7 +5332,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_bigint_should_throw_for_invalid_json_type();
 
@@ -5354,7 +5354,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_bigint_should_throw_for_invalid_param_type();
 
@@ -5376,7 +5376,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_boolean_array_opt_should_throw_for_invalid_json_elem_type();
 
@@ -5398,7 +5398,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_boolean_array_opt_should_throw_for_invalid_param_elem_type();
 
@@ -5420,7 +5420,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_boolean_array_should_throw_for_invalid_json_elem_type();
 
@@ -5442,7 +5442,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_boolean_array_should_throw_for_invalid_param_elem_type();
 
@@ -5464,7 +5464,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_boolean_opt_should_throw_for_invalid_json_type();
 
@@ -5486,7 +5486,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_boolean_opt_should_throw_for_invalid_param_type();
 
@@ -5508,7 +5508,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_boolean_should_throw_for_invalid_json_type();
 
@@ -5530,7 +5530,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_boolean_should_throw_for_invalid_param_type();
 
@@ -5552,7 +5552,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_integer_array_opt_should_throw_for_invalid_json_elem_type();
 
@@ -5574,7 +5574,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_integer_array_opt_should_throw_for_invalid_param_elem_type();
 
@@ -5596,7 +5596,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_integer_array_should_throw_for_invalid_json_elem_type();
 
@@ -5618,7 +5618,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_integer_array_should_throw_for_invalid_param_elem_type();
 
@@ -5640,7 +5640,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_integer_opt_should_throw_for_float_json();
 
@@ -5660,7 +5660,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_integer_opt_should_throw_for_float_param();
 
@@ -5680,7 +5680,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_integer_opt_should_throw_for_invalid_json_type();
 
@@ -5702,7 +5702,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_integer_opt_should_throw_for_invalid_param_type();
 
@@ -5724,7 +5724,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_integer_should_throw_for_float_json();
 
@@ -5744,7 +5744,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_integer_should_throw_for_float_param();
 
@@ -5764,7 +5764,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_integer_should_throw_for_invalid_json_type();
 
@@ -5786,7 +5786,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_integer_should_throw_for_invalid_param_type();
 
@@ -5808,7 +5808,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_number_array_opt_should_throw_for_invalid_json_elem_type();
 
@@ -5830,7 +5830,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_number_array_opt_should_throw_for_invalid_param_elem_type();
 
@@ -5852,7 +5852,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_number_array_should_throw_for_invalid_json_elem_type();
 
@@ -5874,7 +5874,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_number_array_should_throw_for_invalid_param_elem_type();
 
@@ -5896,7 +5896,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_number_opt_should_throw_for_invalid_json_type();
 
@@ -5918,7 +5918,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_number_opt_should_throw_for_invalid_param_type();
 
@@ -5940,7 +5940,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_number_should_throw_for_invalid_json_type();
 
@@ -5962,7 +5962,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_number_should_throw_for_invalid_param_type();
 
@@ -5984,7 +5984,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_object_array_opt_should_throw_for_invalid_json_elem_type();
 
@@ -6006,7 +6006,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_object_array_opt_should_throw_for_invalid_param_elem_type();
 
@@ -6028,7 +6028,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_object_array_should_throw_for_invalid_json_elem_type();
 
@@ -6050,7 +6050,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_object_array_should_throw_for_invalid_param_elem_type();
 
@@ -6072,7 +6072,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_object_opt_should_throw_for_invalid_json_type();
 
@@ -6094,7 +6094,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_object_opt_should_throw_for_invalid_param_type();
 
@@ -6116,7 +6116,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_object_should_throw_for_invalid_json_type();
 
@@ -6138,7 +6138,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_object_should_throw_for_invalid_param_type();
 
@@ -6160,7 +6160,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_string_array_opt_should_throw_for_invalid_json_elem_type();
 
@@ -6182,7 +6182,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_string_array_opt_should_throw_for_invalid_param_elem_type();
 
@@ -6204,7 +6204,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_string_array_should_throw_for_invalid_json_elem_type();
 
@@ -6226,7 +6226,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_string_array_should_throw_for_invalid_param_elem_type();
 
@@ -6248,7 +6248,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_string_opt_should_throw_for_invalid_json_type();
 
@@ -6270,7 +6270,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_string_opt_should_throw_for_invalid_param_type();
 
@@ -6292,7 +6292,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_string_should_throw_for_invalid_json_type();
 
@@ -6314,7 +6314,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_string_should_throw_for_invalid_param_type();
 
@@ -6336,7 +6336,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_x_array_opt_should_throw_for_invalid_json_type();
 
@@ -6361,7 +6361,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_x_array_opt_should_throw_for_invalid_param_type();
 
@@ -6386,7 +6386,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_x_array_should_throw_for_invalid_json_type();
 
@@ -6411,7 +6411,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_x_array_should_throw_for_invalid_param_type();
 
@@ -6436,7 +6436,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_x_opt_with_name_should_throw_for_null_json();
 
@@ -6458,7 +6458,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_x_should_throw_for_non_existing_key();
 
@@ -6481,7 +6481,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function json_test.get_x_should_throw_for_null_json();
 
@@ -6508,7 +6508,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function pallas_project.act_create_debatle_step1(integer, text, jsonb, jsonb, jsonb);
 
@@ -6584,7 +6584,7 @@ begin
     format('{"action": "open_object", "action_data": {"object_id": "%s"}}', v_debatle_code)::jsonb);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function pallas_project.act_debatle_change_person(integer, text, jsonb, jsonb, jsonb);
 
@@ -6670,7 +6670,7 @@ begin
     format('{"action": "open_object", "action_data": {"object_id": "%s"}}', v_temp_object_code)::jsonb);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function pallas_project.act_debatle_change_status(integer, text, jsonb, jsonb, jsonb);
 
@@ -6886,7 +6886,7 @@ begin
     format('{"action": "open_object", "action_data": {"object_id": "%s"}}', v_debatle_code)::jsonb);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function pallas_project.act_debatle_change_theme(integer, text, jsonb, jsonb, jsonb);
 
@@ -6936,7 +6936,7 @@ begin
     format('{"action": "open_object", "action_data": {"object_id": "%s"}}', v_debatle_code)::jsonb);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function pallas_project.act_go_back(integer, text, jsonb, jsonb, jsonb);
 
@@ -6956,7 +6956,7 @@ begin
     '{"action": "go_back", "action_data": {}}'::jsonb);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function pallas_project.act_login(integer, text, jsonb, jsonb, jsonb);
 
@@ -6990,7 +6990,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function pallas_project.act_logout(integer, text, jsonb, jsonb, jsonb);
 
@@ -7020,7 +7020,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function pallas_project.act_open_object(integer, text, jsonb, jsonb, jsonb);
 
@@ -7041,7 +7041,7 @@ begin
     format('{"action": "open_object", "action_data": {"object_id": "%s"}}', v_object_code)::jsonb);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function pallas_project.actgenerator_debatle(integer, integer);
 
@@ -7095,7 +7095,7 @@ begin
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function pallas_project.actgenerator_debatle_temp_person_list(integer, integer);
 
@@ -7120,7 +7120,7 @@ begin
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function pallas_project.actgenerator_debatles(integer, integer);
 
@@ -7142,7 +7142,7 @@ begin
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function pallas_project.actgenerator_menu(integer, integer);
 
@@ -7172,7 +7172,7 @@ begin
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function pallas_project.fcard_debatle(integer, integer);
 
@@ -7219,7 +7219,7 @@ begin
   perform data.change_object(in_object_id, to_jsonb(v_changes), in_actor_id);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function pallas_project.fcard_debatles(integer, integer);
 
@@ -7249,7 +7249,7 @@ begin
   perform data.change_object(in_object_id, to_jsonb(v_changes), in_actor_id);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function pallas_project.fcard_menu(integer, integer);
 
@@ -7275,7 +7275,7 @@ begin
   perform data.change_object(in_object_id, to_jsonb(v_changes), in_actor_id);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function pallas_project.fcard_person(integer, integer);
 
@@ -7319,7 +7319,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function pallas_project.init();
 
@@ -7567,7 +7567,7 @@ insert into data.objects(code, class_id) values('person3', v_person_class_id) re
   perform pallas_project.init_debatles();
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function pallas_project.init_debatles();
 
@@ -7751,7 +7751,7 @@ begin
 
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function pallas_project.is_in_group(integer, text);
 
@@ -7775,7 +7775,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function pallas_project.lef_debatle_temp_person_list(integer, text, integer, integer);
 
@@ -7820,7 +7820,7 @@ begin
     '{"action": "go_back", "action_data": {}}'::jsonb);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function pallas_project.mcard_debatle(integer, integer);
 
@@ -7841,7 +7841,7 @@ begin
   perform data.change_object(in_object_id, to_jsonb(v_changes), in_actor_id);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function pallas_project.mcard_person(integer, integer);
 
@@ -7860,7 +7860,7 @@ begin
 
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function pallas_project.vd_debatle_status(integer, jsonb, integer);
 
@@ -7891,7 +7891,7 @@ begin
   end case;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function pallas_project.vd_debatle_temp_person_list_edited_person(integer, jsonb, integer);
 
@@ -7915,7 +7915,7 @@ begin
   end case;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function pallas_project.vd_person_state(integer, jsonb, integer);
 
@@ -7938,7 +7938,7 @@ begin
   end case;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function random.random_bigint(bigint, bigint);
 
@@ -7962,7 +7962,7 @@ begin
   return floor(in_min_value + v_random_double * (in_max_value - in_min_value + 1));
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function random.random_integer(integer, integer);
 
@@ -7986,7 +7986,7 @@ begin
   return floor(in_min_value + v_random_double * (in_max_value - in_min_value + 1));
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function random_test.random_x_should_return_exact_value();
 
@@ -8004,7 +8004,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function random_test.random_x_should_return_ge_than_min_value();
 
@@ -8023,7 +8023,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function random_test.random_x_should_return_le_than_max_value();
 
@@ -8042,7 +8042,7 @@ begin
   end loop;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_caseeq(text, text);
 
@@ -8072,7 +8072,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_casene(text, text);
 
@@ -8100,7 +8100,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_eq(bigint, bigint);
 
@@ -8130,7 +8130,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_eq(bigint[], bigint[]);
 
@@ -8160,7 +8160,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_eq(json, json);
 
@@ -8190,7 +8190,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_eq(jsonb, jsonb);
 
@@ -8220,7 +8220,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_eq(text, text);
 
@@ -8250,7 +8250,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_eq(text[], text[]);
 
@@ -8280,7 +8280,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_false(boolean);
 
@@ -8296,7 +8296,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_ge(bigint, bigint);
 
@@ -8312,7 +8312,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_gt(bigint, bigint);
 
@@ -8328,7 +8328,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_le(bigint, bigint);
 
@@ -8344,7 +8344,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_lt(bigint, bigint);
 
@@ -8360,7 +8360,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_ne(bigint, bigint);
 
@@ -8388,7 +8388,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_ne(bigint[], bigint[]);
 
@@ -8416,7 +8416,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_ne(json, json);
 
@@ -8444,7 +8444,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_ne(jsonb, jsonb);
 
@@ -8472,7 +8472,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_ne(text, text);
 
@@ -8500,7 +8500,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_ne(text[], text[]);
 
@@ -8528,7 +8528,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_no_throw(text);
 
@@ -8560,7 +8560,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_not_null(bigint);
 
@@ -8576,7 +8576,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_not_null(boolean);
 
@@ -8592,7 +8592,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_not_null(text);
 
@@ -8608,7 +8608,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_null(bigint);
 
@@ -8624,7 +8624,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_null(boolean);
 
@@ -8640,7 +8640,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_null(text);
 
@@ -8656,7 +8656,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_throw(text, text);
 
@@ -8692,7 +8692,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.assert_true(boolean);
 
@@ -8708,7 +8708,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.fail(text);
 
@@ -8726,7 +8726,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test.run_all_tests();
 
@@ -9077,7 +9077,7 @@ begin
   return true;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.diff_action(integer, text, jsonb, jsonb, jsonb);
 
@@ -9127,7 +9127,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.diff_action_generator(integer, integer);
 
@@ -9144,7 +9144,7 @@ begin
   return format('{"action": {"code": "diff", "name": "%s", "disabled": false, "params": {"title": "%s", "object_id": %s}}}', v_name, v_title, in_object_id)::jsonb;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.do_nothing_action(integer, text, jsonb, jsonb, jsonb);
 
@@ -9164,7 +9164,7 @@ begin
   perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.do_nothing_list_action_generator(integer, integer, integer);
 
@@ -9185,7 +9185,7 @@ begin
   return jsonb '{}';
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.get_suffix(text);
 
@@ -9200,7 +9200,7 @@ begin
   return substring(in_code from char_length(v_prefix) + 1)::integer;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.init();
 
@@ -10276,7 +10276,7 @@ Markdown — формат, который все реализуют по-раз�
   values('template', jsonb_build_object('groups', to_jsonb(v_template_groups)), 'Шаблон');
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.is_user_params_empty(jsonb);
 
@@ -10289,7 +10289,7 @@ begin
   return in_user_params is null or in_user_params = jsonb 'null' or in_user_params = jsonb '{}';
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.login_action(integer, text, jsonb, jsonb, jsonb);
 
@@ -10347,7 +10347,7 @@ begin
   perform api_utils.process_get_actors_message(in_client_id, in_request_id);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.login_action_generator(integer, integer);
 
@@ -10362,7 +10362,7 @@ begin
   return format('{"action": {"code": "login", "name": "Далее", "disabled": false, "params": "%s"}}', v_title)::jsonb;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.next_action_with_array_params(integer, text, jsonb, jsonb, jsonb);
 
@@ -10392,7 +10392,7 @@ begin
     test_project.next_code(v_object_code));
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.next_action_with_array_params_generator(integer, integer);
 
@@ -10409,7 +10409,7 @@ begin
   return format('{"action": {"code": "next_action_with_array_params", "name": "Далее", "disabled": false, "params": ["%s"]}}', v_object_code)::jsonb;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.next_action_with_double_user_param(integer, text, jsonb, jsonb, jsonb);
 
@@ -10433,7 +10433,7 @@ begin
     test_project.next_code(v_object_code));
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.next_action_with_double_user_param_generator(integer, integer);
 
@@ -10466,7 +10466,7 @@ begin
 }', v_object_code)::jsonb;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.next_action_with_integer_user_param(integer, text, jsonb, jsonb, jsonb);
 
@@ -10490,7 +10490,7 @@ begin
     test_project.next_code(v_object_code));
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.next_action_with_integer_user_param_generator(integer, integer);
 
@@ -10523,7 +10523,7 @@ begin
 }', v_object_code)::jsonb;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.next_action_with_multiline_user_param(integer, text, jsonb, jsonb, jsonb);
 
@@ -10547,7 +10547,7 @@ begin
     test_project.next_code(v_object_code));
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.next_action_with_multiline_user_param_generator(integer, integer);
 
@@ -10582,7 +10582,7 @@ begin
 }', v_object_code)::jsonb;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.next_action_with_null_params(integer, text, jsonb, jsonb, jsonb);
 
@@ -10606,7 +10606,7 @@ begin
     test_project.next_code(v_object_code));
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.next_action_with_null_params_generator(integer, integer);
 
@@ -10622,7 +10622,7 @@ begin
   return jsonb '{"action": {"code": "next_action_with_null_params", "name": "Далее", "disabled": false, "params": null}}';
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.next_action_with_object_params(integer, text, jsonb, jsonb, jsonb);
 
@@ -10646,7 +10646,7 @@ begin
     test_project.next_code(v_object_code));
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.next_action_with_object_params_generator(integer, integer);
 
@@ -10663,7 +10663,7 @@ begin
   return format('{"action": {"code": "next_action_with_object_params", "name": "Далее", "disabled": false, "params": {"object_code": "%s"}}}', v_object_code)::jsonb;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.next_action_with_text_user_param(integer, text, jsonb, jsonb, jsonb);
 
@@ -10688,7 +10688,7 @@ begin
     test_project.next_code(v_object_code));
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.next_action_with_text_user_param_generator(integer, integer);
 
@@ -10723,7 +10723,7 @@ begin
 }', v_object_code)::jsonb;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.next_action_with_warning_generator(integer, integer);
 
@@ -10740,7 +10740,7 @@ begin
   return format('{"action": {"code": "next_action_with_object_params", "name": "Далее", "warning": "Вы действительно хотите перейти к следующему объекту?", "disabled": false, "params": {"object_code": "%s"}}}', v_object_code)::jsonb;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.next_code(text);
 
@@ -10756,7 +10756,7 @@ begin
   return v_prefix || (v_suffix + 1)::text;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.next_or_do_nothing_list_action(integer, text, integer, integer);
 
@@ -10783,7 +10783,7 @@ begin
   end if;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.object_action_generator(integer, integer);
 
@@ -10800,7 +10800,7 @@ begin
   return format('{"%s_action": {"code": "do_nothing", "name": "Не тыкай сюда!", "disabled": false, "params": null}}', v_object_code)::jsonb;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.simple_action_generator(integer, integer);
 
@@ -10816,7 +10816,7 @@ begin
   return jsonb '{"action": {"code": "do_nothing", "name": "Не тыкай сюда!", "disabled": false, "params": null}}';
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.simple_actions_generator(integer, integer);
 
@@ -10843,7 +10843,7 @@ begin
     jsonb '{"code": "do_nothing", "name": "Невидимое действие", "disabled": false, "params": null}');
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.simple_list_generator(integer, integer);
 
@@ -10926,7 +10926,7 @@ begin
   perform data.set_attribute_value(in_object_id, data.get_attribute_id('list_element_function'), jsonb '"test_project.next_or_do_nothing_list_action"', null, in_actor_id);
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- drop function test_project.test_value_description_function(integer, jsonb, integer);
 
@@ -10958,7 +10958,7 @@ begin
   assert false;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
 
 -- Creating tables
 

@@ -21,4 +21,4 @@ begin
     v_action_data);
 end;
 $$
-language 'plpgsql';
+language plpgsql;

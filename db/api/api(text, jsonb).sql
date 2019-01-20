@@ -85,4 +85,4 @@ exception when others or assert_failure then
   end;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

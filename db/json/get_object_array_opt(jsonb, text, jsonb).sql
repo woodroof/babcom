@@ -27,4 +27,4 @@ begin
   return json.get_object_array(in_json, in_name);
 end;
 $$
-language 'plpgsql';
+language plpgsql;

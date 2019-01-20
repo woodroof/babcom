@@ -13,4 +13,4 @@ begin
   return format('{"%s_action": {"code": "do_nothing", "name": "Не тыкай сюда!", "disabled": false, "params": null}}', v_object_code)::jsonb;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

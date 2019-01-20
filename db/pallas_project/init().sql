@@ -244,4 +244,4 @@ insert into data.objects(code, class_id) values('person3', v_person_class_id) re
   perform pallas_project.init_debatles();
 end;
 $$
-language 'plpgsql';
+language plpgsql;

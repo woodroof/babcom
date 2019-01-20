@@ -17,4 +17,4 @@ begin
     v_source_attribute_modification_date != v_destination_attribute_modification_date;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

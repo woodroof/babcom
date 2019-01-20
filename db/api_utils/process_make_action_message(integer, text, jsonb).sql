@@ -40,4 +40,4 @@ begin
   using in_client_id, in_request_id, v_params, v_user_params, v_default_params;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

@@ -28,4 +28,4 @@ begin
   assert false;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

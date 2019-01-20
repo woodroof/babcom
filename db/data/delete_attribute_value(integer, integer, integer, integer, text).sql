@@ -41,4 +41,4 @@ begin
   where id = v_attribute_value_id;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

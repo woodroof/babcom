@@ -15,4 +15,4 @@ begin
     jsonb_build_object('action', in_action_type, 'action_data', in_action_data));
 end;
 $$
-language 'plpgsql';
+language plpgsql;

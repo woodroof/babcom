@@ -128,4 +128,4 @@ begin
   select in_parent_object_id, in_object_id, null;
 end;
 $$
-language 'plpgsql';
+language plpgsql;

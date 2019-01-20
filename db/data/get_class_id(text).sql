@@ -24,4 +24,4 @@ begin
   return v_class_id;
 end;
 $$
-language 'plpgsql';
+language plpgsql;
