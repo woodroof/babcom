@@ -20,7 +20,7 @@ begin
       json.get_integer(value, 'id') as id,
       json.get_integer_opt(value, 'value_object_id', null) as value_object_id,
       value->'value' as value
-    from jsonb_array_elements(v_changes)
+    from jsonb_array_elements(in_changes)
   )
   loop
     v_value := data.get_raw_attribute_value(in_object_id, v_change.id, v_change.value_object_id);

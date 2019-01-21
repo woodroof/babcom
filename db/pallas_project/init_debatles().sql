@@ -137,7 +137,8 @@ begin
   (v_debatle_class_id, v_mini_card_function_attribute_id, jsonb '"pallas_project.mcard_debatle"'),
   (v_debatle_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatle"'),
   (v_debatle_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
-                                                      '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"], "actions": ["%s", "%s", "%s"]}',
+                                                      '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"], 
+                                                                      "actions": ["%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"]}',
                                                       'debatle_group1',
                                                       'debatle_theme',
                                                       'debatle_status',
@@ -155,7 +156,13 @@ begin
                                                       'debatle_change_instigator',
                                                       'debatle_change_opponent',
                                                       'debatle_change_judge',
-                                                      'debatle_change_theme')::jsonb]));
+                                                      'debatle_change_theme',
+                                                      'debatle_change_status_new',
+                                                      'debatle_change_status_future',
+                                                      'debatle_change_status_vote',
+                                                      'debatle_change_status_vote_over',
+                                                      'debatle_change_status_closed',
+                                                      'debatle_change_status_deleted')::jsonb]));
 
   -- Объект-класс для временных списков персон для редактирования дебатла
   insert into data.objects(code, type) values('debatle_temp_person_list', 'class') returning id into v_debatle_temp_person_list_class_id;
@@ -175,7 +182,8 @@ begin
   insert into data.actions(code, function) values
   ('create_debatle_step1', 'pallas_project.act_create_debatle_step1'),
   ('debatle_change_person', 'pallas_project.act_debatle_change_person'),
-  ('debatle_change_theme', 'pallas_project.act_debatle_change_theme');
+  ('debatle_change_theme', 'pallas_project.act_debatle_change_theme'),
+  ('debatle_change_status', 'pallas_project.act_debatle_change_status');
 
 
 end;

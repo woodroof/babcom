@@ -24,6 +24,7 @@ declare
   v_master_group_id integer := data.get_object_id('master');
 
   v_content text[];
+  v_new_content text[];
 
   v_temp_object_code text;
   v_temp_object_id integer;
@@ -46,24 +47,30 @@ begin
   perform * from data.objects where id = v_debatles_draft_id for update;
 
   -- Достаём, меняем, кладём назад
+  v_content := array[]::text[];
   v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_all_id, 'content', v_master_group_id), v_content);
-  v_content := array_append(v_content, v_debatle_code);
-  perform data.change_object(v_debatles_all_id, 
-                             jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_content))),
-                             v_actor_id);
+  v_new_content := array_append(v_content, v_debatle_code);
+  if v_new_content <> v_content then
+    perform data.change_object_and_notify(v_debatles_all_id, 
+                                          jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_new_content))),
+                                          v_actor_id);
+  end if;
   v_content := array[]::text[];
   v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_my_id,'content', v_actor_id), v_content);
-  v_content := array_append(v_content, v_debatle_code);
-  perform data.change_object(v_debatles_my_id, 
-                             jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_actor_id, to_jsonb(v_content))),
-                             v_actor_id);
-
+  v_new_content := array_append(v_content, v_debatle_code);
+  if v_new_content <> v_content then
+    perform data.change_object_and_notify(v_debatles_my_id, 
+                                         jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_actor_id, to_jsonb(v_new_content))),
+                                         v_actor_id);
+  end if;
   v_content := array[]::text[];
   v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_draft_id,'content', v_actor_id), v_content);
-  v_content := array_append(v_content, v_debatle_code);
-  perform data.change_object(v_debatles_draft_id, 
-                             jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_actor_id, to_jsonb(v_content))),
-                             v_actor_id);
+  v_new_content := array_append(v_content, v_debatle_code);
+  if v_new_content <> v_content then
+    perform data.change_object_and_notify(v_debatles_draft_id, 
+                                          jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_actor_id, to_jsonb(v_new_content))),
+                                          v_actor_id);
+  end if;
 
   perform api_utils.create_notification(
     in_client_id,

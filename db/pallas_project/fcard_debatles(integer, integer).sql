@@ -8,22 +8,21 @@ $$
 declare
   v_is_master boolean := pallas_project.is_in_group(in_actor_id, 'master');
 
-  v_content text[];
+  v_content_attribute_id integer := data.get_attribute_id('content');
 
-  v_changes jsonb[];
+  v_new_content jsonb;
 begin
   perform * from data.objects where id = in_object_id for update;
 
   if v_is_master then
-    v_content := array['debatles_new','debatles_current','debutles_future','debatles_closed', 'debatles_all', 'debatles_my']; 
+    v_new_content := to_jsonb(array['debatles_new','debatles_current', 'debutles_future','debatles_closed', 'debatles_all', 'debatles_my']); 
   else
-    v_content := array['debatles_my','debatles_closed'];
+    v_new_content := to_jsonb(array['debatles_my', 'debatles_current', 'debatles_closed']);
   end if;
 
-  v_changes := array_append(v_changes, data.attribute_change2jsonb('content', in_actor_id, to_jsonb(v_content)));
-
-
-  perform data.change_object(in_object_id, to_jsonb(v_changes), in_actor_id);
+  if coalesce(data.get_raw_attribute_value(in_object_id, v_content_attribute_id, in_actor_id), to_jsonb(array[]::text[])) <> v_new_content then
+    perform data.set_attribute_value(in_object_id, v_content_attribute_id, v_new_content, in_actor_id, in_actor_id);
+  end if;
 end;
 $$
 language plpgsql;

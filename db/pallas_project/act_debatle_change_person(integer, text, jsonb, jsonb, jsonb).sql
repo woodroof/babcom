@@ -31,16 +31,6 @@ declare
 begin
   assert in_request_id is not null;
 
-  v_debatle_status := json.get_string_opt(data.get_attribute_value(v_debatle_id, 'debatle_status'), '~~~');
-  if v_debatle_status not in ('new', 'future') then
-    perform api_utils.create_notification(
-      in_client_id,
-      in_request_id,
-      'action',
-      format('{"action": "show_message", "action_data": {"title": "%s", "message": "%s"}}', 'Ошибка', 'Участников дебатла нельзя изменить на этом этапе')::jsonb); 
-    return;
-  end if;
-
   if v_edited_person not in ('instigator', 'opponent', 'judge') then
     perform api_utils.create_notification(
       in_client_id,

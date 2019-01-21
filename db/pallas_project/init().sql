@@ -119,7 +119,6 @@ begin
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_menu_id, v_type_attribute_id, jsonb '"menu"'),
   (v_menu_id, v_is_visible_attribute_id, jsonb 'true'),
-  (v_menu_id, v_full_card_function_attribute_id, jsonb'"pallas_project.fcard_menu"'),
   (v_menu_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_menu"'),
   (v_menu_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
                                       '{"code": "%s", "actions": ["%s", "%s", "%s"]}',
@@ -134,6 +133,22 @@ begin
   (v_notifications_id, v_type_attribute_id, jsonb '"notifications"'),
   (v_notifications_id, v_is_visible_attribute_id, jsonb 'true'),
   (v_notifications_id, v_content_attribute_id, jsonb '[]');
+
+  -- Создадим объект для страницы 404
+  declare
+    v_not_found_object_id integer;
+  begin
+    insert into data.objects(code) values('not_found') returning id into v_not_found_object_id;
+    insert into data.params(code, value, description)
+    values('not_found_object_id', to_jsonb(v_not_found_object_id), 'Идентификатор объекта, отображаемого в случае, если актору недоступен какой-то объект (ну или он реально не существует)');
+
+    insert into data.attribute_values(object_id, attribute_id, value) values
+    (v_not_found_object_id, v_type_attribute_id, jsonb '"not_found"'),
+    (v_not_found_object_id, v_is_visible_attribute_id, jsonb 'true'),
+    (v_not_found_object_id, v_title_attribute_id, jsonb '"404"'),
+    (v_not_found_object_id, v_subtitle_attribute_id, jsonb '"Not found"'),
+    (v_not_found_object_id, v_description_attribute_id, jsonb '"Это не те дроиды, которых вы ищете."');
+  end;
 
   insert into data.actions(code, function) values
   ('act_open_object', 'pallas_project.act_open_object'),

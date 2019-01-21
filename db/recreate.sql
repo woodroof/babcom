@@ -1648,7 +1648,7 @@ begin
       json.get_integer(value, 'id') as id,
       json.get_integer_opt(value, 'value_object_id', null) as value_object_id,
       value->'value' as value
-    from jsonb_array_elements(v_changes)
+    from jsonb_array_elements(in_changes)
   )
   loop
     v_value := data.get_raw_attribute_value(in_object_id, v_change.id, v_change.value_object_id);
@@ -6770,6 +6770,7 @@ declare
   v_master_group_id integer := data.get_object_id('master');
 
   v_content text[];
+  v_new_content text[];
 
   v_temp_object_code text;
   v_temp_object_id integer;
@@ -6792,24 +6793,30 @@ begin
   perform * from data.objects where id = v_debatles_draft_id for update;
 
   -- Достаём, меняем, кладём назад
+  v_content := array[]::text[];
   v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_all_id, 'content', v_master_group_id), v_content);
-  v_content := array_append(v_content, v_debatle_code);
-  perform data.change_object(v_debatles_all_id, 
-                             jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_content))),
-                             v_actor_id);
+  v_new_content := array_append(v_content, v_debatle_code);
+  if v_new_content <> v_content then
+    perform data.change_object_and_notify(v_debatles_all_id, 
+                                          jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_new_content))),
+                                          v_actor_id);
+  end if;
   v_content := array[]::text[];
   v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_my_id,'content', v_actor_id), v_content);
-  v_content := array_append(v_content, v_debatle_code);
-  perform data.change_object(v_debatles_my_id, 
-                             jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_actor_id, to_jsonb(v_content))),
-                             v_actor_id);
-
+  v_new_content := array_append(v_content, v_debatle_code);
+  if v_new_content <> v_content then
+    perform data.change_object_and_notify(v_debatles_my_id, 
+                                         jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_actor_id, to_jsonb(v_new_content))),
+                                         v_actor_id);
+  end if;
   v_content := array[]::text[];
   v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_draft_id,'content', v_actor_id), v_content);
-  v_content := array_append(v_content, v_debatle_code);
-  perform data.change_object(v_debatles_draft_id, 
-                             jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_actor_id, to_jsonb(v_content))),
-                             v_actor_id);
+  v_new_content := array_append(v_content, v_debatle_code);
+  if v_new_content <> v_content then
+    perform data.change_object_and_notify(v_debatles_draft_id, 
+                                          jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_actor_id, to_jsonb(v_new_content))),
+                                          v_actor_id);
+  end if;
 
   perform api_utils.create_notification(
     in_client_id,
@@ -6852,16 +6859,6 @@ declare
   v_temp_object_id integer;
 begin
   assert in_request_id is not null;
-
-  v_debatle_status := json.get_string_opt(data.get_attribute_value(v_debatle_id, 'debatle_status'), '~~~');
-  if v_debatle_status not in ('new', 'future') then
-    perform api_utils.create_notification(
-      in_client_id,
-      in_request_id,
-      'action',
-      format('{"action": "show_message", "action_data": {"title": "%s", "message": "%s"}}', 'Ошибка', 'Участников дебатла нельзя изменить на этом этапе')::jsonb); 
-    return;
-  end if;
 
   if v_edited_person not in ('instigator', 'opponent', 'judge') then
     perform api_utils.create_notification(
@@ -6920,10 +6917,12 @@ declare
   v_actor_id  integer :=data.get_active_actor_id(in_client_id);
 
   v_is_master boolean := pallas_project.is_in_group(v_actor_id, 'master');
+  v_master_group_id integer:= data.get_object_id('master'); 
 
   v_debatle_status text;
   v_system_debatle_person1 integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person1'), -1);
-  v_system_debatle_judje integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_judge'), -1);
+  v_system_debatle_person2 integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person2'), -1);
+  v_system_debatle_judge integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_judge'), -1);
 
   v_content_attribute_id integer := data.get_attribute_id('content');
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
@@ -6936,6 +6935,9 @@ declare
   v_debatles_current_id integer := data.get_object_id('debatles_current');
   v_debatles_closed_id integer := data.get_object_id('debatles_closed');
   v_debatles_deleted_id integer := data.get_object_id('debatles_deleted');
+
+  v_changes jsonb[];
+  v_message_sent boolean;
 begin
   assert in_request_id is not null;
 
@@ -6948,17 +6950,17 @@ begin
     v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_draft_id, 'content', v_system_debatle_person1), v_content);
     v_new_content := array_remove(v_content, v_debatle_code);
     if v_content <> v_new_content then
-       perform data.change_object(v_debatles_draft_id, 
-                                  jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_system_debatle_person1, to_jsonb(v_new_content))),
-                                  v_actor_id);
+       perform data.change_object_and_notify(v_debatles_draft_id, 
+                                            jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_system_debatle_person1, to_jsonb(v_new_content))),
+                                            v_actor_id);
     end if;
     v_content := array[]::text[];
     v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_new_id, 'content', v_master_group_id), v_content);
     v_new_content := array_append(v_content, v_debatle_code);
     if v_content <> v_new_content then
-     perform data.change_object(v_debatles_new_id, 
-                                jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_new_content))),
-                                v_actor_id);
+     perform data.change_object_and_notify(v_debatles_new_id, 
+                                          jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_new_content))),
+                                          v_actor_id);
     end if;
 
   elsif v_new_status = 'future' and v_debatle_status = 'new' and v_is_master then
@@ -6968,63 +6970,63 @@ begin
     v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_new_id, 'content', v_master_group_id), v_content);
     v_new_content := array_remove(v_content, v_debatle_code);
     if v_content <> v_new_content then
-       perform data.change_object(v_debatles_new_id, 
-                                  jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_new_content))),
-                                  v_actor_id);
+       perform data.change_object_and_notify(v_debatles_new_id, 
+                                            jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_new_content))),
+                                            v_actor_id);
     end if;
     v_content := array[]::text[];
     v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_future_id, 'content', v_master_group_id), v_content);
     v_new_content := array_append(v_content, v_debatle_code);
     if v_content <> v_new_content then
-     perform data.change_object(v_debatles_future_id, 
-                                jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_new_content))),
-                                v_actor_id);
+     perform data.change_object_and_notify(v_debatles_future_id, 
+                                           jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_new_content))),
+                                           v_actor_id);
     end if;
      -- TODO тут следовало бы разослать всем причастным весть о грядущем дебатле!!!!!!!!!!!!!!!
 
-  elsif v_new_status = 'vote' and v_debatle_status = 'future' and (v_is_master or v_system_debatle_judje = v_actor_id) then
+  elsif v_new_status = 'vote' and v_debatle_status = 'future' and (v_is_master or v_system_debatle_judge = v_actor_id) then
     -- удаляем из будущих у мастера, добавляем в текущие всем (TODO вообще не совсем всем, а только тем, кто в аудиории дебатла)
     perform * from data.objects where id = v_debatles_future_id for update;
     perform * from data.objects where id = v_debatles_current_id for update;
     v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_future_id, 'content', v_master_group_id), v_content);
     v_new_content := array_remove(v_content, v_debatle_code);
     if v_content <> v_new_content then
-       perform data.change_object(v_debatles_future_id, 
-                                  jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_new_content))),
-                                  v_actor_id);
+       perform data.change_object_and_notify(v_debatles_future_id, 
+                                             jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_new_content))),
+                                             v_actor_id);
     end if;
     v_content := array[]::text[];
-    v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_current_id, 'content'), v_content);
+    v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_current_id, 'content', v_actor_id), v_content);
     v_new_content := array_append(v_content, v_debatle_code);
     if v_content <> v_new_content then
-     perform data.change_object(v_debatles_current_id, 
-                                jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, null, to_jsonb(v_new_content))),
-                                v_actor_id);
+     perform data.change_object_and_notify(v_debatles_current_id, 
+                                           jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, null, to_jsonb(v_new_content))),
+                                           v_actor_id);
     end if;
-  elsif v_new_status = 'vote_over' and v_debatle_status = 'vote' and (v_is_master or v_system_debatle_judje = v_actor_id) then
+  elsif v_new_status = 'vote_over' and v_debatle_status = 'vote' and (v_is_master or v_system_debatle_judge = v_actor_id) then
     null; -- не надо переставлять ничего по группам
-  elsif v_new_status = 'closed' and v_debatle_status = 'vote_over' and (v_is_master or v_system_debatle_judje = v_actor_id) then
+  elsif v_new_status = 'closed' and v_debatle_status = 'vote_over' and (v_is_master or v_system_debatle_judge = v_actor_id) then
     -- удаляем из текущих у всех, добавляем в завершённые всем (TODO вообще не совсем всем, а только тем, кто в аудиории дебатла)
     perform * from data.objects where id = v_debatles_current_id for update;
     perform * from data.objects where id = v_debatles_closed_id for update;
-    v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_current_id, 'content'), v_content);
+    v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_current_id, 'content', v_actor_id), v_content);
     v_new_content := array_remove(v_content, v_debatle_code);
     if v_content <> v_new_content then
-       perform data.change_object(v_debatles_current_id, 
-                                  jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, null, to_jsonb(v_new_content))),
-                                  v_actor_id);
+       perform data.change_object_and_notify(v_debatles_current_id, 
+                                            jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, null, to_jsonb(v_new_content))),
+                                            v_actor_id);
     end if;
     v_content := array[]::text[];
-    v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_closed_id, 'content'), v_content);
+    v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_closed_id, 'content', v_actor_id), v_content);
     v_new_content := array_append(v_content, v_debatle_code);
     if v_content <> v_new_content then
-      perform data.change_object(v_debatles_closed_id, 
-                                jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, null, to_jsonb(v_new_content))),
-                                v_actor_id);
+      perform data.change_object_and_notify(v_debatles_closed_id, 
+                                            jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, null, to_jsonb(v_new_content))),
+                                            v_actor_id);
     end if;
 -- TODO тут возможно надо ещё менять какие-то статусы участникам дебатла
 
-  elsif v_new_status = 'deleted' and (v_is_master or v_system_debatle_judje = v_actor_id) then
+  elsif v_new_status = 'deleted' and (v_is_master or v_system_debatle_judge = v_actor_id) then
     -- удаляем из черновиков у автора
     -- из неподтверждённых у мастера
     -- из будущих у мастера
@@ -7037,9 +7039,9 @@ begin
       v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_draft_id, 'content', v_system_debatle_person1), v_content);
       v_new_content := array_remove(v_content, v_debatle_code);
       if v_content <> v_new_content then
-         perform data.change_object(v_debatles_draft_id, 
-                                    jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_system_debatle_person1, to_jsonb(v_new_content))),
-                                    v_actor_id);
+         perform data.change_object_and_notify(v_debatles_draft_id, 
+                                              jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_system_debatle_person1, to_jsonb(v_new_content))),
+                                              v_actor_id);
       end if;
     end if;
     if v_debatle_status = 'new' then
@@ -7048,9 +7050,9 @@ begin
       v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_new_id, 'content', v_master_group_id), v_content);
       v_new_content := array_remove(v_content, v_debatle_code);
       if v_content <> v_new_content then
-         perform data.change_object(v_debatles_new_id, 
-                                    jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_new_content))),
-                                    v_actor_id);
+         perform data.change_object_and_notify(v_debatles_new_id, 
+                                              jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_new_content))),
+                                              v_actor_id);
       end if;
     end if;
     if v_debatle_status = 'future' then
@@ -7059,31 +7061,31 @@ begin
       v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_future_id, 'content', v_master_group_id), v_content);
       v_new_content := array_remove(v_content, v_debatle_code);
       if v_content <> v_new_content then
-         perform data.change_object(v_debatles_future_id, 
-                                    jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_new_content))),
-                                    v_actor_id);
+         perform data.change_object_and_notify(v_debatles_future_id, 
+                                              jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_new_content))),
+                                              v_actor_id);
       end if;
     end if;
     if v_debatle_status = 'current' then
       v_content := array[]::text[];
       perform * from data.objects where id = v_debatles_current_id for update;
-      v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_current_id, 'content'), v_content);
+      v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_current_id, 'content', v_actor_id), v_content);
       v_new_content := array_remove(v_content, v_debatle_code);
       if v_content <> v_new_content then
-         perform data.change_object(v_debatles_current_id, 
-                                    jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, null, to_jsonb(v_new_content))),
-                                    v_actor_id);
+         perform data.change_object_and_notify(v_debatles_current_id, 
+                                              jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, null, to_jsonb(v_new_content))),
+                                              v_actor_id);
       end if;
     end if;
     if v_debatle_status = 'closed' then
       v_content := array[]::text[];
       perform * from data.objects where id = v_debatles_closed_id for update;
-      v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_closed_id, 'content'), v_content);
+      v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_closed_id, 'content', v_actor_id), v_content);
       v_new_content := array_remove(v_content, v_debatle_code);
       if v_content <> v_new_content then
-         perform data.change_object(v_debatles_closed_id, 
-                                    jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, null, to_jsonb(v_new_content))),
-                                    v_actor_id);
+         perform data.change_object_and_notify(v_debatles_closed_id, 
+                                              jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, null, to_jsonb(v_new_content))),
+                                              v_actor_id);
       end if;
     end if;
     v_content := array[]::text[];
@@ -7091,9 +7093,9 @@ begin
     v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_deleted_id, 'content', v_master_group_id), v_content);
     v_new_content := array_append(v_content, v_debatle_code);
     if v_content <> v_new_content then
-      perform data.change_object(v_debatles_deleted_id, 
-                                jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_new_content))),
-                                v_actor_id);
+      perform data.change_object_and_notify(v_debatles_deleted_id, 
+                                            jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_new_content))),
+                                            v_actor_id);
     end if;
 
   else
@@ -7109,15 +7111,24 @@ begin
 
 -- TODO - если статус поменялся на future, то надо добавить видимость второму участнику и судье
 -- если статус поменялся на vote, то добавить видимость все
-  perform data.change_object(v_debatle_id, 
-                               jsonb_build_array(data.attribute_change2jsonb('debatle_status', null, to_jsonb(v_new_status))),
-                               v_actor_id);
-
-  perform api_utils.create_notification(
-    in_client_id,
-    in_request_id,
-    'action',
-    format('{"action": "open_object", "action_data": {"object_id": "%s"}}', v_debatle_code)::jsonb);
+  if v_new_status = 'future' then
+    if v_system_debatle_person2 <> -1 then 
+     v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', v_system_debatle_person2, jsonb 'true'));
+    end if;
+    if v_system_debatle_judge <> -1 then 
+     v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', v_system_debatle_judge, jsonb 'true'));
+    end if;
+  elsif v_new_status = 'vote' then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', null, jsonb 'true'));
+  end if;
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_status', null, to_jsonb(v_new_status)));
+  v_message_sent := data.change_current_object(in_client_id,
+                                               in_request_id,
+                                               v_debatle_id, 
+                                               to_jsonb(v_changes));
+  if not v_message_sent then
+   perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+  end if;
 end;
 $$
 language plpgsql;
@@ -7131,13 +7142,15 @@ as
 $$
 declare
   v_title text := json.get_string_opt(in_user_params, 'title','');
-  v_debatle_code text := json.get_string(in_params, 'debaltle_code');
+  v_debatle_code text := json.get_string(in_params, 'debatle_code');
   v_debatle_id  integer := data.get_object_id(v_debatle_code);
   v_debatle_status text := json.get_string(data.get_attribute_value(v_debatle_id,'debatle_status'));
   v_system_debatle_person1 integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person1'), -1);
 
   v_actor_id  integer := data.get_active_actor_id(in_client_id);
   v_is_master boolean := pallas_project.is_in_group(v_actor_id, 'master');
+  v_message_sent boolean := false;
+  v_system_debatle_theme_attribute_id integer := data.get_attribute_id('system_debatle_theme');
 begin
   assert in_request_id is not null;
 
@@ -7159,15 +7172,15 @@ begin
     return;
   end if;
 
-  perform data.change_object(v_debatle_id, 
-                             jsonb_build_array(data.attribute_change2jsonb('system_debatle_theme', v_actor_id, to_jsonb(v_title))),
-                             v_actor_id);
-
-  perform api_utils.create_notification(
-    in_client_id,
-    in_request_id,
-    'action',
-    format('{"action": "open_object", "action_data": {"object_id": "%s"}}', v_debatle_code)::jsonb);
+  if coalesce(data.get_raw_attribute_value(v_debatle_id, v_system_debatle_theme_attribute_id, null), jsonb '"~~~"') <> to_jsonb(v_title) then
+    v_message_sent := data.change_current_object(in_client_id, 
+                                               in_request_id,
+                                               v_debatle_id, 
+                                               jsonb_build_array(data.attribute_change2jsonb('system_debatle_theme', null, to_jsonb(v_title))));
+  end if;
+  if not v_message_sent then
+   perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+  end if;
 end;
 $$
 language plpgsql;
@@ -7287,15 +7300,18 @@ $$
 declare
   v_actions_list text := '';
   v_person1_id integer;
+  v_judge_id integer;
   v_is_master boolean;
   v_debatle_code text;
   v_debatle_status text;
+  v_system_debatle_theme_attribute_id integer := data.get_attribute_id('system_debatle_theme');
 begin
   assert in_actor_id is not null;
 
   v_is_master := pallas_project.is_in_group(in_actor_id, 'master');
   v_debatle_code := data.get_object_code(in_object_id);
   v_person1_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person1'), null);
+  v_judge_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_judge'), null);
   v_debatle_status := json.get_string_opt(data.get_attribute_value(in_object_id, 'debatle_status'), null);
 
   if v_is_master then
@@ -7322,7 +7338,50 @@ begin
   if v_is_master or in_actor_id = v_person1_id and v_debatle_status in ('draft') then
     v_actions_list := v_actions_list || 
         format(', "debatle_change_theme": {"code": "debatle_change_theme", "name": "Изменить тему", "disabled": false, '||
-                '"params": {"debatle_code": "%s"}, "user_params": [{"code": "title", "description": "Введите тему дебатла", "type": "string" }]}',
+                '"params": {"debatle_code": "%s"}, "user_params": [{"code": "title", "description": "Введите тему дебатла", "type": "string", "default_value": "%s" }]}',
+                v_debatle_code,
+                json.get_string_opt(data.get_raw_attribute_value(in_object_id, v_system_debatle_theme_attribute_id, null),''));
+  end if;
+
+  if (v_is_master or in_actor_id = v_person1_id) and v_debatle_status in ('draft') then
+    v_actions_list := v_actions_list || 
+        format(', "debatle_change_status_new": {"code": "debatle_change_status", "name": "Отправить мастеру на подтверждение", "disabled": false, '||
+                '"params": {"debatle_code": "%s", "new_status": "new"}}',
+                v_debatle_code);
+  end if;
+
+  if v_is_master and v_debatle_status in ('new') then
+    v_actions_list := v_actions_list || 
+        format(', "debatle_change_status_future": {"code": "debatle_change_status", "name": "Подтвердить", "disabled": false, '||
+                '"params": {"debatle_code": "%s", "new_status": "future"}}',
+                v_debatle_code);
+  end if;
+
+  if (v_is_master or in_actor_id = v_judge_id) and v_debatle_status in ('future') then
+    v_actions_list := v_actions_list || 
+        format(', "debatle_change_status_vote": {"code": "debatle_change_status", "name": "Начать дебатл", "disabled": false, '||
+                '"params": {"debatle_code": "%s", "new_status": "vote"}}',
+                v_debatle_code);
+  end if;
+
+  if (v_is_master or in_actor_id = v_judge_id) and v_debatle_status in ('vote') then
+    v_actions_list := v_actions_list || 
+        format(', "debatle_change_status_vote_over": {"code": "debatle_change_status", "name": "Завершить голосование", "disabled": false, '||
+                '"params": {"debatle_code": "%s", "new_status": "vote_over"}}',
+                v_debatle_code);
+  end if;
+
+  if (v_is_master or in_actor_id = v_judge_id) and v_debatle_status in ('vote_over') then
+    v_actions_list := v_actions_list || 
+        format(', "debatle_change_status_closed": {"code": "debatle_change_status", "name": "Завершить дебатл", "disabled": false, '||
+                '"params": {"debatle_code": "%s", "new_status": "closed"}}',
+                v_debatle_code);
+  end if;
+
+  if v_is_master or (in_actor_id = v_person1_id) and v_debatle_status in ('draft') then
+    v_actions_list := v_actions_list || 
+        format(', "debatle_change_status_deleted": {"code": "debatle_change_status", "name": "Удалить", "disabled": false, '||
+                '"params": {"debatle_code": "%s", "new_status": "deleted"}}',
                 v_debatle_code);
   end if;
 
@@ -7416,13 +7475,20 @@ volatile
 as
 $$
 declare
-  v_value jsonb;
   v_person1_id integer;
   v_person2_id integer;
   v_judge_id integer;
   v_debatle_theme text;
 
-  v_changes jsonb[];
+  v_title_attribute_id integer := data.get_attribute_id('title');
+  v_debatle_person1_attribute_id integer := data.get_attribute_id('debatle_person1');
+  v_debatle_person2_attribute_id integer := data.get_attribute_id('debatle_person2');
+  v_debatle_judge_attribute_id integer := data.get_attribute_id('debatle_judge');
+
+  v_new_title jsonb;
+  v_new_person1 jsonb;
+  v_new_person2 jsonb;
+  v_new_judge jsonb;
 begin
   perform * from data.objects where id = in_object_id for update;
 
@@ -7431,17 +7497,31 @@ begin
   v_person2_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person2'), null);
   v_judge_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_judge'), null);
 
-  v_changes := array_append(v_changes, data.attribute_change2jsonb('title', null, to_jsonb(format('Дебатл: %s', v_debatle_theme))));
-  if v_person1_id is not null then
-    v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_person1', null, data.get_attribute_value(v_person1_id, 'title', in_actor_id)));
-  end if;
-  if v_person2_id is not null then
-    v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_person2', null, data.get_attribute_value(v_person2_id, 'title', in_actor_id)));
-  end if;
-  if v_judge_id is not null then
-    v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_judge', null, data.get_attribute_value(v_judge_id, 'title', in_actor_id)));
+  v_new_title := to_jsonb(format('Дебатл: %s', v_debatle_theme));
+  if coalesce(data.get_raw_attribute_value(in_object_id, v_title_attribute_id, in_actor_id), jsonb '"~~~"') <> coalesce(v_new_title, jsonb '"~~~"') then
+    perform data.set_attribute_value(in_object_id, v_title_attribute_id, v_new_title, in_actor_id, in_actor_id);
   end if;
 
+  if v_person1_id is not null then
+    v_new_person1 := data.get_attribute_value(v_person1_id, v_title_attribute_id, in_actor_id);
+  end if;
+  if coalesce(data.get_raw_attribute_value(in_object_id, v_debatle_person1_attribute_id, null), jsonb '"~~~"') <> coalesce(v_new_person1, jsonb '"~~~"') then
+    perform data.set_attribute_value(in_object_id, v_debatle_person1_attribute_id, v_new_person1, null, in_actor_id);
+  end if;
+
+  if v_person2_id is not null then
+    v_new_person2 := data.get_attribute_value(v_person2_id, v_title_attribute_id, in_actor_id);
+  end if;
+  if coalesce(data.get_raw_attribute_value(in_object_id, v_debatle_person2_attribute_id, null), jsonb '"~~~"') <> coalesce(v_new_person2, jsonb '"~~~"') then
+    perform data.set_attribute_value(in_object_id, v_debatle_person2_attribute_id, v_new_person2, null, in_actor_id);
+  end if;
+
+  if v_judge_id is not null then
+    v_new_judge := data.get_attribute_value(v_judge_id, v_title_attribute_id, in_actor_id);
+  end if;
+  if coalesce(data.get_raw_attribute_value(in_object_id, v_debatle_judge_attribute_id, null), jsonb '"~~~"') <> coalesce(v_new_judge, jsonb '"~~~"') then
+    perform data.set_attribute_value(in_object_id, v_debatle_judge_attribute_id, v_new_judge, null, in_actor_id);
+  end if;
 
 
   --TODO 
@@ -7450,7 +7530,6 @@ begin
   -- выводить количество голосов только когда статус Голосование завершено
   -- разобрать бонусы и штрафы.показывать только судье, мастерам и участникам (при этом участникам без кнопок изменения)
 
-  perform data.change_object(in_object_id, to_jsonb(v_changes), in_actor_id);
 end;
 $$
 language plpgsql;
@@ -7465,22 +7544,21 @@ $$
 declare
   v_is_master boolean := pallas_project.is_in_group(in_actor_id, 'master');
 
-  v_content text[];
+  v_content_attribute_id integer := data.get_attribute_id('content');
 
-  v_changes jsonb[];
+  v_new_content jsonb;
 begin
   perform * from data.objects where id = in_object_id for update;
 
   if v_is_master then
-    v_content := array['debatles_new','debatles_current','debutles_future','debatles_closed', 'debatles_all', 'debatles_my']; 
+    v_new_content := to_jsonb(array['debatles_new','debatles_current', 'debutles_future','debatles_closed', 'debatles_all', 'debatles_my']); 
   else
-    v_content := array['debatles_my','debatles_closed'];
+    v_new_content := to_jsonb(array['debatles_my', 'debatles_current', 'debatles_closed']);
   end if;
 
-  v_changes := array_append(v_changes, data.attribute_change2jsonb('content', in_actor_id, to_jsonb(v_content)));
-
-
-  perform data.change_object(in_object_id, to_jsonb(v_changes), in_actor_id);
+  if coalesce(data.get_raw_attribute_value(in_object_id, v_content_attribute_id, in_actor_id), to_jsonb(array[]::text[])) <> v_new_content then
+    perform data.set_attribute_value(in_object_id, v_content_attribute_id, v_new_content, in_actor_id, in_actor_id);
+  end if;
 end;
 $$
 language plpgsql;
@@ -7522,34 +7600,41 @@ declare
   v_value jsonb;
   v_is_master boolean;
   v_changes jsonb[];
+  v_money_attribute_id integer :=  data.get_attribute_id('money');
+  v_system_money_attribute_id integer :=  data.get_attribute_id('system_money');
+  v_person_deposit_money_attribute_id integer :=  data.get_attribute_id('person_deposit_money');
+  v_system_person_deposit_money_attribute_id integer :=  data.get_attribute_id('system_person_deposit_money');
+  v_person_coin_attribute_id integer :=  data.get_attribute_id('person_coin');
+  v_system_person_coin_attribute_id integer :=  data.get_attribute_id('system_person_coin');
+  v_person_opa_rating_attribute_id integer :=  data.get_attribute_id('person_opa_rating');
+  v_system_person_opa_rating_attribute_id integer :=  data.get_attribute_id('system_person_opa_rating');
+  v_person_un_rating_attribute_id integer :=  data.get_attribute_id('person_un_rating');
+  v_system_person_un_rating_attribute_id integer :=  data.get_attribute_id('system_person_un_rating');
 begin
   perform * from data.objects where id = in_object_id for update;
 
   v_is_master := pallas_project.is_in_group(in_actor_id, 'master');
   if v_is_master or in_object_id = in_actor_id then
-    v_value := data.get_attribute_value(in_object_id, 'system_money');
-    if json.get_bigint_opt(v_value, null) is not null then
-      v_changes := array_append(v_changes, data.attribute_change2jsonb('money', in_actor_id, v_value));
+    v_value := data.get_attribute_value(in_object_id, v_system_money_attribute_id);
+    if data.should_attribute_value_be_changed(in_object_id, v_system_money_attribute_id, null, v_money_attribute_id, in_actor_id) then
+      perform data.set_attribute_value(in_object_id, v_money_attribute_id, v_value, in_actor_id, in_actor_id);
     end if;
-    v_value := data.get_attribute_value(in_object_id, 'system_person_deposit_money');
-    if json.get_bigint_opt(v_value, null) is not null then
-      v_changes := array_append(v_changes, data.attribute_change2jsonb('person_deposit_money', in_actor_id, v_value));
+    v_value := data.get_attribute_value(in_object_id, v_system_person_deposit_money_attribute_id);
+    if data.should_attribute_value_be_changed(in_object_id, v_system_person_deposit_money_attribute_id, null, v_person_deposit_money_attribute_id, in_actor_id) then
+      perform data.set_attribute_value(in_object_id, v_person_deposit_money_attribute_id, v_value, in_actor_id, in_actor_id);
     end if;
-    v_value := data.get_attribute_value(in_object_id, 'system_person_coin');
-    if json.get_integer_opt(v_value, null) is not null then
-      v_changes := array_append(v_changes, data.attribute_change2jsonb('person_coin', in_actor_id, v_value));
+    v_value := data.get_attribute_value(in_object_id, v_system_person_coin_attribute_id);
+    if data.should_attribute_value_be_changed(in_object_id, v_system_person_coin_attribute_id, null, v_person_coin_attribute_id, in_actor_id) then
+      perform data.set_attribute_value(in_object_id, v_person_coin_attribute_id, v_value, in_actor_id, in_actor_id);
     end if;
-    v_value := data.get_attribute_value(in_object_id, 'system_person_opa_rating');
-    if json.get_integer_opt(v_value, null) is not null then
-      v_changes := array_append(v_changes, data.attribute_change2jsonb('person_opa_rating', in_actor_id, v_value));
+    v_value := data.get_attribute_value(in_object_id, v_system_person_opa_rating_attribute_id);
+    if data.should_attribute_value_be_changed(in_object_id, v_system_person_opa_rating_attribute_id, null, v_person_opa_rating_attribute_id, in_actor_id) then
+      perform data.set_attribute_value(in_object_id, v_person_opa_rating_attribute_id, v_value, in_actor_id, in_actor_id);
     end if;
-    v_value := data.get_attribute_value(in_object_id, 'system_person_un_rating');
-    if json.get_integer_opt(v_value, null) is not null then
-      v_changes := array_append(v_changes, data.attribute_change2jsonb('person_un_rating', in_actor_id, v_value));
+    v_value := data.get_attribute_value(in_object_id, v_system_person_un_rating_attribute_id);
+    if data.should_attribute_value_be_changed(in_object_id, v_system_person_un_rating_attribute_id, null, v_person_un_rating_attribute_id, in_actor_id) then
+      perform data.set_attribute_value(in_object_id, v_person_un_rating_attribute_id, v_value, in_actor_id, in_actor_id);
     end if;
-  end if;
-  if array_length(v_changes,1) > 0 then
-    perform data.change_object(in_object_id, to_jsonb(v_changes), in_actor_id);
   end if;
 end;
 $$
@@ -7676,7 +7761,6 @@ begin
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_menu_id, v_type_attribute_id, jsonb '"menu"'),
   (v_menu_id, v_is_visible_attribute_id, jsonb 'true'),
-  (v_menu_id, v_full_card_function_attribute_id, jsonb'"pallas_project.fcard_menu"'),
   (v_menu_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_menu"'),
   (v_menu_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
                                       '{"code": "%s", "actions": ["%s", "%s", "%s"]}',
@@ -7691,6 +7775,22 @@ begin
   (v_notifications_id, v_type_attribute_id, jsonb '"notifications"'),
   (v_notifications_id, v_is_visible_attribute_id, jsonb 'true'),
   (v_notifications_id, v_content_attribute_id, jsonb '[]');
+
+  -- Создадим объект для страницы 404
+  declare
+    v_not_found_object_id integer;
+  begin
+    insert into data.objects(code) values('not_found') returning id into v_not_found_object_id;
+    insert into data.params(code, value, description)
+    values('not_found_object_id', to_jsonb(v_not_found_object_id), 'Идентификатор объекта, отображаемого в случае, если актору недоступен какой-то объект (ну или он реально не существует)');
+
+    insert into data.attribute_values(object_id, attribute_id, value) values
+    (v_not_found_object_id, v_type_attribute_id, jsonb '"not_found"'),
+    (v_not_found_object_id, v_is_visible_attribute_id, jsonb 'true'),
+    (v_not_found_object_id, v_title_attribute_id, jsonb '"404"'),
+    (v_not_found_object_id, v_subtitle_attribute_id, jsonb '"Not found"'),
+    (v_not_found_object_id, v_description_attribute_id, jsonb '"Это не те дроиды, которых вы ищете."');
+  end;
 
   insert into data.actions(code, function) values
   ('act_open_object', 'pallas_project.act_open_object'),
@@ -7942,7 +8042,8 @@ begin
   (v_debatle_class_id, v_mini_card_function_attribute_id, jsonb '"pallas_project.mcard_debatle"'),
   (v_debatle_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatle"'),
   (v_debatle_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
-                                                      '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"], "actions": ["%s", "%s", "%s"]}',
+                                                      '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"], 
+                                                                      "actions": ["%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"]}',
                                                       'debatle_group1',
                                                       'debatle_theme',
                                                       'debatle_status',
@@ -7960,7 +8061,13 @@ begin
                                                       'debatle_change_instigator',
                                                       'debatle_change_opponent',
                                                       'debatle_change_judge',
-                                                      'debatle_change_theme')::jsonb]));
+                                                      'debatle_change_theme',
+                                                      'debatle_change_status_new',
+                                                      'debatle_change_status_future',
+                                                      'debatle_change_status_vote',
+                                                      'debatle_change_status_vote_over',
+                                                      'debatle_change_status_closed',
+                                                      'debatle_change_status_deleted')::jsonb]));
 
   -- Объект-класс для временных списков персон для редактирования дебатла
   insert into data.objects(code, type) values('debatle_temp_person_list', 'class') returning id into v_debatle_temp_person_list_class_id;
@@ -7980,7 +8087,8 @@ begin
   insert into data.actions(code, function) values
   ('create_debatle_step1', 'pallas_project.act_create_debatle_step1'),
   ('debatle_change_person', 'pallas_project.act_debatle_change_person'),
-  ('debatle_change_theme', 'pallas_project.act_debatle_change_theme');
+  ('debatle_change_theme', 'pallas_project.act_debatle_change_theme'),
+  ('debatle_change_status', 'pallas_project.act_debatle_change_status');
 
 
 end;
@@ -8045,7 +8153,7 @@ begin
     v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_judge', null, to_jsonb(list_object_id)));
   end if;
 
-  perform data.change_object(v_debatle_id, to_jsonb(v_changes), v_actor_id);
+  perform data.change_object_and_notify(v_debatle_id, to_jsonb(v_changes), v_actor_id);
 
   perform api_utils.create_notification(
     in_client_id,
@@ -8064,15 +8172,19 @@ volatile
 as
 $$
 declare
+  v_new_title jsonb;
+  v_title_attribute_id integer := data.get_attribute_id('title');
   v_debatle_theme text;
-  v_changes jsonb[];
-begin
+
+  begin
   perform * from data.objects where id = in_object_id for update;
 
-  v_debatle_theme := json.get_string_opt(data.get_attribute_value(in_object_id, 'system_debatle_theme'), null);  
-  v_changes := array_append(v_changes, data.attribute_change2jsonb('title', null, to_jsonb(format('%s', v_debatle_theme))));
+  v_debatle_theme := json.get_string_opt(data.get_attribute_value(in_object_id, 'system_debatle_theme'), null);
+  v_new_title := to_jsonb(format('%s', v_debatle_theme));
+  if coalesce(data.get_raw_attribute_value(in_object_id, v_title_attribute_id, in_actor_id), jsonb '"~~~"') <>  coalesce(v_new_title, jsonb '"~~~"') then
+    perform data.set_attribute_value(in_object_id, v_title_attribute_id, v_new_title, in_actor_id, in_actor_id);
+  end if;
 
-  perform data.change_object(in_object_id, to_jsonb(v_changes), in_actor_id);
 end;
 $$
 language plpgsql;

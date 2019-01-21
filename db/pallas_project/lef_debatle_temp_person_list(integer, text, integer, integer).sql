@@ -32,7 +32,7 @@ begin
     v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_judge', null, to_jsonb(list_object_id)));
   end if;
 
-  perform data.change_object(v_debatle_id, to_jsonb(v_changes), v_actor_id);
+  perform data.change_object_and_notify(v_debatle_id, to_jsonb(v_changes), v_actor_id);
 
   perform api_utils.create_notification(
     in_client_id,

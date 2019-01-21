@@ -6,15 +6,19 @@ volatile
 as
 $$
 declare
+  v_new_title jsonb;
+  v_title_attribute_id integer := data.get_attribute_id('title');
   v_debatle_theme text;
-  v_changes jsonb[];
-begin
+
+  begin
   perform * from data.objects where id = in_object_id for update;
 
-  v_debatle_theme := json.get_string_opt(data.get_attribute_value(in_object_id, 'system_debatle_theme'), null);  
-  v_changes := array_append(v_changes, data.attribute_change2jsonb('title', null, to_jsonb(format('%s', v_debatle_theme))));
+  v_debatle_theme := json.get_string_opt(data.get_attribute_value(in_object_id, 'system_debatle_theme'), null);
+  v_new_title := to_jsonb(format('%s', v_debatle_theme));
+  if coalesce(data.get_raw_attribute_value(in_object_id, v_title_attribute_id, in_actor_id), jsonb '"~~~"') <>  coalesce(v_new_title, jsonb '"~~~"') then
+    perform data.set_attribute_value(in_object_id, v_title_attribute_id, v_new_title, in_actor_id, in_actor_id);
+  end if;
 
-  perform data.change_object(in_object_id, to_jsonb(v_changes), in_actor_id);
 end;
 $$
 language plpgsql;
