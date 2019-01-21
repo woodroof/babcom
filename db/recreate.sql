@@ -1327,15 +1327,18 @@ $$
 -- Возвращается массив объектов с полями client_id, object и list_changes, поля object и list_changes могут отсутствовать
 declare
   v_changes jsonb := data.filter_changes(in_object_id, in_changes);
+  v_object_code text;
   v_full_card_function text;
   v_mini_card_function text;
   v_client_id integer;
   v_actor_id integer;
   v_original_values jsonb := jsonb '{}';
   v_list record;
+  v_original_list_value jsonb;
   v_original_list_values jsonb := jsonb '{}';
   v_change record;
   v_list_changed boolean := false;
+  v_subscription record;
   v_content_attribute_id integer;
   v_new_data jsonb;
   v_default_template jsonb;
@@ -1353,6 +1356,7 @@ begin
     return jsonb '[]';
   end if;
 
+  v_object_code := data.get_object_code(in_object_id);
   v_full_card_function := json.get_string_opt(data.get_attribute_value(in_object_id, 'full_card_function'), null);
   v_mini_card_function := json.get_string_opt(data.get_attribute_value(in_object_id, 'mini_card_function'), null);
   v_content_attribute_id := data.get_attribute_id('content');
@@ -1373,7 +1377,8 @@ begin
   loop
     v_actor_id := data.get_active_actor_id(v_client_id);
 
-    -- todo Для невидимых - пустой объект!
+    -- Невидимые объекты должны были пройти через change_object, подписки были бы удалены
+    assert json.get_boolean(data.get_attribute_value(in_object_id, 'is_visible', v_actor_id));
 
     v_original_values :=
       v_original_values ||
@@ -1391,18 +1396,15 @@ begin
       cs.object_id,
       cso.is_visible,
       cso.index
-    from client_subscription_objects cso
-    join client_subscriptions cs
+    from data.client_subscription_objects cso
+    join data.client_subscriptions cs
       on cs.id = cso.client_subscription_id
     where cso.object_id = in_object_id
   )
   loop
     v_actor_id := data.get_active_actor_id(v_list.client_id);
 
-    -- todo невидимая миникарточка - не получаем данные
-
-    v_original_list_values :=
-      v_original_list_values ||
+    v_original_list_value :=
       jsonb_build_object(
         v_list.id::text,
         jsonb_build_object(
@@ -1413,9 +1415,18 @@ begin
           'is_visible',
           v_list.is_visible,
           'index',
-          v_list.index,
-          'data',
-          data.get_object(in_object_id, v_actor_id, 'mini', v_list.object_id)));
+          v_list.index));
+
+    if v_list.is_visible then
+      -- Изменения невидимых объектов должны были пройти через change_object, атрибут в таблице client_subscription_objects был бы изменён
+      assert json.get_boolean(data.get_attribute_value(v_list.object_id, 'is_visible', v_actor_id));
+
+      v_original_list_value :=
+        v_original_list_value ||
+        jsonb_build_object('data', data.get_object(in_object_id, v_actor_id, 'mini', v_list.object_id));
+    end if;
+
+    v_original_list_values := v_original_list_values || v_original_list_value;
   end loop;
 
   -- Меняем состояние объекта
@@ -1440,21 +1451,32 @@ begin
   end loop;
 
   -- Берём новые атрибуты и действия для тех же клиентов
-  for v_client_id in
+  for v_subscription in
   (
-    select client_id
+    select id, client_id
     from data.client_subscriptions
     where object_id = in_object_id
   )
   loop
-    v_actor_id := data.get_active_actor_id(v_client_id);
+    v_actor_id := data.get_active_actor_id(v_subscription.client_id);
 
     if v_full_card_function is not null then
       execute format('select %s($1, $2)', v_full_card_function)
       using in_object_id, v_actor_id;
     end if;
 
-    -- todo Стал невидимым, пустой объект!
+    -- Объект стал невидимым - отправляем специальный diff и вычищаем подписки
+    if not json.get_boolean_opt(data.get_attribute_value(in_object_id, 'is_visible', v_actor_id), false) then
+      v_ret_val := array_append(v_ret_val, jsonb_build_object('object_id', v_object_code, 'object', jsonb 'null'));
+
+      delete from data.client_subscription_objects
+      where client_subscription_id = v_subscription.id;
+
+      delete from data.client_subscriptions
+      where id = v_subscription.id;
+
+      continue;
+    end if;
 
     v_new_data := data.get_object_data(in_object_id, v_actor_id, 'full', in_object_id);
 
@@ -1462,7 +1484,7 @@ begin
     v_list_changes := null;
 
     -- Сравниваем и при нахождении различий включаем в diff
-    if v_new_data != v_original_values->(v_client_id::text) then
+    if v_new_data != v_original_values->(v_subscription.client_id::text) then
       v_attributes := json.get_object(v_new_data, 'attributes');
       v_actions := json.get_object_opt(v_new_data, 'actions', null);
 
@@ -1475,7 +1497,7 @@ begin
       v_object :=
         jsonb_build_object(
           'id',
-          data.get_object_code(in_object_id),
+          v_object_code,
           'attributes',
           v_attributes,
           'actions',
@@ -1489,7 +1511,7 @@ begin
     end if;
 
     if v_object is not null or v_list_changes is not null then
-      v_ret_val_element := jsonb_build_object('client_id', v_client_id);
+      v_ret_val_element := jsonb_build_object('client_id', v_subscription.client_id);
 
       if v_object is not null then
         v_ret_val_element := v_ret_val_element || jsonb_build_object('object', v_object);
@@ -1512,13 +1534,13 @@ begin
       cs.object_id,
       cso.is_visible,
       cso.index
-    from client_subscription_objects cso
-    join client_subscriptions cs
+    from data.client_subscription_objects cso
+    join data.client_subscriptions cs
       on cs.id = cso.client_subscription_id
     where cso.object_id = in_object_id
   )
   loop
-    v_actor_id := data.get_active_actor_id(v_client_id);
+    v_actor_id := data.get_active_actor_id(v_list.client_id);
 
     if v_mini_card_function is not null then
       execute format('select %s($1, $2)', v_mini_card_function)
