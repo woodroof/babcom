@@ -296,7 +296,7 @@ begin
                 jsonb_build_object('remove', jsonb_build_array(v_object_code)));
           end if;
         else
-          v_new_data := data.get_object(in_object_id, v_actor_id, 'mini', v_list.object_id);
+          v_new_data := data.get_object(in_object_id, in_actor_id, 'mini', v_list.object_id);
 
           if not v_list.is_visible or v_new_data != v_list.data then
             v_attributes := json.get_object(v_new_data, 'attributes');

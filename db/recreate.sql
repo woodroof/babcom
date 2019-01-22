@@ -1628,7 +1628,7 @@ begin
                 jsonb_build_object('remove', jsonb_build_array(v_object_code)));
           end if;
         else
-          v_new_data := data.get_object(in_object_id, v_actor_id, 'mini', v_list.object_id);
+          v_new_data := data.get_object(in_object_id, in_actor_id, 'mini', v_list.object_id);
 
           if not v_list.is_visible or v_new_data != v_list.data then
             v_attributes := json.get_object(v_new_data, 'attributes');
@@ -7000,6 +7000,53 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_create_random_person(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_create_random_person(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_title text;
+
+  v_person_id integer;
+  v_login_id integer;
+
+  v_first_names text[] := json.get_string_array(data.get_param('first_names'));
+  v_last_names text[] := json.get_string_array(data.get_param('last_names'));
+
+  v_title_attribute_id integer := data.get_attribute_id('title');
+  v_priority_attribute_id integer := data.get_attribute_id('priority');
+
+  v_all_person_group_id integer := data.get_object_id('all_person');
+  v_player_group_id integer := data.get_object_id('player');
+
+  v_person_class_id integer := data.get_class_id('person');
+begin
+  assert in_request_id is not null;
+
+  v_title := v_first_names[random.random_integer(1, array_length(v_first_names, 1))] || ' '|| v_last_names[random.random_integer(1, array_length(v_last_names, 1))];
+  insert into data.objects(class_id) values(v_person_class_id) returning id into v_person_id;
+    -- Логин
+  insert into data.logins default values returning id into v_login_id;
+  insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_person_id, v_title_attribute_id, to_jsonb(v_title)),
+  (v_person_id, v_priority_attribute_id, jsonb '200');
+
+  insert into data.object_objects(parent_object_id, object_id) values
+  (v_all_person_group_id, v_person_id),
+  (v_player_group_id, v_person_id);
+
+  -- Заменим логин
+  perform data.set_login(in_client_id, v_login_id);
+  -- И отправим новый список акторов
+  perform api_utils.process_get_actors_message(in_client_id, in_request_id);
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_debatle_change_person(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_debatle_change_person(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -7453,6 +7500,26 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.actgenerator_anonymous(integer, integer);
+
+create or replace function pallas_project.actgenerator_anonymous(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_object_code text := data.get_object_code(in_object_id);
+  v_actions_list text := '';
+begin
+  assert in_actor_id is not null;
+
+  v_actions_list := v_actions_list || ', "' || 'create_random_person":' || 
+    '{"code": "create_random_person", "name": "Нажми меня", "disabled": false, "params": {}}';
+  return jsonb ('{'||trim(v_actions_list,',')||'}');
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.actgenerator_debatle(integer, integer);
 
 create or replace function pallas_project.actgenerator_debatle(in_object_id integer, in_actor_id integer)
@@ -7615,7 +7682,7 @@ begin
 
   if data.get_object_code(in_actor_id) = 'anonymous' then
     v_actions_list := v_actions_list || ', "' || 'login":' || 
-      '{"code": "login", "name": "Войти", "disabled": false, "params": {}, "user_params": [{"code": "password", "description": "Введите пароль", "type": "string" }]}';
+      '{"code": "login", "name": "Кнопка для мастеров", "disabled": false, "params": {}, "user_params": [{"code": "password", "description": "Введите пароль", "type": "string" }]}';
   else
     if pallas_project.is_in_group(in_actor_id, 'all_person') then
       v_actions_list := v_actions_list || ', "' || 'debatles":' || 
@@ -7909,6 +7976,13 @@ begin
 
   -- Создадим актора по умолчанию, который является первым тестом
   insert into data.objects(code) values('anonymous') returning id into v_test_id;
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_test_id, v_title_attribute_id, jsonb '"Unknown"'),
+  (v_test_id, v_actions_function_attribute_id,'"pallas_project.actgenerator_anonymous"'),
+  (v_test_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
+                                      '{"code": "%s", "actions": ["%s"]}',
+                                      'group1',
+                                      'create_random_person')::jsonb]));
 
   -- Логин по умолчанию
   insert into data.logins(code) values('default_login') returning id into v_default_login_id;
@@ -7917,7 +7991,12 @@ begin
   insert into data.params(code, value, description) values
   ('default_login_id', to_jsonb(v_default_login_id), 'Идентификатор логина по умолчанию'),
   ('page_size', to_jsonb(10), 'Размер страницы'),
-  ('template', jsonb_build_object('groups', array[]::text[]), 'Шаблон');
+  ('template', jsonb_build_object('groups', array[]::text[]), 'Шаблон'),
+  ('first_names', to_jsonb(string_to_array('Джон Джек Пол Джордж Билл Кевин Уильям Кристофер Энтони Алекс Джош Томас Фред Филипп Джеймс Брюс Питер Рональд Люк Энди Антонио Итан Сэм Марк Карл Роберт'||
+  ' Эльза Лидия Лия Роза Кейт Тесса Рэйчел Амали Шарлотта Эшли София Саманта Элоиз Талия Молли Анна Виктория Мария Натали Келли Ванесса Мишель Элизабет Кимберли Кортни Лоис Сьюзен Эмма', ' ')), 'Список имён'),
+  ('last_names', to_jsonb(string_to_array('Янг Коннери Питерс Паркер Уэйн Ли Максуэлл Калвер Кэмерон Альба Сэндерсон Бэйли Блэкшоу Браун Клеменс Хаузер Кендалл Патридж Рой Сойер Стоун Фостер Хэнкс Грегг'||
+  ' Флинн Холл Винсон Уайтинг Хасси Хейвуд Стивенс Робинсон Йорк Гудман Махони Гордон Вуд Рид Грэй Тодд Иствуд Брукс Бродер Ховард Смит Нельсон Синклер Мур Тернер Китон Норрис', ' ')), 'Список фамилий');
+
 
   -- Также для работы нам понадобится объект меню
   insert into data.objects(code) values('menu') returning id into v_menu_id;
@@ -7959,7 +8038,8 @@ begin
   ('act_open_object', 'pallas_project.act_open_object'),
   ('login', 'pallas_project.act_login'),
   ('logout', 'pallas_project.act_logout'),
-  ('go_back', 'pallas_project.act_go_back');
+  ('go_back', 'pallas_project.act_go_back'),
+  ('create_random_person', 'pallas_project.act_create_random_person');
 
   --Объект класса для персон
   insert into data.objects(code, type) values('person', 'class') returning id into v_person_class_id;
@@ -8008,7 +8088,7 @@ begin
   (v_mars_group_id, v_priority_attribute_id, jsonb '40'),
   (v_opa_group_id, v_priority_attribute_id, jsonb '50'),
   (v_master_group_id, v_priority_attribute_id, jsonb '190');
-
+/*
   -- Данные персон
   insert into data.objects(code, class_id) values('person1', v_person_class_id) returning id into v_person_id;
     -- Логин
@@ -8028,7 +8108,7 @@ begin
   (v_all_person_group_id, v_person_id),
   (v_un_group_id, v_person_id),
   (v_player_group_id, v_person_id);
-
+*/
   insert into data.objects(code, class_id) values('person2', v_person_class_id) returning id into v_person_id;
     -- Логин
   insert into data.logins(code) values('p2') returning id into v_default_login_id;
@@ -8041,7 +8121,7 @@ begin
   insert into data.object_objects(parent_object_id, object_id) values
   (v_all_person_group_id, v_person_id),
   (v_master_group_id, v_person_id);
-
+/*
 insert into data.objects(code, class_id) values('person3', v_person_class_id) returning id into v_person_id;
     -- Логин
   insert into data.logins(code) values('p3') returning id into v_default_login_id;
@@ -8060,7 +8140,7 @@ insert into data.objects(code, class_id) values('person3', v_person_class_id) re
   (v_opa_group_id, v_person_id),
   (v_player_group_id, v_person_id),
   (v_aster_group_id, v_person_id);
-
+*/
   perform pallas_project.init_debatles();
 end;
 $$
