@@ -91,6 +91,10 @@ begin
     false
   ),
   ('type', null, 'Тип объекта, string', 'hidden', null, null, true);
+
+  insert into data.params(code, value, description) values
+  ('page_size', jsonb '10', 'Количество элементов списка, получаемых за один раз'),
+  ('template', jsonb '{"groups": []}', 'Шаблон по умолчанию');
 end;
 $$
 language plpgsql;

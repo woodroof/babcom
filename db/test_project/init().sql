@@ -25,8 +25,9 @@ declare
   v_template_groups jsonb[];
 begin
   -- Базовые настройки
-  insert into data.params(code, value, description)
-  values('page_size', jsonb '5', 'Размер страницы');
+  update data.params
+  set value = jsonb '5'
+  where code = 'page_size';
 
   -- Атрибут для какого-то текста
   insert into data.attributes(code, type, card_type, can_be_overridden)
@@ -1068,8 +1069,9 @@ Markdown — формат, который все реализуют по-раз�
   );
 
   -- Заполним шаблон
-  insert into data.params(code, value, description)
-  values('template', jsonb_build_object('groups', to_jsonb(v_template_groups)), 'Шаблон');
+  update data.params
+  set value = jsonb_build_object('groups', to_jsonb(v_template_groups))
+  where code = 'template';
 end;
 $$
 language plpgsql;
