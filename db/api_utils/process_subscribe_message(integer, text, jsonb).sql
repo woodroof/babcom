@@ -93,8 +93,8 @@ begin
     end if;
 
     -- Проверяем видимость
-    v_is_visible := json.get_boolean_opt(data.get_attribute_value(v_object_id, 'is_visible', v_actor_id), null);
-    if v_is_visible is null then
+    v_is_visible := json.get_boolean_opt(data.get_attribute_value(v_object_id, 'is_visible', v_actor_id), false);
+    if not v_is_visible then
       v_object_id := data.get_integer_param('not_found_object_id');
       continue;
     end if;

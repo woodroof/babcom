@@ -42,15 +42,14 @@ begin
     -- удаляем из черновиков у автора, добавляем в неподтверждённые мастерам
     perform * from data.objects where id = v_debatles_draft_id for update;
     perform * from data.objects where id = v_debatles_new_id for update;
-    v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_draft_id, 'content', v_system_debatle_person1), v_content);
+    v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_draft_id, 'content', v_system_debatle_person1), array[]::text[]);
     v_new_content := array_remove(v_content, v_debatle_code);
     if v_content <> v_new_content then
        perform data.change_object_and_notify(v_debatles_draft_id, 
                                             jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_system_debatle_person1, to_jsonb(v_new_content))),
                                             v_actor_id);
     end if;
-    v_content := array[]::text[];
-    v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_new_id, 'content', v_master_group_id), v_content);
+    v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_new_id, 'content', v_master_group_id), array[]::text[]);
     v_new_content := array_append(v_content, v_debatle_code);
     if v_content <> v_new_content then
      perform data.change_object_and_notify(v_debatles_new_id, 
@@ -62,15 +61,14 @@ begin
     -- удаляем из неподтверждённых у мастера, добавляем в будущие мастеру
     perform * from data.objects where id = v_debatles_new_id for update;
     perform * from data.objects where id = v_debatles_future_id for update;
-    v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_new_id, 'content', v_master_group_id), v_content);
+    v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_new_id, 'content', v_master_group_id), array[]::text[]);
     v_new_content := array_remove(v_content, v_debatle_code);
     if v_content <> v_new_content then
        perform data.change_object_and_notify(v_debatles_new_id, 
                                             jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_new_content))),
                                             v_actor_id);
     end if;
-    v_content := array[]::text[];
-    v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_future_id, 'content', v_master_group_id), v_content);
+    v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_future_id, 'content', v_master_group_id), array[]::text[]);
     v_new_content := array_append(v_content, v_debatle_code);
     if v_content <> v_new_content then
      perform data.change_object_and_notify(v_debatles_future_id, 
@@ -83,15 +81,14 @@ begin
     -- удаляем из будущих у мастера, добавляем в текущие всем (TODO вообще не совсем всем, а только тем, кто в аудиории дебатла)
     perform * from data.objects where id = v_debatles_future_id for update;
     perform * from data.objects where id = v_debatles_current_id for update;
-    v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_future_id, 'content', v_master_group_id), v_content);
+    v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_future_id, 'content', v_master_group_id), array[]::text[]);
     v_new_content := array_remove(v_content, v_debatle_code);
     if v_content <> v_new_content then
        perform data.change_object_and_notify(v_debatles_future_id, 
                                              jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_new_content))),
                                              v_actor_id);
     end if;
-    v_content := array[]::text[];
-    v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_current_id, 'content', v_actor_id), v_content);
+    v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_current_id, 'content', v_actor_id), array[]::text[]);
     v_new_content := array_append(v_content, v_debatle_code);
     if v_content <> v_new_content then
      perform data.change_object_and_notify(v_debatles_current_id, 
@@ -104,15 +101,14 @@ begin
     -- удаляем из текущих у всех, добавляем в завершённые всем (TODO вообще не совсем всем, а только тем, кто в аудиории дебатла)
     perform * from data.objects where id = v_debatles_current_id for update;
     perform * from data.objects where id = v_debatles_closed_id for update;
-    v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_current_id, 'content', v_actor_id), v_content);
+    v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_current_id, 'content', v_actor_id), array[]::text[]);
     v_new_content := array_remove(v_content, v_debatle_code);
     if v_content <> v_new_content then
        perform data.change_object_and_notify(v_debatles_current_id, 
                                             jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, null, to_jsonb(v_new_content))),
                                             v_actor_id);
     end if;
-    v_content := array[]::text[];
-    v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_closed_id, 'content', v_actor_id), v_content);
+    v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_closed_id, 'content', v_actor_id), array[]::text[]);
     v_new_content := array_append(v_content, v_debatle_code);
     if v_content <> v_new_content then
       perform data.change_object_and_notify(v_debatles_closed_id, 
@@ -129,9 +125,8 @@ begin
     -- из закрытых у всех
     -- добавляем в закрытые мастеру
     if v_debatle_status = 'draft' then
-      v_content := array[]::text[];
       perform * from data.objects where id = v_debatles_draft_id for update;
-      v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_draft_id, 'content', v_system_debatle_person1), v_content);
+      v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_draft_id, 'content', v_system_debatle_person1), array[]::text[]);
       v_new_content := array_remove(v_content, v_debatle_code);
       if v_content <> v_new_content then
          perform data.change_object_and_notify(v_debatles_draft_id, 
@@ -140,9 +135,8 @@ begin
       end if;
     end if;
     if v_debatle_status = 'new' then
-      v_content := array[]::text[];
       perform * from data.objects where id = v_debatles_new_id for update;
-      v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_new_id, 'content', v_master_group_id), v_content);
+      v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_new_id, 'content', v_master_group_id), array[]::text[]);
       v_new_content := array_remove(v_content, v_debatle_code);
       if v_content <> v_new_content then
          perform data.change_object_and_notify(v_debatles_new_id, 
@@ -151,9 +145,8 @@ begin
       end if;
     end if;
     if v_debatle_status = 'future' then
-      v_content := array[]::text[];
       perform * from data.objects where id = v_debatles_future_id for update;
-      v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_future_id, 'content', v_master_group_id), v_content);
+      v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_future_id, 'content', v_master_group_id), array[]::text[]);
       v_new_content := array_remove(v_content, v_debatle_code);
       if v_content <> v_new_content then
          perform data.change_object_and_notify(v_debatles_future_id, 
@@ -162,9 +155,8 @@ begin
       end if;
     end if;
     if v_debatle_status = 'current' then
-      v_content := array[]::text[];
       perform * from data.objects where id = v_debatles_current_id for update;
-      v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_current_id, 'content', v_actor_id), v_content);
+      v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_current_id, 'content', v_actor_id), array[]::text[]);
       v_new_content := array_remove(v_content, v_debatle_code);
       if v_content <> v_new_content then
          perform data.change_object_and_notify(v_debatles_current_id, 
@@ -173,9 +165,8 @@ begin
       end if;
     end if;
     if v_debatle_status = 'closed' then
-      v_content := array[]::text[];
       perform * from data.objects where id = v_debatles_closed_id for update;
-      v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_closed_id, 'content', v_actor_id), v_content);
+      v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_closed_id, 'content', v_actor_id), array[]::text[]);
       v_new_content := array_remove(v_content, v_debatle_code);
       if v_content <> v_new_content then
          perform data.change_object_and_notify(v_debatles_closed_id, 
@@ -183,9 +174,8 @@ begin
                                               v_actor_id);
       end if;
     end if;
-    v_content := array[]::text[];
     perform * from data.objects where id = v_debatles_deleted_id for update;
-    v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_deleted_id, 'content', v_master_group_id), v_content);
+    v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_deleted_id, 'content', v_master_group_id), array[]::text[]);
     v_new_content := array_append(v_content, v_debatle_code);
     if v_content <> v_new_content then
       perform data.change_object_and_notify(v_debatles_deleted_id, 
@@ -204,8 +194,8 @@ begin
 
   perform * from data.objects where id = v_debatle_id for update;
 
--- TODO - если статус поменялся на future, то надо добавить видимость второму участнику и судье
--- если статус поменялся на vote, то добавить видимость все
+  -- если статус поменялся на future, то надо добавить видимость второму участнику и судье
+  -- если статус поменялся на vote, то добавить видимость все
   if v_new_status = 'future' then
     if v_system_debatle_person2 <> -1 then 
      v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', v_system_debatle_person2, jsonb 'true'));
