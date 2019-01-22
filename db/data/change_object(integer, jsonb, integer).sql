@@ -230,7 +230,53 @@ begin
         end if;
 
         if v_list_changed then
-          -- todo изменение списка, арр!
+          declare
+            v_content_diff jsonb;
+            v_add jsonb;
+            v_remove jsonb;
+            v_remove_list_change jsonb;
+          begin
+            v_content_diff :=
+              calc_content_diff(
+                json.get_array_opt(json.get_object(v_subscription.data, 'attributes'), 'content', null),
+                json.get_array_opt(json.get_object(v_new_data, 'attributes'), 'content', null));
+
+            v_add := json.get_array(v_content_diff, 'add');
+            v_remove := json.get_array(v_content_diff, 'remove');
+
+            if v_add != jsonb '[]' or v_remove != jsonb '[]' then
+              v_list_changes := jsonb '{}';
+
+              if v_remove != jsonb '[]' then
+                -- Посылаем удаления только для видимых
+                select jsonb_agg(a.value)
+                into v_remove_list_change
+                from unnest(json.get_string_array(v_remove)) a(value)
+                join data.objects o
+                  on o.code = a.value
+                join data.client_subscription_objects cso
+                  on cso.object_id = o.id
+                  and cso.client_subscription_id = v_subscription.id
+                  and cso.is_visible is true;
+
+                v_list_changes := v_list_changes || jsonb_build_object('remove', v_remove_list_change);
+
+                -- А вот удаляем реально все
+                delete from data.client_subscription_objects
+                where
+                  client_subscription_id = v_subscription.id and
+                  object_id in (
+                    select o.id
+                    from unnest(json.get_string_array(v_remove)) a(value)
+                    join data.objects o
+                      on o.code = a.value);
+              end if;
+
+              if v_add != jsonb '[]' then
+                -- todo добавить в v_list_changes, добавить в подписку И изменить индексы последующих элементов
+              end if;
+            end if;
+          end;
         end if;
 
         if v_object is not null or v_list_changes is not null then
@@ -296,7 +342,7 @@ begin
                 jsonb_build_object('remove', jsonb_build_array(v_object_code)));
           end if;
         else
-          v_new_data := data.get_object(in_object_id, in_actor_id, 'mini', v_list.object_id);
+          v_new_data := data.get_object(in_object_id, v_list.actor_id, 'mini', v_list.object_id);
 
           if not v_list.is_visible or v_new_data != v_list.data then
             v_attributes := json.get_object(v_new_data, 'attributes');

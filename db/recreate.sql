@@ -1232,6 +1232,50 @@ end;
 $$
 language plpgsql;
 
+-- drop function data.calc_content_diff(jsonb, jsonb);
+
+create or replace function data.calc_content_diff(in_original_content jsonb, in_new_content jsonb)
+returns jsonb
+volatile
+as
+$$
+-- add - массив объектов с полями position и object_code
+-- remove - массив кодов объектов
+declare
+  v_add jsonb := jsonb '[]';
+  v_remove jsonb := jsonb '[]';
+  v_code text;
+begin
+  perform json.get_string_array_opt(in_original_content);
+  perform json.get_string_array_opt(in_new_content);
+
+  if
+    in_original_content is null and in_new_content is null or
+    in_original_content = in_new_content
+  then
+    return jsonb '{"add": [], "remove": []}';
+  end if;
+
+  if in_new_content is null then
+    v_remove := in_original_content;
+  elsif in_original_content is null then
+    for v_code in
+    (
+      select value
+      from jsonb_array_elements(in_new_content)
+    )
+    loop
+      v_add := v_add || jsonb_build_object('object_code', v_code);
+    end loop;
+  else
+    -- todo самое интересное
+  end if;
+
+  return jsonb_build_object('add', v_add, 'remove', v_remove);
+end;
+$$
+language plpgsql;
+
 -- drop function data.can_attribute_be_overridden(integer);
 
 create or replace function data.can_attribute_be_overridden(in_attribute_id integer)
@@ -1562,7 +1606,53 @@ begin
         end if;
 
         if v_list_changed then
-          -- todo изменение списка, арр!
+          declare
+            v_content_diff jsonb;
+            v_add jsonb;
+            v_remove jsonb;
+            v_remove_list_change jsonb;
+          begin
+            v_content_diff :=
+              calc_content_diff(
+                json.get_array_opt(json.get_object(v_subscription.data, 'attributes'), 'content', null),
+                json.get_array_opt(json.get_object(v_new_data, 'attributes'), 'content', null));
+
+            v_add := json.get_array(v_content_diff, 'add');
+            v_remove := json.get_array(v_content_diff, 'remove');
+
+            if v_add != jsonb '[]' or v_remove != jsonb '[]' then
+              v_list_changes := jsonb '{}';
+
+              if v_remove != jsonb '[]' then
+                -- Посылаем удаления только для видимых
+                select jsonb_agg(a.value)
+                into v_remove_list_change
+                from unnest(json.get_string_array(v_remove)) a(value)
+                join data.objects o
+                  on o.code = a.value
+                join data.client_subscription_objects cso
+                  on cso.object_id = o.id
+                  and cso.client_subscription_id = v_subscription.id
+                  and cso.is_visible is true;
+
+                v_list_changes := v_list_changes || jsonb_build_object('remove', v_remove_list_change);
+
+                -- А вот удаляем реально все
+                delete from data.client_subscription_objects
+                where
+                  client_subscription_id = v_subscription.id and
+                  object_id in (
+                    select o.id
+                    from unnest(json.get_string_array(v_remove)) a(value)
+                    join data.objects o
+                      on o.code = a.value);
+              end if;
+
+              if v_add != jsonb '[]' then
+                -- todo добавить в v_list_changes, добавить в подписку И изменить индексы последующих элементов
+              end if;
+            end if;
+          end;
         end if;
 
         if v_object is not null or v_list_changes is not null then
@@ -1628,7 +1718,7 @@ begin
                 jsonb_build_object('remove', jsonb_build_array(v_object_code)));
           end if;
         else
-          v_new_data := data.get_object(in_object_id, in_actor_id, 'mini', v_list.object_id);
+          v_new_data := data.get_object(in_object_id, v_list.actor_id, 'mini', v_list.object_id);
 
           if not v_list.is_visible or v_new_data != v_list.data then
             v_attributes := json.get_object(v_new_data, 'attributes');
