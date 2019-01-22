@@ -1316,7 +1316,7 @@ declare
   v_diffs jsonb;
   v_diff record;
   v_message_sent boolean := false;
-  v_request_id integer;
+  v_request_id text;
   v_notification_data jsonb;
 begin
   assert in_client_id is not null;
