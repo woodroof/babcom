@@ -1,6 +1,6 @@
--- drop function api_utils.process_get_more_message(integer, integer, jsonb);
+-- drop function api_utils.process_get_more_message(integer, text, jsonb);
 
-create or replace function api_utils.process_get_more_message(in_client_id integer, in_request_id integer, in_message jsonb)
+create or replace function api_utils.process_get_more_message(in_client_id integer, in_request_id text, in_message jsonb)
 returns void
 volatile
 as
@@ -24,7 +24,7 @@ begin
 
   perform 1
   from data.objects
-  where object_id = v_object_id
+  where id = v_object_id
   for update;
 
   v_list := data.get_next_list(in_client_id, v_object_id);
