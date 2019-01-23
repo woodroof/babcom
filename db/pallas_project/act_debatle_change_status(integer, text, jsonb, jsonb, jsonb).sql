@@ -78,7 +78,11 @@ begin
      -- TODO тут следовало бы разослать всем причастным весть о грядущем дебатле!!!!!!!!!!!!!!!
 
   elsif v_new_status = 'vote' and v_debatle_status = 'future' and (v_is_master or v_system_debatle_judge = v_actor_id) then
-    -- удаляем из будущих у мастера, добавляем в текущие всем (TODO вообще не совсем всем, а только тем, кто в аудиории дебатла)
+    if v_system_debatle_judge = -1 or v_system_debatle_person1 =-1 or v_system_debatle_person2 =-1 then
+      perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Попросите мастера внести недостающих участников дебатла прежде чем начать');
+      return;
+    end if;
+  -- удаляем из будущих у мастера, добавляем в текущие всем (TODO вообще не совсем всем, а только тем, кто в аудиории дебатла)
     perform * from data.objects where id = v_debatles_future_id for update;
     perform * from data.objects where id = v_debatles_current_id for update;
     v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_future_id, 'content', v_master_group_id), array[]::text[]);

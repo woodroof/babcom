@@ -37,28 +37,31 @@ begin
   -- Атрибуты для дебатла
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
   ('system_debatle_theme', null, 'Тема дебатла', 'system', null, null, false),
-  ('debatle_status', 'Статус дебатла', null, 'normal', null, 'pallas_project.vd_debatle_status', false),
+  ('debatle_status', 'Статус', null, 'normal', null, 'pallas_project.vd_debatle_status', false),
   ('system_debatle_person1', null, 'Идентификатор первого участника дебатла', 'system', null, null, false),
-  ('debatle_person1', 'Первый участник дебатла', null, 'normal', 'full', null, false),
+  ('debatle_person1', 'Зачинщик', null, 'normal', 'full', null, false),
   ('system_debatle_person2', null, 'Идентификатор второго участника дебатла', 'system', null, null, false),
-  ('debatle_person2', 'Второй участник дебатла', null, 'normal', 'full', null, false),
+  ('debatle_person2', 'Оппонент', null, 'normal', 'full', null, false),
   ('system_debatle_judge', null, 'Идентификатор судьи', 'system', null, null, false),
   ('debatle_judge', 'Судья', null, 'normal', 'full', null, false),
   ('system_debatle_target_audience', null, 'Аудитория дебатла', 'system', null, null, false),
-  ('debatle_target_audience', 'Аудитория дебатла', null, 'normal', 'full', null, true),
+  ('debatle_target_audience', 'Аудитория', null, 'normal', 'full', null, true),
   ('system_debatle_person1_votes', null, 'Количество голосов за первого участника', 'system', null, null, false),
-  ('debatle_person1_votes', 'Количество голосов за первого участника', null, 'normal', 'full', null, true),
+  ('debatle_person1_votes', null, 'Количество голосов за первого участника', 'normal', 'full', null, true),
   ('system_debatle_person2_votes', null, 'Количество голосов за второго участника', 'system', null, null, false),
-  ('debatle_person2_votes', 'Количество голосов за второго участника', null, 'normal', 'full', null, true),
+  ('debatle_person2_votes', null, 'Количество голосов за второго участника', 'normal', 'full', null, true),
   ('debatle_vote_price', 'Стоимость голосования', null, 'normal', 'full', null, true),
   ('system_debatle_person1_bonuses', null, 'Бонусы первого участника', 'system', null, null, false),
-  ('debatle_person1_bonuses', 'Бонусы первого участника', null, 'normal', 'full', null, true),
+  ('debatle_person1_bonuses', 'Бонусы зачинщика', null, 'normal', 'full', null, true),
   ('system_debatle_person1_fines' , null, 'Штрафы первого участника', 'system', null, null, false),
-  ('debatle_person1_fines', 'Штрафы первого участника', null, 'normal', 'full', null, true),
+  ('debatle_person1_fines', 'Штрафы зачинщика', null, 'normal', 'full', null, true),
   ('system_debatle_person2_bonuses', null, 'Бонусы второго участника', 'system', null, null, false),
-  ('debatle_person2_bonuses', 'Бонусы второго участника', null, 'normal', 'full', null, true),
+  ('debatle_person2_bonuses', 'Бонусы оппонента', null, 'normal', 'full', null, true),
   ('system_debatle_person2_fines', null, 'Штрафы второго участника', 'system', null, null, false),
-  ('debatle_person2_fines', 'Штрафы второго участника', null, 'normal', 'full', null, true),
+  ('debatle_person2_fines', 'Штрафы оппонента', null, 'normal', 'full', null, true),
+  ('system_debatle_person1_my_vote', null, 'Количество голосов каждого голосующего за первого участника', 'system', null, null, true),
+  ('system_debatle_person2_my_vote', null, 'Количество голосов каждого голосующего за второго участника', 'system', null, null, true),
+  ('debatle_my_vote', null, 'Уведомление игрока о том, за кого от проголосовал', 'normal', 'full', null, true),
   -- для временных объектов 
   ('debatle_temp_person_list_edited_person', null, 'Редактируемая персона в дебатле', 'normal', 'full', 'pallas_project.vd_debatle_temp_person_list_edited_person', false),
   ('system_debatle_temp_person_list_debatle_id', null, 'Идентификатор дебатла для списка редактирования персон', 'system', null, null, false);
@@ -126,8 +129,6 @@ begin
   (v_debatles_deleted_id, v_title_attribute_id, jsonb '"Удалённые дебатлы"', null),
   (v_debatles_deleted_id, v_is_visible_attribute_id, jsonb 'true', null);
 
-
-
   -- Объект-класс для дебатла
   insert into data.objects(code, type) values('debatle', 'class') returning id into v_debatle_class_id;
 
@@ -137,7 +138,7 @@ begin
   (v_debatle_class_id, v_mini_card_function_attribute_id, jsonb '"pallas_project.mcard_debatle"'),
   (v_debatle_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatle"'),
   (v_debatle_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
-                                                      '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"], 
+                                                      '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s", "%s", "%s"], 
                                                                       "actions": ["%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"]}',
                                                       'debatle_group1',
                                                       'debatle_theme',
@@ -146,13 +147,6 @@ begin
                                                       'debatle_person2',
                                                       'debatle_judge',
                                                       'debatle_target_audience',
-                                                      'debatle_person1_votes',
-                                                      'debatle_person2_votes',
-                                                      'debatle_vote_price',
-                                                      'debatle_person1_bonuses',
-                                                      'debatle_person1_fines',
-                                                      'debatle_person2_bonuses',
-                                                      'debatle_person2_fines',
                                                       'debatle_change_instigator',
                                                       'debatle_change_opponent',
                                                       'debatle_change_judge',
@@ -162,7 +156,21 @@ begin
                                                       'debatle_change_status_vote',
                                                       'debatle_change_status_vote_over',
                                                       'debatle_change_status_closed',
-                                                      'debatle_change_status_deleted')::jsonb]));
+                                                      'debatle_change_status_deleted')::jsonb,
+                                                      format(
+                                                      '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"], 
+                                                                      "actions": ["%s", "%s"]}',
+                                                      'debatle_group2',
+                                                      'debatle_person1_votes',
+                                                      'debatle_person2_votes',
+                                                      'debatle_vote_price',
+                                                      'debatle_person1_bonuses',
+                                                      'debatle_person1_fines',
+                                                      'debatle_person2_bonuses',
+                                                      'debatle_person2_fines',
+                                                      'debatle_my_vote',
+                                                      'debatle_vote_person1',
+                                                      'debatle_vote_person2')::jsonb]));
 
   -- Объект-класс для временных списков персон для редактирования дебатла
   insert into data.objects(code, type) values('debatle_temp_person_list', 'class') returning id into v_debatle_temp_person_list_class_id;
@@ -183,7 +191,8 @@ begin
   ('create_debatle_step1', 'pallas_project.act_create_debatle_step1'),
   ('debatle_change_person', 'pallas_project.act_debatle_change_person'),
   ('debatle_change_theme', 'pallas_project.act_debatle_change_theme'),
-  ('debatle_change_status', 'pallas_project.act_debatle_change_status');
+  ('debatle_change_status', 'pallas_project.act_debatle_change_status'),
+  ('debatle_vote', 'pallas_project.act_debatle_vote');
 
 
 end;

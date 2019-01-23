@@ -477,7 +477,7 @@ volatile
 as
 $$
 declare
-  v_action_data jsonb := jsonb_build_object('description', in_description);
+  v_action_data jsonb := jsonb_build_object('message', in_description);
 begin
   assert in_description is not null and trim(leading E' \t\n' from in_description) != '';
 
@@ -7297,7 +7297,11 @@ begin
      -- TODO тут следовало бы разослать всем причастным весть о грядущем дебатле!!!!!!!!!!!!!!!
 
   elsif v_new_status = 'vote' and v_debatle_status = 'future' and (v_is_master or v_system_debatle_judge = v_actor_id) then
-    -- удаляем из будущих у мастера, добавляем в текущие всем (TODO вообще не совсем всем, а только тем, кто в аудиории дебатла)
+    if v_system_debatle_judge = -1 or v_system_debatle_person1 =-1 or v_system_debatle_person2 =-1 then
+      perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Попросите мастера внести недостающих участников дебатла прежде чем начать');
+      return;
+    end if;
+  -- удаляем из будущих у мастера, добавляем в текущие всем (TODO вообще не совсем всем, а только тем, кто в аудиории дебатла)
     perform * from data.objects where id = v_debatles_future_id for update;
     perform * from data.objects where id = v_debatles_current_id for update;
     v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_future_id, 'content', v_master_group_id), array[]::text[]);
@@ -7476,12 +7480,113 @@ begin
     return;
   end if;
 
+  perform * from data.objects o where o.id = v_debatle_id for update;
   if coalesce(data.get_raw_attribute_value(v_debatle_id, v_system_debatle_theme_attribute_id, null), jsonb '"~~~"') <> to_jsonb(v_title) then
     v_message_sent := data.change_current_object(in_client_id, 
                                                in_request_id,
                                                v_debatle_id, 
                                                jsonb_build_array(data.attribute_change2jsonb('system_debatle_theme', null, to_jsonb(v_title))));
   end if;
+  if not v_message_sent then
+   perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_debatle_vote(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_debatle_vote(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_debatle_code text := json.get_string(in_params, 'debatle_code');
+  v_voted_person text := json.get_string_opt(in_params, 'voted_person', '~~~');
+  v_debatle_id  integer := data.get_object_id(v_debatle_code);
+  v_actor_id  integer := data.get_active_actor_id(in_client_id);
+
+  v_debatle_status text := json.get_string(data.get_attribute_value(v_debatle_id,'debatle_status'));
+  v_system_debatle_person1 integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person1'), -1);
+  v_system_debatle_person2 integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person2'), -1);
+  v_system_debatle_person1_my_vote integer;
+  v_system_debatle_person2_my_vote integer;
+  v_system_debatle_person1_votes integer;
+  v_system_debatle_person2_votes integer;
+  v_person1_my_vote_new integer;
+  v_person2_my_vote_new integer;
+  v_person1_votes_new integer;
+  v_person2_votes_new integer;
+  v_nothing_changed boolean := false;
+
+  v_changes jsonb[];
+
+  v_is_master boolean := pallas_project.is_in_group(v_actor_id, 'master');
+  v_message_sent boolean := false;
+begin
+  assert in_request_id is not null;
+
+  if v_debatle_status <> 'vote' then
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Не время для голосования');
+    return;
+  end if;
+
+  if v_voted_person not in ('instigator', 'opponent') then
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Непонятно за кого проголосовали. Наверное что-то пошло не так. Обратитесь к мастеру.');
+    return;
+  end if;
+
+  perform * from data.objects o where o.id = v_debatle_id for update;
+
+  v_system_debatle_person1_my_vote := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person1_my_vote', v_actor_id), 0);
+  v_system_debatle_person2_my_vote := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person2_my_vote', v_actor_id), 0);
+
+  assert v_system_debatle_person1_my_vote >= 0;
+  assert v_system_debatle_person2_my_vote >= 0;
+
+  if v_voted_person = 'instigator' then 
+    if v_system_debatle_person1_my_vote > 0 then 
+      v_nothing_changed := true;
+    else
+      v_person1_my_vote_new := 1;
+      v_person2_my_vote_new := 0;
+    end if;
+  elsif v_voted_person = 'opponent' then 
+    if v_system_debatle_person2_my_vote > 0 then 
+      v_nothing_changed := true;
+    else
+      v_person2_my_vote_new := 1;
+      v_person1_my_vote_new := 0;
+    end if;
+  end if;
+
+  if not v_nothing_changed then
+    v_system_debatle_person1_votes := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person1_votes'), 0);
+    v_system_debatle_person2_votes := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person2_votes'), 0);
+    v_person1_votes_new := v_system_debatle_person1_votes + v_person1_my_vote_new - v_system_debatle_person1_my_vote;
+    v_person2_votes_new := v_system_debatle_person2_votes + v_person2_my_vote_new - v_system_debatle_person2_my_vote;
+
+    if v_system_debatle_person1_my_vote <> v_person1_my_vote_new then 
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person1_my_vote', v_actor_id, to_jsonb(v_person1_my_vote_new)));
+    end if;
+    if v_system_debatle_person2_my_vote <> v_person2_my_vote_new then 
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person2_my_vote', v_actor_id, to_jsonb(v_person2_my_vote_new)));
+    end if;
+    if v_system_debatle_person1_votes <> v_person1_votes_new then 
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person1_votes', null, to_jsonb(v_person1_votes_new)));
+    end if;
+    if v_system_debatle_person2_votes <> v_person2_votes_new then 
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person2_votes', null, to_jsonb(v_person2_votes_new)));
+    end if;
+    if array_length(v_changes, 1) > 0 then
+      v_message_sent := data.change_current_object(in_client_id, 
+                                                   in_request_id,
+                                                   v_debatle_id, 
+                                                   to_jsonb(v_changes));
+    end if;
+  end if;
+
   if not v_message_sent then
    perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
   end if;
@@ -7624,6 +7729,7 @@ $$
 declare
   v_actions_list text := '';
   v_person1_id integer;
+  v_person2_id integer;
   v_judge_id integer;
   v_is_master boolean;
   v_debatle_code text;
@@ -7635,6 +7741,7 @@ begin
   v_is_master := pallas_project.is_in_group(in_actor_id, 'master');
   v_debatle_code := data.get_object_code(in_object_id);
   v_person1_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person1'), null);
+  v_person2_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person2'), null);
   v_judge_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_judge'), null);
   v_debatle_status := json.get_string_opt(data.get_attribute_value(in_object_id, 'debatle_status'), null);
 
@@ -7702,10 +7809,30 @@ begin
                 v_debatle_code);
   end if;
 
-  if v_is_master or (in_actor_id = v_person1_id) and v_debatle_status in ('draft') then
+  if v_is_master and v_debatle_status in ('deleted') or in_actor_id = v_person1_id and v_debatle_status in ('draft') then
     v_actions_list := v_actions_list || 
         format(', "debatle_change_status_deleted": {"code": "debatle_change_status", "name": "Удалить", "disabled": false, '||
                 '"params": {"debatle_code": "%s", "new_status": "deleted"}}',
+                v_debatle_code);
+  end if;
+
+  if v_debatle_status in ('vote') 
+    and not v_is_master
+    and v_person1_id is not null
+    and v_person2_id is not null
+    and v_judge_id is not null
+    and in_actor_id not in (v_person1_id, v_person2_id, v_judge_id) then
+      v_actions_list := v_actions_list || 
+        format(', "debatle_vote_person1": {"code": "debatle_vote", "name": "Голосовать за %s", "disabled": %s, '||
+                '"params": {"debatle_code": "%s", "voted_person": "instigator"}}',
+                json.get_string_opt(data.get_attribute_value(v_person1_id, 'title', in_actor_id), ''),
+                case when json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person1_my_vote', in_actor_id), 0) > 0 then 'true' else 'false' end,
+                v_debatle_code);
+     v_actions_list := v_actions_list || 
+        format(', "debatle_vote_person2": {"code": "debatle_vote", "name": "Голосовать за %s", "disabled": %s, '||
+                '"params": {"debatle_code": "%s", "voted_person": "opponent"}}',
+                json.get_string_opt(data.get_attribute_value(v_person2_id, 'title', in_actor_id), ''),
+                case when json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person2_my_vote', in_actor_id), 0) > 0 then 'true' else 'false' end,
                 v_debatle_code);
   end if;
 
@@ -7803,20 +7930,34 @@ declare
   v_person2_id integer;
   v_judge_id integer;
   v_debatle_theme text;
+  v_debatle_status text;
 
   v_title_attribute_id integer := data.get_attribute_id('title');
   v_debatle_person1_attribute_id integer := data.get_attribute_id('debatle_person1');
   v_debatle_person2_attribute_id integer := data.get_attribute_id('debatle_person2');
   v_debatle_judge_attribute_id integer := data.get_attribute_id('debatle_judge');
+  v_debatle_my_vote_attribute_id integer := data.get_attribute_id('debatle_my_vote');
+  v_debatle_person1_votes_attribute_id integer := data.get_attribute_id('debatle_person1_votes');
+  v_debatle_person2_votes_attribute_id integer := data.get_attribute_id('debatle_person2_votes');
+
+  v_system_debatle_person1_my_vote integer;
+  v_system_debatle_person2_my_vote integer;
+
+  v_system_debatle_person1_votes integer;
+  v_system_debatle_person2_votes integer;
 
   v_new_title jsonb;
   v_new_person1 jsonb;
   v_new_person2 jsonb;
   v_new_judge jsonb;
+  v_new_debatle_my_vote jsonb;
+  v_new_debatle_person1_votes jsonb;
+  v_new_debatle_person2_votes jsonb;
 begin
   perform * from data.objects where id = in_object_id for update;
 
   v_debatle_theme := json.get_string_opt(data.get_attribute_value(in_object_id, 'system_debatle_theme'), null);
+  v_debatle_status := json.get_string(data.get_attribute_value(in_object_id,'debatle_status'));
   v_person1_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person1'), null);
   v_person2_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person2'), null);
   v_judge_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_judge'), null);
@@ -7847,11 +7988,47 @@ begin
     perform data.set_attribute_value(in_object_id, v_debatle_judge_attribute_id, v_new_judge, null, in_actor_id);
   end if;
 
+  --debatle_my_vote
+  if v_debatle_status in ('vote', 'vote_over', 'closed') then
+    v_system_debatle_person1_my_vote := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person1_my_vote', in_actor_id), 0);
+    v_system_debatle_person2_my_vote := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person2_my_vote', in_actor_id), 0);
 
+    if in_actor_id = v_person1_id 
+      or in_actor_id = v_person2_id 
+      or in_actor_id = v_judge_id 
+      or pallas_project.is_in_group(in_actor_id, 'master') then
+      v_new_debatle_my_vote := jsonb '"Вы не можете голосовать"';
+    elsif v_system_debatle_person1_my_vote = 0 and v_system_debatle_person2_my_vote = 0 then
+      if v_debatle_status = 'vote' then
+        v_new_debatle_my_vote := jsonb '"Вы ещё не проголосовали"';
+      else
+        v_new_debatle_my_vote := jsonb '"Вы не голосовали"';
+      end if;
+    elsif v_system_debatle_person1_my_vote > 0 then
+      v_new_debatle_my_vote := to_jsonb(format('Вы проголосовали за %s', json.get_string_opt(v_new_person1, 'зачинщика')));
+    elsif v_system_debatle_person2_my_vote > 0 then
+      v_new_debatle_my_vote := to_jsonb(format('Вы проголосовали за %s', json.get_string_opt(v_new_person2, 'оппонента')));
+    end if;
+    if coalesce(data.get_raw_attribute_value(in_object_id, v_debatle_my_vote_attribute_id, in_actor_id), jsonb '"~~~"') <> coalesce(v_new_debatle_my_vote, jsonb '"~~~"') then
+      perform data.set_attribute_value(in_object_id, v_debatle_my_vote_attribute_id, v_new_debatle_my_vote, in_actor_id, in_actor_id);
+    end if;
+
+    v_system_debatle_person1_votes := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person1_votes'), 0);
+    v_system_debatle_person2_votes := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person2_votes'), 0);
+
+    v_new_debatle_person1_votes := to_jsonb(format('Количество голосов за %s: %s', json.get_string_opt(v_new_person1, 'зачинщика'), v_system_debatle_person1_votes));
+    v_new_debatle_person2_votes := to_jsonb(format('Количество голосов за %s: %s', json.get_string_opt(v_new_person2, 'оппонента'), v_system_debatle_person2_votes));
+
+    if coalesce(data.get_raw_attribute_value(in_object_id, v_debatle_person1_votes_attribute_id, in_actor_id), jsonb '"~~~"') <> coalesce(v_new_debatle_person1_votes, jsonb '"~~~"') then
+      perform data.set_attribute_value(in_object_id, v_debatle_person1_votes_attribute_id, v_new_debatle_person1_votes, in_actor_id, in_actor_id);
+    end if;
+    if coalesce(data.get_raw_attribute_value(in_object_id, v_debatle_person2_votes_attribute_id, in_actor_id), jsonb '"~~~"') <> coalesce(v_new_debatle_person2_votes, jsonb '"~~~"') then
+      perform data.set_attribute_value(in_object_id, v_debatle_person2_votes_attribute_id, v_new_debatle_person2_votes, in_actor_id, in_actor_id);
+    end if;
+  end if;
   --TODO 
   -- разобрать json с аудиториями и вывести списком через запятую
   -- посчитать стоимость голосования в зависимости от того, кто смотрит (астерам и марсианам по курсу коина, оон-овцам просто 1 коин)
-  -- выводить количество голосов только когда статус Голосование завершено
   -- разобрать бонусы и штрафы.показывать только судье, мастерам и участникам (при этом участникам без кнопок изменения)
 
 end;
@@ -8276,28 +8453,31 @@ begin
   -- Атрибуты для дебатла
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
   ('system_debatle_theme', null, 'Тема дебатла', 'system', null, null, false),
-  ('debatle_status', 'Статус дебатла', null, 'normal', null, 'pallas_project.vd_debatle_status', false),
+  ('debatle_status', 'Статус', null, 'normal', null, 'pallas_project.vd_debatle_status', false),
   ('system_debatle_person1', null, 'Идентификатор первого участника дебатла', 'system', null, null, false),
-  ('debatle_person1', 'Первый участник дебатла', null, 'normal', 'full', null, false),
+  ('debatle_person1', 'Зачинщик', null, 'normal', 'full', null, false),
   ('system_debatle_person2', null, 'Идентификатор второго участника дебатла', 'system', null, null, false),
-  ('debatle_person2', 'Второй участник дебатла', null, 'normal', 'full', null, false),
+  ('debatle_person2', 'Оппонент', null, 'normal', 'full', null, false),
   ('system_debatle_judge', null, 'Идентификатор судьи', 'system', null, null, false),
   ('debatle_judge', 'Судья', null, 'normal', 'full', null, false),
   ('system_debatle_target_audience', null, 'Аудитория дебатла', 'system', null, null, false),
-  ('debatle_target_audience', 'Аудитория дебатла', null, 'normal', 'full', null, true),
+  ('debatle_target_audience', 'Аудитория', null, 'normal', 'full', null, true),
   ('system_debatle_person1_votes', null, 'Количество голосов за первого участника', 'system', null, null, false),
-  ('debatle_person1_votes', 'Количество голосов за первого участника', null, 'normal', 'full', null, true),
+  ('debatle_person1_votes', null, 'Количество голосов за первого участника', 'normal', 'full', null, true),
   ('system_debatle_person2_votes', null, 'Количество голосов за второго участника', 'system', null, null, false),
-  ('debatle_person2_votes', 'Количество голосов за второго участника', null, 'normal', 'full', null, true),
+  ('debatle_person2_votes', null, 'Количество голосов за второго участника', 'normal', 'full', null, true),
   ('debatle_vote_price', 'Стоимость голосования', null, 'normal', 'full', null, true),
   ('system_debatle_person1_bonuses', null, 'Бонусы первого участника', 'system', null, null, false),
-  ('debatle_person1_bonuses', 'Бонусы первого участника', null, 'normal', 'full', null, true),
+  ('debatle_person1_bonuses', 'Бонусы зачинщика', null, 'normal', 'full', null, true),
   ('system_debatle_person1_fines' , null, 'Штрафы первого участника', 'system', null, null, false),
-  ('debatle_person1_fines', 'Штрафы первого участника', null, 'normal', 'full', null, true),
+  ('debatle_person1_fines', 'Штрафы зачинщика', null, 'normal', 'full', null, true),
   ('system_debatle_person2_bonuses', null, 'Бонусы второго участника', 'system', null, null, false),
-  ('debatle_person2_bonuses', 'Бонусы второго участника', null, 'normal', 'full', null, true),
+  ('debatle_person2_bonuses', 'Бонусы оппонента', null, 'normal', 'full', null, true),
   ('system_debatle_person2_fines', null, 'Штрафы второго участника', 'system', null, null, false),
-  ('debatle_person2_fines', 'Штрафы второго участника', null, 'normal', 'full', null, true),
+  ('debatle_person2_fines', 'Штрафы оппонента', null, 'normal', 'full', null, true),
+  ('system_debatle_person1_my_vote', null, 'Количество голосов каждого голосующего за первого участника', 'system', null, null, true),
+  ('system_debatle_person2_my_vote', null, 'Количество голосов каждого голосующего за второго участника', 'system', null, null, true),
+  ('debatle_my_vote', null, 'Уведомление игрока о том, за кого от проголосовал', 'normal', 'full', null, true),
   -- для временных объектов 
   ('debatle_temp_person_list_edited_person', null, 'Редактируемая персона в дебатле', 'normal', 'full', 'pallas_project.vd_debatle_temp_person_list_edited_person', false),
   ('system_debatle_temp_person_list_debatle_id', null, 'Идентификатор дебатла для списка редактирования персон', 'system', null, null, false);
@@ -8365,8 +8545,6 @@ begin
   (v_debatles_deleted_id, v_title_attribute_id, jsonb '"Удалённые дебатлы"', null),
   (v_debatles_deleted_id, v_is_visible_attribute_id, jsonb 'true', null);
 
-
-
   -- Объект-класс для дебатла
   insert into data.objects(code, type) values('debatle', 'class') returning id into v_debatle_class_id;
 
@@ -8376,7 +8554,7 @@ begin
   (v_debatle_class_id, v_mini_card_function_attribute_id, jsonb '"pallas_project.mcard_debatle"'),
   (v_debatle_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatle"'),
   (v_debatle_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
-                                                      '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"], 
+                                                      '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s", "%s", "%s"], 
                                                                       "actions": ["%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"]}',
                                                       'debatle_group1',
                                                       'debatle_theme',
@@ -8385,13 +8563,6 @@ begin
                                                       'debatle_person2',
                                                       'debatle_judge',
                                                       'debatle_target_audience',
-                                                      'debatle_person1_votes',
-                                                      'debatle_person2_votes',
-                                                      'debatle_vote_price',
-                                                      'debatle_person1_bonuses',
-                                                      'debatle_person1_fines',
-                                                      'debatle_person2_bonuses',
-                                                      'debatle_person2_fines',
                                                       'debatle_change_instigator',
                                                       'debatle_change_opponent',
                                                       'debatle_change_judge',
@@ -8401,7 +8572,21 @@ begin
                                                       'debatle_change_status_vote',
                                                       'debatle_change_status_vote_over',
                                                       'debatle_change_status_closed',
-                                                      'debatle_change_status_deleted')::jsonb]));
+                                                      'debatle_change_status_deleted')::jsonb,
+                                                      format(
+                                                      '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"], 
+                                                                      "actions": ["%s", "%s"]}',
+                                                      'debatle_group2',
+                                                      'debatle_person1_votes',
+                                                      'debatle_person2_votes',
+                                                      'debatle_vote_price',
+                                                      'debatle_person1_bonuses',
+                                                      'debatle_person1_fines',
+                                                      'debatle_person2_bonuses',
+                                                      'debatle_person2_fines',
+                                                      'debatle_my_vote',
+                                                      'debatle_vote_person1',
+                                                      'debatle_vote_person2')::jsonb]));
 
   -- Объект-класс для временных списков персон для редактирования дебатла
   insert into data.objects(code, type) values('debatle_temp_person_list', 'class') returning id into v_debatle_temp_person_list_class_id;
@@ -8422,7 +8607,8 @@ begin
   ('create_debatle_step1', 'pallas_project.act_create_debatle_step1'),
   ('debatle_change_person', 'pallas_project.act_debatle_change_person'),
   ('debatle_change_theme', 'pallas_project.act_debatle_change_theme'),
-  ('debatle_change_status', 'pallas_project.act_debatle_change_status');
+  ('debatle_change_status', 'pallas_project.act_debatle_change_status'),
+  ('debatle_vote', 'pallas_project.act_debatle_vote');
 
 
 end;

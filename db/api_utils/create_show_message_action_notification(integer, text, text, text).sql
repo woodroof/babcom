@@ -6,7 +6,7 @@ volatile
 as
 $$
 declare
-  v_action_data jsonb := jsonb_build_object('description', in_description);
+  v_action_data jsonb := jsonb_build_object('message', in_description);
 begin
   assert in_description is not null and trim(leading E' \t\n' from in_description) != '';
 

@@ -8,6 +8,7 @@ $$
 declare
   v_actions_list text := '';
   v_person1_id integer;
+  v_person2_id integer;
   v_judge_id integer;
   v_is_master boolean;
   v_debatle_code text;
@@ -19,6 +20,7 @@ begin
   v_is_master := pallas_project.is_in_group(in_actor_id, 'master');
   v_debatle_code := data.get_object_code(in_object_id);
   v_person1_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person1'), null);
+  v_person2_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person2'), null);
   v_judge_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_judge'), null);
   v_debatle_status := json.get_string_opt(data.get_attribute_value(in_object_id, 'debatle_status'), null);
 
@@ -86,10 +88,30 @@ begin
                 v_debatle_code);
   end if;
 
-  if v_is_master or (in_actor_id = v_person1_id) and v_debatle_status in ('draft') then
+  if v_is_master and v_debatle_status in ('deleted') or in_actor_id = v_person1_id and v_debatle_status in ('draft') then
     v_actions_list := v_actions_list || 
         format(', "debatle_change_status_deleted": {"code": "debatle_change_status", "name": "Удалить", "disabled": false, '||
                 '"params": {"debatle_code": "%s", "new_status": "deleted"}}',
+                v_debatle_code);
+  end if;
+
+  if v_debatle_status in ('vote') 
+    and not v_is_master
+    and v_person1_id is not null
+    and v_person2_id is not null
+    and v_judge_id is not null
+    and in_actor_id not in (v_person1_id, v_person2_id, v_judge_id) then
+      v_actions_list := v_actions_list || 
+        format(', "debatle_vote_person1": {"code": "debatle_vote", "name": "Голосовать за %s", "disabled": %s, '||
+                '"params": {"debatle_code": "%s", "voted_person": "instigator"}}',
+                json.get_string_opt(data.get_attribute_value(v_person1_id, 'title', in_actor_id), ''),
+                case when json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person1_my_vote', in_actor_id), 0) > 0 then 'true' else 'false' end,
+                v_debatle_code);
+     v_actions_list := v_actions_list || 
+        format(', "debatle_vote_person2": {"code": "debatle_vote", "name": "Голосовать за %s", "disabled": %s, '||
+                '"params": {"debatle_code": "%s", "voted_person": "opponent"}}',
+                json.get_string_opt(data.get_attribute_value(v_person2_id, 'title', in_actor_id), ''),
+                case when json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person2_my_vote', in_actor_id), 0) > 0 then 'true' else 'false' end,
                 v_debatle_code);
   end if;
 
