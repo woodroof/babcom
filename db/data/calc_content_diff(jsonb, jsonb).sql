@@ -5,7 +5,7 @@ returns jsonb
 volatile
 as
 $$
--- add - массив объектов с полями position и object_code
+-- add - массив объектов с полями position и object_code, position может отсутствовать
 -- remove - массив кодов объектов
 declare
   v_add jsonb := jsonb '[]';

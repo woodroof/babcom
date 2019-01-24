@@ -204,7 +204,7 @@ begin
         v_new_data := data.get_object_data(in_object_id, v_subscription.actor_id, 'full', in_object_id);
 
         v_object := null;
-        v_list_changes := null;
+        v_list_changes := jsonb '{}';
 
         -- Сравниваем и при нахождении различий включаем в diff
         if v_new_data != v_subscription.data then
@@ -234,7 +234,8 @@ begin
             v_content_diff jsonb;
             v_add jsonb;
             v_remove jsonb;
-            v_remove_list_change jsonb;
+            v_remove_list_changes jsonb;
+            v_add_list_changes jsonb := jsonb '[]';
           begin
             v_content_diff :=
               calc_content_diff(
@@ -245,12 +246,10 @@ begin
             v_remove := json.get_array(v_content_diff, 'remove');
 
             if v_add != jsonb '[]' or v_remove != jsonb '[]' then
-              v_list_changes := jsonb '{}';
-
               if v_remove != jsonb '[]' then
                 -- Посылаем удаления только для видимых
                 select jsonb_agg(a.value)
-                into v_remove_list_change
+                into v_remove_list_changes
                 from unnest(json.get_string_array(v_remove)) a(value)
                 join data.objects o
                   on o.code = a.value
@@ -259,7 +258,7 @@ begin
                   and cso.client_subscription_id = v_subscription.id
                   and cso.is_visible is true;
 
-                v_list_changes := v_list_changes || jsonb_build_object('remove', v_remove_list_change);
+                v_list_changes := v_list_changes || jsonb_build_object('remove', v_remove_list_changes);
 
                 -- А вот удаляем реально все
                 delete from data.client_subscription_objects
@@ -273,20 +272,114 @@ begin
               end if;
 
               if v_add != jsonb '[]' then
-                -- todo добавить в v_list_changes, добавить в подписку И изменить индексы последующих элементов
+                declare
+                  v_processed_objects jsonb;
+                  v_add_element record;
+                  v_object_id integer;
+                  v_is_visible boolean;
+                  v_processed_object jsonb;
+                  v_index integer;
+                  v_position text;
+                  v_add_list_change jsonb;
+                begin
+                  select jsonb_object_agg(o.code, jsonb_build_object('is_visible', cso.is_visible, 'index', cso.index))
+                  into v_processed_objects
+                  from data.client_subscription_objects cso
+                  join object o
+                    on o.id = cso.object_id
+                  where cso.client_subscription_id = v_subscription.id;
+
+                  for v_add_element in
+                  (
+                    select
+                      json.get_string(value, 'object_code') as object_code,
+                      json.get_string_opt(value, 'position', null) as position
+                    from jsonb_array_elements(v_add) a(value)
+                  )
+                  loop
+                    -- Если клиенту не возвращался объект, указанный в position,
+                    -- то этот объект и все дальнейшие обрабатывать не нужно
+                    if not v_processed_objects ? v_add_element.position then
+                      exit;
+                    end if;
+
+                    v_object_id := data.get_object_id(v_add_element.object_code);
+
+                    v_is_visible :=
+                      json.get_boolean_opt(
+                        data.get_attribute_value(
+                          v_object_id,
+                          'is_visible',
+                          v_subscription.actor_id),
+                        false);
+
+                    if v_add_element.position is not null then
+                      v_processed_object := json.get_object(v_processed_objects, v_add_element.position);
+                      v_index := json.get_integer(v_processed_object, 'index');
+                      if json.get_boolean(v_processed_object, 'is_visible') then
+                        v_position := v_add_element.position;
+                      else
+                        select o.code
+                        into v_position
+                        from data.client_subscription_objects cso
+                        join data.objects o
+                          on o.id = cso.object_id
+                        where
+                          cso.client_subscription_id = v_subscription.id and
+                          cso.index = (
+                            select min(index)
+                            from data.client_subscription_objects
+                            where
+                              client_subscription_id = v_subscription.id and
+                              index > v_index and
+                              is_visible is true);
+                      end if;
+
+                      update data.client_subscription_objects
+                      set index = index + 1
+                      where
+                        client_subscription_id = v_subscription.id and
+                        index >= v_index;
+                    else
+                      select max(index) + 1
+                      into v_index
+                      from data.client_subscription_objects
+                      where
+                        client_subscription_id = v_subscription.id;
+                    end if;
+
+                    insert into data.client_subscription_objects(client_subscription_id, object_id, index, is_visible)
+                    values(v_subscription.id, data.get_object_id(v_add_element.object_code), v_index);
+
+                    if v_is_visible then
+                      v_add_list_change :=
+                        jsonb_build_object(
+                          'object',
+                          data.get_object(v_object_id, v_subscription.actor_id, 'mini', in_object_id));
+                      if v_position is not null then
+                        v_add_list_change := v_add_list_change || jsonb_build_object('position', v_position);
+                      end if;
+                      v_add_list_changes := v_add_list_changes || v_add_list_change;
+                    end if;
+                  end loop;
+                end;
+              end if;
+
+              if v_add_list_changes != jsonb '[]' then
+                v_list_changes := v_list_changes || jsonb_build_object('add', v_add_list_changes);
               end if;
             end if;
           end;
         end if;
 
-        if v_object is not null or v_list_changes is not null then
+        if v_object is not null or v_list_changes != jsonb '{}' then
           v_ret_val_element := jsonb_build_object('client_id', v_subscription.client_id);
 
           if v_object is not null then
             v_ret_val_element := v_ret_val_element || jsonb_build_object('object', v_object);
           end if;
 
-          if v_list_changes is not null then
+          if v_list_changes!= jsonb '{}' then
             v_ret_val_element := v_ret_val_element || jsonb_build_object('list_changes', v_list_changes);
           end if;
 
