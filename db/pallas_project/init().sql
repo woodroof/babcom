@@ -236,10 +236,36 @@ begin
 */
   insert into data.objects(code, class_id) values('person2', v_person_class_id) returning id into v_person_id;
     -- Логин
-  insert into data.logins(code) values('p2') returning id into v_default_login_id;
+  insert into data.logins(code) values('m1') returning id into v_default_login_id;
   insert into data.login_actors(login_id, actor_id) values(v_default_login_id, v_person_id);
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_person_id, v_title_attribute_id, jsonb '"Саша"'),
+  (v_person_id, v_person_occupation_attribute_id, jsonb '"Мастер"'),
+  (v_person_id, v_priority_attribute_id, jsonb '200');
+
+  insert into data.object_objects(parent_object_id, object_id) values
+  (v_all_person_group_id, v_person_id),
+  (v_master_group_id, v_person_id);
+
+  insert into data.objects(code, class_id) values('person4', v_person_class_id) returning id into v_person_id;
+    -- Логин
+  insert into data.logins(code) values('m2') returning id into v_default_login_id;
+  insert into data.login_actors(login_id, actor_id) values(v_default_login_id, v_person_id);
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_person_id, v_title_attribute_id, jsonb '"Пётр"'),
+  (v_person_id, v_person_occupation_attribute_id, jsonb '"Мастер"'),
+  (v_person_id, v_priority_attribute_id, jsonb '200');
+
+  insert into data.object_objects(parent_object_id, object_id) values
+  (v_all_person_group_id, v_person_id),
+  (v_master_group_id, v_person_id);
+
+  insert into data.objects(code, class_id) values('person5', v_person_class_id) returning id into v_person_id;
+    -- Логин
+  insert into data.logins(code) values('m3') returning id into v_default_login_id;
+  insert into data.login_actors(login_id, actor_id) values(v_default_login_id, v_person_id);
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_person_id, v_title_attribute_id, jsonb '"Данил"'),
   (v_person_id, v_person_occupation_attribute_id, jsonb '"Мастер"'),
   (v_person_id, v_priority_attribute_id, jsonb '200');
 

@@ -115,6 +115,20 @@ begin
                 v_debatle_code);
   end if;
 
+  if v_debatle_status in ('vote', 'vote_over') and in_actor_id = v_judge_id or
+   v_debatle_status in ('future', 'vote', 'vote_over', 'closed') and v_is_master then
+      v_actions_list := v_actions_list || 
+        format(', "debatle_change_bonuses1": {"code": "debatle_change_bonuses", "name": "Оштрафовать или наградить %s", "disabled": false, '||
+                '"params": {"debatle_code": "%s", "judged_person": "instigator"}}',
+                json.get_string_opt(data.get_attribute_value(v_person1_id, 'title', in_actor_id), ''),
+                v_debatle_code);
+     v_actions_list := v_actions_list || 
+        format(', "debatle_change_bonuses2": {"code": "debatle_change_bonuses", "name": "Оштрафовать или наградить %s", "disabled": false, '||
+                '"params": {"debatle_code": "%s", "judged_person": "opponent"}}',
+                json.get_string_opt(data.get_attribute_value(v_person2_id, 'title', in_actor_id), ''),
+                v_debatle_code);
+  end if;
+
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;
 $$

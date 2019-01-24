@@ -14,7 +14,6 @@ begin
     return 'Выберите оппонента для дебатла';
   when v_text_value = 'judge' then
     return 'Выберите судью дебатла';
-  when v_text_value = 'vote_over' then
   else
     return 'Что-то пошло не так';
   end case;
