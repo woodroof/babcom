@@ -1408,7 +1408,6 @@ $$
 -- Если функция вернула false, то скорее всего внешнему коду нужно сгенерировать событие ok или action
 declare
   v_actor_id integer := data.get_active_actor_id(in_client_id);
-  v_object_code text := data.get_object_code(in_object_id);
   v_subscription_exists boolean;
   v_diffs jsonb;
   v_diff record;
@@ -1435,6 +1434,7 @@ begin
   for v_diff in
   (
     select
+      json.get_string(value, 'object_id') as object_id,
       json.get_integer(value, 'client_id') as client_id,
       (case when value ? 'object' then value->'object' else null end) as object,
       (case when value ? 'list_changes' then value->'list_changes' else null end) as list_changes
@@ -1453,7 +1453,7 @@ begin
       v_request_id := null;
     end if;
 
-    v_notification_data := jsonb_build_object('object_id', v_object_code);
+    v_notification_data := jsonb_build_object('object_id', v_diff.object_id);
 
     if v_diff.object is not null then
       v_notification_data := v_notification_data || jsonb_build_object('object', v_diff.object);
@@ -1660,6 +1660,8 @@ begin
           v_ret_val :=
             v_ret_val ||
             jsonb_build_object(
+              'object_id',
+              v_object_code,
               'client_id',
               v_subscription.client_id,
               'object',
@@ -1828,7 +1830,7 @@ begin
         end if;
 
         if v_object is not null or v_list_changes != jsonb '{}' then
-          v_ret_val_element := jsonb_build_object('client_id', v_subscription.client_id);
+          v_ret_val_element := jsonb_build_object('object_id', v_object_code, 'client_id', v_subscription.client_id);
 
           if v_object is not null then
             v_ret_val_element := v_ret_val_element || jsonb_build_object('object', v_object);
@@ -1858,6 +1860,7 @@ begin
       v_object jsonb;
       v_position_object_id integer;
       v_add jsonb;
+      v_object_code text;
     begin
       for v_list in
       (
@@ -1884,6 +1887,8 @@ begin
             v_ret_val :=
               v_ret_val ||
               jsonb_build_object(
+                'object_id',
+                data.get_object_code(v_list.object_id),
                 'client_id',
                 v_list.client_id,
                 'list_changes',
@@ -1894,6 +1899,7 @@ begin
 
           if not v_list.is_visible or v_new_data != v_list.data then
             v_object = v_new_data;
+            v_object_code := data.get_object_code(v_list.object_id);
 
             if not v_list.is_visible then
               v_set_visible := array_append(v_set_visible, v_list.id);
@@ -1922,6 +1928,8 @@ begin
               v_ret_val :=
                 v_ret_val ||
                 jsonb_build_object(
+                  'object_id',
+                  v_object_code,
                   'client_id',
                   v_list.client_id,
                   'list_changes',
@@ -1932,6 +1940,8 @@ begin
               v_ret_val :=
                 v_ret_val ||
                 jsonb_build_object(
+                  'object_id',
+                  v_object_code,
                   'client_id',
                   v_list.client_id,
                   'list_changes',
@@ -1970,19 +1980,19 @@ $$
 declare
   v_diffs jsonb := data.change_object(in_object_id, in_changes, in_actor_id);
   v_diff record;
-  v_object_code text := data.get_object_code(in_object_id);
   v_notification_data jsonb;
 begin
   for v_diff in
   (
     select
+      json.get_string(value, 'object_id') as object_id,
       json.get_integer(value, 'client_id') as client_id,
       (case when value ? 'object' then value->'object' else null end) as object,
       (case when value ? 'list_changes' then value->'list_changes' else null end) as list_changes
     from jsonb_array_elements(v_diffs)
   )
   loop
-    v_notification_data := jsonb_build_object('object_id', v_object_code);
+    v_notification_data := jsonb_build_object('object_id', v_diff.object_id);
 
     if v_diff.object is not null then
       v_notification_data := v_notification_data || jsonb_build_object('object', v_diff.object);

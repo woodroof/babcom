@@ -9,7 +9,6 @@ $$
 -- Если функция вернула false, то скорее всего внешнему коду нужно сгенерировать событие ok или action
 declare
   v_actor_id integer := data.get_active_actor_id(in_client_id);
-  v_object_code text := data.get_object_code(in_object_id);
   v_subscription_exists boolean;
   v_diffs jsonb;
   v_diff record;
@@ -36,6 +35,7 @@ begin
   for v_diff in
   (
     select
+      json.get_string(value, 'object_id') as object_id,
       json.get_integer(value, 'client_id') as client_id,
       (case when value ? 'object' then value->'object' else null end) as object,
       (case when value ? 'list_changes' then value->'list_changes' else null end) as list_changes
@@ -54,7 +54,7 @@ begin
       v_request_id := null;
     end if;
 
-    v_notification_data := jsonb_build_object('object_id', v_object_code);
+    v_notification_data := jsonb_build_object('object_id', v_diff.object_id);
 
     if v_diff.object is not null then
       v_notification_data := v_notification_data || jsonb_build_object('object', v_diff.object);
