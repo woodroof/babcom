@@ -27,7 +27,7 @@ begin
   elsif in_original_content is null or in_original_content = '[]' then
     for v_code in
     (
-      select value
+      select json.get_string(value)
       from jsonb_array_elements(in_new_content)
     )
     loop

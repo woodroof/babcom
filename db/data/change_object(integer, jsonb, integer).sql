@@ -65,7 +65,7 @@ begin
           'actor_id',
           v_actor_id,
           'data',
-          data.get_object_data(in_object_id, v_actor_id, 'full', in_object_id));
+          data.get_object(in_object_id, v_actor_id, 'full', in_object_id));
     end loop;
   end;
 
@@ -201,32 +201,14 @@ begin
           continue;
         end if;
 
-        v_new_data := data.get_object_data(in_object_id, v_subscription.actor_id, 'full', in_object_id);
+        v_new_data := data.get_object(in_object_id, v_subscription.actor_id, 'full', in_object_id);
 
         v_object := null;
         v_list_changes := jsonb '{}';
 
         -- Сравниваем и при нахождении различий включаем в diff
         if v_new_data != v_subscription.data then
-          v_attributes := json.get_object(v_new_data, 'attributes');
-          v_actions := json.get_object_opt(v_new_data, 'actions', null);
-
-          v_object_template := data.get_attribute_value(in_object_id, 'template', v_subscription.actor_id);
-          if v_object_template is null then
-            v_object_template := v_default_template;
-          end if;
-          v_object_template := data.filter_template(v_object_template, v_attributes, v_actions);
-
-          v_object :=
-            jsonb_build_object(
-              'id',
-              v_object_code,
-              'attributes',
-              v_attributes,
-              'actions',
-              coalesce(v_actions, jsonb '{}'),
-              'template',
-              v_object_template);
+          v_object := v_new_data;
         end if;
 
         if v_list_changed then
@@ -239,8 +221,8 @@ begin
           begin
             v_content_diff :=
               data.calc_content_diff(
-                json.get_array_opt(json.get_object(v_subscription.data, 'attributes'), 'content', null),
-                json.get_array_opt(json.get_object(v_new_data, 'attributes'), 'content', null));
+                json.get_array_opt(json.get_object_opt(json.get_object(v_subscription.data, 'attributes'), 'content', jsonb '{}'), 'value', null),
+                json.get_array_opt(json.get_object_opt(json.get_object(v_new_data, 'attributes'), 'content', jsonb '{}'), 'value', null));
 
             v_add := json.get_array(v_content_diff, 'add');
             v_remove := json.get_array(v_content_diff, 'remove');
@@ -285,7 +267,7 @@ begin
                   select jsonb_object_agg(o.code, jsonb_build_object('is_visible', cso.is_visible, 'index', cso.index))
                   into v_processed_objects
                   from data.client_subscription_objects cso
-                  join object o
+                  join data.objects o
                     on o.id = cso.object_id
                   where cso.client_subscription_id = v_subscription.id;
 
@@ -341,7 +323,7 @@ begin
                         client_subscription_id = v_subscription.id and
                         index >= v_index;
                     else
-                      select max(index) + 1
+                      select coalesce(max(index) + 1, 1)
                       into v_index
                       from data.client_subscription_objects
                       where
@@ -349,7 +331,7 @@ begin
                     end if;
 
                     insert into data.client_subscription_objects(client_subscription_id, object_id, index, is_visible)
-                    values(v_subscription.id, data.get_object_id(v_add_element.object_code), v_index);
+                    values(v_subscription.id, data.get_object_id(v_add_element.object_code), v_index, v_is_visible);
 
                     if v_is_visible then
                       v_add_list_change :=
@@ -438,25 +420,7 @@ begin
           v_new_data := data.get_object(in_object_id, v_list.actor_id, 'mini', v_list.object_id);
 
           if not v_list.is_visible or v_new_data != v_list.data then
-            v_attributes := json.get_object(v_new_data, 'attributes');
-            v_actions := json.get_object_opt(v_new_data, 'actions', null);
-
-            v_object_template := data.get_attribute_value(in_object_id, 'template', v_list.actor_id);
-            if v_object_template is null then
-              v_object_template := v_default_template;
-            end if;
-            v_object_template := data.filter_template(v_object_template, v_attributes, v_actions);
-
-            v_object :=
-              jsonb_build_object(
-                'id',
-                v_object_code,
-                'attributes',
-                v_attributes,
-                'actions',
-                coalesce(v_actions, jsonb '{}'),
-                'template',
-                v_object_template);
+            v_object = v_new_data;
 
             if not v_list.is_visible then
               v_set_visible := array_append(v_set_visible, v_list.id);
