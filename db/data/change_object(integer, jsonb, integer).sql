@@ -238,7 +238,7 @@ begin
             v_add_list_changes jsonb := jsonb '[]';
           begin
             v_content_diff :=
-              calc_content_diff(
+              data.calc_content_diff(
                 json.get_array_opt(json.get_object(v_subscription.data, 'attributes'), 'content', null),
                 json.get_array_opt(json.get_object(v_new_data, 'attributes'), 'content', null));
 
