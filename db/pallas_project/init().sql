@@ -102,7 +102,7 @@ begin
   values ('person_un_rating', 'Рейтинг в ООН', 'normal', 'full', null, true)
   returning id into v_person_un_rating_attribute_id;
 
-  -- Создадим актора по умолчанию, который является первым тестом
+  -- Создадим актора по умолчанию
   insert into data.objects(code) values('anonymous') returning id into v_test_id;
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_test_id, v_title_attribute_id, jsonb '"Unknown"'),

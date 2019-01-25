@@ -15,7 +15,7 @@ declare
   v_mini_card_function_attribute_id integer := data.get_attribute_id('mini_card_function');
   v_list_element_function_attribute_id integer := data.get_attribute_id('list_element_function');
   v_temporary_object_attribute_id integer := data.get_attribute_id('temporary_object');
-
+  v_content_attribute_id integer := data.get_attribute_id('content');
 
   v_debatles_id integer;
   v_debatle_list_class_id integer;
@@ -83,47 +83,54 @@ begin
   (v_debatle_list_class_id, v_type_attribute_id, jsonb '"debatle_list"'),
   (v_debatle_list_class_id, v_template_attribute_id, jsonb_build_object('groups', array[]::text[]));
 
-
   -- Списки дебатлов
   insert into data.objects(code, class_id) values ('debatles_all', v_debatle_list_class_id) returning id into v_debatles_all_id;
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_debatles_all_id, v_title_attribute_id, jsonb '"Все дебатлы"', null),
-  (v_debatles_all_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id);
+  (v_debatles_all_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
+  (v_debatles_all_id, v_content_attribute_id, jsonb '[]', null);
 
   insert into data.objects(code, class_id) values ('debatles_draft', v_debatle_list_class_id) returning id into v_debatles_draft_id;
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_debatles_draft_id, v_title_attribute_id, jsonb '"Дебатлы черновики"', null),
-  (v_debatles_draft_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id);
+  (v_debatles_draft_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
+  (v_debatles_draft_id, v_content_attribute_id, jsonb '[]', null);
 
   insert into data.objects(code, class_id) values ('debatles_new', v_debatle_list_class_id) returning id into v_debatles_new_id;
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_debatles_new_id, v_title_attribute_id, jsonb '"Неподтверждённые дебатлы"', null),
-  (v_debatles_new_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id);
+  (v_debatles_new_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
+  (v_debatles_new_id, v_content_attribute_id, jsonb '[]', null);
 
   insert into data.objects(code, class_id) values ('debatles_my', v_debatle_list_class_id) returning id into v_debatles_my_id;
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_debatles_my_id, v_title_attribute_id, jsonb '"Мои дебатлы"', null),
-  (v_debatles_my_id, v_is_visible_attribute_id, jsonb 'true', null);
+  (v_debatles_my_id, v_is_visible_attribute_id, jsonb 'true', null),
+  (v_debatles_my_id, v_content_attribute_id, jsonb '[]', null);
 
   insert into data.objects(code, class_id) values ('debatles_future', v_debatle_list_class_id) returning id into v_debatles_future_id;
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_debatles_future_id, v_title_attribute_id, jsonb '"Будущие дебатлы"', null),
-  (v_debatles_future_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id);
+  (v_debatles_future_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
+  (v_debatles_future_id, v_content_attribute_id, jsonb '[]', null);
 
   insert into data.objects(code, class_id) values ('debatles_current', v_debatle_list_class_id) returning id into v_debatles_current_id;
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_debatles_current_id, v_title_attribute_id, jsonb '"Текущие дебатлы"', null),
-  (v_debatles_current_id, v_is_visible_attribute_id, jsonb 'true', null);
+  (v_debatles_current_id, v_is_visible_attribute_id, jsonb 'true', null),
+  (v_debatles_current_id, v_content_attribute_id, jsonb '[]', null);
 
   insert into data.objects(code, class_id) values ('debatles_closed', v_debatle_list_class_id) returning id into v_debatles_closed_id;
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_debatles_closed_id, v_title_attribute_id, jsonb '"Завершенные дебатлы"', null),
-  (v_debatles_closed_id, v_is_visible_attribute_id, jsonb 'true', null);
+  (v_debatles_closed_id, v_is_visible_attribute_id, jsonb 'true', null),
+  (v_debatles_closed_id, v_content_attribute_id, jsonb '[]', null);
 
   insert into data.objects(code, class_id) values ('debatles_deleted', v_debatle_list_class_id) returning id into v_debatles_deleted_id;
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_debatles_deleted_id, v_title_attribute_id, jsonb '"Удалённые дебатлы"', null),
-  (v_debatles_deleted_id, v_is_visible_attribute_id, jsonb 'true', null);
+  (v_debatles_deleted_id, v_is_visible_attribute_id, jsonb 'true', null),
+  (v_debatles_deleted_id, v_content_attribute_id, jsonb '[]', null);
 
   -- Объект-класс для дебатла
   insert into data.objects(code, type) values('debatle', 'class') returning id into v_debatle_class_id;
@@ -198,7 +205,6 @@ begin
     ('system_debatle_temp_bonus_list_debatle_id', null, 'Идентификатор дебатла для списка редактирования бонусов и штрафов', 'system', null, null, false),
     ('debatle_temp_bonus_list_bonuses', 'Уже имеющиеся бонусы и штрафы', 'Уже имеющиеся бонусы и штрафы', 'normal', 'full', 'pallas_project.vd_debatle_bonuses', false);
 
-
     -- Объект-класс для временных списков персон для редактирования бонусов и штрафов
     insert into data.objects(code, type) values('debatle_temp_bonus_list', 'class') returning id into v_debatle_temp_bonus_list_class_id;
 
@@ -266,7 +272,6 @@ begin
 
   end;
 
-
   insert into data.actions(code, function) values
   ('create_debatle_step1', 'pallas_project.act_create_debatle_step1'),
   ('debatle_change_person', 'pallas_project.act_debatle_change_person'),
@@ -274,7 +279,6 @@ begin
   ('debatle_change_status', 'pallas_project.act_debatle_change_status'),
   ('debatle_vote', 'pallas_project.act_debatle_vote'),
   ('debatle_change_bonuses','pallas_project.act_debatle_change_bonuses');
-
 
 end;
 $$
