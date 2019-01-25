@@ -26,6 +26,12 @@ declare
   v_system_debatle_person1_votes integer;
   v_system_debatle_person2_votes integer;
 
+  v_debatle_person1_bonuses_json jsonb;
+  v_debatle_person2_bonuses_json jsonb;
+
+  v_debatle_person1_bonuses integer;
+  v_debatle_person2_bonuses integer;
+
   v_new_title jsonb;
   v_new_person1 jsonb;
   v_new_person2 jsonb;
@@ -96,10 +102,23 @@ begin
     v_system_debatle_person1_votes := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person1_votes'), 0);
     v_system_debatle_person2_votes := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person2_votes'), 0);
 
+    v_debatle_person1_bonuses_json := data.get_attribute_value(in_object_id, 'debatle_person1_bonuses');
+    v_debatle_person2_bonuses_json := data.get_attribute_value(in_object_id, 'debatle_person2_bonuses');
+
+    select coalesce(sum(x.votes), 0) into v_debatle_person1_bonuses from jsonb_to_recordset(v_debatle_person1_bonuses_json) as x(code text, name text, votes int);
+    select coalesce(sum(x.votes), 0) into v_debatle_person2_bonuses from jsonb_to_recordset(v_debatle_person2_bonuses_json) as x(code text, name text, votes int);
 
 
-    v_new_debatle_person1_votes := to_jsonb(format('Количество голосов за %s: %s', json.get_string_opt(v_new_person1, 'зачинщика'), v_system_debatle_person1_votes));
-    v_new_debatle_person2_votes := to_jsonb(format('Количество голосов за %s: %s', json.get_string_opt(v_new_person2, 'оппонента'), v_system_debatle_person2_votes));
+    v_new_debatle_person1_votes := to_jsonb(format('Количество голосов за %s: %s + %s (от судьи) = %s',
+                                                    json.get_string_opt(v_new_person1, 'зачинщика'), 
+                                                    v_system_debatle_person1_votes, 
+                                                    v_debatle_person1_bonuses, 
+                                                    v_system_debatle_person1_votes + v_debatle_person1_bonuses));
+    v_new_debatle_person2_votes := to_jsonb(format('Количество голосов за %s: %s + %s (от судьи) = %s', 
+                                                    json.get_string_opt(v_new_person2, 'оппонента'), 
+                                                    v_system_debatle_person2_votes, 
+                                                    v_debatle_person2_bonuses,
+                                                    v_system_debatle_person2_votes + v_debatle_person2_bonuses));
 
     if coalesce(data.get_raw_attribute_value(in_object_id, v_debatle_person1_votes_attribute_id, in_actor_id), jsonb '"~~~"') <> coalesce(v_new_debatle_person1_votes, jsonb '"~~~"') then
       perform data.set_attribute_value(in_object_id, v_debatle_person1_votes_attribute_id, v_new_debatle_person1_votes, in_actor_id, in_actor_id);

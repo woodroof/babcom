@@ -142,7 +142,7 @@ begin
   (v_debatle_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatle"'),
   (v_debatle_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
                                                       '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s", "%s", "%s"], 
-                                                                      "actions": ["%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"]}',
+                                                                      "actions": ["%s", "%s", "%s", "%s", "%s"]}',
                                                       'debatle_group1',
                                                       'debatle_theme',
                                                       'debatle_status',
@@ -154,6 +154,10 @@ begin
                                                       'debatle_change_opponent',
                                                       'debatle_change_judge',
                                                       'debatle_change_theme',
+                                                      'debatle_change_subtitle')::jsonb,
+                                                      format(
+                                                      '{"code": "%s", "actions": ["%s", "%s", "%s", "%s", "%s", "%s"]}',
+                                                      'debatle_group2',
                                                       'debatle_change_status_new',
                                                       'debatle_change_status_future',
                                                       'debatle_change_status_vote',
@@ -163,7 +167,7 @@ begin
                                                       format(
                                                       '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s"], 
                                                                       "actions": ["%s", "%s"]}',
-                                                      'debatle_group2',
+                                                      'debatle_group3',
                                                       'debatle_person1_votes',
                                                       'debatle_person2_votes',
                                                       'debatle_vote_price',
@@ -173,7 +177,7 @@ begin
                                                       format(
                                                       '{"code": "%s", "attributes": ["%s", "%s"], 
                                                                       "actions": ["%s", "%s"]}',
-                                                      'debatle_group3',
+                                                      'debatle_group4',
                                                       'debatle_person1_bonuses',
                                                       'debatle_person2_bonuses',
                                                       'debatle_change_bonuses1',
@@ -281,7 +285,8 @@ begin
   ('debatle_change_status', 'pallas_project.act_debatle_change_status'),
   ('debatle_vote', 'pallas_project.act_debatle_vote'),
   ('debatle_change_bonuses','pallas_project.act_debatle_change_bonuses'),
-  ('debatle_change_other_bonus','pallas_project.act_debatle_change_other_bonus');
+  ('debatle_change_other_bonus','pallas_project.act_debatle_change_other_bonus'),
+  ('debatle_change_subtitle','pallas_project.act_debatle_change_subtitle');
 
 end;
 $$

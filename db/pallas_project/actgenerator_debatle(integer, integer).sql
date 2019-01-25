@@ -14,6 +14,7 @@ declare
   v_debatle_code text;
   v_debatle_status text;
   v_system_debatle_theme_attribute_id integer := data.get_attribute_id('system_debatle_theme');
+  v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
 begin
   assert in_actor_id is not null;
 
@@ -51,6 +52,14 @@ begin
                 '"params": {"debatle_code": "%s"}, "user_params": [{"code": "title", "description": "Введите тему дебатла", "type": "string", "default_value": "%s" }]}',
                 v_debatle_code,
                 json.get_string_opt(data.get_raw_attribute_value(in_object_id, v_system_debatle_theme_attribute_id, null),''));
+  end if;
+
+  if v_is_master then
+    v_actions_list := v_actions_list || 
+        format(', "debatle_change_subtitle": {"code": "debatle_change_subtitle", "name": "Изменить место и время", "disabled": false, '||
+                '"params": {"debatle_code": "%s"}, "user_params": [{"code": "subtitle", "description": "Введите место и время текстом", "type": "string", "default_value": "%s" }]}',
+                v_debatle_code,
+                json.get_string_opt(data.get_raw_attribute_value(in_object_id, v_subtitle_attribute_id, null),''));
   end if;
 
   if (v_is_master or in_actor_id = v_person1_id) and v_debatle_status in ('draft') then

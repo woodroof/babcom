@@ -7786,6 +7786,38 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_debatle_change_subtitle(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_debatle_change_subtitle(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_subtitle text := json.get_string_opt(in_user_params, 'subtitle','');
+  v_debatle_code text := json.get_string(in_params, 'debatle_code');
+  v_debatle_id  integer := data.get_object_id(v_debatle_code);
+  v_actor_id  integer := data.get_active_actor_id(in_client_id);
+
+  v_message_sent boolean := false;
+  v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
+begin
+  assert in_request_id is not null;
+
+  perform * from data.objects o where o.id = v_debatle_id for update;
+  if coalesce(data.get_raw_attribute_value(v_debatle_id, v_subtitle_attribute_id, null), jsonb '"~~~"') <> to_jsonb(v_subtitle) then
+    v_message_sent := data.change_current_object(in_client_id, 
+                                               in_request_id,
+                                               v_debatle_id, 
+                                               jsonb_build_array(data.attribute_change2jsonb(v_subtitle_attribute_id, null, to_jsonb(v_subtitle))));
+  end if;
+  if not v_message_sent then
+   perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_debatle_change_theme(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_debatle_change_theme(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -8080,6 +8112,7 @@ declare
   v_debatle_code text;
   v_debatle_status text;
   v_system_debatle_theme_attribute_id integer := data.get_attribute_id('system_debatle_theme');
+  v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
 begin
   assert in_actor_id is not null;
 
@@ -8117,6 +8150,14 @@ begin
                 '"params": {"debatle_code": "%s"}, "user_params": [{"code": "title", "description": "Введите тему дебатла", "type": "string", "default_value": "%s" }]}',
                 v_debatle_code,
                 json.get_string_opt(data.get_raw_attribute_value(in_object_id, v_system_debatle_theme_attribute_id, null),''));
+  end if;
+
+  if v_is_master then
+    v_actions_list := v_actions_list || 
+        format(', "debatle_change_subtitle": {"code": "debatle_change_subtitle", "name": "Изменить место и время", "disabled": false, '||
+                '"params": {"debatle_code": "%s"}, "user_params": [{"code": "subtitle", "description": "Введите место и время текстом", "type": "string", "default_value": "%s" }]}',
+                v_debatle_code,
+                json.get_string_opt(data.get_raw_attribute_value(in_object_id, v_subtitle_attribute_id, null),''));
   end if;
 
   if (v_is_master or in_actor_id = v_person1_id) and v_debatle_status in ('draft') then
@@ -8343,6 +8384,12 @@ declare
   v_system_debatle_person1_votes integer;
   v_system_debatle_person2_votes integer;
 
+  v_debatle_person1_bonuses_json jsonb;
+  v_debatle_person2_bonuses_json jsonb;
+
+  v_debatle_person1_bonuses integer;
+  v_debatle_person2_bonuses integer;
+
   v_new_title jsonb;
   v_new_person1 jsonb;
   v_new_person2 jsonb;
@@ -8413,10 +8460,23 @@ begin
     v_system_debatle_person1_votes := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person1_votes'), 0);
     v_system_debatle_person2_votes := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person2_votes'), 0);
 
+    v_debatle_person1_bonuses_json := data.get_attribute_value(in_object_id, 'debatle_person1_bonuses');
+    v_debatle_person2_bonuses_json := data.get_attribute_value(in_object_id, 'debatle_person2_bonuses');
+
+    select coalesce(sum(x.votes), 0) into v_debatle_person1_bonuses from jsonb_to_recordset(v_debatle_person1_bonuses_json) as x(code text, name text, votes int);
+    select coalesce(sum(x.votes), 0) into v_debatle_person2_bonuses from jsonb_to_recordset(v_debatle_person2_bonuses_json) as x(code text, name text, votes int);
 
 
-    v_new_debatle_person1_votes := to_jsonb(format('Количество голосов за %s: %s', json.get_string_opt(v_new_person1, 'зачинщика'), v_system_debatle_person1_votes));
-    v_new_debatle_person2_votes := to_jsonb(format('Количество голосов за %s: %s', json.get_string_opt(v_new_person2, 'оппонента'), v_system_debatle_person2_votes));
+    v_new_debatle_person1_votes := to_jsonb(format('Количество голосов за %s: %s + %s (от судьи) = %s',
+                                                    json.get_string_opt(v_new_person1, 'зачинщика'), 
+                                                    v_system_debatle_person1_votes, 
+                                                    v_debatle_person1_bonuses, 
+                                                    v_system_debatle_person1_votes + v_debatle_person1_bonuses));
+    v_new_debatle_person2_votes := to_jsonb(format('Количество голосов за %s: %s + %s (от судьи) = %s', 
+                                                    json.get_string_opt(v_new_person2, 'оппонента'), 
+                                                    v_system_debatle_person2_votes, 
+                                                    v_debatle_person2_bonuses,
+                                                    v_system_debatle_person2_votes + v_debatle_person2_bonuses));
 
     if coalesce(data.get_raw_attribute_value(in_object_id, v_debatle_person1_votes_attribute_id, in_actor_id), jsonb '"~~~"') <> coalesce(v_new_debatle_person1_votes, jsonb '"~~~"') then
       perform data.set_attribute_value(in_object_id, v_debatle_person1_votes_attribute_id, v_new_debatle_person1_votes, in_actor_id, in_actor_id);
@@ -8983,7 +9043,7 @@ begin
   (v_debatle_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatle"'),
   (v_debatle_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
                                                       '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s", "%s", "%s"], 
-                                                                      "actions": ["%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"]}',
+                                                                      "actions": ["%s", "%s", "%s", "%s", "%s"]}',
                                                       'debatle_group1',
                                                       'debatle_theme',
                                                       'debatle_status',
@@ -8995,6 +9055,10 @@ begin
                                                       'debatle_change_opponent',
                                                       'debatle_change_judge',
                                                       'debatle_change_theme',
+                                                      'debatle_change_subtitle')::jsonb,
+                                                      format(
+                                                      '{"code": "%s", "actions": ["%s", "%s", "%s", "%s", "%s", "%s"]}',
+                                                      'debatle_group2',
                                                       'debatle_change_status_new',
                                                       'debatle_change_status_future',
                                                       'debatle_change_status_vote',
@@ -9004,7 +9068,7 @@ begin
                                                       format(
                                                       '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s"], 
                                                                       "actions": ["%s", "%s"]}',
-                                                      'debatle_group2',
+                                                      'debatle_group3',
                                                       'debatle_person1_votes',
                                                       'debatle_person2_votes',
                                                       'debatle_vote_price',
@@ -9014,7 +9078,7 @@ begin
                                                       format(
                                                       '{"code": "%s", "attributes": ["%s", "%s"], 
                                                                       "actions": ["%s", "%s"]}',
-                                                      'debatle_group3',
+                                                      'debatle_group4',
                                                       'debatle_person1_bonuses',
                                                       'debatle_person2_bonuses',
                                                       'debatle_change_bonuses1',
@@ -9122,7 +9186,8 @@ begin
   ('debatle_change_status', 'pallas_project.act_debatle_change_status'),
   ('debatle_vote', 'pallas_project.act_debatle_vote'),
   ('debatle_change_bonuses','pallas_project.act_debatle_change_bonuses'),
-  ('debatle_change_other_bonus','pallas_project.act_debatle_change_other_bonus');
+  ('debatle_change_other_bonus','pallas_project.act_debatle_change_other_bonus'),
+  ('debatle_change_subtitle','pallas_project.act_debatle_change_subtitle');
 
 end;
 $$
