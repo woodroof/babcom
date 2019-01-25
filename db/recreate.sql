@@ -1715,7 +1715,9 @@ begin
                   and cso.client_subscription_id = v_subscription.id
                   and cso.is_visible is true;
 
-                v_list_changes := v_list_changes || jsonb_build_object('remove', v_remove_list_changes);
+                if v_remove_list_changes is not null then
+                  v_list_changes := v_list_changes || jsonb_build_object('remove', v_remove_list_changes);
+                end if;
 
                 -- А вот удаляем реально все
                 delete from data.client_subscription_objects
@@ -1860,7 +1862,7 @@ begin
       v_object jsonb;
       v_position_object_id integer;
       v_add jsonb;
-      v_object_code text;
+      v_subscription_object_code text;
     begin
       for v_list in
       (
@@ -1899,7 +1901,7 @@ begin
 
           if not v_list.is_visible or v_new_data != v_list.data then
             v_object = v_new_data;
-            v_object_code := data.get_object_code(v_list.object_id);
+            v_subscription_object_code := data.get_object_code(v_list.object_id);
 
             if not v_list.is_visible then
               v_set_visible := array_append(v_set_visible, v_list.id);
@@ -1929,7 +1931,7 @@ begin
                 v_ret_val ||
                 jsonb_build_object(
                   'object_id',
-                  v_object_code,
+                  v_subscription_object_code,
                   'client_id',
                   v_list.client_id,
                   'list_changes',
@@ -1941,7 +1943,7 @@ begin
                 v_ret_val ||
                 jsonb_build_object(
                   'object_id',
-                  v_object_code,
+                  v_subscription_object_code,
                   'client_id',
                   v_list.client_id,
                   'list_changes',
