@@ -66,7 +66,7 @@ begin
               -- Удаляем
               while v_original_idx != v_original_test_idx loop
                 v_remove_indexes := array_prepend(v_original_idx, v_remove_indexes);
-                v_remove := v_remove || in_original_content->v_original_idx;
+                v_remove := v_remove || (in_original_content->v_original_idx);
                 v_original_idx := v_original_idx + 1;
               end loop;
 
@@ -80,7 +80,7 @@ begin
             v_new_idx := v_new_idx + 1;
           else
             v_remove_indexes := array_prepend(v_original_idx, v_remove_indexes);
-            v_remove := v_remove || in_original_content->v_original_idx;
+            v_remove := v_remove || (in_original_content->v_original_idx);
             v_original_idx := v_original_idx + 1;
           end if;
         end if;
@@ -88,7 +88,7 @@ begin
 
       while v_original_idx != v_original_size loop
         v_remove_indexes := array_prepend(v_original_idx, v_remove_indexes);
-        v_remove := v_remove || in_original_content->v_original_idx;
+        v_remove := v_remove || (in_original_content->v_original_idx);
         v_original_idx := v_original_idx + 1;
       end loop;
 

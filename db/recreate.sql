@@ -1300,7 +1300,7 @@ begin
               -- Удаляем
               while v_original_idx != v_original_test_idx loop
                 v_remove_indexes := array_prepend(v_original_idx, v_remove_indexes);
-                v_remove := v_remove || in_original_content->v_original_idx;
+                v_remove := v_remove || (in_original_content->v_original_idx);
                 v_original_idx := v_original_idx + 1;
               end loop;
 
@@ -1314,7 +1314,7 @@ begin
             v_new_idx := v_new_idx + 1;
           else
             v_remove_indexes := array_prepend(v_original_idx, v_remove_indexes);
-            v_remove := v_remove || in_original_content->v_original_idx;
+            v_remove := v_remove || (in_original_content->v_original_idx);
             v_original_idx := v_original_idx + 1;
           end if;
         end if;
@@ -1322,7 +1322,7 @@ begin
 
       while v_original_idx != v_original_size loop
         v_remove_indexes := array_prepend(v_original_idx, v_remove_indexes);
-        v_remove := v_remove || in_original_content->v_original_idx;
+        v_remove := v_remove || (in_original_content->v_original_idx);
         v_original_idx := v_original_idx + 1;
       end loop;
 
@@ -7416,6 +7416,76 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_debatle_change_other_bonus(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_debatle_change_other_bonus(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_debatle_change_code text := json.get_string(in_params, 'debatle_change_code');
+  v_judged_person text := json.get_string_opt(in_params, 'judged_person', '~~~');
+  v_bonus_or_fine text := json.get_string_opt(in_params, 'bonus_or_fine', '~~~');
+
+  v_bonus_reason text := json.get_string_opt(in_user_params, 'bonus_reason', '~~~');
+  v_votes integer := json.get_integer_opt(in_user_params, 'votes', 1);
+
+  v_debatle_change_id integer := data.get_object_id(v_debatle_change_code);
+  v_debatle_id integer := json.get_integer(data.get_attribute_value(v_debatle_change_id,'system_debatle_temp_bonus_list_debatle_id'));
+  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+
+
+  v_debatle_person_bonuses jsonb;
+
+  v_changes jsonb[];
+  v_message_sent boolean;
+begin
+  assert in_request_id is not null;
+  assert v_bonus_or_fine in ('bonus', 'fine');
+
+  if v_bonus_or_fine = 'fine' then
+    v_votes := (@ v_votes) *(-1);
+  end if;
+
+  if v_judged_person not in ('instigator', 'opponent') then
+    perform api_utils.create_show_message_action_notification(
+      in_client_id,
+      in_request_id,
+      'Ошибка',
+      'Непонятно, какой из персон начислять бонусы и штрафы. Наверное что-то пошло не так. Обратитесь к мастеру.');
+    return;
+  end if;
+
+  perform * from data.objects where id = v_debatle_id for update;
+
+  if v_judged_person = 'instigator' then
+    v_debatle_person_bonuses := coalesce(data.get_attribute_value(v_debatle_id, 'debatle_person1_bonuses'), jsonb '[]');
+    v_debatle_person_bonuses := jsonb_insert(v_debatle_person_bonuses, '{1}', jsonb_build_object('code', 'other', 'name', v_bonus_reason, 'votes', v_votes));
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_person1_bonuses', null, v_debatle_person_bonuses));
+  elsif v_judged_person = 'opponent' then
+    v_debatle_person_bonuses := coalesce(data.get_attribute_value(v_debatle_id, 'debatle_person2_bonuses'), jsonb '[]');
+    v_debatle_person_bonuses := jsonb_insert(v_debatle_person_bonuses, '{1}', jsonb_build_object('code', 'other', 'name', v_bonus_reason, 'votes', v_votes));
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_person2_bonuses', null, v_debatle_person_bonuses));
+  end if;
+
+  perform data.change_object_and_notify(v_debatle_id, to_jsonb(v_changes), v_actor_id);
+
+  perform * from data.objects where id = v_debatle_change_id for update;
+
+  v_changes := array[]::jsonb[];
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_temp_bonus_list_bonuses', null, v_debatle_person_bonuses));
+  v_message_sent := data.change_current_object(in_client_id,
+                                               in_request_id,
+                                               v_debatle_change_id, 
+                                               to_jsonb(v_changes));
+  if not v_message_sent then
+   perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_debatle_change_person(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_debatle_change_person(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -8130,6 +8200,44 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.actgenerator_debatle_temp_bonus_list(integer, integer);
+
+create or replace function pallas_project.actgenerator_debatle_temp_bonus_list(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_actions_list text := '';
+  v_debatle_change_code text := data.get_object_code(in_object_id);
+  v_judged_person text := json.get_string(data.get_attribute_value(in_object_id, 'debatle_temp_bonus_list_person'));
+begin
+  assert in_actor_id is not null;
+
+  v_actions_list := v_actions_list || 
+                ', "debatle_change_bonus_back": {"code": "go_back", "name": "Вернуться к дебатлу", "disabled": false, '||
+                '"params": {}}';
+  v_actions_list := v_actions_list || 
+                ', "debatle_change_other_bonus": {"code": "debatle_change_other_bonus", "name": "Добавить произвольный бонус", "disabled": false, '||
+                 format('"params": {"debatle_change_code": "%s", "judged_person": "%s", "bonus_or_fine": "bonus"},'||
+                        ' "user_params": [{"code": "bonus_reason", "description": "Описание бонуса", "type": "string", "restrictions":{"min_length": 5}},{"code": "votes", "description": "Количество прибавляемых голосов", "type": "integer", "default_value": %s }]}',
+                        v_debatle_change_code,
+                        v_judged_person,
+                        1);
+  v_actions_list := v_actions_list || 
+                ', "debatle_change_other_fine": {"code": "debatle_change_other_bonus", "name": "Добавить произвольный штраф", "disabled": false, '||
+                format('"params": {"debatle_change_code": "%s", "judged_person": "%s", "bonus_or_fine": "fine"},'||
+                ' "user_params": [{"code": "bonus_reason", "description": "Описание штрафа", "type": "string", "restrictions":{"min_length": 5}},{"code": "votes", "description": "Количество вычитаемых голосов", "type": "integer", "default_value": %s }]}',
+                v_debatle_change_code,
+                v_judged_person,
+                1);
+
+
+  return jsonb ('{'||trim(v_actions_list,',')||'}');
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.actgenerator_debatle_temp_person_list(integer, integer);
 
 create or replace function pallas_project.actgenerator_debatle_temp_person_list(in_object_id integer, in_actor_id integer)
@@ -8304,6 +8412,8 @@ begin
 
     v_system_debatle_person1_votes := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person1_votes'), 0);
     v_system_debatle_person2_votes := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person2_votes'), 0);
+
+
 
     v_new_debatle_person1_votes := to_jsonb(format('Количество голосов за %s: %s', json.get_string_opt(v_new_person1, 'зачинщика'), v_system_debatle_person1_votes));
     v_new_debatle_person2_votes := to_jsonb(format('Количество голосов за %s: %s', json.get_string_opt(v_new_person2, 'оппонента'), v_system_debatle_person2_votes));
@@ -8941,17 +9051,19 @@ begin
 
     insert into data.attribute_values(object_id, attribute_id, value) values
     (v_debatle_temp_bonus_list_class_id, v_type_attribute_id, jsonb '"debatle_temp_bonus_list"'),
-  --  (v_debatle_temp_bonus_list_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatle_temp_bonus_list"'),
+    (v_debatle_temp_bonus_list_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatle_temp_bonus_list"'),
     (v_debatle_temp_bonus_list_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_debatle_temp_bonus_list"'),
     (v_debatle_temp_bonus_list_class_id, v_temporary_object_attribute_id, jsonb 'true'),
     (v_debatle_temp_bonus_list_class_id, v_template_attribute_id, jsonb_build_object('groups', format(
-                                                        '[{"code": "%s", "actions": ["%s"]}, {"code": "%s", "attributes": ["%s", "%s"], "actions": ["%s"]}]',
+                                                        '[{"code": "%s", "actions": ["%s"]}, {"code": "%s", "attributes": ["%s", "%s"], "actions": ["%s", "%s"]}]',
                                                         'group1',
                                                         'debatle_change_bonus_back',
                                                         'group2',
                                                         'debatle_temp_bonus_list_bonuses',
                                                         'debatle_temp_bonus_list_person',
-                                                        'debatle_change_bonus_others')::jsonb));
+                                                        'debatle_change_other_bonus',
+                                                        'debatle_change_other_fine')::jsonb));
+
     -- Объекты для списка изменений бонусов и штрафов
     -- Класс
     insert into data.objects(code, type) values('debatle_bonus', 'class') returning id into v_debatle_bonus_class_id;
@@ -9009,7 +9121,8 @@ begin
   ('debatle_change_theme', 'pallas_project.act_debatle_change_theme'),
   ('debatle_change_status', 'pallas_project.act_debatle_change_status'),
   ('debatle_vote', 'pallas_project.act_debatle_vote'),
-  ('debatle_change_bonuses','pallas_project.act_debatle_change_bonuses');
+  ('debatle_change_bonuses','pallas_project.act_debatle_change_bonuses'),
+  ('debatle_change_other_bonus','pallas_project.act_debatle_change_other_bonus');
 
 end;
 $$
@@ -9058,7 +9171,10 @@ declare
   v_bonus_name text;
   v_bonus_votes integer;
 
+  v_content text[];
+
   v_changes jsonb[];
+  v_message_sent boolean;
 begin
   assert in_request_id is not null;
   assert list_object_id is not null;
@@ -9090,11 +9206,22 @@ begin
 
   perform data.change_object_and_notify(v_debatle_id, to_jsonb(v_changes), v_actor_id);
 
-  perform api_utils.create_notification(
-    in_client_id,
-    in_request_id,
-    'action',
-    '{"action": "go_back", "action_data": {}}'::jsonb);
+  perform * from data.objects where id = object_id for update;
+
+  v_content := json.get_string_array_opt(data.get_attribute_value(object_id, 'content', v_actor_id), array[]::text[]);
+  v_content := array_remove(v_content, v_bonus_code);
+
+  v_changes := array[]::jsonb[];
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_temp_bonus_list_bonuses', null, v_debatle_person_bonuses));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('content', null, to_jsonb(v_content)));
+  v_message_sent := data.change_current_object(in_client_id,
+                                               in_request_id,
+                                               object_id, 
+                                               to_jsonb(v_changes));
+  if not v_message_sent then
+   perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+  end if;
+
 end;
 $$
 language plpgsql;
@@ -9262,7 +9389,7 @@ begin
       v_text_value := v_text_value || v_bonuses.votes || ' голос за ' || v_bonuses.name || '
 ';
     else
-      v_text_value := v_text_value || v_bonuses.votes || ' голос за ' || v_bonuses.name || '
+      v_text_value := v_text_value || v_bonuses.votes || ' голосов за ' || v_bonuses.name || '
 ';
     end if;
   end loop;

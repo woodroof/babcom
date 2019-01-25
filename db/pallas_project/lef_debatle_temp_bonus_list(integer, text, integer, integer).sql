@@ -17,7 +17,10 @@ declare
   v_bonus_name text;
   v_bonus_votes integer;
 
+  v_content text[];
+
   v_changes jsonb[];
+  v_message_sent boolean;
 begin
   assert in_request_id is not null;
   assert list_object_id is not null;
@@ -49,11 +52,22 @@ begin
 
   perform data.change_object_and_notify(v_debatle_id, to_jsonb(v_changes), v_actor_id);
 
-  perform api_utils.create_notification(
-    in_client_id,
-    in_request_id,
-    'action',
-    '{"action": "go_back", "action_data": {}}'::jsonb);
+  perform * from data.objects where id = object_id for update;
+
+  v_content := json.get_string_array_opt(data.get_attribute_value(object_id, 'content', v_actor_id), array[]::text[]);
+  v_content := array_remove(v_content, v_bonus_code);
+
+  v_changes := array[]::jsonb[];
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_temp_bonus_list_bonuses', null, v_debatle_person_bonuses));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('content', null, to_jsonb(v_content)));
+  v_message_sent := data.change_current_object(in_client_id,
+                                               in_request_id,
+                                               object_id, 
+                                               to_jsonb(v_changes));
+  if not v_message_sent then
+   perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+  end if;
+
 end;
 $$
 language plpgsql;

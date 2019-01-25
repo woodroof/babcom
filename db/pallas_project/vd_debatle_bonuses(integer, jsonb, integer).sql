@@ -15,7 +15,7 @@ begin
       v_text_value := v_text_value || v_bonuses.votes || ' голос за ' || v_bonuses.name || '
 ';
     else
-      v_text_value := v_text_value || v_bonuses.votes || ' голос за ' || v_bonuses.name || '
+      v_text_value := v_text_value || v_bonuses.votes || ' голосов за ' || v_bonuses.name || '
 ';
     end if;
   end loop;

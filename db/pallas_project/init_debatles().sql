@@ -210,17 +210,19 @@ begin
 
     insert into data.attribute_values(object_id, attribute_id, value) values
     (v_debatle_temp_bonus_list_class_id, v_type_attribute_id, jsonb '"debatle_temp_bonus_list"'),
-  --  (v_debatle_temp_bonus_list_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatle_temp_bonus_list"'),
+    (v_debatle_temp_bonus_list_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatle_temp_bonus_list"'),
     (v_debatle_temp_bonus_list_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_debatle_temp_bonus_list"'),
     (v_debatle_temp_bonus_list_class_id, v_temporary_object_attribute_id, jsonb 'true'),
     (v_debatle_temp_bonus_list_class_id, v_template_attribute_id, jsonb_build_object('groups', format(
-                                                        '[{"code": "%s", "actions": ["%s"]}, {"code": "%s", "attributes": ["%s", "%s"], "actions": ["%s"]}]',
+                                                        '[{"code": "%s", "actions": ["%s"]}, {"code": "%s", "attributes": ["%s", "%s"], "actions": ["%s", "%s"]}]',
                                                         'group1',
                                                         'debatle_change_bonus_back',
                                                         'group2',
                                                         'debatle_temp_bonus_list_bonuses',
                                                         'debatle_temp_bonus_list_person',
-                                                        'debatle_change_bonus_others')::jsonb));
+                                                        'debatle_change_other_bonus',
+                                                        'debatle_change_other_fine')::jsonb));
+
     -- Объекты для списка изменений бонусов и штрафов
     -- Класс
     insert into data.objects(code, type) values('debatle_bonus', 'class') returning id into v_debatle_bonus_class_id;
@@ -278,7 +280,8 @@ begin
   ('debatle_change_theme', 'pallas_project.act_debatle_change_theme'),
   ('debatle_change_status', 'pallas_project.act_debatle_change_status'),
   ('debatle_vote', 'pallas_project.act_debatle_vote'),
-  ('debatle_change_bonuses','pallas_project.act_debatle_change_bonuses');
+  ('debatle_change_bonuses','pallas_project.act_debatle_change_bonuses'),
+  ('debatle_change_other_bonus','pallas_project.act_debatle_change_other_bonus');
 
 end;
 $$
