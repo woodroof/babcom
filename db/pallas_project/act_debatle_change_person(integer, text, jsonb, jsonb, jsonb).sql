@@ -43,9 +43,10 @@ begin
   -- создаём темповый список персон
   insert into data.objects(class_id) values (v_debatle_temp_person_list_class_id) returning id, code into v_temp_object_id, v_temp_object_code;
 
-  select array_agg(o.code) into v_content
+  select array_agg(o.code order by av.value) into v_content
   from data.object_objects oo
-    left join data.objects o on o.id = oo.object_id 
+    left join data.objects o on o.id = oo.object_id
+    left join data.attribute_values av on av.object_id = o.id and av.attribute_id = v_title_attribute_id and av.value_object_id is null
   where oo.parent_object_id = data.get_object_id('player')
     and oo.object_id not in (oo.parent_object_id, v_system_debatle_person1, v_system_debatle_person2, v_system_debatle_judje);
 

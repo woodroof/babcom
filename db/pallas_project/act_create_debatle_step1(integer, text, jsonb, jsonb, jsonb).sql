@@ -49,7 +49,7 @@ begin
   -- Достаём, меняем, кладём назад
   v_content := array[]::text[];
   v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_all_id, 'content', v_master_group_id), v_content);
-  v_new_content := array_append(v_content, v_debatle_code);
+  v_new_content := array_prepend(v_debatle_code, v_content);
   if v_new_content <> v_content then
     perform data.change_object_and_notify(v_debatles_all_id, 
                                           jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_new_content))),
@@ -57,7 +57,7 @@ begin
   end if;
   v_content := array[]::text[];
   v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_my_id,'content', v_actor_id), v_content);
-  v_new_content := array_append(v_content, v_debatle_code);
+  v_new_content := array_prepend(v_debatle_code, v_content);
   if v_new_content <> v_content then
     perform data.change_object_and_notify(v_debatles_my_id, 
                                          jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_actor_id, to_jsonb(v_new_content))),
@@ -65,7 +65,7 @@ begin
   end if;
   v_content := array[]::text[];
   v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_draft_id,'content', v_actor_id), v_content);
-  v_new_content := array_append(v_content, v_debatle_code);
+  v_new_content := array_prepend(v_debatle_code, v_content);
   if v_new_content <> v_content then
     perform data.change_object_and_notify(v_debatles_draft_id, 
                                           jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_actor_id, to_jsonb(v_new_content))),

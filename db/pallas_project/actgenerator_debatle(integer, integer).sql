@@ -97,7 +97,7 @@ begin
                 v_debatle_code);
   end if;
 
-  if v_is_master and v_debatle_status in ('deleted') or in_actor_id = v_person1_id and v_debatle_status in ('draft') then
+  if v_is_master and v_debatle_status not in ('deleted') or in_actor_id = v_person1_id and v_debatle_status in ('draft') then
     v_actions_list := v_actions_list || 
         format(', "debatle_change_status_deleted": {"code": "debatle_change_status", "name": "Удалить", "disabled": false, '||
                 '"params": {"debatle_code": "%s", "new_status": "deleted"}}',

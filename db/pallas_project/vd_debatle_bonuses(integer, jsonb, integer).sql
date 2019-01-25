@@ -9,7 +9,7 @@ declare
   v_text_value text := '';
   v_bonuses record;
 begin
-  for v_bonuses in select x.name, x.votes from jsonb_to_recordset(in_value) as x(code text, name text, votes int)
+  for v_bonuses in select x.name, x.votes from jsonb_to_recordset(in_value) as x(code text, name text, votes int) order by x.votes desc, x.name
   loop
     if @ v_bonuses.votes%10 = 1 then
       v_text_value := v_text_value || v_bonuses.votes || ' голос за ' || v_bonuses.name || '

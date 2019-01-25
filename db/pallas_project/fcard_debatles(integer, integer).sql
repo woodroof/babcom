@@ -15,7 +15,7 @@ begin
   perform * from data.objects where id = in_object_id for update;
 
   if v_is_master then
-    v_new_content := to_jsonb(array['debatles_new','debatles_current', 'debutles_future','debatles_closed', 'debatles_all', 'debatles_my']); 
+    v_new_content := to_jsonb(array['debatles_new','debatles_current', 'debatles_all', 'debatles_closed']); 
   else
     v_new_content := to_jsonb(array['debatles_my', 'debatles_current', 'debatles_closed']);
   end if;
