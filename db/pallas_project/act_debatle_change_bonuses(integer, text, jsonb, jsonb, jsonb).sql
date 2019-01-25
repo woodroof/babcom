@@ -25,6 +25,7 @@ declare
   v_debatle_temp_bonus_list_person_attribute_id integer := data.get_attribute_id('debatle_temp_bonus_list_person');
   v_system_debatle_temp_bonus_list_debatle_id_attribute_id integer := data.get_attribute_id('system_debatle_temp_bonus_list_debatle_id');
   v_debatle_temp_bonus_list_bonuses_attribute_id integer := data.get_attribute_id('debatle_temp_bonus_list_bonuses');
+  v_debatle_bonus_votes_attribute_id integer:= data.get_attribute_id('debatle_bonus_votes');
 
   v_debatle_temp_bonus_list_class_id integer := data.get_class_id('debatle_temp_bonus_list');
   v_debatle_bonus_class_id integer := data.get_class_id('debatle_bonus');
@@ -53,8 +54,10 @@ begin
   -- создаём темповый список бонусов и штрафов
   insert into data.objects(class_id) values (v_debatle_temp_bonus_list_class_id) returning id, code into v_temp_object_id, v_temp_object_code;
 
-  select array_agg(o.code) into v_content
-  from data.objects o 
+  select array_agg(o.code order by av_votes.value desc, av_title.value) into v_content
+  from data.objects o
+  left join data.attribute_values av_votes on av_votes.object_id = o.id and av_votes.attribute_id = v_debatle_bonus_votes_attribute_id and av_votes.value_object_id is null
+  left join data.attribute_values av_title on av_title.object_id = o.id and av_title.attribute_id = v_title_attribute_id and av_title.value_object_id is null
   where o.class_id = v_debatle_bonus_class_id
     and o.code not in (select x.code from jsonb_to_recordset(v_debatle_person_bonuses) as x(code text, name text, votes int));
 
