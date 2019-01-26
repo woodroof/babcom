@@ -11883,8 +11883,21 @@ Markdown — формат, который все реализуют по-раз�
 **Проверка 5:** У первого элемента есть заголовок "Uno" и текст "Первый элемент списка".
 **Проверка 6:** У второго элемента есть заголовок "Duo", подзаголовок "Второй элемент списка" и текст с дополнительными проверками.
 **Проверка 7:** При выборе первого или второго элемента ничего не происходит.
-**Проверка 8:** У третьего элемента есть заголовок "Далее" и какой-то текст.')
+**Проверка 8:** У третьего элемента есть заголовок "Далее" и какой-то текст.
+**Проверка 9:** При выборе третьего элемента переходим к следующему тесту.')
   );
+
+  -- И далее в предыдущем тесте проверки на:
+  --  - diff c удалением списка
+  --  - diff с добавлением списка
+  --  - diff с удалением одного и удалением другого элемента списка
+
+  insert into data.actions(code, function) values
+  ('list_diff', 'test_project.list_diff_action');
+
+  -- todo прочие тесты на списки
+
+  v_test_num := v_test_num + 3;
 
   -- todo прочие тесты на списки
   -- todo и прочие тесты
@@ -11918,6 +11931,67 @@ as
 $$
 begin
   return in_user_params is null or in_user_params = jsonb 'null' or in_user_params = jsonb '{}';
+end;
+$$
+language plpgsql;
+
+-- drop function test_project.list_diff_action(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function test_project.list_diff_action(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_object_code text := json.get_string(in_params);
+  v_object_id integer := data.get_object_id(v_object_code);
+  v_test_state text := json.get_string(data.get_attribute_value(v_object_id, 'test_state'));
+  v_changes jsonb := jsonb '[]';
+begin
+  assert test_project.is_user_params_empty(in_user_params);
+  assert in_default_params is null;
+
+  v_changes :=
+    v_changes ||
+    data.attribute_change2jsonb(
+      'title',
+      null,
+      to_jsonb(
+        test_project.next_code(
+          json.get_string(
+            data.get_attribute_value(
+              v_object_id,
+              'title',
+              v_actor_id)))));
+  if v_test_state = 'remove_list' then
+    v_changes := v_changes || data.attribute_change2jsonb('subtitle', null, jsonb '"Тест добавления списка"');
+    v_changes := v_changes || data.attribute_change2jsonb('content', null, jsonb '[]');
+    v_changes := v_changes || data.attribute_change2jsonb('test_state', null, jsonb '"add_list"');
+    v_changes := v_changes || data.attribute_change2jsonb('description2', null, to_jsonb(text
+'**Проверка 1:** Вместо удалённого списка появилась заглушка.
+**Проверка 2:** По действию изменится заголовок, подзаголовок, описание, а также добавится два элемента списка.'));
+  elsif v_test_state = 'add_list' then
+    -- todo
+  end if;
+
+  assert data.change_current_object(in_client_id, in_request_id, v_object_id, v_changes);
+end;
+$$
+language plpgsql;
+
+-- drop function test_project.list_diff_action_generator(integer, integer);
+
+create or replace function test_project.list_diff_action_generator(in_object_id integer, in_actor_id integer)
+returns jsonb
+stable
+as
+$$
+declare
+  v_object_code text := data.get_object_code(in_object_id);
+begin
+  assert in_actor_id is not null;
+  return format('{"action": {"code": "list_diff", "name": "Далее", "disabled": false, "params": "%s"}}', v_object_code)::jsonb;
 end;
 $$
 language plpgsql;
@@ -12398,17 +12472,75 @@ as
 $$
 declare
   v_actor_id integer := data.get_active_actor_id(in_client_id);
-  v_object_code text := data.get_object_code(in_object_id);
-  v_list_object_code text := data.get_object_code(in_list_object_id);
+  v_object_title text := test_project.next_code(json.get_string(data.get_attribute_value(in_object_id, 'title', v_actor_id)));
   v_list_object_title text := json.get_string_opt(data.get_attribute_value(in_list_object_id, 'title', v_actor_id), null);
+  v_object_id integer;
+  v_object_code text;
+  v_content jsonb := jsonb '[]';
+  v_login_id integer;
 begin
   assert in_request_id is not null;
 
   if v_list_object_title = 'Далее' then
-    perform api_utils.create_open_object_action_notification(
-      in_client_id,
-      in_request_id,
-      test_project.next_code(v_object_code));
+    -- Два элемента списка
+
+    insert into data.objects
+    default values
+    returning id, code into v_object_id, v_object_code;
+
+    v_content := v_content || to_jsonb(v_object_code);
+
+    insert into data.attribute_values(object_id, attribute_id, value) values
+    (v_object_id, data.get_attribute_id('type'), jsonb '"list_object"'),
+    (v_object_id, data.get_attribute_id('is_visible'), jsonb 'true'),
+    (v_object_id, data.get_attribute_id('title'), jsonb '"One"'),
+    (v_object_id, data.get_attribute_id('template'), jsonb '{"groups":[]}');
+
+    insert into data.objects
+    default values
+    returning id, code into v_object_id, v_object_code;
+
+    v_content := v_content || to_jsonb(v_object_code);
+
+    insert into data.attribute_values(object_id, attribute_id, value) values
+    (v_object_id, data.get_attribute_id('type'), jsonb '"list_object"'),
+    (v_object_id, data.get_attribute_id('is_visible'), jsonb 'true'),
+    (v_object_id, data.get_attribute_id('title'), jsonb '"Two"'),
+    (v_object_id, data.get_attribute_id('template'), jsonb '{"groups":[]}');
+
+    -- И основной объект
+
+    insert into data.objects
+    default values
+    returning id, code into v_object_id, v_object_code;
+
+    insert into data.attribute_values(object_id, attribute_id, value) values
+    (v_object_id, data.get_attribute_id('type'), jsonb '"test"'),
+    (v_object_id, data.get_attribute_id('test_state'), jsonb '"remove_list"'),
+    (v_object_id, data.get_attribute_id('is_visible'), jsonb 'true'),
+    (v_object_id, data.get_attribute_id('content'), v_content),
+    (v_object_id, data.get_attribute_id('actions_function'), jsonb '"test_project.list_diff_action_generator"'),
+    (v_object_id, data.get_attribute_id('list_element_function'), jsonb '"test_project.next_or_do_nothing_list_action"'),
+    (v_object_id, data.get_attribute_id('title'), to_jsonb(v_object_title)),
+    (v_object_id, data.get_attribute_id('subtitle'), jsonb '"Тест удаления списка"'),
+    (v_object_id, data.get_attribute_id('template'), jsonb '{"groups": [{"code": "main", "attributes": ["description2"], "actions": ["action"]}]}'),
+    (v_object_id, data.get_attribute_id('description2'), to_jsonb(text
+'**Проверка:** По нажатию на кнопку "Далее" изменится заголовок, подзаголовок, описание объекта, а также удалится список!'));
+
+    -- Создадим новый логин
+    insert into data.logins
+    default values
+    returning id into v_login_id;
+
+    -- Привяжем тест к логину
+    insert into data.login_actors(login_id, actor_id)
+    values(v_login_id, v_object_id);
+
+    -- Заменим логин
+    perform data.set_login(in_client_id, v_login_id);
+
+    -- И отправим новый список акторов
+    perform api_utils.process_get_actors_message(in_client_id, in_request_id);
   else
     perform api_utils.create_ok_notification(in_client_id, in_request_id);
   end if;
@@ -12522,7 +12654,6 @@ begin
   (v_object_id, data.get_attribute_id('is_visible'), jsonb 'true'),
   (v_object_id, data.get_attribute_id('title'), jsonb '"Duo"'),
   (v_object_id, data.get_attribute_id('subtitle'), jsonb '"Второй элемент списка"'),
-  (v_object_id, data.get_attribute_id('short_card_attribute'), null),
   (v_object_id, data.get_attribute_id('attribute_with_description'), jsonb '"значение"'),
   (v_object_id, data.get_attribute_id('attribute'), jsonb '"значение"'),
   (v_object_id, data.get_attribute_id('template'), jsonb '{"groups": [{"code": "main", "attributes": ["description2"]}, {"code": "additional", "name": "Группа элемента списка", "attributes": ["short_card_attribute", "attribute_with_description", "attribute"], "actions": ["action"]}]}'),

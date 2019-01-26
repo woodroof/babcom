@@ -44,7 +44,6 @@ begin
   (v_object_id, data.get_attribute_id('is_visible'), jsonb 'true'),
   (v_object_id, data.get_attribute_id('title'), jsonb '"Duo"'),
   (v_object_id, data.get_attribute_id('subtitle'), jsonb '"Второй элемент списка"'),
-  (v_object_id, data.get_attribute_id('short_card_attribute'), null),
   (v_object_id, data.get_attribute_id('attribute_with_description'), jsonb '"значение"'),
   (v_object_id, data.get_attribute_id('attribute'), jsonb '"значение"'),
   (v_object_id, data.get_attribute_id('template'), jsonb '{"groups": [{"code": "main", "attributes": ["description2"]}, {"code": "additional", "name": "Группа элемента списка", "attributes": ["short_card_attribute", "attribute_with_description", "attribute"], "actions": ["action"]}]}'),
