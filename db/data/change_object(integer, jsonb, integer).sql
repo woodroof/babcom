@@ -9,7 +9,7 @@ $$
 -- Если присутствует, value_object_id меняет именно значение, задаваемое для указанного объекта
 -- Если value отсутствует (именно отсутствует, а не равно jsonb 'null'!), то указанное значение удаляется, в противном случае - устанавливается
 
--- Возвращается массив объектов с полями client_id, object и list_changes, поля object и list_changes могут отсутствовать
+-- Возвращается массив объектов с полями object_id, client_id, object и list_changes, поля object и list_changes могут отсутствовать
 declare
   v_changes jsonb := data.filter_changes(in_object_id, in_changes);
   v_object_code text;

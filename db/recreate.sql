@@ -1482,7 +1482,7 @@ $$
 -- Если присутствует, value_object_id меняет именно значение, задаваемое для указанного объекта
 -- Если value отсутствует (именно отсутствует, а не равно jsonb 'null'!), то указанное значение удаляется, в противном случае - устанавливается
 
--- Возвращается массив объектов с полями client_id, object и list_changes, поля object и list_changes могут отсутствовать
+-- Возвращается массив объектов с полями object_id, client_id, object и list_changes, поля object и list_changes могут отсутствовать
 declare
   v_changes jsonb := data.filter_changes(in_object_id, in_changes);
   v_object_code text;
@@ -11966,12 +11966,19 @@ begin
               v_actor_id)))));
   if v_test_state = 'remove_list' then
     v_changes := v_changes || data.attribute_change2jsonb('subtitle', null, jsonb '"Тест добавления списка"');
-    v_changes := v_changes || data.attribute_change2jsonb('content', null, jsonb '[]');
+    v_changes := v_changes || data.attribute_change2jsonb('content', v_actor_id, jsonb '[]');
     v_changes := v_changes || data.attribute_change2jsonb('test_state', null, jsonb '"add_list"');
     v_changes := v_changes || data.attribute_change2jsonb('description2', null, to_jsonb(text
 '**Проверка 1:** Вместо удалённого списка появилась заглушка.
 **Проверка 2:** По действию изменится заголовок, подзаголовок, описание, а также добавится два элемента списка.'));
   elsif v_test_state = 'add_list' then
+    v_changes := v_changes || data.attribute_change2jsonb('subtitle', null, jsonb '"Тест изменения элемента списка"');
+    v_changes := v_changes || data.attribute_change2jsonb('content', v_actor_id, null);
+    v_changes := v_changes || data.attribute_change2jsonb('test_state', null, jsonb '"modify_list_element"');
+    v_changes := v_changes || data.attribute_change2jsonb('description2', null, to_jsonb(text
+'**Проверка 1:** Заглушка исчезла, вместо неё отображается два элемента списка.
+**Проверка 2:** По действию изменится заголовок, подзаголовок, описание, а также изменится второй объект списка.'));
+  elsif v_test_state = 'modify_list_element' then
     -- todo
   end if;
 
