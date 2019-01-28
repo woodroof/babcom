@@ -1244,10 +1244,10 @@ $$
 declare
   v_add jsonb := jsonb '[]';
   v_remove jsonb := jsonb '[]';
-  v_code text;
+  v_code jsonb;
 begin
-  perform json.get_string_array_opt(in_original_content, null);
-  perform json.get_string_array_opt(in_new_content, null);
+  assert in_original_content is null or json.is_string_array(in_original_content);
+  assert in_new_content is null or json.is_string_array(in_new_content);
 
   if
     in_original_content is null and in_new_content is null or
@@ -1261,7 +1261,7 @@ begin
   elsif in_original_content is null or in_original_content = '[]' then
     for v_code in
     (
-      select json.get_string(value)
+      select value
       from jsonb_array_elements(in_new_content)
     )
     loop
@@ -1273,8 +1273,8 @@ begin
       v_original_size integer := jsonb_array_length(in_original_content);
       v_new_idx integer := 0;
       v_new_size integer := jsonb_array_length(in_new_content);
-      v_current_original_value text;
-      v_current_new_value text;
+      v_current_original_value jsonb;
+      v_current_new_value jsonb;
       v_original_test_idx integer;
       v_new_test_idx integer;
       v_remove_indexes integer[];
@@ -1282,17 +1282,17 @@ begin
     begin
       -- Сначала определим, что нужно удалить
       while v_original_idx != v_original_size and v_new_idx != v_new_size loop
-        v_current_original_value := json.get_string(in_original_content->v_original_idx);
-        v_current_new_value := json.get_string(in_new_content->v_new_idx);
+        v_current_original_value := in_original_content->v_original_idx;
+        v_current_new_value := in_new_content->v_new_idx;
 
         if v_current_original_value = v_current_new_value then
           v_original_idx := v_original_idx + 1;
           v_new_idx := v_new_idx + 1;
         else
           v_original_test_idx :=
-            json.array_find(in_original_content, to_jsonb(v_current_new_value), v_original_idx + 1);
+            json.array_find(in_original_content, v_current_new_value, v_original_idx + 1);
           v_new_test_idx :=
-            json.array_find(in_new_content, to_jsonb(v_current_original_value), v_new_idx + 1);
+            json.array_find(in_new_content, v_current_original_value, v_new_idx + 1);
 
           -- Определяем, что эффективнее - удалять объекты из оригинального массива или добавлять в результирующий
           if v_original_test_idx is not null and v_new_test_idx is not null then
@@ -1338,23 +1338,34 @@ begin
       v_new_idx := 0;
       v_original_size := jsonb_array_length(v_modified_content);
 
-      if v_original_size > 0 then
+      if v_new_size = v_original_size then
+        v_new_idx := v_new_size;
+      elsif v_original_size > 0 then
         v_original_idx := 0;
 
-        while v_original_idx != v_original_size loop
-          assert v_new_idx != v_new_size;
-
-          v_current_original_value := json.get_string(v_modified_content->v_original_idx);
-          v_current_new_value := json.get_string(in_new_content->v_new_idx);
+        loop
+          v_current_original_value := v_modified_content->v_original_idx;
+          v_current_new_value := in_new_content->v_new_idx;
 
           if v_current_original_value = v_current_new_value then
             v_original_idx := v_original_idx + 1;
             v_new_idx := v_new_idx + 1;
+
+            assert v_new_idx != v_new_size;
+
+            if v_original_idx = v_original_size then
+              exit;
+            end if;
           else
             v_add :=
               v_add ||
               jsonb_build_object('position', v_current_original_value, 'object_code', v_current_new_value);
             v_new_idx := v_new_idx + 1;
+
+            if v_new_size - v_new_idx = v_original_size - v_original_idx then
+              v_new_idx := v_new_size;
+              exit;
+            end if;
           end if;
         end loop;
       end if;
@@ -1362,7 +1373,7 @@ begin
       while v_new_idx != v_new_size loop
         v_add :=
           v_add ||
-          jsonb_build_object('object_code', json.get_string(in_new_content->v_new_idx));
+          jsonb_build_object('object_code', in_new_content->v_new_idx);
         v_new_idx := v_new_idx + 1;
       end loop;
     end;
@@ -2070,7 +2081,7 @@ declare
   v_next_change jsonb;
 begin
   assert data.is_instance(in_object_id);
-  perform json.get_object_array(in_changes);
+  assert json.is_object_array(in_changes);
 
   for v_change in
   (
@@ -5726,6 +5737,142 @@ begin
   end if;
 
   return v_param#>>'{}';
+end;
+$$
+language plpgsql;
+
+-- drop function json.is_object_array(json, text);
+
+create or replace function json.is_object_array(in_json json, in_name text default null::text)
+returns boolean
+immutable
+as
+$$
+declare
+  v_array json;
+  v_array_len integer;
+begin
+  if in_name is not null then
+    v_array := json.get_object(in_json)->in_name;
+  else
+    v_array = in_json;
+  end if;
+
+  if v_array is null or json_typeof(v_array) != 'array' then
+    return false;
+  end if;
+
+  v_array_len := json_array_length(v_array);
+
+  for i in 0 .. v_array_len - 1 loop
+    if json_typeof(v_array->i) != 'object' then
+      return false;
+    end if;
+  end loop;
+
+  return true;
+end;
+$$
+language plpgsql;
+
+-- drop function json.is_object_array(jsonb, text);
+
+create or replace function json.is_object_array(in_json jsonb, in_name text default null::text)
+returns boolean
+immutable
+as
+$$
+declare
+  v_array jsonb;
+  v_array_len integer;
+begin
+  if in_name is not null then
+    v_array := json.get_object(in_json)->in_name;
+  else
+    v_array = in_json;
+  end if;
+
+  if v_array is null or jsonb_typeof(v_array) != 'array' then
+    return false;
+  end if;
+
+  v_array_len := jsonb_array_length(v_array);
+
+  for i in 0 .. v_array_len - 1 loop
+    if jsonb_typeof(v_array->i) != 'object' then
+      return false;
+    end if;
+  end loop;
+
+  return true;
+end;
+$$
+language plpgsql;
+
+-- drop function json.is_string_array(json, text);
+
+create or replace function json.is_string_array(in_json json, in_name text default null::text)
+returns boolean
+immutable
+as
+$$
+declare
+  v_array json;
+  v_array_len integer;
+begin
+  if in_name is not null then
+    v_array := json.get_object(in_json)->in_name;
+  else
+    v_array = in_json;
+  end if;
+
+  if v_array is null or json_typeof(v_array) != 'array' then
+    return false;
+  end if;
+
+  v_array_len := json_array_length(v_array);
+
+  for i in 0 .. v_array_len - 1 loop
+    if json_typeof(v_array->i) != 'string' then
+      return false;
+    end if;
+  end loop;
+
+  return true;
+end;
+$$
+language plpgsql;
+
+-- drop function json.is_string_array(jsonb, text);
+
+create or replace function json.is_string_array(in_json jsonb, in_name text default null::text)
+returns boolean
+immutable
+as
+$$
+declare
+  v_array jsonb;
+  v_array_len integer;
+begin
+  if in_name is not null then
+    v_array := json.get_object(in_json)->in_name;
+  else
+    v_array = in_json;
+  end if;
+
+  if v_array is null or jsonb_typeof(v_array) != 'array' then
+    return false;
+  end if;
+
+  v_array_len := jsonb_array_length(v_array);
+
+  for i in 0 .. v_array_len - 1 loop
+    if jsonb_typeof(v_array->i) != 'string' then
+      return false;
+    end if;
+  end loop;
+
+  return true;
 end;
 $$
 language plpgsql;

@@ -10,10 +10,10 @@ $$
 declare
   v_add jsonb := jsonb '[]';
   v_remove jsonb := jsonb '[]';
-  v_code text;
+  v_code jsonb;
 begin
-  perform json.get_string_array_opt(in_original_content, null);
-  perform json.get_string_array_opt(in_new_content, null);
+  assert in_original_content is null or json.is_string_array(in_original_content);
+  assert in_new_content is null or json.is_string_array(in_new_content);
 
   if
     in_original_content is null and in_new_content is null or
@@ -27,7 +27,7 @@ begin
   elsif in_original_content is null or in_original_content = '[]' then
     for v_code in
     (
-      select json.get_string(value)
+      select value
       from jsonb_array_elements(in_new_content)
     )
     loop
@@ -39,8 +39,8 @@ begin
       v_original_size integer := jsonb_array_length(in_original_content);
       v_new_idx integer := 0;
       v_new_size integer := jsonb_array_length(in_new_content);
-      v_current_original_value text;
-      v_current_new_value text;
+      v_current_original_value jsonb;
+      v_current_new_value jsonb;
       v_original_test_idx integer;
       v_new_test_idx integer;
       v_remove_indexes integer[];
@@ -48,17 +48,17 @@ begin
     begin
       -- Сначала определим, что нужно удалить
       while v_original_idx != v_original_size and v_new_idx != v_new_size loop
-        v_current_original_value := json.get_string(in_original_content->v_original_idx);
-        v_current_new_value := json.get_string(in_new_content->v_new_idx);
+        v_current_original_value := in_original_content->v_original_idx;
+        v_current_new_value := in_new_content->v_new_idx;
 
         if v_current_original_value = v_current_new_value then
           v_original_idx := v_original_idx + 1;
           v_new_idx := v_new_idx + 1;
         else
           v_original_test_idx :=
-            json.array_find(in_original_content, to_jsonb(v_current_new_value), v_original_idx + 1);
+            json.array_find(in_original_content, v_current_new_value, v_original_idx + 1);
           v_new_test_idx :=
-            json.array_find(in_new_content, to_jsonb(v_current_original_value), v_new_idx + 1);
+            json.array_find(in_new_content, v_current_original_value, v_new_idx + 1);
 
           -- Определяем, что эффективнее - удалять объекты из оригинального массива или добавлять в результирующий
           if v_original_test_idx is not null and v_new_test_idx is not null then
@@ -104,23 +104,34 @@ begin
       v_new_idx := 0;
       v_original_size := jsonb_array_length(v_modified_content);
 
-      if v_original_size > 0 then
+      if v_new_size = v_original_size then
+        v_new_idx := v_new_size;
+      elsif v_original_size > 0 then
         v_original_idx := 0;
 
-        while v_original_idx != v_original_size loop
-          assert v_new_idx != v_new_size;
-
-          v_current_original_value := json.get_string(v_modified_content->v_original_idx);
-          v_current_new_value := json.get_string(in_new_content->v_new_idx);
+        loop
+          v_current_original_value := v_modified_content->v_original_idx;
+          v_current_new_value := in_new_content->v_new_idx;
 
           if v_current_original_value = v_current_new_value then
             v_original_idx := v_original_idx + 1;
             v_new_idx := v_new_idx + 1;
+
+            assert v_new_idx != v_new_size;
+
+            if v_original_idx = v_original_size then
+              exit;
+            end if;
           else
             v_add :=
               v_add ||
               jsonb_build_object('position', v_current_original_value, 'object_code', v_current_new_value);
             v_new_idx := v_new_idx + 1;
+
+            if v_new_size - v_new_idx = v_original_size - v_original_idx then
+              v_new_idx := v_new_size;
+              exit;
+            end if;
           end if;
         end loop;
       end if;
@@ -128,7 +139,7 @@ begin
       while v_new_idx != v_new_size loop
         v_add :=
           v_add ||
-          jsonb_build_object('object_code', json.get_string(in_new_content->v_new_idx));
+          jsonb_build_object('object_code', in_new_content->v_new_idx);
         v_new_idx := v_new_idx + 1;
       end loop;
     end;

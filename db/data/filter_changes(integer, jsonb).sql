@@ -12,7 +12,7 @@ declare
   v_next_change jsonb;
 begin
   assert data.is_instance(in_object_id);
-  perform json.get_object_array(in_changes);
+  assert json.is_object_array(in_changes);
 
   for v_change in
   (
