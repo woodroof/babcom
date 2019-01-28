@@ -9,6 +9,7 @@ $$
 -- Если функция вернула false, то скорее всего внешнему коду нужно сгенерировать событие ok или action
 declare
   v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_object_code text := data.get_object_code(in_object_id);
   v_subscription_exists boolean;
   v_diffs jsonb;
   v_diff record;
@@ -44,7 +45,7 @@ begin
   loop
     assert v_diff.object is not null or v_diff.list_changes is not null;
 
-    if v_diff.client_id = in_client_id then
+    if v_diff.client_id = in_client_id and v_diff.object_id = v_object_code then
       assert not v_message_sent;
 
       v_message_sent := true;
