@@ -7353,6 +7353,75 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_create_chat(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_create_chat(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_title text := json.get_string(in_user_params, 'title');
+  v_chat_code text;
+  v_chat_id  integer;
+  v_chat_class_id integer := data.get_class_id('chat');
+  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+
+  v_title_attribute_id integer := data.get_attribute_id('title');
+  v_content_attribute_id integer := data.get_attribute_id('content');
+  v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
+
+  v_all_chats_id integer := data.get_object_id('all_chats');
+  v_chats_id integer := data.get_object_id('chats');
+  v_master_group_id integer := data.get_object_id('master');
+
+  v_content text[];
+  v_new_content text[];
+
+begin
+  assert in_request_id is not null;
+  -- создаём новый чат
+  insert into data.objects(class_id) values (v_chat_class_id) returning id, code into v_chat_id, v_chat_code;
+
+  insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
+  (v_chat_id, v_title_attribute_id, to_jsonb(v_title), null),
+  (v_chat_id, v_is_visible_attribute_id, jsonb 'true', v_chat_id),
+  (v_chat_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id);
+
+  insert into data.object_objects(parent_object_id, object_id) values (v_chat_id, v_actor_id);
+
+  -- Добавляем его в список всех и в список моих для того, кто создаёт
+  -- Блокируем списки
+  perform * from data.objects where id = v_all_chats_id for update;
+  perform * from data.objects where id = v_chats_id for update;
+
+  -- Достаём, меняем, кладём назад
+  v_content := array[]::text[];
+  v_content := json.get_string_array_opt(data.get_attribute_value(v_all_chats_id, 'content', v_master_group_id), v_content);
+  v_new_content := array_prepend(v_chat_code, v_content);
+  if v_new_content <> v_content then
+    perform data.change_object_and_notify(v_all_chats_id, 
+                                          jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_new_content))),
+                                          v_actor_id);
+  end if;
+  v_content := array[]::text[];
+  v_content := json.get_string_array_opt(data.get_attribute_value(v_chats_id,'content', v_actor_id), v_content);
+  v_new_content := array_prepend(v_chat_code, v_content);
+  if v_new_content <> v_content then
+    perform data.change_object_and_notify(v_chats_id, 
+                                         jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_actor_id, to_jsonb(v_new_content))),
+                                         v_actor_id);
+  end if;
+
+  perform api_utils.create_notification(
+    in_client_id,
+    in_request_id,
+    'action',
+    format('{"action": "open_object", "action_data": {"object_id": "%s"}}', v_chat_code)::jsonb);
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_create_debatle_step1(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_create_debatle_step1(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -8488,16 +8557,23 @@ $$
 declare
   v_object_code text := data.get_object_code(in_object_id);
   v_actions_list text := '';
+  v_is_master boolean := pallas_project.is_in_group(in_actor_id, 'master');
 begin
   assert in_actor_id is not null;
 
   if data.get_object_code(in_actor_id) = 'anonymous' then
     v_actions_list := v_actions_list || ', "' || 'login":' || 
-      '{"code": "login", "name": "Кнопка для мастеров", "disabled": false, "params": {}, "user_params": [{"code": "password", "description": "Введите пароль", "type": "string" }]}';
+      '{"code": "login", "name": "Войти", "disabled": false, "params": {}, "user_params": [{"code": "password", "description": "Введите пароль", "type": "string" }]}';
   else
     if pallas_project.is_in_group(in_actor_id, 'all_person') then
       v_actions_list := v_actions_list || ', "' || 'debatles":' || 
         '{"code": "act_open_object", "name": "Дебатлы", "disabled": false, "params": {"object_code": "debatles"}}';
+      v_actions_list := v_actions_list || ', "' || 'chats":' || 
+        '{"code": "act_open_object", "name": "Чаты", "disabled": false, "params": {"object_code": "chats"}}';
+      if v_is_master then
+        v_actions_list := v_actions_list || ', "' || 'all_chats":' || 
+        '{"code": "act_open_object", "name": "Все чаты", "disabled": false, "params": {"object_code": "all_chats"}}';
+      end if;
       v_actions_list := v_actions_list || ', "' || 'logout":' || 
         '{"code": "logout", "name": "Выход", "disabled": false, "params": {}}';
     end if;
@@ -8883,11 +8959,14 @@ begin
   (v_menu_id, v_type_attribute_id, jsonb '"menu"'),
   (v_menu_id, v_is_visible_attribute_id, jsonb 'true'),
   (v_menu_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_menu"'),
+  (v_menu_id, v_content_attribute_id, jsonb '["debatles", "chats"]'),
   (v_menu_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
-                                      '{"code": "%s", "actions": ["%s", "%s", "%s"]}',
+                                      '{"code": "%s", "actions": ["%s", "%s", "%s", "%s", "%s"]}',
                                       'menu_group1',
                                       'login',
                                       'debatles',
+                                      'chats',
+                                      'all_chats',
                                       'logout')::jsonb]));
 
   -- И пустой список уведомлений
@@ -9047,6 +9126,7 @@ insert into data.objects(code, class_id) values('person3', v_person_class_id) re
   (v_aster_group_id, v_person_id);
 */
   perform pallas_project.init_debatles();
+  perform pallas_project.init_messenger();
 end;
 $$
 language plpgsql;
@@ -9340,6 +9420,145 @@ begin
   ('debatle_change_bonuses','pallas_project.act_debatle_change_bonuses'),
   ('debatle_change_other_bonus','pallas_project.act_debatle_change_other_bonus'),
   ('debatle_change_subtitle','pallas_project.act_debatle_change_subtitle');
+
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.init_messenger();
+
+create or replace function pallas_project.init_messenger()
+returns void
+volatile
+as
+$$
+declare
+  v_type_attribute_id integer := data.get_attribute_id('type');
+  v_title_attribute_id integer := data.get_attribute_id('title');
+  v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
+  v_actions_function_attribute_id integer := data.get_attribute_id('actions_function');
+  v_template_attribute_id integer := data.get_attribute_id('template');
+  v_full_card_function_attribute_id integer := data.get_attribute_id('full_card_function');
+  v_mini_card_function_attribute_id integer := data.get_attribute_id('mini_card_function');
+  v_list_element_function_attribute_id integer := data.get_attribute_id('list_element_function');
+  v_temporary_object_attribute_id integer := data.get_attribute_id('temporary_object');
+  v_content_attribute_id integer := data.get_attribute_id('content');
+
+  v_master_group_id integer := data.get_object_id('master');
+
+  v_chats_id integer;
+  v_chat_class_id integer;
+  v_message_class_id integer;
+  v_chat_temp_person_list_class_id integer;
+
+  v_system_chat_can_invite_attribute_id integer;
+  v_system_chat_can_leave_attribute_id integer;
+  v_system_chat_can_mute_attribute_id integer;
+
+begin
+  -- Атрибуты 
+  insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
+  --для сообщений
+  ('message_text', null, 'Текст сообщения', 'normal', null, null, false),
+  ('message_sender', null, 'Код объекта-отправителя сообщения', 'normal', null, null, false),
+  ('message_time', null, 'Дата и время отправки сообщения', 'normal', null, null, false),
+  -- для чатов
+  ('chat_persons', null, 'Участники чата', 'normal', 'full', null, false),
+  ('system_chat_can_invite', null, 'Возможность пригласить кого-то в чат', 'system', null, null, true),
+  ('system_chat_can_leave', null, 'Возможность покинуть чат', 'system', null, null, true),
+  ('system_chat_can_mute', null, 'Возможность Убрать уведомления о новых сообщениях', 'system', null, null, true),
+  ('system_chat_last_message_time', null, 'Дата последнего собщения', 'system', null, null, false);
+
+  v_system_chat_can_invite_attribute_id := data.get_attribute_id('system_chat_can_invite');
+  v_system_chat_can_leave_attribute_id := data.get_attribute_id('system_chat_can_leave');
+  v_system_chat_can_mute_attribute_id := data.get_attribute_id('system_chat_can_mute');
+
+  -- Объект со списком чатов
+  insert into data.objects(code) values('chats') returning id into v_chats_id;
+
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_chats_id, v_type_attribute_id, jsonb '"chats"'),
+  (v_chats_id, v_is_visible_attribute_id, jsonb 'true'),
+  (v_chats_id, v_title_attribute_id, jsonb '"Чаты"'),
+--  (v_chats_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_debatles"'),
+--  (v_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatles"'),
+  (v_chats_id, v_content_attribute_id, jsonb '[]'),
+  (v_chats_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
+                                          '{"code": "%s", "attributes": ["%s"], "actions": ["%s"]}',
+                                          'chats_group1',
+                                          'description',
+                                          'create_chat')::jsonb]));
+
+  -- Объект со списком всек чатов (для мастеров)
+  insert into data.objects(code) values('all_chats') returning id into v_chats_id;
+
+  insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
+  (v_chats_id, v_type_attribute_id, jsonb '"all_chats"', null),
+  (v_chats_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
+  (v_chats_id, v_title_attribute_id, jsonb '"Все чаты"', null),
+--  (v_chats_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_debatles"', null),
+--  (v_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatles"', null),
+  (v_chats_id, v_content_attribute_id, jsonb '[]', null),
+  (v_chats_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
+                                          '{"code": "%s", "attributes": ["%s"], "actions": ["%s"]}',
+                                          'chats_group1',
+                                          'description',
+                                          'create_chat')::jsonb]), null);
+
+  -- Объект-класс для чата
+  insert into data.objects(code, type) values('chat', 'class') returning id into v_chat_class_id;
+
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_chat_class_id, v_type_attribute_id, jsonb '"chat"'),
+  --(v_chat_class_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_debatle"'),
+  --(v_chat_class_id, v_mini_card_function_attribute_id, jsonb '"pallas_project.mcard_debatle"'),
+  --(v_chat_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatle"'),
+  (v_chat_class_id, v_system_chat_can_invite_attribute_id, jsonb 'true'),
+  (v_chat_class_id, v_system_chat_can_leave_attribute_id, jsonb 'true'),
+  (v_chat_class_id, v_system_chat_can_mute_attribute_id, jsonb 'true'),
+  (v_chat_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
+                                                      '{"code": "%s", "attributes": ["%s"], 
+                                                                      "actions": ["%s", "%s", "%s"]}',
+                                                      'chat_group1',
+                                                      'chat_persons',
+                                                      'chat_add_person',
+                                                      'chat_leave',
+                                                      'chat_mute')::jsonb,
+                                                      format(
+                                                      '{"code": "%s", "actions": ["%s"]}',
+                                                      'chat_group2',
+                                                      'chat_write')::jsonb]));
+
+  -- Объект-класс для сообщения
+  insert into data.objects(code, type) values('message', 'class') returning id into v_message_class_id;
+
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_message_class_id, v_type_attribute_id, jsonb '"message"'),
+  --(v_message_class_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_debatle"'),
+  --(v_message_class_id, v_mini_card_function_attribute_id, jsonb '"pallas_project.mcard_debatle"'),
+  --(v_message_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatle"'),
+  (v_message_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
+                                                      '{"code": "%s", "attributes": ["%s", "%s", "%s"]}',
+                                                      'message_group1',
+                                                      'message_sender',
+                                                      'message_time',
+                                                      'message_text')::jsonb]));
+
+  -- Объект-класс для временных списков персон для редактирования участников чата
+  insert into data.objects(code, type) values('chat_temp_person_list', 'class') returning id into v_chat_temp_person_list_class_id;
+
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_chat_temp_person_list_class_id, v_type_attribute_id, jsonb '"chat_temp_person_list"'),
+--  (v_chat_temp_person_list_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatle_temp_person_list"'),
+--  (v_chat_temp_person_list_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_debatle_temp_person_list"'),
+  (v_chat_temp_person_list_class_id, v_temporary_object_attribute_id, jsonb 'true'),
+  (v_chat_temp_person_list_class_id, v_template_attribute_id, jsonb_build_object('groups', format(
+                                                      '[{"code": "%s", "actions": ["%s"]}]',
+                                                      'group1',
+                                                      'chat_add_person_back')::jsonb));
+
+  insert into data.actions(code, function) values
+  ('create_chat', 'pallas_project.act_create_chat');
 
 end;
 $$

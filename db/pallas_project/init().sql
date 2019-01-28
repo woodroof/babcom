@@ -129,11 +129,14 @@ begin
   (v_menu_id, v_type_attribute_id, jsonb '"menu"'),
   (v_menu_id, v_is_visible_attribute_id, jsonb 'true'),
   (v_menu_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_menu"'),
+  (v_menu_id, v_content_attribute_id, jsonb '["debatles", "chats"]'),
   (v_menu_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
-                                      '{"code": "%s", "actions": ["%s", "%s", "%s"]}',
+                                      '{"code": "%s", "actions": ["%s", "%s", "%s", "%s", "%s"]}',
                                       'menu_group1',
                                       'login',
                                       'debatles',
+                                      'chats',
+                                      'all_chats',
                                       'logout')::jsonb]));
 
   -- И пустой список уведомлений
@@ -293,6 +296,7 @@ insert into data.objects(code, class_id) values('person3', v_person_class_id) re
   (v_aster_group_id, v_person_id);
 */
   perform pallas_project.init_debatles();
+  perform pallas_project.init_messenger();
 end;
 $$
 language plpgsql;
