@@ -6,7 +6,6 @@ volatile
 as
 $$
 declare
-  v_title text := json.get_string(in_user_params, 'title');
   v_chat_code text;
   v_chat_id  integer;
   v_chat_class_id integer := data.get_class_id('chat');
@@ -29,7 +28,7 @@ begin
   insert into data.objects(class_id) values (v_chat_class_id) returning id, code into v_chat_id, v_chat_code;
 
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
-  (v_chat_id, v_title_attribute_id, to_jsonb(v_title), null),
+  (v_chat_id, v_title_attribute_id, to_jsonb('Чат:'|| json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id, v_actor_id))), null),
   (v_chat_id, v_is_visible_attribute_id, jsonb 'true', v_chat_id),
   (v_chat_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id);
 
