@@ -1063,13 +1063,14 @@ end;
 $$
 language plpgsql;
 
--- drop function data.add_object_to_object(integer, integer);
+-- drop function data.add_object_to_object(integer, integer, integer, text);
 
-create or replace function data.add_object_to_object(in_object_id integer, in_parent_object_id integer)
+create or replace function data.add_object_to_object(in_object_id integer, in_parent_object_id integer, in_actor_id integer default null::integer, in_reason text default null::text)
 returns void
 volatile
 as
 $$
+-- Как правило вместо этой функции следует вызывать data.change_object_groups
 declare
   v_exists boolean;
   v_cycle boolean;
@@ -1077,6 +1078,7 @@ declare
 begin
   assert data.is_instance(in_object_id);
   assert data.is_instance(in_parent_object_id);
+  assert in_actor_id is null or data.is_instance(in_actor_id);
 
   if in_object_id = in_parent_object_id then
     raise exception 'Attempt to add object % to itself', in_object_id;
@@ -1159,11 +1161,13 @@ begin
     )
   for share;
 
-  insert into data.object_objects(parent_object_id, object_id, intermediate_object_ids)
+  insert into data.object_objects(parent_object_id, object_id, intermediate_object_ids, start_reason, start_actor_id)
   select
     oo2.parent_object_id,
     oo1.object_id,
-    oo1.intermediate_object_ids || in_object_id || in_parent_object_id || oo2.intermediate_object_ids
+    oo1.intermediate_object_ids || in_object_id || in_parent_object_id || oo2.intermediate_object_ids,
+    in_reason,
+    in_actor_id
   from data.object_objects oo1
   join data.object_objects oo2
   on
@@ -1175,7 +1179,9 @@ begin
   select
     oo.parent_object_id,
     in_object_id,
-    in_parent_object_id || oo.intermediate_object_ids
+    in_parent_object_id || oo.intermediate_object_ids,
+    in_reason,
+    in_actor_id
   from data.object_objects oo
   where
     oo.object_id = in_parent_object_id and
@@ -1184,13 +1190,15 @@ begin
   select
     in_parent_object_id,
     oo.object_id,
-    oo.intermediate_object_ids || in_object_id
+    oo.intermediate_object_ids || in_object_id,
+    in_reason,
+    in_actor_id
   from data.object_objects oo
   where
     oo.parent_object_id = in_object_id and
     oo.object_id != oo.parent_object_id
   union
-  select in_parent_object_id, in_object_id, null;
+  select in_parent_object_id, in_object_id, null, in_reason, in_actor_id;
 end;
 $$
 language plpgsql;
@@ -2244,33 +2252,312 @@ returns void
 volatile
 as
 $$
-declare
-  v_diffs jsonb := data.change_object(in_object_id, in_changes, in_actor_id, in_reason);
-  v_diff record;
-  v_notification_data jsonb;
 begin
-  for v_diff in
+  perform data.process_diffs_and_notify(data.change_object(in_object_id, in_changes, in_actor_id, in_reason));
+end;
+$$
+language plpgsql;
+
+-- drop function data.change_object_groups(integer, integer[], integer[], integer, text);
+
+create or replace function data.change_object_groups(in_object_id integer, in_add integer[], in_remove integer[], in_actor_id integer, in_reason text default null::text)
+returns jsonb
+volatile
+as
+$$
+-- В параметре in_add приходит массив объектов, в которые нужно добавить объект
+-- В параметре in_remove приходит массив объектов, из которых нужно убрать объект
+
+-- Возвращается массив объектов с полями object_id, client_id, object и list_changes, поля object и list_changes могут отсутствовать
+declare
+  v_parent_object_id integer;
+  v_actor_subscriptions jsonb := jsonb '[]';
+  v_ret_val jsonb;
+begin
+  assert coalesce(array_length(in_add), 0) + coalesce(array_length(in_remove), 0) > 0;
+
+  -- Сохраняем подписки клиентов актора
+  declare
+    v_subscription record;
+    v_list record;
+    v_list_objects jsonb := jsonb '[]';
+    v_list_object jsonb;
+  begin
+    for v_subscription in
+    (
+      select
+        id,
+        object_id,
+        client_id
+      from data.client_subscriptions
+      where
+        client_id in (
+          select id
+          from data.clients
+          where actor_id = in_object_id)
+    )
+    loop
+      for v_list in
+      (
+        select
+          id,
+          object_id,
+          is_visible,
+          index
+        from data.client_subscription_objects
+        where client_subscription_id = v_subscription.id
+      )
+      loop
+        v_list_object :=
+          jsonb_build_object(
+            'id',
+            v_list.id,
+            'object_id',
+            v_list.object_id,
+            'is_visible',
+            v_list.is_visible,
+            'index',
+            v_list.index);
+
+        if v_list.is_visible then
+          v_list_object :=
+            v_list_object ||
+              jsonb_build_object(
+                'data',
+                data.get_object(v_list.object_id, in_object_id, 'mini', v_subscription.object_id));
+        end if;
+
+        v_list_objects := v_list_objects || v_list_object;
+      end loop;
+
+      v_actor_subscriptions :=
+        v_actor_subscriptions ||
+        jsonb_build_object(
+          'id',
+          v_subscription.id,
+          'client_id',
+          v_subscription.client_id,
+          'object_id',
+          v_subscription.object_id,
+          'data',
+          data.get_object(v_subscription.object_id, in_object_id, 'full', v_subscription.object_id),
+          'list_objects',
+          v_list_objects);
+    end loop;
+  end;
+
+  -- Меняем группы объектов
+  for v_parent_object_id in
   (
-    select
-      json.get_string(value, 'object_id') as object_id,
-      json.get_integer(value, 'client_id') as client_id,
-      (case when value ? 'object' then value->'object' else null end) as object,
-      (case when value ? 'list_changes' then value->'list_changes' else null end) as list_changes
-    from jsonb_array_elements(v_diffs)
+    select value
+    from unnest(in_add) a(value)
   )
   loop
-    v_notification_data := jsonb_build_object('object_id', v_diff.object_id);
-
-    if v_diff.object is not null then
-      v_notification_data := v_notification_data || jsonb_build_object('object', v_diff.object);
-    end if;
-
-    if v_diff.list_changes is not null then
-      v_notification_data := v_notification_data || jsonb_build_object('list_changes', v_diff.list_changes);
-    end if;
-
-    perform api_utils.create_notification(v_diff.client_id, null, 'diff', v_notification_data);
+    perform data.add_object_to_object(in_object_id, v_parent_object_id, in_actor, in_reason);
   end loop;
+
+  for v_parent_object_id in
+  (
+    select value
+    from unnest(in_remove) a(value)
+  )
+  loop
+    perform data.remove_object_from_object(in_object_id, v_parent_object_id, in_actor, in_reason);
+  end loop;
+
+  -- Обрабатываем изменения подписок клиентов изменённого актора
+  if v_actor_subscriptions != jsonb '[]' then
+    declare
+      v_subscription record;
+      v_full_card_function text;
+      v_subscription_object_code text;
+      v_new_data jsonb;
+      v_object jsonb;
+      v_list_changes jsonb;
+      v_ret_val_element jsonb;
+      v_set_visible integer[];
+      v_set_invisible integer[];
+    begin
+      for v_subscription in
+      (
+        select
+          json.get_integer(value, 'id') as id,
+          json.get_integer(value, 'client_id') as client_id,
+          json.get_integer(value, 'object_id') as object_id,
+          json.get_object(value, 'data') as data,
+          json.get_array(value, 'list_objects') as list_objects
+        from jsonb_array_elements(v_actor_subscriptions)
+      )
+      loop
+        v_full_card_function :=
+          json.get_string_opt(
+            data.get_attribute_value(v_subscription.object_id, 'full_card_function'),
+            null);
+
+        if v_full_card_function is not null then
+          execute format('select %s($1, $2)', v_full_card_function)
+          using v_subscription.object_id, in_object_id;
+        end if;
+
+        v_subscription_object_code := data.get_object_code(v_subscription.object_id);
+
+        -- Объект стал невидимым - отправляем специальный diff и вычищаем подписки
+        if not json.get_boolean_opt(data.get_attribute_value(v_subscription.object_id, 'is_visible', in_object_id), false) then
+          v_ret_val :=
+            v_ret_val ||
+            jsonb_build_object(
+              'object_id',
+              v_subscription_object_code,
+              'client_id',
+              v_subscription.client_id,
+              'object',
+              jsonb 'null');
+
+          delete from data.client_subscription_objects
+          where client_subscription_id = v_subscription.id;
+
+          delete from data.client_subscriptions
+          where id = v_subscription.id;
+
+          continue;
+        end if;
+
+        v_new_data := data.get_object(v_subscription.object_id, in_object_id, 'full', v_subscription.object_id);
+
+        v_object := null;
+        v_list_changes := jsonb '{}';
+
+        -- Сравниваем и при нахождении различий включаем в diff
+        if v_new_data != v_subscription.data then
+          v_object := v_new_data;
+        end if;
+
+        if v_subscription.list_objects != jsonb '[]' then
+          declare
+            v_list record;
+            v_mini_card_function text;
+            v_new_list_data jsonb;
+            v_add jsonb;
+            v_position_object_id integer;
+          begin
+            for v_list in
+            (
+              select
+                json.get_integer(value, 'id') as id,
+                json.get_integer(value, 'object_id') as object_id,
+                json.get_boolean(value, 'is_visible') as is_visible,
+                json.get_integer(value, 'index') as index,
+                json.get_object_opt(value, 'data', null) as data
+              from jsonb_array_elements(v_subscription.list_objects)
+            )
+            loop
+              v_mini_card_function :=
+                json.get_string_opt(
+                  data.get_attribute_value(v_list.object_id, 'mini_card_function'),
+                  null);
+
+              if v_mini_card_function is not null then
+                execute format('select %s($1, $2)', v_mini_card_function)
+                using v_list.object_id, in_object_id;
+              end if;
+
+              if not json.get_boolean_opt(data.get_attribute_value(v_list.object_id, 'is_visible', in_object_id), false) then
+                if v_list.is_visible then
+                  v_set_invisible := array_append(v_set_invisible, v_list.id);
+
+                  v_ret_val :=
+                    v_ret_val ||
+                    jsonb_build_object(
+                      'object_id',
+                      v_subscription_object_code,
+                      'client_id',
+                      v_subscription.client_id,
+                      'list_changes',
+                      jsonb_build_object('remove', jsonb_build_array(data.get_object_code(v_list.object_id))));
+                end if;
+              else
+                v_new_list_data := data.get_object(v_list.object_id, in_object_id, 'mini', v_subscription.object_id);
+
+                if not v_list.is_visible or v_new_list_data != v_list.data then
+                  if not v_list.is_visible then
+                    v_set_visible := array_append(v_set_visible, v_list.id);
+
+                    v_add := jsonb_build_object('object', v_new_list_data);
+
+                    select s.value
+                    into v_position_object_id
+                    from (
+                      select first_value(object_id) over(order by index) as value
+                      from data.client_subscription_objects
+                      where
+                        client_subscription_id = v_subscription.id and
+                        index > v_list.index and
+                        is_visible is true
+                    ) s
+                    limit 1;
+
+                    if v_position_object_id is not null then
+                      v_add := v_add || jsonb_build_object('position', data.get_object_code(v_position_object_id));
+                    end if;
+
+                    v_ret_val :=
+                      v_ret_val ||
+                      jsonb_build_object(
+                        'object_id',
+                        v_subscription_object_code,
+                        'client_id',
+                        v_subscription.client_id,
+                        'list_changes',
+                        jsonb_build_object(
+                          'add',
+                          jsonb_build_array(v_add)));
+                  else
+                    v_ret_val :=
+                      v_ret_val ||
+                      jsonb_build_object(
+                        'object_id',
+                        v_subscription_object_code,
+                        'client_id',
+                        v_subscription.client_id,
+                        'list_changes',
+                        jsonb_build_object('change', jsonb_build_array(v_new_list_data)));
+                  end if;
+                end if;
+              end if;
+            end loop;
+          end;
+        end if;
+
+        if v_object is not null or v_list_changes != jsonb '{}' then
+          v_ret_val_element := jsonb_build_object('object_id', v_subscription_object_code, 'client_id', v_subscription.client_id);
+
+          if v_object is not null then
+            v_ret_val_element := v_ret_val_element || jsonb_build_object('object', v_object);
+          end if;
+
+          if v_list_changes!= jsonb '{}' then
+            v_ret_val_element := v_ret_val_element || jsonb_build_object('list_changes', v_list_changes);
+          end if;
+
+          v_ret_val := v_ret_val || v_ret_val_element;
+        end if;
+      end loop;
+
+      if v_set_visible is not null then
+        update data.client_subscription_objects
+        set is_visible = true
+        where id = any(v_set_visible);
+      end if;
+
+      if v_set_invisible is not null then
+        update data.client_subscription_objects
+        set is_visible = false
+        where id = any(v_set_invisible);
+      end if;
+    end;
+  end if;
+
+  return v_ret_val;
 end;
 $$
 language plpgsql;
@@ -2288,6 +2575,7 @@ declare
 begin
   assert data.is_instance(in_object_id);
   assert in_attribute_id is not null;
+  assert in_actor_id is null or data.is_instance(in_actor_id);
 
   if in_value_object_id is null then
     select id
@@ -3443,19 +3731,60 @@ end;
 $$
 language plpgsql;
 
--- drop function data.remove_object_from_object(integer, integer);
+-- drop function data.process_diffs_and_notify(jsonb);
 
-create or replace function data.remove_object_from_object(in_object_id integer, in_parent_object_id integer)
+create or replace function data.process_diffs_and_notify(in_diffs jsonb)
 returns void
 volatile
 as
 $$
+declare
+  v_diff record;
+  v_notification_data jsonb;
+begin
+  assert json.is_object_array(in_diffs);
+
+  for v_diff in
+  (
+    select
+      json.get_string(value, 'object_id') as object_id,
+      json.get_integer(value, 'client_id') as client_id,
+      (case when value ? 'object' then value->'object' else null end) as object,
+      (case when value ? 'list_changes' then value->'list_changes' else null end) as list_changes
+    from jsonb_array_elements(in_diffs)
+  )
+  loop
+    v_notification_data := jsonb_build_object('object_id', v_diff.object_id);
+
+    if v_diff.object is not null then
+      v_notification_data := v_notification_data || jsonb_build_object('object', v_diff.object);
+    end if;
+
+    if v_diff.list_changes is not null then
+      v_notification_data := v_notification_data || jsonb_build_object('list_changes', v_diff.list_changes);
+    end if;
+
+    perform api_utils.create_notification(v_diff.client_id, null, 'diff', v_notification_data);
+  end loop;
+end;
+$$
+language plpgsql;
+
+-- drop function data.remove_object_from_object(integer, integer, integer, text);
+
+create or replace function data.remove_object_from_object(in_object_id integer, in_parent_object_id integer, in_actor_id integer default null::integer, in_reason text default null::text)
+returns void
+volatile
+as
+$$
+-- Как правило вместо этой функции следует вызывать data.change_object_groups
 declare
   v_connection_id integer;
   v_ids integer[];
 begin
   assert data.is_instance(in_object_id);
   assert data.is_instance(in_parent_object_id);
+  assert in_actor_id is null or data.is_instance(in_actor_id);
 
   if in_object_id = in_parent_object_id then
     raise exception 'Attempt to remove object % from itself', in_object_id;
@@ -3518,8 +3847,8 @@ begin
     select v_connection_id
   ) i;
 
-  insert into data.object_objects_journal(parent_object_id, object_id, intermediate_object_ids, start_time, end_time)
-  select parent_object_id, object_id, intermediate_object_ids, start_time, clock_timestamp()
+  insert into data.object_objects_journal(parent_object_id, object_id, intermediate_object_ids, start_time, start_reason, start_actor_id, end_time, end_reason, end_actor_id)
+  select parent_object_id, object_id, intermediate_object_ids, start_time, start_reason, start_actor_id, clock_timestamp(), in_reason, in_actor_id
   from data.object_objects
   where id = any(v_ids);
 
@@ -3544,6 +3873,7 @@ begin
   assert data.is_instance(in_object_id);
   assert in_attribute_id is not null;
   assert in_value is not null;
+  assert in_actor_id is null or data.is_instance(in_actor_id);
 
   if in_value_object_id is null then
     select id, object_id, attribute_id, value_object_id, value, start_time, start_reason, start_actor_id
@@ -3554,8 +3884,6 @@ begin
       attribute_id = in_attribute_id and
       value_object_id is null;
   else
-    assert data.can_attribute_be_overridden(in_attribute_id);
-
     select id, object_id, attribute_id, value_object_id, value, start_time, start_reason, start_actor_id
     into v_attribute_value
     from data.attribute_values
@@ -13632,6 +13960,8 @@ create table data.object_objects(
   object_id integer not null,
   intermediate_object_ids integer[],
   start_time timestamp with time zone not null default clock_timestamp(),
+  start_reason text,
+  start_actor_id integer,
   constraint object_objects_intermediate_object_ids_check check(intarray.uniq(intarray.sort(intermediate_object_ids)) = intarray.sort(intermediate_object_ids)),
   constraint object_objects_object_check check(data.is_instance(object_id)),
   constraint object_objects_parent_object_check check(data.is_instance(parent_object_id)),
@@ -13648,7 +13978,11 @@ create table data.object_objects_journal(
   object_id integer not null,
   intermediate_object_ids integer[],
   start_time timestamp with time zone not null,
+  start_reason text,
+  start_actor_id integer,
   end_time timestamp with time zone not null,
+  end_reason text,
+  end_actor_id integer,
   constraint object_objects_journal_pk primary key(id)
 );
 
@@ -13740,11 +14074,20 @@ foreign key(object_id) references data.objects(id);
 alter table data.object_objects add constraint object_objects_fk_parent_object
 foreign key(parent_object_id) references data.objects(id);
 
+alter table data.object_objects add constraint object_objects_fk_start_actor
+foreign key(start_actor_id) references data.objects(id);
+
+alter table data.object_objects_journal add constraint object_objects_journal_fk_end_actor
+foreign key(end_actor_id) references data.objects(id);
+
 alter table data.object_objects_journal add constraint object_objects_journal_fk_object
 foreign key(object_id) references data.objects(id);
 
 alter table data.object_objects_journal add constraint object_objects_journal_fk_parent_object
 foreign key(parent_object_id) references data.objects(id);
+
+alter table data.object_objects_journal add constraint object_objects_journal_fk_start_actor
+foreign key(start_actor_id) references data.objects(id);
 
 alter table data.objects add constraint objects_fk_objects
 foreign key(class_id) references data.objects(id);

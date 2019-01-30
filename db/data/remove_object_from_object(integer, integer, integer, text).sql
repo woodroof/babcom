@@ -1,16 +1,18 @@
--- drop function data.remove_object_from_object(integer, integer);
+-- drop function data.remove_object_from_object(integer, integer, integer, text);
 
-create or replace function data.remove_object_from_object(in_object_id integer, in_parent_object_id integer)
+create or replace function data.remove_object_from_object(in_object_id integer, in_parent_object_id integer, in_actor_id integer default null::integer, in_reason text default null::text)
 returns void
 volatile
 as
 $$
+-- Как правило вместо этой функции следует вызывать data.change_object_groups
 declare
   v_connection_id integer;
   v_ids integer[];
 begin
   assert data.is_instance(in_object_id);
   assert data.is_instance(in_parent_object_id);
+  assert in_actor_id is null or data.is_instance(in_actor_id);
 
   if in_object_id = in_parent_object_id then
     raise exception 'Attempt to remove object % from itself', in_object_id;
@@ -73,8 +75,8 @@ begin
     select v_connection_id
   ) i;
 
-  insert into data.object_objects_journal(parent_object_id, object_id, intermediate_object_ids, start_time, end_time)
-  select parent_object_id, object_id, intermediate_object_ids, start_time, clock_timestamp()
+  insert into data.object_objects_journal(parent_object_id, object_id, intermediate_object_ids, start_time, start_reason, start_actor_id, end_time, end_reason, end_actor_id)
+  select parent_object_id, object_id, intermediate_object_ids, start_time, start_reason, start_actor_id, clock_timestamp(), in_reason, in_actor_id
   from data.object_objects
   where id = any(v_ids);
 

@@ -11,6 +11,7 @@ declare
 begin
   assert data.is_instance(in_object_id);
   assert in_attribute_id is not null;
+  assert in_actor_id is null or data.is_instance(in_actor_id);
 
   if in_value_object_id is null then
     select id

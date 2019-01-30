@@ -13,6 +13,7 @@ begin
   assert data.is_instance(in_object_id);
   assert in_attribute_id is not null;
   assert in_value is not null;
+  assert in_actor_id is null or data.is_instance(in_actor_id);
 
   if in_value_object_id is null then
     select id, object_id, attribute_id, value_object_id, value, start_time, start_reason, start_actor_id
@@ -23,8 +24,6 @@ begin
       attribute_id = in_attribute_id and
       value_object_id is null;
   else
-    assert data.can_attribute_be_overridden(in_attribute_id);
-
     select id, object_id, attribute_id, value_object_id, value, start_time, start_reason, start_actor_id
     into v_attribute_value
     from data.attribute_values

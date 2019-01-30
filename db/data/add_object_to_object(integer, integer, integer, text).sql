@@ -1,10 +1,11 @@
--- drop function data.add_object_to_object(integer, integer);
+-- drop function data.add_object_to_object(integer, integer, integer, text);
 
-create or replace function data.add_object_to_object(in_object_id integer, in_parent_object_id integer)
+create or replace function data.add_object_to_object(in_object_id integer, in_parent_object_id integer, in_actor_id integer default null::integer, in_reason text default null::text)
 returns void
 volatile
 as
 $$
+-- Как правило вместо этой функции следует вызывать data.change_object_groups
 declare
   v_exists boolean;
   v_cycle boolean;
@@ -12,6 +13,7 @@ declare
 begin
   assert data.is_instance(in_object_id);
   assert data.is_instance(in_parent_object_id);
+  assert in_actor_id is null or data.is_instance(in_actor_id);
 
   if in_object_id = in_parent_object_id then
     raise exception 'Attempt to add object % to itself', in_object_id;
@@ -94,11 +96,13 @@ begin
     )
   for share;
 
-  insert into data.object_objects(parent_object_id, object_id, intermediate_object_ids)
+  insert into data.object_objects(parent_object_id, object_id, intermediate_object_ids, start_reason, start_actor_id)
   select
     oo2.parent_object_id,
     oo1.object_id,
-    oo1.intermediate_object_ids || in_object_id || in_parent_object_id || oo2.intermediate_object_ids
+    oo1.intermediate_object_ids || in_object_id || in_parent_object_id || oo2.intermediate_object_ids,
+    in_reason,
+    in_actor_id
   from data.object_objects oo1
   join data.object_objects oo2
   on
@@ -110,7 +114,9 @@ begin
   select
     oo.parent_object_id,
     in_object_id,
-    in_parent_object_id || oo.intermediate_object_ids
+    in_parent_object_id || oo.intermediate_object_ids,
+    in_reason,
+    in_actor_id
   from data.object_objects oo
   where
     oo.object_id = in_parent_object_id and
@@ -119,13 +125,15 @@ begin
   select
     in_parent_object_id,
     oo.object_id,
-    oo.intermediate_object_ids || in_object_id
+    oo.intermediate_object_ids || in_object_id,
+    in_reason,
+    in_actor_id
   from data.object_objects oo
   where
     oo.parent_object_id = in_object_id and
     oo.object_id != oo.parent_object_id
   union
-  select in_parent_object_id, in_object_id, null;
+  select in_parent_object_id, in_object_id, null, in_reason, in_actor_id;
 end;
 $$
 language plpgsql;
