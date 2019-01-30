@@ -12,9 +12,9 @@ $$
 declare
   v_parent_object_id integer;
   v_actor_subscriptions jsonb := jsonb '[]';
-  v_ret_val jsonb;
+  v_ret_val jsonb := jsonb '[]';
 begin
-  assert coalesce(array_length(in_add), 0) + coalesce(array_length(in_remove), 0) > 0;
+  assert coalesce(array_length(in_add, 1), 0) + coalesce(array_length(in_remove, 1), 0) > 0;
 
   -- Сохраняем подписки клиентов актора
   declare
@@ -93,7 +93,7 @@ begin
     from unnest(in_add) a(value)
   )
   loop
-    perform data.add_object_to_object(in_object_id, v_parent_object_id, in_actor, in_reason);
+    perform data.add_object_to_object(in_object_id, v_parent_object_id, in_actor_id, in_reason);
   end loop;
 
   for v_parent_object_id in
@@ -102,7 +102,7 @@ begin
     from unnest(in_remove) a(value)
   )
   loop
-    perform data.remove_object_from_object(in_object_id, v_parent_object_id, in_actor, in_reason);
+    perform data.remove_object_from_object(in_object_id, v_parent_object_id, in_actor_id, in_reason);
   end loop;
 
   -- Обрабатываем изменения подписок клиентов изменённого актора

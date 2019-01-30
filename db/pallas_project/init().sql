@@ -129,7 +129,6 @@ begin
   (v_menu_id, v_type_attribute_id, jsonb '"menu"'),
   (v_menu_id, v_is_visible_attribute_id, jsonb 'true'),
   (v_menu_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_menu"'),
-  (v_menu_id, v_content_attribute_id, jsonb '["debatles", "chats"]'),
   (v_menu_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
                                       '{"code": "%s", "actions": ["%s", "%s", "%s", "%s", "%s"]}',
                                       'menu_group1',
@@ -232,10 +231,10 @@ begin
   (v_person_id, v_system_person_opa_rating_attribute_id, jsonb '1'),
   (v_person_id, v_system_person_un_rating_attribute_id, jsonb '150');
 
-  insert into data.object_objects(parent_object_id, object_id) values
-  (v_all_person_group_id, v_person_id),
-  (v_un_group_id, v_person_id),
-  (v_player_group_id, v_person_id);
+  perform data.add_object_to_object(v_person_id, v_all_person_group_id);
+  perform data.add_object_to_object(v_person_id, v_un_group_id);
+  perform data.add_object_to_object(v_person_id, v_player_group_id);
+
 */
   insert into data.objects(code, class_id) values('person2', v_person_class_id) returning id into v_person_id;
     -- Логин
@@ -246,9 +245,8 @@ begin
   (v_person_id, v_person_occupation_attribute_id, jsonb '"Мастер"'),
   (v_person_id, v_priority_attribute_id, jsonb '200');
 
-  insert into data.object_objects(parent_object_id, object_id) values
-  (v_all_person_group_id, v_person_id),
-  (v_master_group_id, v_person_id);
+  perform data.add_object_to_object(v_person_id, v_all_person_group_id);
+  perform data.add_object_to_object(v_person_id, v_master_group_id);
 
   insert into data.objects(code, class_id) values('person4', v_person_class_id) returning id into v_person_id;
     -- Логин
@@ -259,9 +257,8 @@ begin
   (v_person_id, v_person_occupation_attribute_id, jsonb '"Мастер"'),
   (v_person_id, v_priority_attribute_id, jsonb '200');
 
-  insert into data.object_objects(parent_object_id, object_id) values
-  (v_all_person_group_id, v_person_id),
-  (v_master_group_id, v_person_id);
+  perform data.add_object_to_object(v_person_id, v_all_person_group_id);
+  perform data.add_object_to_object(v_person_id, v_master_group_id);
 
   insert into data.objects(code, class_id) values('person5', v_person_class_id) returning id into v_person_id;
     -- Логин
@@ -272,9 +269,8 @@ begin
   (v_person_id, v_person_occupation_attribute_id, jsonb '"Мастер"'),
   (v_person_id, v_priority_attribute_id, jsonb '200');
 
-  insert into data.object_objects(parent_object_id, object_id) values
-  (v_all_person_group_id, v_person_id),
-  (v_master_group_id, v_person_id);
+  perform data.add_object_to_object(v_person_id, v_all_person_group_id);
+  perform data.add_object_to_object(v_person_id, v_master_group_id);
 /*
 insert into data.objects(code, class_id) values('person3', v_person_class_id) returning id into v_person_id;
     -- Логин
@@ -289,11 +285,11 @@ insert into data.objects(code, class_id) values('person3', v_person_class_id) re
   (v_person_id, v_system_person_opa_rating_attribute_id, jsonb '5'),
   (v_person_id, v_system_person_un_rating_attribute_id, jsonb '0');
 
-  insert into data.object_objects(parent_object_id, object_id) values
-  (v_all_person_group_id, v_person_id),
-  (v_opa_group_id, v_person_id),
-  (v_player_group_id, v_person_id),
-  (v_aster_group_id, v_person_id);
+  perform data.add_object_to_object(v_person_id, v_all_person_group_id);
+  perform data.add_object_to_object(v_person_id, v_opa_group_id);
+  perform data.add_object_to_object(v_person_id, v_player_group_id);
+  perform data.add_object_to_object(v_person_id, v_aster_group_id);
+
 */
   perform pallas_project.init_debatles();
   perform pallas_project.init_messenger();

@@ -15,12 +15,12 @@ begin
   v_is_master := pallas_project.is_in_group(in_actor_id, 'master');
   v_chat_code := data.get_object_code(in_object_id);
 
-/*  if v_is_master then
+  if v_is_master or json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_invite', in_actor_id), false) then
     v_actions_list := v_actions_list || 
-        format(', "debatle_change_instigator": {"code": "debatle_change_person", "name": "Изменить зачинщика", "disabled": false, '||
-                '"params": {"debatle_code": "%s", "edited_person": "instigator"}}',
-                v_debatle_code);
-  end if;*/
+        format(', "chat_add_person": {"code": "chat_add_person", "name": "Добавить участника", "disabled": false, '||
+                '"params": {"chat_code": "%s"}}',
+                v_chat_code);
+  end if;
 
 
   v_actions_list := v_actions_list || 

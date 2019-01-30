@@ -16,6 +16,7 @@ declare
   v_list_element_function_attribute_id integer := data.get_attribute_id('list_element_function');
   v_temporary_object_attribute_id integer := data.get_attribute_id('temporary_object');
   v_content_attribute_id integer := data.get_attribute_id('content');
+  v_priority_attribute_id integer := data.get_attribute_id('priority');
 
   v_master_group_id integer := data.get_object_id('master');
 
@@ -33,6 +34,7 @@ begin
   -- Атрибуты 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
   --для сообщений
+  ('message_text', null, 'Текст сообщения', 'normal', null, null, false),
   ('system_message_sender', null, 'id объекта-отправителя сообщения', 'system', null, null, false),
   ('system_message_time', null, 'Дата и время отправки сообщения', 'system', null, null, false),
   -- для чатов
@@ -41,7 +43,11 @@ begin
   ('system_chat_can_leave', null, 'Возможность покинуть чат', 'system', null, null, true),
   ('system_chat_can_mute', null, 'Возможность Убрать уведомления о новых сообщениях', 'system', null, null, true),
   ('system_chat_can_rename', null, 'Возможность переименовать чат', 'system', null, null, true),
-  ('system_chat_last_message_time', null, 'Дата последнего собщения', 'system', null, null, false);
+  ('system_chat_is_mute', null, 'Признак отлюченного уведомления о новых сообщениях', 'system', null, null, true),
+  ('system_chat_last_message_time', null, 'Дата последнего собщения', 'system', null, null, false),
+  -- для временных объектов для изменения участников
+  ('chat_temp_person_list_persons', 'Сейчас участвуют:', 'Список участников чата', 'normal', 'full', null, false),
+  ('system_chat_temp_person_list_chat_id', null, 'Идентификатор изменяемого чата', 'system', null, null, false);
 
   v_system_chat_can_invite_attribute_id := data.get_attribute_id('system_chat_can_invite');
   v_system_chat_can_leave_attribute_id := data.get_attribute_id('system_chat_can_leave');
@@ -88,6 +94,7 @@ begin
   --(v_chat_class_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_debatle"'),
   --(v_chat_class_id, v_mini_card_function_attribute_id, jsonb '"pallas_project.mcard_debatle"'),
   (v_chat_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chat"'),
+  (v_chat_class_id, v_priority_attribute_id, jsonb '100'),
   (v_chat_class_id, v_system_chat_can_invite_attribute_id, jsonb 'true'),
   (v_chat_class_id, v_system_chat_can_leave_attribute_id, jsonb 'true'),
   (v_chat_class_id, v_system_chat_can_mute_attribute_id, jsonb 'true'),
@@ -114,8 +121,9 @@ begin
   --(v_message_class_id, v_mini_card_function_attribute_id, jsonb '"pallas_project.mcard_debatle"'),
   --(v_message_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatle"'),
   (v_message_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
-                                                      '{"code": "%s", "attributes": []}',
-                                                      'message_group1')::jsonb]));
+                                                      '{"code": "%s", "attributes": ["%s"]}',
+                                                      'message_group1',
+                                                      'message_text')::jsonb]));
 
   -- Объект-класс для временных списков персон для редактирования участников чата
   insert into data.objects(code, type) values('chat_temp_person_list', 'class') returning id into v_chat_temp_person_list_class_id;
@@ -126,13 +134,16 @@ begin
 --  (v_chat_temp_person_list_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_debatle_temp_person_list"'),
   (v_chat_temp_person_list_class_id, v_temporary_object_attribute_id, jsonb 'true'),
   (v_chat_temp_person_list_class_id, v_template_attribute_id, jsonb_build_object('groups', format(
-                                                      '[{"code": "%s", "actions": ["%s"]}]',
+                                                      '[{"code": "%s", "actions": ["%s"]},{"code": "%s", "attributes": ["%s"]}]',
                                                       'group1',
-                                                      'chat_add_person_back')::jsonb));
+                                                      'chat_add_person_back',
+                                                      'group2',
+                                                      'chat_temp_person_list_persons')::jsonb));
 
   insert into data.actions(code, function) values
   ('create_chat', 'pallas_project.act_create_chat'),
-  ('chat_write', 'pallas_project.act_chat_write');
+  ('chat_write', 'pallas_project.act_chat_write'),
+  ('chat_add_person','pallas_project.act_chat_add_person');
 
 end;
 $$

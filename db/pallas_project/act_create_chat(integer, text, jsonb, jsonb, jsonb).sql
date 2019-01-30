@@ -28,11 +28,12 @@ begin
   insert into data.objects(class_id) values (v_chat_class_id) returning id, code into v_chat_id, v_chat_code;
 
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
-  (v_chat_id, v_title_attribute_id, to_jsonb('Чат:'|| json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id, v_actor_id))), null),
+  (v_chat_id, v_title_attribute_id, to_jsonb('Чат: '|| json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id, v_actor_id))), null),
   (v_chat_id, v_is_visible_attribute_id, jsonb 'true', v_chat_id),
   (v_chat_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id);
 
-  insert into data.object_objects(parent_object_id, object_id) values (v_chat_id, v_actor_id);
+  -- Добавляем заведшего чат в группу имени этого чата
+  perform data.process_diffs_and_notify(data.change_object_groups(v_actor_id, array[v_chat_id], array[]::integer[], v_actor_id));
 
   -- Добавляем его в список всех и в список моих для того, кто создаёт
   -- Блокируем списки

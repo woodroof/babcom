@@ -58,6 +58,10 @@ begin
     end if;
 
   elsif v_new_status = 'future' and v_debatle_status = 'new' and v_is_master then
+    if v_system_debatle_person1 =-1 or v_system_debatle_person2 =-1 then
+      perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Зачинщик и оппонент дебатла должны быть заполнены');
+      return;
+    end if;
     -- удаляем из неподтверждённых у мастера, добавляем в будущие мастеру
     perform * from data.objects where id = v_debatles_new_id for update;
     perform * from data.objects where id = v_debatles_future_id for update;
