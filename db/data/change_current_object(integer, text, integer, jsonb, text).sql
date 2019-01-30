@@ -1,6 +1,6 @@
--- drop function data.change_current_object(integer, text, integer, jsonb);
+-- drop function data.change_current_object(integer, text, integer, jsonb, text);
 
-create or replace function data.change_current_object(in_client_id integer, in_request_id text, in_object_id integer, in_changes jsonb)
+create or replace function data.change_current_object(in_client_id integer, in_request_id text, in_object_id integer, in_changes jsonb, in_reason text default null::text)
 returns boolean
 volatile
 as
@@ -31,7 +31,7 @@ begin
   -- Если стреляет этот ассерт, то нам нужно вызывать другую функцию
   assert v_subscription_exists;
 
-  v_diffs := data.change_object(in_object_id, in_changes, v_actor_id);
+  v_diffs := data.change_object(in_object_id, in_changes, v_actor_id, in_reason);
 
   for v_diff in
   (

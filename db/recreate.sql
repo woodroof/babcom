@@ -1408,9 +1408,9 @@ end;
 $$
 language plpgsql;
 
--- drop function data.change_current_object(integer, text, integer, jsonb);
+-- drop function data.change_current_object(integer, text, integer, jsonb, text);
 
-create or replace function data.change_current_object(in_client_id integer, in_request_id text, in_object_id integer, in_changes jsonb)
+create or replace function data.change_current_object(in_client_id integer, in_request_id text, in_object_id integer, in_changes jsonb, in_reason text default null::text)
 returns boolean
 volatile
 as
@@ -1441,7 +1441,7 @@ begin
   -- Если стреляет этот ассерт, то нам нужно вызывать другую функцию
   assert v_subscription_exists;
 
-  v_diffs := data.change_object(in_object_id, in_changes, v_actor_id);
+  v_diffs := data.change_object(in_object_id, in_changes, v_actor_id, in_reason);
 
   for v_diff in
   (
@@ -1483,9 +1483,9 @@ end;
 $$
 language plpgsql;
 
--- drop function data.change_object(integer, jsonb, integer);
+-- drop function data.change_object(integer, jsonb, integer, text);
 
-create or replace function data.change_object(in_object_id integer, in_changes jsonb, in_actor_id integer default null::integer)
+create or replace function data.change_object(in_object_id integer, in_changes jsonb, in_actor_id integer default null::integer, in_reason text default null::text)
 returns jsonb
 volatile
 as
@@ -1704,14 +1704,16 @@ begin
           in_object_id,
           v_change.attribute_id,
           v_change.value_object_id,
-          in_actor_id);
+          in_actor_id,
+          in_reason);
       else
         perform data.set_attribute_value(
           in_object_id,
           v_change.attribute_id,
           v_change.value,
           v_change.value_object_id,
-          in_actor_id);
+          in_actor_id,
+          in_reason);
       end if;
     end loop;
   end;
@@ -2235,15 +2237,15 @@ end;
 $$
 language plpgsql;
 
--- drop function data.change_object_and_notify(integer, jsonb, integer);
+-- drop function data.change_object_and_notify(integer, jsonb, integer, text);
 
-create or replace function data.change_object_and_notify(in_object_id integer, in_changes jsonb, in_actor_id integer default null::integer)
+create or replace function data.change_object_and_notify(in_object_id integer, in_changes jsonb, in_actor_id integer default null::integer, in_reason text default null::text)
 returns void
 volatile
 as
 $$
 declare
-  v_diffs jsonb := data.change_object(in_object_id, in_changes, in_actor_id);
+  v_diffs jsonb := data.change_object(in_object_id, in_changes, in_actor_id, in_reason);
   v_diff record;
   v_notification_data jsonb;
 begin

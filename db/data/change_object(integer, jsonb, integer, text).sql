@@ -1,6 +1,6 @@
--- drop function data.change_object(integer, jsonb, integer);
+-- drop function data.change_object(integer, jsonb, integer, text);
 
-create or replace function data.change_object(in_object_id integer, in_changes jsonb, in_actor_id integer default null::integer)
+create or replace function data.change_object(in_object_id integer, in_changes jsonb, in_actor_id integer default null::integer, in_reason text default null::text)
 returns jsonb
 volatile
 as
@@ -219,14 +219,16 @@ begin
           in_object_id,
           v_change.attribute_id,
           v_change.value_object_id,
-          in_actor_id);
+          in_actor_id,
+          in_reason);
       else
         perform data.set_attribute_value(
           in_object_id,
           v_change.attribute_id,
           v_change.value,
           v_change.value_object_id,
-          in_actor_id);
+          in_actor_id,
+          in_reason);
       end if;
     end loop;
   end;
