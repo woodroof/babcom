@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 import asyncio
 import asyncpg
+import os
 import json
+import uuid
 
 from aiohttp import web, WSMsgType
 from aiojobs.aiohttp import atomic, setup
+from pathlib import Path
 from prometheus_client import Counter, Gauge, Summary, Histogram, start_http_server
 from prometheus_async.aio import time
 
@@ -15,6 +18,9 @@ DB_PASSWORD = 'http'
 
 PORT = 8000
 PROMETHEUS_CLIENT_PORT = 9001
+
+TMP_DIR_PATH = Path(os.path.dirname(os.path.abspath(__file__))) / 'tmp'
+IMAGES_DIR_PATH = TMP_DIR_PATH / '..' / 'images'
 
 OP_TIME_BUCKETS = (0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10)
 LONG_TIME_BUCKETS = (0.001, 0.01, 0.1, 1, 10, 1*60, 2*60, 5*60, 10*60, 30*60, 1*60*60, 2*60*60, 5*60*60, 10*60*60, 24*60*60)
@@ -119,13 +125,29 @@ async def api(request):
     return ws
 
 async def post_image(request):
-    # TODO
-    web.Response(status=200, content_type='application/json', text='{"filename": "1.png"}')
+    reader = await request.multipart()
 
-async def get_image(request):
-    file_name = request.match_info.get('file_name')
-    # TODO
-    web.Response(status=200, text=file_name)
+    field = await reader.next()
+    if field.name != 'image':
+        return web.Response(status=400, text='Form field "image" not found')
+
+    extension = os.path.splitext(field.filename)[1]
+    file_name = str(uuid.uuid4())
+    tmp_path = TMP_DIR_PATH / file_name
+    dest_path = IMAGES_DIR_PATH / (file_name + extension)
+    size = 0
+    with open(tmp_path, 'wb') as file:
+        while True:
+            chunk = await field.read_chunk()
+            if not chunk:
+                break
+            size += len(chunk)
+            file.write(chunk)
+    # TODO обработать прерывание загрузки
+    # TODO check size
+    os.rename(tmp_path, dest_path)
+    response_text = '{{"filename": "{}{}"}}'.format(file_name, extension)
+    return web.Response(status=200, content_type='application/json', text=response_text)
 
 async def async_listener(app, notification_id):
     connections = app.connections
@@ -162,9 +184,9 @@ async def init_app():
     app.add_routes(
         [
             web.get('/api/{client_id}', api),
-            web.get('/images/{file_name}', get_image),
             web.post('/images', post_image),
         ])
+    app.router.add_static('/images/', IMAGES_DIR_PATH)
     app.connections = {}
     app.db_pool = await asyncpg.create_pool(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME, init=init_connection)
     async with app.db_pool.acquire() as connection:
@@ -174,6 +196,11 @@ async def init_app():
     return app
 
 if __name__ == '__main__':
+    if not os.path.exists(IMAGES_DIR_PATH):
+        os.makedirs(IMAGES_DIR_PATH)
+    if not os.path.exists(TMP_DIR_PATH):
+        os.makedirs(TMP_DIR_PATH)
+
     start_http_server(PROMETHEUS_CLIENT_PORT)
     loop = asyncio.get_event_loop()
     app = loop.run_until_complete(init_app())
