@@ -18,7 +18,7 @@ declare
 begin
   assert in_actor_id is not null;
 
-  v_is_master := pallas_project.is_in_group(in_actor_id, 'master');
+  v_is_master := pp_utils.is_in_group(in_actor_id, 'master');
   v_debatle_code := data.get_object_code(in_object_id);
   v_person1_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person1'), null);
   v_person2_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person2'), null);

@@ -1,6 +1,6 @@
--- drop function pallas_project.add_notification(integer, text, integer);
+-- drop function pp_utils.add_notification(integer, text, integer);
 
-create or replace function pallas_project.add_notification(in_actor_id integer, in_text text, in_redirect_object integer default null::integer)
+create or replace function pp_utils.add_notification(in_actor_id integer, in_text text, in_redirect_object integer default null::integer)
 returns void
 volatile
 as
@@ -21,12 +21,12 @@ begin
 
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_notification_id, v_title_attribute_id, to_jsonb(in_text), null),
-  (v_notification_id, v_is_visible_attribute_id, jsonb 'true', v_actor_id),
+  (v_notification_id, v_is_visible_attribute_id, jsonb 'true', in_actor_id),
   (v_notification_id, v_temporary_object_attribute_id, jsonb 'true', null),
-  (v_notification_id, v_redirect_attribute_id, to_jsonb (in_redirect_object), v_actor_id);
+  (v_notification_id, v_redirect_attribute_id, to_jsonb (in_redirect_object), in_actor_id);
 
   -- Вставляем в начало списка и рассылаем уведомления
-  perform pallas_progect.list_prepend_and_notify(v_notifications_id, v_notification_code, v_actor_id);
+  perform pp_utils.list_prepend_and_notify(v_notifications_id, v_notification_code, in_actor_id);
 
 end;
 $$

@@ -8,7 +8,7 @@ $$
 declare
   v_object_code text := data.get_object_code(in_object_id);
   v_actions_list text := '';
-  v_is_master boolean := pallas_project.is_in_group(in_actor_id, 'master');
+  v_is_master boolean := pp_utils.is_in_group(in_actor_id, 'master');
 begin
   assert in_actor_id is not null;
 
@@ -16,7 +16,7 @@ begin
     v_actions_list := v_actions_list || ', "' || 'login":' || 
       '{"code": "login", "name": "Войти", "disabled": false, "params": {}, "user_params": [{"code": "password", "description": "Введите пароль", "type": "string" }]}';
   else
-    if pallas_project.is_in_group(in_actor_id, 'all_person') then
+    if pp_utils.is_in_group(in_actor_id, 'all_person') then
       v_actions_list := v_actions_list || ', "' || 'debatles":' || 
         '{"code": "act_open_object", "name": "Дебатлы", "disabled": false, "params": {"object_code": "debatles"}}';
       v_actions_list := v_actions_list || ', "' || 'chats":' || 

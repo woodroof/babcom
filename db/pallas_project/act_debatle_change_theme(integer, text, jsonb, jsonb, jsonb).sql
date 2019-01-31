@@ -13,7 +13,7 @@ declare
   v_system_debatle_person1 integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person1'), -1);
 
   v_actor_id  integer := data.get_active_actor_id(in_client_id);
-  v_is_master boolean := pallas_project.is_in_group(v_actor_id, 'master');
+  v_is_master boolean := pp_utils.is_in_group(v_actor_id, 'master');
   v_message_sent boolean := false;
   v_system_debatle_theme_attribute_id integer := data.get_attribute_id('system_debatle_theme');
 begin

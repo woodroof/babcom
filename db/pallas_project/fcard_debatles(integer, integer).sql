@@ -6,7 +6,7 @@ volatile
 as
 $$
 declare
-  v_is_master boolean := pallas_project.is_in_group(in_actor_id, 'master');
+  v_is_master boolean := pp_utils.is_in_group(in_actor_id, 'master');
 
   v_content_attribute_id integer := data.get_attribute_id('content');
 

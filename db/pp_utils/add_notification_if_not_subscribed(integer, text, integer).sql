@@ -1,6 +1,6 @@
--- drop function pallas_project.add_notification_if_not_subscribed(integer, text, integer);
+-- drop function pp_utils.add_notification_if_not_subscribed(integer, text, integer);
 
-create or replace function pallas_project.add_notification_if_not_subscribed(in_actor_id integer, in_text text, in_redirect_object integer)
+create or replace function pp_utils.add_notification_if_not_subscribed(in_actor_id integer, in_text text, in_redirect_object integer)
 returns void
 volatile
 as
@@ -15,7 +15,7 @@ begin
   where c.actor_id = in_actor_id;
 
   if v_exists = 0 then
-    perform pallas_project.add_notification(in_actor_id, in_text, in_redirect_object);
+    perform pp_utils.add_notification(in_actor_id, in_text, in_redirect_object);
   end if;
 
 end;

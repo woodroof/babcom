@@ -82,7 +82,7 @@ begin
     if in_actor_id = v_person1_id 
       or in_actor_id = v_person2_id 
       or in_actor_id = v_judge_id 
-      or pallas_project.is_in_group(in_actor_id, 'master') then
+      or pp_utils.is_in_group(in_actor_id, 'master') then
       v_new_debatle_my_vote := jsonb '"Вы не можете голосовать"';
     elsif v_system_debatle_person1_my_vote = 0 and v_system_debatle_person2_my_vote = 0 then
       if v_debatle_status = 'vote' then

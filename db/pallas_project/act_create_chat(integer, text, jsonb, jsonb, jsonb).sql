@@ -12,15 +12,11 @@ declare
   v_actor_id  integer :=data.get_active_actor_id(in_client_id);
 
   v_title_attribute_id integer := data.get_attribute_id('title');
-  v_content_attribute_id integer := data.get_attribute_id('content');
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
 
   v_all_chats_id integer := data.get_object_id('all_chats');
   v_chats_id integer := data.get_object_id('chats');
   v_master_group_id integer := data.get_object_id('master');
-
-  v_content text[];
-  v_new_content text[];
 
 begin
   assert in_request_id is not null;
@@ -35,28 +31,9 @@ begin
   -- Добавляем заведшего чат в группу имени этого чата
   perform data.process_diffs_and_notify(data.change_object_groups(v_actor_id, array[v_chat_id], array[]::integer[], v_actor_id));
 
-  -- Добавляем его в список всех и в список моих для того, кто создаёт
-  -- Блокируем списки
-  perform * from data.objects where id = v_all_chats_id for update;
-  perform * from data.objects where id = v_chats_id for update;
-
-  -- Достаём, меняем, кладём назад
-  v_content := array[]::text[];
-  v_content := json.get_string_array_opt(data.get_attribute_value(v_all_chats_id, 'content', v_master_group_id), v_content);
-  v_new_content := array_prepend(v_chat_code, v_content);
-  if v_new_content <> v_content then
-    perform data.change_object_and_notify(v_all_chats_id, 
-                                          jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_new_content))),
-                                          v_actor_id);
-  end if;
-  v_content := array[]::text[];
-  v_content := json.get_string_array_opt(data.get_attribute_value(v_chats_id,'content', v_actor_id), v_content);
-  v_new_content := array_prepend(v_chat_code, v_content);
-  if v_new_content <> v_content then
-    perform data.change_object_and_notify(v_chats_id, 
-                                         jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_actor_id, to_jsonb(v_new_content))),
-                                         v_actor_id);
-  end if;
+  -- Добавляем чат в список всех и в список моих для того, кто создаёт
+  perform pp_utils.list_prepend_and_notify(v_all_chats_id, v_chat_code, v_master_group_id);
+  perform pp_utils.list_prepend_and_notify(v_chats_id, v_chat_code, v_actor_id);
 
   perform api_utils.create_notification(
     in_client_id,

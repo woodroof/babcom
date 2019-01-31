@@ -68,6 +68,10 @@ create schema json_test;
 
 create schema pallas_project;
 
+-- drop schema pp_utils;
+
+create schema pp_utils;
+
 -- drop schema random;
 
 create schema random;
@@ -8042,10 +8046,12 @@ begin
       where oo.parent_object_id = v_chat_id
         and oo.parent_object_id <> oo.object_id
       order by av.value) loop 
-      v_persons := v_persons||'
+      v_persons := v_persons || '
 '|| json.get_string_opt(v_name,'');
    end loop;
-
+ v_persons := v_persons || '
+'|| '------------------
+Кого добавляем?';
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_temp_object_id, v_title_attribute_id, to_jsonb(format('Изменение участников чата %s', v_chat_subtitle)), v_actor_id),
   (v_temp_object_id, v_is_visible_attribute_id, jsonb 'true', v_actor_id),
@@ -8089,6 +8095,9 @@ declare
   v_system_message_sender_attribute_id integer := data.get_attribute_id('system_message_sender');
   v_system_message_time_attribute_id integer := data.get_attribute_id('system_message_time');
 
+  v_all_chats_id integer := data.get_object_id('all_chats');
+  v_chats_id integer := data.get_object_id('chats');
+
   v_master_group_id integer := data.get_object_id('master');
 
   v_content text[];
@@ -8114,24 +8123,29 @@ begin
   perform * from data.objects where id = v_chat_id for update;
 
   -- Достаём, меняем, кладём назад
-  v_content := json.get_string_array_opt(data.get_attribute_value(v_chat_id, 'content', v_actor_id), array[]::text[]);
+  v_content := json.get_string_array_opt(data.get_attribute_value(v_chat_id, 'content', v_chat_id), array[]::text[]);
   v_new_content := array_prepend(v_message_code, v_content);
   if v_new_content <> v_content then
     v_message_sent := data.change_current_object(in_client_id, 
                                                  in_request_id,
                                                  v_chat_id, 
-                                                 jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_actor_id, to_jsonb(v_new_content))));
+                                                 jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_chat_id, to_jsonb(v_new_content))));
   end if;
 
+  -- Перекладываем этот чат в начало в мастерском списке чатов
+  perform pp_utils.list_replace_to_head_and_notify(v_all_chats_id, v_chat_code, v_master_group_id);
+
   -- Отправляем нотификацию о новом сообщении всем неподписанным на этот чат
+  -- и перекладываем у всех участников этот чат вверх списка
   for v_person_id in 
     (select oo.object_id from data.object_objects oo 
       where oo.parent_object_id = v_chat_id
-        and oo.parent_object_id <> oo.object_id
-        and oo.object_id <> v_actor_id)
+        and oo.parent_object_id <> oo.object_id)
   loop
-    if not json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_mute', v_person_id), false) then
-      perform pallas_project.add_notification_if_not_subscribed(v_person_id, 'Новое сообщение от '|| v_actor_title, v_chat_id);
+    perform pp_utils.list_replace_to_head_and_notify(v_chats_id, v_chat_code, v_person_id);
+    if v_person_id <> v_actor_id 
+      and not json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_mute', v_person_id), false) then
+      perform pp_utils.add_notification_if_not_subscribed(v_person_id, 'Новое сообщение от '|| v_actor_title, v_chat_id);
     end if;
   end loop;
 
@@ -8156,15 +8170,11 @@ declare
   v_actor_id  integer :=data.get_active_actor_id(in_client_id);
 
   v_title_attribute_id integer := data.get_attribute_id('title');
-  v_content_attribute_id integer := data.get_attribute_id('content');
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
 
   v_all_chats_id integer := data.get_object_id('all_chats');
   v_chats_id integer := data.get_object_id('chats');
   v_master_group_id integer := data.get_object_id('master');
-
-  v_content text[];
-  v_new_content text[];
 
 begin
   assert in_request_id is not null;
@@ -8179,28 +8189,9 @@ begin
   -- Добавляем заведшего чат в группу имени этого чата
   perform data.process_diffs_and_notify(data.change_object_groups(v_actor_id, array[v_chat_id], array[]::integer[], v_actor_id));
 
-  -- Добавляем его в список всех и в список моих для того, кто создаёт
-  -- Блокируем списки
-  perform * from data.objects where id = v_all_chats_id for update;
-  perform * from data.objects where id = v_chats_id for update;
-
-  -- Достаём, меняем, кладём назад
-  v_content := array[]::text[];
-  v_content := json.get_string_array_opt(data.get_attribute_value(v_all_chats_id, 'content', v_master_group_id), v_content);
-  v_new_content := array_prepend(v_chat_code, v_content);
-  if v_new_content <> v_content then
-    perform data.change_object_and_notify(v_all_chats_id, 
-                                          jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_master_group_id, to_jsonb(v_new_content))),
-                                          v_actor_id);
-  end if;
-  v_content := array[]::text[];
-  v_content := json.get_string_array_opt(data.get_attribute_value(v_chats_id,'content', v_actor_id), v_content);
-  v_new_content := array_prepend(v_chat_code, v_content);
-  if v_new_content <> v_content then
-    perform data.change_object_and_notify(v_chats_id, 
-                                         jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_actor_id, to_jsonb(v_new_content))),
-                                         v_actor_id);
-  end if;
+  -- Добавляем чат в список всех и в список моих для того, кто создаёт
+  perform pp_utils.list_prepend_and_notify(v_all_chats_id, v_chat_code, v_master_group_id);
+  perform pp_utils.list_prepend_and_notify(v_chats_id, v_chat_code, v_actor_id);
 
   perform api_utils.create_notification(
     in_client_id,
@@ -8585,7 +8576,7 @@ declare
   v_debatle_id integer := data.get_object_id(v_debatle_code);
   v_actor_id  integer :=data.get_active_actor_id(in_client_id);
 
-  v_is_master boolean := pallas_project.is_in_group(v_actor_id, 'master');
+  v_is_master boolean := pp_utils.is_in_group(v_actor_id, 'master');
   v_master_group_id integer:= data.get_object_id('master'); 
 
   v_debatle_status text;
@@ -8847,7 +8838,7 @@ declare
   v_system_debatle_person1 integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person1'), -1);
 
   v_actor_id  integer := data.get_active_actor_id(in_client_id);
-  v_is_master boolean := pallas_project.is_in_group(v_actor_id, 'master');
+  v_is_master boolean := pp_utils.is_in_group(v_actor_id, 'master');
   v_message_sent boolean := false;
   v_system_debatle_theme_attribute_id integer := data.get_attribute_id('system_debatle_theme');
 begin
@@ -8913,7 +8904,7 @@ declare
 
   v_changes jsonb[];
 
-  v_is_master boolean := pallas_project.is_in_group(v_actor_id, 'master');
+  v_is_master boolean := pp_util.is_in_group(v_actor_id, 'master');
   v_message_sent boolean := false;
 begin
   assert in_request_id is not null;
@@ -9124,7 +9115,7 @@ declare
 begin
   assert in_actor_id is not null;
 
-  v_is_master := pallas_project.is_in_group(in_actor_id, 'master');
+  v_is_master := pp_utils.is_in_group(in_actor_id, 'master');
   v_chat_code := data.get_object_code(in_object_id);
 
   if v_is_master or json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_invite', in_actor_id), false) then
@@ -9145,6 +9136,31 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.actgenerator_chat_temp_person_list(integer, integer);
+
+create or replace function pallas_project.actgenerator_chat_temp_person_list(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_actions_list text := '';
+  v_person1_id integer;
+  v_is_master boolean;
+  v_debatle_code text;
+  v_debatle_status text;
+begin
+  assert in_actor_id is not null;
+
+  v_actions_list := v_actions_list || 
+                ', "chat_add_person_back": {"code": "go_back", "name": "Назад к чату", "disabled": false, '||
+                '"params": {}}';
+
+  return jsonb ('{'||trim(v_actions_list,',')||'}');
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.actgenerator_chats(integer, integer);
 
 create or replace function pallas_project.actgenerator_chats(in_object_id integer, in_actor_id integer)
@@ -9157,7 +9173,7 @@ declare
 begin
   assert in_actor_id is not null;
 
-  if pallas_project.is_in_group(in_actor_id, 'all_person') then
+  if pp_utils.is_in_group(in_actor_id, 'all_person') then
     v_actions_list := v_actions_list || 
       ', "create_chat": {"code": "create_chat", "name": "Создать чат", "disabled": false, '||
       '"params": {}}';
@@ -9187,7 +9203,7 @@ declare
 begin
   assert in_actor_id is not null;
 
-  v_is_master := pallas_project.is_in_group(in_actor_id, 'master');
+  v_is_master := pp_utils.is_in_group(in_actor_id, 'master');
   v_debatle_code := data.get_object_code(in_object_id);
   v_person1_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person1'), null);
   v_person2_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person2'), null);
@@ -9387,7 +9403,7 @@ declare
 begin
   assert in_actor_id is not null;
 
-  if pallas_project.is_in_group(in_actor_id, 'all_person') then
+  if pp_utils.is_in_group(in_actor_id, 'all_person') then
     v_actions_list := v_actions_list || 
       ', "create_debatle_step1": {"code": "create_debatle_step1", "name": "Инициировать дебатл", "disabled": false, '||
       '"params": {}, "user_params": [{"code": "title", "description": "Введите тему дебатла", "type": "string" }]}';
@@ -9407,7 +9423,7 @@ $$
 declare
   v_object_code text := data.get_object_code(in_object_id);
   v_actions_list text := '';
-  v_is_master boolean := pallas_project.is_in_group(in_actor_id, 'master');
+  v_is_master boolean := pp_utils.is_in_group(in_actor_id, 'master');
 begin
   assert in_actor_id is not null;
 
@@ -9415,7 +9431,7 @@ begin
     v_actions_list := v_actions_list || ', "' || 'login":' || 
       '{"code": "login", "name": "Войти", "disabled": false, "params": {}, "user_params": [{"code": "password", "description": "Введите пароль", "type": "string" }]}';
   else
-    if pallas_project.is_in_group(in_actor_id, 'all_person') then
+    if pp_utils.is_in_group(in_actor_id, 'all_person') then
       v_actions_list := v_actions_list || ', "' || 'debatles":' || 
         '{"code": "act_open_object", "name": "Дебатлы", "disabled": false, "params": {"object_code": "debatles"}}';
       v_actions_list := v_actions_list || ', "' || 'chats":' || 
@@ -9430,64 +9446,6 @@ begin
   end if;
 
   return jsonb ('{'||trim(v_actions_list,',')||'}');
-end;
-$$
-language plpgsql;
-
--- drop function pallas_project.add_notification(integer, text, integer);
-
-create or replace function pallas_project.add_notification(in_actor_id integer, in_text text, in_redirect_object integer default null::integer)
-returns void
-volatile
-as
-$$
-declare
-  v_notification_code text;
-  v_notification_id  integer;
-
-  v_title_attribute_id integer := data.get_attribute_id('title');
-  v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
-  v_temporary_object_attribute_id integer := data.get_attribute_id('temporary_object');
-  v_redirect_attribute_id integer := data.get_attribute_id('redirect');
-
-  v_notifications_id integer := data.get_object_id('notifications');
-begin
-  -- создаём новый объект для нотификации
-  insert into data.objects default values returning id, code into v_notification_id, v_notification_code;
-
-  insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
-  (v_notification_id, v_title_attribute_id, to_jsonb(in_text), null),
-  (v_notification_id, v_is_visible_attribute_id, jsonb 'true', v_actor_id),
-  (v_notification_id, v_temporary_object_attribute_id, jsonb 'true', null),
-  (v_notification_id, v_redirect_attribute_id, to_jsonb (in_redirect_object), v_actor_id);
-
-  -- Вставляем в начало списка и рассылаем уведомления
-  perform pallas_progect.list_prepend_and_notify(v_notifications_id, v_notification_code, v_actor_id);
-
-end;
-$$
-language plpgsql;
-
--- drop function pallas_project.add_notification_if_not_subscribed(integer, text, integer);
-
-create or replace function pallas_project.add_notification_if_not_subscribed(in_actor_id integer, in_text text, in_redirect_object integer)
-returns void
-volatile
-as
-$$
-declare
-  v_exists integer;
-begin
-  -- Ищем подписку на этот объект у этого актора
-  select count(s.object_id) into v_exists
-  from data.clients c
-  inner join data.client_subscriptions s on s.client_id = c.id and s.object_id = in_redirect_object
-  where c.actor_id = in_actor_id;
-
-  if v_exists = 0 then
-    perform pallas_project.add_notification(in_actor_id, in_text, in_redirect_object);
-  end if;
-
 end;
 $$
 language plpgsql;
@@ -9576,7 +9534,7 @@ begin
     if in_actor_id = v_person1_id 
       or in_actor_id = v_person2_id 
       or in_actor_id = v_judge_id 
-      or pallas_project.is_in_group(in_actor_id, 'master') then
+      or pp_utils.is_in_group(in_actor_id, 'master') then
       v_new_debatle_my_vote := jsonb '"Вы не можете голосовать"';
     elsif v_system_debatle_person1_my_vote = 0 and v_system_debatle_person2_my_vote = 0 then
       if v_debatle_status = 'vote' then
@@ -9638,7 +9596,7 @@ volatile
 as
 $$
 declare
-  v_is_master boolean := pallas_project.is_in_group(in_actor_id, 'master');
+  v_is_master boolean := pp_utils.is_in_group(in_actor_id, 'master');
 
   v_content_attribute_id integer := data.get_attribute_id('content');
 
@@ -9667,7 +9625,7 @@ volatile
 as
 $$
 declare
-  v_is_master boolean := pallas_project.is_in_group(in_actor_id, 'master');
+  v_is_master boolean := pp_utils.is_in_group(in_actor_id, 'master');
 
   v_content text[];
 
@@ -9709,7 +9667,7 @@ declare
 begin
   perform * from data.objects where id = in_object_id for update;
 
-  v_is_master := pallas_project.is_in_group(in_actor_id, 'master');
+  v_is_master := pp_utils.is_in_group(in_actor_id, 'master');
   if v_is_master or in_object_id = in_actor_id then
     v_value := data.get_attribute_value(in_object_id, v_system_money_attribute_id);
     if data.should_attribute_value_be_changed(in_object_id, v_system_money_attribute_id, null, v_money_attribute_id, in_actor_id) then
@@ -10377,7 +10335,7 @@ begin
   ('system_chat_is_mute', null, 'Признак отлюченного уведомления о новых сообщениях', 'system', null, null, true),
   ('system_chat_last_message_time', null, 'Дата последнего собщения', 'system', null, null, false),
   -- для временных объектов для изменения участников
-  ('chat_temp_person_list_persons', 'Сейчас участвуют:', 'Список участников чата', 'normal', 'full', null, false),
+  ('chat_temp_person_list_persons', 'Сейчас участвуют', 'Список участников чата', 'normal', 'full', null, false),
   ('system_chat_temp_person_list_chat_id', null, 'Идентификатор изменяемого чата', 'system', null, null, false);
 
   v_system_chat_can_invite_attribute_id := data.get_attribute_id('system_chat_can_invite');
@@ -10461,8 +10419,8 @@ begin
 
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_chat_temp_person_list_class_id, v_type_attribute_id, jsonb '"chat_temp_person_list"'),
---  (v_chat_temp_person_list_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatle_temp_person_list"'),
---  (v_chat_temp_person_list_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_debatle_temp_person_list"'),
+  (v_chat_temp_person_list_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chat_temp_person_list"'),
+  (v_chat_temp_person_list_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chat_temp_person_list"'),
   (v_chat_temp_person_list_class_id, v_temporary_object_attribute_id, jsonb 'true'),
   (v_chat_temp_person_list_class_id, v_template_attribute_id, jsonb_build_object('groups', format(
                                                       '[{"code": "%s", "actions": ["%s"]},{"code": "%s", "attributes": ["%s"]}]',
@@ -10480,83 +10438,105 @@ end;
 $$
 language plpgsql;
 
--- drop function pallas_project.is_in_group(integer, text);
-
-create or replace function pallas_project.is_in_group(in_object_id integer, in_group_code text)
-returns boolean
-volatile
-as
-$$
-declare
-  v_group_id integer := data.get_object_id(in_group_code);
-  v_count integer; 
-begin
-  select count(1) into v_count from data.object_objects oo
-  where oo.object_id = in_object_id
-    and oo.parent_object_id = v_group_id;
-
-  if v_count > 0 then
-    return true;
-  else 
-    return false;
-  end if;
-end;
-$$
-language plpgsql;
-
 -- drop function pallas_project.lef_chat_temp_person_list(integer, text, integer, integer);
 
-create or replace function pallas_project.lef_chat_temp_person_list(in_client_id integer, in_request_id text, object_id integer, list_object_id integer)
+create or replace function pallas_project.lef_chat_temp_person_list(in_client_id integer, in_request_id text, in_object_id integer, in_list_object_id integer)
 returns void
 volatile
 as
 $$
 declare
   v_actor_id  integer :=data.get_active_actor_id(in_client_id);
-  v_chat_id integer := json.get_integer(data.get_attribute_value(object_id, 'system_chat_temp_person_list_chat_id'));
+  v_chat_id integer := json.get_integer(data.get_attribute_value(in_object_id, 'system_chat_temp_person_list_chat_id'));
   v_chat_code text := data.get_object_code(v_chat_id);
 
   v_chats_id integer := data.get_object_id('chats');
 
   v_content_attribute_id integer := data.get_attribute_id('content');
+  v_title_attribute_id integer := data.get_attribute_id('title');
 
+  v_chat_title text;
+  v_person_title text;
+  v_chat_subtitle text := json.get_string_opt(data.get_attribute_value(v_chat_id, 'subtitle', v_actor_id), '');
+
+  v_person_code text := data.get_object_code(in_list_object_id);
   v_content text[];
   v_new_content text[];
   v_changes jsonb[];
+  v_message_sent boolean;
+
+  v_name jsonb;
+  v_persons text := '';
 begin
   assert in_request_id is not null;
-  assert list_object_id is not null;
+  assert in_list_object_id is not null;
 
-  -- добавляем в группу с рассылкой
+-- добавляем в группу с рассылкой
+  perform data.process_diffs_and_notify(data.change_object_groups(in_list_object_id, array[v_chat_id], array[]::integer[], v_actor_id));
+
+  -- Меняем заголовок чата
+  perform * from data.objects where id = v_chat_id for update;
+  v_chat_title := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), '');
+  v_person_title := json.get_string_opt(data.get_attribute_value(in_list_object_id, v_title_attribute_id, v_actor_id), '');
+  v_chat_title := v_chat_title ||', ' || v_person_title;
+  perform data.change_object_and_notify(v_chat_id, 
+                                        jsonb_build_array(data.attribute_change2jsonb(v_title_attribute_id, null, to_jsonb(v_chat_title))),
+                                        null);
+
+-- Добавляем чат в список чатов в начало
+  perform pp_utils.list_prepend_and_notify(v_chats_id, v_chat_code, in_list_object_id);
 
   -- отправляем нотификацию, что был добавлен в чат
-  -- удаляем персону из списка
+  perform pp_utils.add_notification(in_list_object_id, 'Вы добавлены в чат ' || v_chat_subtitle, v_chat_id);
+
+-- удаляем персону из временного списка
+  perform * from data.objects where id = in_object_id for update;
+
+  v_content := json.get_string_array_opt(data.get_attribute_value(in_object_id, 'content', v_actor_id), array[]::text[]);
+  v_content := array_remove(v_content, v_person_code);
+
   -- обновляем список текущих персон
+  for v_name in 
+    (select av.value
+      from data.object_objects oo
+      left join data.attribute_values av on av.object_id = oo.object_id and av.attribute_id = v_title_attribute_id and av.value_object_id is null
+      where oo.parent_object_id = v_chat_id
+        and oo.parent_object_id <> oo.object_id
+      order by av.value) loop 
+      v_persons := v_persons || '
+'|| json.get_string_opt(v_name,'');
+   end loop;
+ v_persons := v_persons || '
+'|| '------------------
+Кого добавляем?';
+
+  v_changes := array[]::jsonb[];
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('chat_temp_person_list_persons', null, to_jsonb(v_persons)));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('content', null, to_jsonb(v_content)));
+
   -- рассылаем обновление списка себе
-  -- остаёмся на месте
-
-  perform * from data.objects where id = v_debatle_id for update;
-
-  perform api_utils.create_notification(
-    in_client_id,
-    in_request_id,
-    'action',
-    '{"action": "go_back", "action_data": {}}'::jsonb);
+  v_message_sent := data.change_current_object(in_client_id,
+                                               in_request_id,
+                                               in_object_id, 
+                                               to_jsonb(v_changes));
+  if not v_message_sent then
+   perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+  end if;
 end;
 $$
 language plpgsql;
 
 -- drop function pallas_project.lef_debatle_temp_bonus_list(integer, text, integer, integer);
 
-create or replace function pallas_project.lef_debatle_temp_bonus_list(in_client_id integer, in_request_id text, object_id integer, list_object_id integer)
+create or replace function pallas_project.lef_debatle_temp_bonus_list(in_client_id integer, in_request_id text, in_object_id integer, in_list_object_id integer)
 returns void
 volatile
 as
 $$
 declare
   v_actor_id  integer :=data.get_active_actor_id(in_client_id);
-  v_judged_person text := json.get_string(data.get_attribute_value(object_id, 'debatle_temp_bonus_list_person'));
-  v_debatle_id integer := json.get_integer(data.get_attribute_value(object_id, 'system_debatle_temp_bonus_list_debatle_id'));
+  v_judged_person text := json.get_string(data.get_attribute_value(in_object_id, 'debatle_temp_bonus_list_person'));
+  v_debatle_id integer := json.get_integer(data.get_attribute_value(in_object_id, 'system_debatle_temp_bonus_list_debatle_id'));
   v_debatle_code text := data.get_object_code(v_debatle_id);
 
   v_debatle_person_bonuses jsonb;
@@ -10571,7 +10551,7 @@ declare
   v_message_sent boolean;
 begin
   assert in_request_id is not null;
-  assert list_object_id is not null;
+  assert in_list_object_id is not null;
 
   if v_judged_person not in ('instigator', 'opponent') then
     perform api_utils.create_show_message_action_notification(
@@ -10584,9 +10564,9 @@ begin
 
   perform * from data.objects where id = v_debatle_id for update;
 
-  v_bonus_code := data.get_object_code(list_object_id);
-  v_bonus_name := json.get_string_opt(data.get_attribute_value(list_object_id, 'title', v_actor_id), '');
-  v_bonus_votes := json.get_integer_opt(data.get_attribute_value(list_object_id, 'debatle_bonus_votes'), 1);
+  v_bonus_code := data.get_object_code(in_list_object_id);
+  v_bonus_name := json.get_string_opt(data.get_attribute_value(in_list_object_id, 'title', v_actor_id), '');
+  v_bonus_votes := json.get_integer_opt(data.get_attribute_value(in_list_object_id, 'debatle_bonus_votes'), 1);
 
   if v_judged_person = 'instigator' then
     v_debatle_person_bonuses := coalesce(data.get_attribute_value(v_debatle_id, 'debatle_person1_bonuses'), jsonb '[]');
@@ -10600,9 +10580,9 @@ begin
 
   perform data.change_object_and_notify(v_debatle_id, to_jsonb(v_changes), v_actor_id);
 
-  perform * from data.objects where id = object_id for update;
+  perform * from data.objects where id = in_object_id for update;
 
-  v_content := json.get_string_array_opt(data.get_attribute_value(object_id, 'content', v_actor_id), array[]::text[]);
+  v_content := json.get_string_array_opt(data.get_attribute_value(in_object_id, 'content', v_actor_id), array[]::text[]);
   v_content := array_remove(v_content, v_bonus_code);
 
   v_changes := array[]::jsonb[];
@@ -10610,7 +10590,7 @@ begin
   v_changes := array_append(v_changes, data.attribute_change2jsonb('content', null, to_jsonb(v_content)));
   v_message_sent := data.change_current_object(in_client_id,
                                                in_request_id,
-                                               object_id, 
+                                               in_object_id, 
                                                to_jsonb(v_changes));
   if not v_message_sent then
    perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
@@ -10622,15 +10602,15 @@ language plpgsql;
 
 -- drop function pallas_project.lef_debatle_temp_person_list(integer, text, integer, integer);
 
-create or replace function pallas_project.lef_debatle_temp_person_list(in_client_id integer, in_request_id text, object_id integer, list_object_id integer)
+create or replace function pallas_project.lef_debatle_temp_person_list(in_client_id integer, in_request_id text, in_object_id integer, in_list_object_id integer)
 returns void
 volatile
 as
 $$
 declare
   v_actor_id  integer :=data.get_active_actor_id(in_client_id);
-  v_edited_person text := json.get_string(data.get_attribute_value(object_id, 'debatle_temp_person_list_edited_person'));
-  v_debatle_id integer := json.get_integer(data.get_attribute_value(object_id, 'system_debatle_temp_person_list_debatle_id'));
+  v_edited_person text := json.get_string(data.get_attribute_value(in_object_id, 'debatle_temp_person_list_edited_person'));
+  v_debatle_id integer := json.get_integer(data.get_attribute_value(in_object_id, 'system_debatle_temp_person_list_debatle_id'));
   v_debatle_code text := data.get_object_code(v_debatle_id);
 
   v_system_debatle_person1 integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person1'), -1);
@@ -10651,7 +10631,7 @@ declare
   v_change_debatles_my jsonb[]; 
 begin
   assert in_request_id is not null;
-  assert list_object_id is not null;
+  assert in_list_object_id is not null;
 
   if v_edited_person not in ('instigator', 'opponent', 'judge') then
     perform api_utils.create_notification(
@@ -10666,18 +10646,18 @@ begin
 
   if v_edited_person = 'instigator' then
     v_old_person := v_system_debatle_person1;
-    if v_old_person <> list_object_id then
-      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person1', null, to_jsonb(list_object_id)));
+    if v_old_person <> in_list_object_id then
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person1', null, to_jsonb(in_list_object_id)));
     end if;
   elsif v_edited_person = 'opponent' then
     v_old_person := v_system_debatle_person2;
-    if v_old_person <> list_object_id then
-      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person2', null, to_jsonb(list_object_id)));
+    if v_old_person <> in_list_object_id then
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person2', null, to_jsonb(in_list_object_id)));
     end if;
   elsif v_edited_person = 'judge' then
     v_old_person := v_system_debatle_judge;
-    if v_old_person <> list_object_id then
-      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_judge', null, to_jsonb(list_object_id)));
+    if v_old_person <> in_list_object_id then
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_judge', null, to_jsonb(in_list_object_id)));
     end if;
   end if;
 
@@ -10688,11 +10668,11 @@ begin
   end if;
   if v_edited_person = 'instigator' 
     or (v_edited_person in ('opponent','judge') and v_debatle_status in ('future', 'vote', 'vote_over', 'closed')) then
-    v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', list_object_id, jsonb 'true'));
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', in_list_object_id, jsonb 'true'));
   end if;
   perform data.change_object_and_notify(v_debatle_id, to_jsonb(v_changes), v_actor_id);
 
-  if v_old_person <> list_object_id and v_old_person <> -1 then
+  if v_old_person <> in_list_object_id and v_old_person <> -1 then
     --Удаляем из моих дебатлов у старой персоны,
     perform * from data.objects where id = v_debatles_my_id for update;
     v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_my_id, 'content', v_old_person), array[]::text[]);
@@ -10702,10 +10682,10 @@ begin
     end if;
   end if;
   -- Добавляем в мои дебатлы новой персоне
-  v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_my_id, 'content', list_object_id), array[]::text[]);
+  v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_my_id, 'content', in_list_object_id), array[]::text[]);
   v_new_content := array_prepend(v_debatle_code, v_content);
   if v_content <> v_new_content then
-    v_change_debatles_my := array_prepend(data.attribute_change2jsonb(v_content_attribute_id, list_object_id, to_jsonb(v_new_content)), v_change_debatles_my);
+    v_change_debatles_my := array_prepend(data.attribute_change2jsonb(v_content_attribute_id, in_list_object_id, to_jsonb(v_new_content)), v_change_debatles_my);
   end if;
   if array_length(v_change_debatles_my, 1) > 0 then
     perform data.change_object_and_notify(v_debatles_my_id, 
@@ -10718,35 +10698,6 @@ begin
     in_request_id,
     'action',
     '{"action": "go_back", "action_data": {}}'::jsonb);
-end;
-$$
-language plpgsql;
-
--- drop function pallas_project.list_prepend_and_notify(integer, text, integer);
-
-create or replace function pallas_project.list_prepend_and_notify(in_list_id integer, in_new_object_code text, in_actor_id integer)
-returns void
-volatile
-as
-$$
-declare
-  v_content_attribute_id integer := data.get_attribute_id('content');
-
-  v_content text[];
-  v_new_content text[];
-
-begin
-  -- Блокируем список
-  perform * from data.objects where id = in_list_id for update;
-
-  -- Достаём, меняем, кладём назад
-  v_content := json.get_string_array_opt(data.get_attribute_value(in_list_id, 'content', in_actor_id), array[]::text[]);
-  v_new_content := array_prepend(in_new_object_code, v_content);
-  if v_new_content <> v_content then
-    perform data.change_object_and_notify(in_list_id, 
-                                          jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, in_actor_id, to_jsonb(v_new_content))),
-                                          in_actor_id);
-  end if;
 end;
 $$
 language plpgsql;
@@ -10919,6 +10870,148 @@ begin
   else
     return 'Неизвестно';
   end case;
+end;
+$$
+language plpgsql;
+
+-- drop function pp_utils.add_notification(integer, text, integer);
+
+create or replace function pp_utils.add_notification(in_actor_id integer, in_text text, in_redirect_object integer default null::integer)
+returns void
+volatile
+as
+$$
+declare
+  v_notification_code text;
+  v_notification_id  integer;
+
+  v_title_attribute_id integer := data.get_attribute_id('title');
+  v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
+  v_temporary_object_attribute_id integer := data.get_attribute_id('temporary_object');
+  v_redirect_attribute_id integer := data.get_attribute_id('redirect');
+
+  v_notifications_id integer := data.get_object_id('notifications');
+begin
+  -- создаём новый объект для нотификации
+  insert into data.objects default values returning id, code into v_notification_id, v_notification_code;
+
+  insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
+  (v_notification_id, v_title_attribute_id, to_jsonb(in_text), null),
+  (v_notification_id, v_is_visible_attribute_id, jsonb 'true', in_actor_id),
+  (v_notification_id, v_temporary_object_attribute_id, jsonb 'true', null),
+  (v_notification_id, v_redirect_attribute_id, to_jsonb (in_redirect_object), in_actor_id);
+
+  -- Вставляем в начало списка и рассылаем уведомления
+  perform pp_utils.list_prepend_and_notify(v_notifications_id, v_notification_code, in_actor_id);
+
+end;
+$$
+language plpgsql;
+
+-- drop function pp_utils.add_notification_if_not_subscribed(integer, text, integer);
+
+create or replace function pp_utils.add_notification_if_not_subscribed(in_actor_id integer, in_text text, in_redirect_object integer)
+returns void
+volatile
+as
+$$
+declare
+  v_exists integer;
+begin
+  -- Ищем подписку на этот объект у этого актора
+  select count(s.object_id) into v_exists
+  from data.clients c
+  inner join data.client_subscriptions s on s.client_id = c.id and s.object_id = in_redirect_object
+  where c.actor_id = in_actor_id;
+
+  if v_exists = 0 then
+    perform pp_utils.add_notification(in_actor_id, in_text, in_redirect_object);
+  end if;
+
+end;
+$$
+language plpgsql;
+
+-- drop function pp_utils.is_in_group(integer, text);
+
+create or replace function pp_utils.is_in_group(in_object_id integer, in_group_code text)
+returns boolean
+volatile
+as
+$$
+declare
+  v_group_id integer := data.get_object_id(in_group_code);
+  v_count integer; 
+begin
+  select count(1) into v_count from data.object_objects oo
+  where oo.object_id = in_object_id
+    and oo.parent_object_id = v_group_id;
+
+  if v_count > 0 then
+    return true;
+  else 
+    return false;
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pp_utils.list_prepend_and_notify(integer, text, integer);
+
+create or replace function pp_utils.list_prepend_and_notify(in_list_id integer, in_new_object_code text, in_actor_id integer)
+returns void
+volatile
+as
+$$
+declare
+  v_content_attribute_id integer := data.get_attribute_id('content');
+
+  v_content text[];
+  v_new_content text[];
+
+begin
+  -- Блокируем список
+  perform * from data.objects where id = in_list_id for update;
+
+  -- Достаём, меняем, кладём назад
+  v_content := json.get_string_array_opt(data.get_attribute_value(in_list_id, 'content', in_actor_id), array[]::text[]);
+  v_new_content := array_prepend(in_new_object_code, v_content);
+  if v_new_content <> v_content then
+    perform data.change_object_and_notify(in_list_id, 
+                                          jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, in_actor_id, to_jsonb(v_new_content))),
+                                          in_actor_id);
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pp_utils.list_replace_to_head_and_notify(integer, text, integer);
+
+create or replace function pp_utils.list_replace_to_head_and_notify(in_list_id integer, in_object_code text, in_actor_id integer)
+returns void
+volatile
+as
+$$
+-- Функция перемещает элемент в начало массива
+declare
+  v_content_attribute_id integer := data.get_attribute_id('content');
+
+  v_content text[];
+  v_new_content text[];
+
+begin
+  -- Блокируем список
+  perform * from data.objects where id = in_list_id for update;
+
+  -- Достаём, меняем, кладём назад
+  v_content := json.get_string_array_opt(data.get_attribute_value(in_list_id, 'content', in_actor_id), array[]::text[]);
+  v_new_content := array_remove(v_content, in_object_code);
+  v_new_content := array_prepend(in_object_code, v_new_content);
+  if v_new_content <> v_content then
+    perform data.change_object_and_notify(in_list_id, 
+                                          jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, in_actor_id, to_jsonb(v_new_content))),
+                                          in_actor_id);
+  end if;
 end;
 $$
 language plpgsql;

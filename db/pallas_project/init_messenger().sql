@@ -46,7 +46,7 @@ begin
   ('system_chat_is_mute', null, 'Признак отлюченного уведомления о новых сообщениях', 'system', null, null, true),
   ('system_chat_last_message_time', null, 'Дата последнего собщения', 'system', null, null, false),
   -- для временных объектов для изменения участников
-  ('chat_temp_person_list_persons', 'Сейчас участвуют:', 'Список участников чата', 'normal', 'full', null, false),
+  ('chat_temp_person_list_persons', 'Сейчас участвуют', 'Список участников чата', 'normal', 'full', null, false),
   ('system_chat_temp_person_list_chat_id', null, 'Идентификатор изменяемого чата', 'system', null, null, false);
 
   v_system_chat_can_invite_attribute_id := data.get_attribute_id('system_chat_can_invite');
@@ -130,8 +130,8 @@ begin
 
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_chat_temp_person_list_class_id, v_type_attribute_id, jsonb '"chat_temp_person_list"'),
---  (v_chat_temp_person_list_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatle_temp_person_list"'),
---  (v_chat_temp_person_list_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_debatle_temp_person_list"'),
+  (v_chat_temp_person_list_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chat_temp_person_list"'),
+  (v_chat_temp_person_list_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chat_temp_person_list"'),
   (v_chat_temp_person_list_class_id, v_temporary_object_attribute_id, jsonb 'true'),
   (v_chat_temp_person_list_class_id, v_template_attribute_id, jsonb_build_object('groups', format(
                                                       '[{"code": "%s", "actions": ["%s"]},{"code": "%s", "attributes": ["%s"]}]',

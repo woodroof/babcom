@@ -22,7 +22,7 @@ declare
 begin
   perform * from data.objects where id = in_object_id for update;
 
-  v_is_master := pallas_project.is_in_group(in_actor_id, 'master');
+  v_is_master := pp_utils.is_in_group(in_actor_id, 'master');
   if v_is_master or in_object_id = in_actor_id then
     v_value := data.get_attribute_value(in_object_id, v_system_money_attribute_id);
     if data.should_attribute_value_be_changed(in_object_id, v_system_money_attribute_id, null, v_money_attribute_id, in_actor_id) then

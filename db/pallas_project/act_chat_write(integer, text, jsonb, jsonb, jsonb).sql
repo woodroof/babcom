@@ -25,6 +25,9 @@ declare
   v_system_message_sender_attribute_id integer := data.get_attribute_id('system_message_sender');
   v_system_message_time_attribute_id integer := data.get_attribute_id('system_message_time');
 
+  v_all_chats_id integer := data.get_object_id('all_chats');
+  v_chats_id integer := data.get_object_id('chats');
+
   v_master_group_id integer := data.get_object_id('master');
 
   v_content text[];
@@ -50,24 +53,29 @@ begin
   perform * from data.objects where id = v_chat_id for update;
 
   -- Достаём, меняем, кладём назад
-  v_content := json.get_string_array_opt(data.get_attribute_value(v_chat_id, 'content', v_actor_id), array[]::text[]);
+  v_content := json.get_string_array_opt(data.get_attribute_value(v_chat_id, 'content', v_chat_id), array[]::text[]);
   v_new_content := array_prepend(v_message_code, v_content);
   if v_new_content <> v_content then
     v_message_sent := data.change_current_object(in_client_id, 
                                                  in_request_id,
                                                  v_chat_id, 
-                                                 jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_actor_id, to_jsonb(v_new_content))));
+                                                 jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_chat_id, to_jsonb(v_new_content))));
   end if;
 
+  -- Перекладываем этот чат в начало в мастерском списке чатов
+  perform pp_utils.list_replace_to_head_and_notify(v_all_chats_id, v_chat_code, v_master_group_id);
+
   -- Отправляем нотификацию о новом сообщении всем неподписанным на этот чат
+  -- и перекладываем у всех участников этот чат вверх списка
   for v_person_id in 
     (select oo.object_id from data.object_objects oo 
       where oo.parent_object_id = v_chat_id
-        and oo.parent_object_id <> oo.object_id
-        and oo.object_id <> v_actor_id)
+        and oo.parent_object_id <> oo.object_id)
   loop
-    if not json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_mute', v_person_id), false) then
-      perform pallas_project.add_notification_if_not_subscribed(v_person_id, 'Новое сообщение от '|| v_actor_title, v_chat_id);
+    perform pp_utils.list_replace_to_head_and_notify(v_chats_id, v_chat_code, v_person_id);
+    if v_person_id <> v_actor_id 
+      and not json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_mute', v_person_id), false) then
+      perform pp_utils.add_notification_if_not_subscribed(v_person_id, 'Новое сообщение от '|| v_actor_title, v_chat_id);
     end if;
   end loop;
 

@@ -26,7 +26,7 @@ declare
 
   v_changes jsonb[];
 
-  v_is_master boolean := pallas_project.is_in_group(v_actor_id, 'master');
+  v_is_master boolean := pp_util.is_in_group(v_actor_id, 'master');
   v_message_sent boolean := false;
 begin
   assert in_request_id is not null;

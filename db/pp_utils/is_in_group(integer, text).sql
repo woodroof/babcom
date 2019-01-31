@@ -1,6 +1,6 @@
--- drop function pallas_project.is_in_group(integer, text);
+-- drop function pp_utils.is_in_group(integer, text);
 
-create or replace function pallas_project.is_in_group(in_object_id integer, in_group_code text)
+create or replace function pp_utils.is_in_group(in_object_id integer, in_group_code text)
 returns boolean
 volatile
 as

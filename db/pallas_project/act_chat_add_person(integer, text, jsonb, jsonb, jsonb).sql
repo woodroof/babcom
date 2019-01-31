@@ -53,10 +53,12 @@ begin
       where oo.parent_object_id = v_chat_id
         and oo.parent_object_id <> oo.object_id
       order by av.value) loop 
-      v_persons := v_persons||'
+      v_persons := v_persons || '
 '|| json.get_string_opt(v_name,'');
    end loop;
-
+ v_persons := v_persons || '
+'|| '------------------
+Кого добавляем?';
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_temp_object_id, v_title_attribute_id, to_jsonb(format('Изменение участников чата %s', v_chat_subtitle)), v_actor_id),
   (v_temp_object_id, v_is_visible_attribute_id, jsonb 'true', v_actor_id),

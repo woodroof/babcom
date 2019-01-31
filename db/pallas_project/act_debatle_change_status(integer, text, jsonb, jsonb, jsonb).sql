@@ -11,7 +11,7 @@ declare
   v_debatle_id integer := data.get_object_id(v_debatle_code);
   v_actor_id  integer :=data.get_active_actor_id(in_client_id);
 
-  v_is_master boolean := pallas_project.is_in_group(v_actor_id, 'master');
+  v_is_master boolean := pp_utils.is_in_group(v_actor_id, 'master');
   v_master_group_id integer:= data.get_object_id('master'); 
 
   v_debatle_status text;

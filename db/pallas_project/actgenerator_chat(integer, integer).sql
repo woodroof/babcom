@@ -12,7 +12,7 @@ declare
 begin
   assert in_actor_id is not null;
 
-  v_is_master := pallas_project.is_in_group(in_actor_id, 'master');
+  v_is_master := pp_utils.is_in_group(in_actor_id, 'master');
   v_chat_code := data.get_object_code(in_object_id);
 
   if v_is_master or json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_invite', in_actor_id), false) then

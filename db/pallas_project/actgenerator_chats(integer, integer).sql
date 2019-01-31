@@ -10,7 +10,7 @@ declare
 begin
   assert in_actor_id is not null;
 
-  if pallas_project.is_in_group(in_actor_id, 'all_person') then
+  if pp_utils.is_in_group(in_actor_id, 'all_person') then
     v_actions_list := v_actions_list || 
       ', "create_chat": {"code": "create_chat", "name": "Создать чат", "disabled": false, '||
       '"params": {}}';
