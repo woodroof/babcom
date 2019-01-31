@@ -55,7 +55,6 @@ async def fetchval_sql(connection, query, *args):
 
 async def connect(connection, client_code, connection_object, request):
     CONNECTION_COUNT.inc()
-    print('Connected: %s' % client_code)
     await execute_sql(connection, 'select api.connect_client($1)', client_code)
     ws = web.WebSocketResponse()
     connection_object['ws'] = ws
@@ -63,7 +62,6 @@ async def connect(connection, client_code, connection_object, request):
     return ws
 
 async def reconnect(connection, client_code, connection_object, request):
-    print('Reconnected: %s' % client_code)
     await connection_object['ws'].close()
     await execute_sql(connection, 'select api.disconnect_client($1)', client_code)
     await execute_sql(connection, 'select api.connect_client($1)', client_code)
@@ -74,7 +72,6 @@ async def reconnect(connection, client_code, connection_object, request):
 
 async def disconnect(connection, client_code):
     CONNECTION_COUNT.dec()
-    print('Disconnected: %s' % client_code)
     await execute_sql(connection, 'select api.disconnect_client($1)', client_code)
 
 async def process_message(connection, client_code, data):
