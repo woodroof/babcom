@@ -144,7 +144,8 @@ async def post_image(request):
     # TODO check size
     os.rename(tmp_path, dest_path)
     response_text = '{{"filename": "{}{}"}}'.format(file_name, extension)
-    return web.Response(status=200, content_type='application/json', text=response_text)
+    additional_headers = {'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*'}
+    return web.Response(status=200, content_type='application/json', text=response_text, headers=additional_headers)
 
 async def async_listener(app, notification_id):
     connections = app.connections
