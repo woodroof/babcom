@@ -10,6 +10,10 @@ begin
 
   insert into data.log(severity, message, actor_id)
   values(in_severity, in_message, in_actor_id);
+
+  if in_severity = 'error' then
+    perform data.metric_add('error_count', 1);
+  end if;
 end;
 $$
 language plpgsql;
