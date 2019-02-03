@@ -13,6 +13,7 @@ declare
 
   v_title_attribute_id integer := data.get_attribute_id('title');
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
+  v_priority_attribute_id integer := data.get_attribute_id('priority');
 
   v_all_chats_id integer := data.get_object_id('all_chats');
   v_chats_id integer := data.get_object_id('chats');
@@ -25,6 +26,7 @@ begin
 
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_chat_id, v_title_attribute_id, to_jsonb('Чат: '|| json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id, v_actor_id))), null),
+  (v_chat_id, v_priority_attribute_id, jsonb '100', null),
   (v_chat_id, v_is_visible_attribute_id, jsonb 'true', v_chat_id),
   (v_chat_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id);
 

@@ -11,8 +11,8 @@ declare
 begin
   assert in_actor_id is not null;
 
-  v_actions_list := v_actions_list || ', "' || 'create_random_person":' || 
-    '{"code": "create_random_person", "name": "Нажми меня", "disabled": false, "params": {}}';
+  /*v_actions_list := v_actions_list || ', "' || 'create_random_person":' || 
+    '{"code": "create_random_person", "name": "Нажми меня", "disabled": false, "params": {}}';*/
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;
 $$

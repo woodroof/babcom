@@ -15,7 +15,7 @@ declare
   v_content_attribute_id integer := data.get_attribute_id('content');
   v_title_attribute_id integer := data.get_attribute_id('title');
 
-  v_chat_title text;
+  v_chat_title text := '';
   v_person_title text;
   v_chat_subtitle text := json.get_string_opt(data.get_attribute_value(v_chat_id, 'subtitle', v_actor_id), '');
 
@@ -34,11 +34,21 @@ begin
 -- добавляем в группу с рассылкой
   perform data.process_diffs_and_notify(data.change_object_groups(in_list_object_id, array[v_chat_id], array[]::integer[], v_actor_id));
 
+  -- обновляем список текущих персон
+  for v_name in 
+    (select * from unnest(pallas_project.get_chat_persons_but_masters(v_chat_id))) loop 
+    v_persons := v_persons || '
+'|| json.get_string_opt(v_name, '');
+    v_chat_title := v_chat_title || ', '|| json.get_string_opt(v_name, '');
+   end loop;
+  v_persons := v_persons || '
+'|| '------------------
+Кого добавляем?';
+
+  v_chat_title := trim(v_chat_title, ', ');
+
   -- Меняем заголовок чата
   perform * from data.objects where id = v_chat_id for update;
-  v_chat_title := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), '');
-  v_person_title := json.get_string_opt(data.get_attribute_value(in_list_object_id, v_title_attribute_id, v_actor_id), '');
-  v_chat_title := v_chat_title ||', ' || v_person_title;
   perform data.change_object_and_notify(v_chat_id, 
                                         jsonb_build_array(data.attribute_change2jsonb(v_title_attribute_id, null, to_jsonb(v_chat_title))),
                                         null);
@@ -54,21 +64,6 @@ begin
 
   v_content := json.get_string_array_opt(data.get_attribute_value(in_object_id, 'content', v_actor_id), array[]::text[]);
   v_content := array_remove(v_content, v_person_code);
-
-  -- обновляем список текущих персон
-  for v_name in 
-    (select av.value
-      from data.object_objects oo
-      left join data.attribute_values av on av.object_id = oo.object_id and av.attribute_id = v_title_attribute_id and av.value_object_id is null
-      where oo.parent_object_id = v_chat_id
-        and oo.parent_object_id <> oo.object_id
-      order by av.value) loop 
-      v_persons := v_persons || '
-'|| json.get_string_opt(v_name,'');
-   end loop;
- v_persons := v_persons || '
-'|| '------------------
-Кого добавляем?';
 
   v_changes := array[]::jsonb[];
   v_changes := array_append(v_changes, data.attribute_change2jsonb('chat_temp_person_list_persons', null, to_jsonb(v_persons)));

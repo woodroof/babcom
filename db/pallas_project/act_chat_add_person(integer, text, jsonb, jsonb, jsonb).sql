@@ -46,17 +46,11 @@ begin
   end if;
 
   -- Собираем список тех, кто уже в чате, просто чтобы показать
-  for v_name in 
-    (select av.value
-      from data.object_objects oo
-      left join data.attribute_values av on av.object_id = oo.object_id and av.attribute_id = v_title_attribute_id and av.value_object_id is null
-      where oo.parent_object_id = v_chat_id
-        and oo.parent_object_id <> oo.object_id
-      order by av.value) loop 
-      v_persons := v_persons || '
-'|| json.get_string_opt(v_name,'');
-   end loop;
- v_persons := v_persons || '
+  for v_name in (select * from unnest(pallas_project.get_chat_persons_but_masters(v_chat_id))) loop 
+    v_persons := v_persons || '
+'|| json.get_string_opt(v_name, '');
+  end loop;
+  v_persons := v_persons || '
 '|| '------------------
 Кого добавляем?';
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values

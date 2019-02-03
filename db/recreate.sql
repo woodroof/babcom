@@ -8039,17 +8039,11 @@ begin
   end if;
 
   -- Собираем список тех, кто уже в чате, просто чтобы показать
-  for v_name in 
-    (select av.value
-      from data.object_objects oo
-      left join data.attribute_values av on av.object_id = oo.object_id and av.attribute_id = v_title_attribute_id and av.value_object_id is null
-      where oo.parent_object_id = v_chat_id
-        and oo.parent_object_id <> oo.object_id
-      order by av.value) loop 
-      v_persons := v_persons || '
-'|| json.get_string_opt(v_name,'');
-   end loop;
- v_persons := v_persons || '
+  for v_name in (select * from unnest(pallas_project.get_chat_persons_but_masters(v_chat_id))) loop 
+    v_persons := v_persons || '
+'|| json.get_string_opt(v_name, '');
+  end loop;
+  v_persons := v_persons || '
 '|| '------------------
 Кого добавляем?';
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
@@ -8064,6 +8058,109 @@ begin
     in_request_id,
     'action',
     format('{"action": "open_object", "action_data": {"object_id": "%s"}}', v_temp_object_code)::jsonb);
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_chat_leave(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_chat_leave(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_chat_code text := json.get_string(in_params, 'chat_code');
+  v_chat_id integer := data.get_object_id(v_chat_code);
+  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+
+  v_person_id integer;
+
+  v_message_id integer;
+  v_message_code text;
+  v_message_class_id integer := data.get_class_id('message');
+
+  v_title_attribute_id integer := data.get_attribute_id('title');
+  v_message_text_attribute_id integer := data.get_attribute_id('message_text');
+  v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
+  v_system_message_sender_attribute_id integer := data.get_attribute_id('system_message_sender');
+  v_system_message_time_attribute_id integer := data.get_attribute_id('system_message_time');
+
+  v_all_chats_id integer := data.get_object_id('all_chats');
+  v_chats_id integer := data.get_object_id('chats');
+
+  v_master_group_id integer := data.get_object_id('master');
+
+  v_content text[];
+  v_new_content text[];
+  v_message_sent boolean := false;
+
+  v_chat_bot_id integer := data.get_object_id('chat_bot');
+  v_chat_bot_title text := json.get_string(data.get_attribute_value(v_chat_bot_id, v_title_attribute_id, v_actor_id));
+
+  v_actor_title text := json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id, v_actor_id));
+  v_title text := to_char(clock_timestamp(),'DD.MM hh24:mi:ss ') || v_chat_bot_title;
+  v_chat_subtitle text := json.get_string_opt(data.get_attribute_value(v_chat_id, 'subtitle', v_actor_id), '');
+
+  v_name jsonb;
+  v_persons text:= '';
+begin
+  assert in_request_id is not null;
+
+  -- проверяем, что выходить можно
+  assert json.get_boolean_opt(data.get_attribute_value(v_actor_id, 'system_chat_can_leave', v_actor_id), true);
+
+  -- Удаляемся из группы чата
+  perform data.process_diffs_and_notify(data.change_object_groups(v_actor_id, array[]::integer[], array[v_chat_id], v_actor_id));
+
+  -- Удаляем чат из своего списка чатов
+  perform pp_utils.list_remove_and_notify(v_chats_id, v_chat_code, v_actor_id);
+
+  -- Мастера в чате не видно, поэтому светить его выход не надо
+  if not pp_utils.is_in_group(v_actor_id, 'master') then
+    -- Меняем список участников чата в заголовке
+    for v_name in (select * from unnest(pallas_project.get_chat_persons_but_masters(v_chat_id))) loop 
+      v_persons := v_persons || ','|| json.get_string_opt(v_name, '');
+    end loop;
+    v_persons := trim(v_persons, ',');
+    perform data.change_object_and_notify(v_chat_id, 
+                                          jsonb_build_array(data.attribute_change2jsonb(v_title_attribute_id, null, to_jsonb('Чат: '|| v_persons))),
+                                          v_actor_id);
+
+    -- Создаём новое сообщение о том, что персонаж вышел из чата
+    insert into data.objects(class_id) values (v_message_class_id) returning id, code into v_message_id, v_message_code;
+
+    insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
+    (v_message_id, v_title_attribute_id, to_jsonb(v_title), null),
+    (v_message_id, v_message_text_attribute_id, to_jsonb(v_actor_title || ' вышел из чата'), null),
+    (v_message_id, v_is_visible_attribute_id, jsonb 'true', v_chat_id),
+    (v_message_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
+    (v_message_id, v_system_message_sender_attribute_id, to_jsonb(v_chat_bot_id), null),
+    (v_message_id, v_system_message_time_attribute_id, to_jsonb(to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss') ), null);
+
+    -- Добавляем сообщение в чат
+    perform pp_utils.list_prepend_and_notify(v_chat_id, v_message_code, null, v_chat_id);
+
+    -- Перекладываем этот чат в начало в мастерском списке чатов
+    perform pp_utils.list_replace_to_head_and_notify(v_all_chats_id, v_chat_code, v_master_group_id);
+
+    -- Отправляем нотификацию о новом сообщении всем неподписанным на этот чат
+    -- и перекладываем у всех участников этот чат вверх списка
+    for v_person_id in 
+      (select oo.object_id from data.object_objects oo 
+       where oo.parent_object_id = v_chat_id
+         and oo.parent_object_id <> oo.object_id)
+    loop
+      perform pp_utils.list_replace_to_head_and_notify(v_chats_id, v_chat_code, v_person_id);
+      if v_person_id <> v_actor_id 
+        and not json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'chat_is_mute', v_person_id), false) then
+        perform pp_utils.add_notification_if_not_subscribed(v_person_id, v_actor_title || ' вышел из чата ' || v_chat_subtitle, v_chat_id);
+      end if;
+    end loop;
+  end if;
+
+  -- Переходим к списку чатов
+  perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, 'chats');
 end;
 $$
 language plpgsql;
@@ -8129,7 +8226,7 @@ begin
     v_message_sent := data.change_current_object(in_client_id, 
                                                  in_request_id,
                                                  v_chat_id, 
-                                                 jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_chat_id, to_jsonb(v_new_content))));
+                                                 jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, null, to_jsonb(v_new_content))));
   end if;
 
   -- Перекладываем этот чат в начало в мастерском списке чатов
@@ -8144,7 +8241,7 @@ begin
   loop
     perform pp_utils.list_replace_to_head_and_notify(v_chats_id, v_chat_code, v_person_id);
     if v_person_id <> v_actor_id 
-      and not json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_mute', v_person_id), false) then
+      and not json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'chat_is_mute', v_person_id), false) then
       perform pp_utils.add_notification_if_not_subscribed(v_person_id, 'Новое сообщение от '|| v_actor_title, v_chat_id);
     end if;
   end loop;
@@ -8171,6 +8268,7 @@ declare
 
   v_title_attribute_id integer := data.get_attribute_id('title');
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
+  v_priority_attribute_id integer := data.get_attribute_id('priority');
 
   v_all_chats_id integer := data.get_object_id('all_chats');
   v_chats_id integer := data.get_object_id('chats');
@@ -8183,6 +8281,7 @@ begin
 
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_chat_id, v_title_attribute_id, to_jsonb('Чат: '|| json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id, v_actor_id))), null),
+  (v_chat_id, v_priority_attribute_id, jsonb '100', null),
   (v_chat_id, v_is_visible_attribute_id, jsonb 'true', v_chat_id),
   (v_chat_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id);
 
@@ -9094,8 +9193,8 @@ declare
 begin
   assert in_actor_id is not null;
 
-  v_actions_list := v_actions_list || ', "' || 'create_random_person":' || 
-    '{"code": "create_random_person", "name": "Нажми меня", "disabled": false, "params": {}}';
+  /*v_actions_list := v_actions_list || ', "' || 'create_random_person":' || 
+    '{"code": "create_random_person", "name": "Нажми меня", "disabled": false, "params": {}}';*/
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;
 $$
@@ -9120,11 +9219,17 @@ begin
 
   if v_is_master or json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_invite', in_actor_id), false) then
     v_actions_list := v_actions_list || 
-        format(', "chat_add_person": {"code": "chat_add_person", "name": "Добавить участника", "disabled": false, '||
+        format(', "chat_add_person": {"code": "chat_add_person", "name": "Добавить/посмотреть участников", "disabled": false, '||
                 '"params": {"chat_code": "%s"}}',
                 v_chat_code);
   end if;
 
+  if pp_utils.is_in_group(in_actor_id, v_chat_code) and json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_leave', in_actor_id), false) then
+    v_actions_list := v_actions_list || 
+        format(', "chat_leave": {"code": "chat_leave", "name": "Выйти из чата", "disabled": false, "warning": "Вы уверены? Этот чат исчезнет из вашего списка чатов, и вернуться вы не сможете.",'||
+                '"params": {"chat_code": "%s"}}',
+                v_chat_code);
+  end if;
 
   v_actions_list := v_actions_list || 
         format(', "chat_write": {"code": "chat_write", "name": "Написать", "disabled": false, '||
@@ -9173,7 +9278,7 @@ declare
 begin
   assert in_actor_id is not null;
 
-  if pp_utils.is_in_group(in_actor_id, 'all_person') then
+  if pp_utils.is_in_group(in_actor_id, 'all_person') or pp_utils.is_in_group(in_actor_id, 'master') then
     v_actions_list := v_actions_list || 
       ', "create_chat": {"code": "create_chat", "name": "Создать чат", "disabled": false, '||
       '"params": {}}';
@@ -9403,7 +9508,7 @@ declare
 begin
   assert in_actor_id is not null;
 
-  if pp_utils.is_in_group(in_actor_id, 'all_person') then
+  if pp_utils.is_in_group(in_actor_id, 'all_person') or pp_utils.is_in_group(in_actor_id, 'master') then
     v_actions_list := v_actions_list || 
       ', "create_debatle_step1": {"code": "create_debatle_step1", "name": "Инициировать дебатл", "disabled": false, '||
       '"params": {}, "user_params": [{"code": "title", "description": "Введите тему дебатла", "type": "string" }]}';
@@ -9431,7 +9536,7 @@ begin
     v_actions_list := v_actions_list || ', "' || 'login":' || 
       '{"code": "login", "name": "Войти", "disabled": false, "params": {}, "user_params": [{"code": "password", "description": "Введите пароль", "type": "string" }]}';
   else
-    if pp_utils.is_in_group(in_actor_id, 'all_person') then
+    if v_is_master or pp_utils.is_in_group(in_actor_id, 'all_person') then
       v_actions_list := v_actions_list || ', "' || 'debatles":' || 
         '{"code": "act_open_object", "name": "Дебатлы", "disabled": false, "params": {"object_code": "debatles"}}';
       v_actions_list := v_actions_list || ', "' || 'chats":' || 
@@ -9694,6 +9799,31 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.get_chat_persons_but_masters(integer);
+
+create or replace function pallas_project.get_chat_persons_but_masters(in_chat_id integer)
+returns jsonb[]
+volatile
+as
+$$
+declare
+  v_persons jsonb[] := array[]::jsonb[];
+  v_title_attribute_id integer := data.get_attribute_id('title');
+begin
+
+  select array_agg(av.value order by av.value) into v_persons
+      from data.object_objects oo
+      left join data.attribute_values av on av.object_id = oo.object_id and av.attribute_id = v_title_attribute_id and av.value_object_id is null
+      where oo.parent_object_id = in_chat_id
+        and oo.parent_object_id <> oo.object_id
+        and oo.object_id not in (select oom.object_id from data.object_objects oom
+                                 join data.objects om on om.id = oom.parent_object_id and om.code = 'master'
+                                 where oom.parent_object_id <> oom.object_id);
+  return v_persons;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.init();
 
 create or replace function pallas_project.init()
@@ -9714,94 +9844,22 @@ declare
   v_template_attribute_id integer := data.get_attribute_id('template');
 
   v_description_attribute_id integer;
-  v_system_person_name_attribute_id integer;
-  v_person_state_attribute_id integer;
-  v_person_occupation_attribute_id integer; 
-  v_system_money_attribute_id integer;
-  v_money_attribute_id integer;
-  v_system_person_deposit_money_attribute_id integer;
-  v_person_deposit_money_attribute_id integer;
-  v_system_person_coin_attribute_id integer;
-  v_person_coin_attribute_id integer;
-  v_system_person_opa_rating_attribute_id integer;
-  v_person_opa_rating_attribute_id integer;
-  v_system_person_un_rating_attribute_id integer;
-  v_person_un_rating_attribute_id integer;
-  v_person_is_master_attribute_id integer;
-
-  v_all_person_group_id integer;
-  v_aster_group_id integer;
-  v_un_group_id integer;
-  v_mars_group_id integer;
-  v_opa_group_id integer;
-  v_master_group_id integer;
-  v_player_group_id integer;
 
   v_default_login_id integer;
   v_menu_id integer;
   v_notifications_id integer;
   v_test_id integer;
-  v_person_id integer;
-  v_person_class_id integer;
 
-  v_template_groups jsonb[];
 begin
   insert into data.attributes(code, description, type, card_type, can_be_overridden)
   values('description', 'Текстовый блок с развёрнутым описанием объекта, string', 'normal', 'full', true)
   returning id into v_description_attribute_id;
 
-  insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden)
-  values ('person_occupation', null, 'Должность', 'normal', null, null, false)
-  returning id into v_person_occupation_attribute_id;
-
-  insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden)
-  values ('person_state', null, 'Гражданство', 'normal', 'full', 'pallas_project.vd_person_state', false)
-  returning id into v_person_state_attribute_id;
-
-  insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
-  values ('system_money', 'Остаток средств на счёте', 'system', null, null, false)
-  returning id into v_system_money_attribute_id;
-
-  insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
-  values ('money', 'Остаток средств на счёте', 'normal', 'full', null, true)
-  returning id into v_money_attribute_id;
-
-  insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
-  values ('system_person_deposit_money', 'Остаток средств на накопительном счёте', 'system', null, null, false)
-  returning id into v_system_person_deposit_money_attribute_id;
-
-  insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
-  values ('person_deposit_money', 'Остаток средств на накопительном счёте', 'normal', 'full', null, true)
-  returning id into v_person_deposit_money_attribute_id;
-
-  insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
-  values ('system_person_coin', 'Остаток коинов', 'system', null, null, false)
-  returning id into v_system_person_coin_attribute_id;
-
-  insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
-  values ('person_coin', 'Остаток коинов', 'normal', 'full', null, true)
-  returning id into v_person_coin_attribute_id;
-
-  insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
-  values ('system_person_opa_rating', 'Рейтинг в СВП', 'system', null, null, false)
-  returning id into v_system_person_opa_rating_attribute_id;
-
-  insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
-  values ('person_opa_rating', 'Рейтинг в СВП', 'normal', 'full', null, true)
-  returning id into v_person_opa_rating_attribute_id;
-
-  insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
-  values ('system_person_un_rating', 'Рейтинг в ООН', 'system', null, null, false)
-  returning id into v_system_person_un_rating_attribute_id;
-
-  insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
-  values ('person_un_rating', 'Рейтинг в ООН', 'normal', 'full', null, true)
-  returning id into v_person_un_rating_attribute_id;
-
   -- Создадим актора по умолчанию
   insert into data.objects(code) values('anonymous') returning id into v_test_id;
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_test_id, v_title_attribute_id, jsonb '"Unknown"'),
+  (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
   (v_test_id, v_actions_function_attribute_id,'"pallas_project.actgenerator_anonymous"'),
   (v_test_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
                                       '{"code": "%s", "actions": ["%s"]}',
@@ -9864,129 +9922,7 @@ begin
   ('go_back', 'pallas_project.act_go_back'),
   ('create_random_person', 'pallas_project.act_create_random_person');
 
-  --Объект класса для персон
-  insert into data.objects(code, type) values('person', 'class') returning id into v_person_class_id;
-
-  insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_person_class_id, v_type_attribute_id, jsonb '"person"'),
-  (v_person_class_id, v_is_visible_attribute_id, jsonb 'true'),
-  (v_person_class_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_person"'),
-  (v_person_class_id, v_mini_card_function_attribute_id, jsonb '"pallas_project.mcard_person"'),
-  (v_person_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_menu"'),
-  (v_person_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
-                                                      '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"]}',
-                                                      'person_group1',
-                                                      'person_state',
-                                                      'person_occupation',
-                                                      'money',
-                                                      'person_deposit_money',
-                                                      'person_coin',
-                                                      'person_opa_rating',
-                                                      'person_un_rating',
-                                                      'description')::jsonb]));
-
-  insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_test_id, v_type_attribute_id, jsonb '"test"'),
-  (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
-  (
-    v_test_id,
-    v_description_attribute_id,
-    to_jsonb(text 'Добрый день!')
-  );
-
-  -- Группы персон
-  insert into data.objects(code) values ('all_person') returning id into v_all_person_group_id;
-  insert into data.objects(code) values ('aster') returning id into v_aster_group_id;
-  insert into data.objects(code) values ('un') returning id into v_un_group_id;
-  insert into data.objects(code) values ('mars') returning id into v_mars_group_id;
-  insert into data.objects(code) values ('opa') returning id into v_opa_group_id;
-  insert into data.objects(code) values ('master') returning id into v_master_group_id;
-  insert into data.objects(code) values ('player') returning id into v_player_group_id;
-
-  insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_all_person_group_id, v_priority_attribute_id, jsonb '10'),
-  (v_player_group_id, v_priority_attribute_id, jsonb '15'),
-  (v_aster_group_id, v_priority_attribute_id, jsonb '20'),
-  (v_un_group_id, v_priority_attribute_id, jsonb '30'),
-  (v_mars_group_id, v_priority_attribute_id, jsonb '40'),
-  (v_opa_group_id, v_priority_attribute_id, jsonb '50'),
-  (v_master_group_id, v_priority_attribute_id, jsonb '190');
-/*
-  -- Данные персон
-  insert into data.objects(code, class_id) values('person1', v_person_class_id) returning id into v_person_id;
-    -- Логин
-  insert into data.logins(code) values('p1') returning id into v_default_login_id;
-  insert into data.login_actors(login_id, actor_id) values(v_default_login_id, v_person_id);
-  insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_person_id, v_title_attribute_id, jsonb '"Джерри Адамс"'),
-  (v_person_id, v_priority_attribute_id, jsonb '200'),
-  (v_person_id, v_person_state_attribute_id, jsonb '"un"'),
-  (v_person_id, v_person_occupation_attribute_id, jsonb '"Секретарь администрации"'),
-  (v_person_id, v_system_money_attribute_id, jsonb '0'),
-  (v_person_id, v_system_person_coin_attribute_id, jsonb '50'),
-  (v_person_id, v_system_person_opa_rating_attribute_id, jsonb '1'),
-  (v_person_id, v_system_person_un_rating_attribute_id, jsonb '150');
-
-  perform data.add_object_to_object(v_person_id, v_all_person_group_id);
-  perform data.add_object_to_object(v_person_id, v_un_group_id);
-  perform data.add_object_to_object(v_person_id, v_player_group_id);
-
-*/
-  insert into data.objects(code, class_id) values('person2', v_person_class_id) returning id into v_person_id;
-    -- Логин
-  insert into data.logins(code) values('m1') returning id into v_default_login_id;
-  insert into data.login_actors(login_id, actor_id) values(v_default_login_id, v_person_id);
-  insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_person_id, v_title_attribute_id, jsonb '"Саша"'),
-  (v_person_id, v_person_occupation_attribute_id, jsonb '"Мастер"'),
-  (v_person_id, v_priority_attribute_id, jsonb '200');
-
-  perform data.add_object_to_object(v_person_id, v_all_person_group_id);
-  perform data.add_object_to_object(v_person_id, v_master_group_id);
-
-  insert into data.objects(code, class_id) values('person4', v_person_class_id) returning id into v_person_id;
-    -- Логин
-  insert into data.logins(code) values('m2') returning id into v_default_login_id;
-  insert into data.login_actors(login_id, actor_id) values(v_default_login_id, v_person_id);
-  insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_person_id, v_title_attribute_id, jsonb '"Пётр"'),
-  (v_person_id, v_person_occupation_attribute_id, jsonb '"Мастер"'),
-  (v_person_id, v_priority_attribute_id, jsonb '200');
-
-  perform data.add_object_to_object(v_person_id, v_all_person_group_id);
-  perform data.add_object_to_object(v_person_id, v_master_group_id);
-
-  insert into data.objects(code, class_id) values('person5', v_person_class_id) returning id into v_person_id;
-    -- Логин
-  insert into data.logins(code) values('m3') returning id into v_default_login_id;
-  insert into data.login_actors(login_id, actor_id) values(v_default_login_id, v_person_id);
-  insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_person_id, v_title_attribute_id, jsonb '"Данил"'),
-  (v_person_id, v_person_occupation_attribute_id, jsonb '"Мастер"'),
-  (v_person_id, v_priority_attribute_id, jsonb '200');
-
-  perform data.add_object_to_object(v_person_id, v_all_person_group_id);
-  perform data.add_object_to_object(v_person_id, v_master_group_id);
-/*
-insert into data.objects(code, class_id) values('person3', v_person_class_id) returning id into v_person_id;
-    -- Логин
-  insert into data.logins(code) values('p3') returning id into v_default_login_id;
-  insert into data.login_actors(login_id, actor_id) values(v_default_login_id, v_person_id);
-  insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_person_id, v_title_attribute_id, jsonb '"Сьюзан Сидорова"'),
-  (v_person_id, v_priority_attribute_id, jsonb '200'),
-  (v_person_id, v_person_state_attribute_id, jsonb '"aster"'),
-  (v_person_id, v_person_occupation_attribute_id, jsonb '"Шахтёр"'),
-  (v_person_id, v_system_money_attribute_id, jsonb '65000'),
-  (v_person_id, v_system_person_opa_rating_attribute_id, jsonb '5'),
-  (v_person_id, v_system_person_un_rating_attribute_id, jsonb '0');
-
-  perform data.add_object_to_object(v_person_id, v_all_person_group_id);
-  perform data.add_object_to_object(v_person_id, v_opa_group_id);
-  perform data.add_object_to_object(v_person_id, v_player_group_id);
-  perform data.add_object_to_object(v_person_id, v_aster_group_id);
-
-*/
+  perform pallas_project.init_persons();
   perform pallas_project.init_debatles();
   perform pallas_project.init_messenger();
 end;
@@ -10318,7 +10254,7 @@ declare
   v_system_chat_can_leave_attribute_id integer;
   v_system_chat_can_mute_attribute_id integer;
   v_system_chat_can_rename_attribute_id integer;
-
+  v_chat_bot_id integer;
 begin
   -- Атрибуты 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
@@ -10327,13 +10263,11 @@ begin
   ('system_message_sender', null, 'id объекта-отправителя сообщения', 'system', null, null, false),
   ('system_message_time', null, 'Дата и время отправки сообщения', 'system', null, null, false),
   -- для чатов
-  ('chat_persons', null, 'Участники чата', 'normal', 'full', null, false),
   ('system_chat_can_invite', null, 'Возможность пригласить кого-то в чат', 'system', null, null, true),
   ('system_chat_can_leave', null, 'Возможность покинуть чат', 'system', null, null, true),
   ('system_chat_can_mute', null, 'Возможность Убрать уведомления о новых сообщениях', 'system', null, null, true),
   ('system_chat_can_rename', null, 'Возможность переименовать чат', 'system', null, null, true),
-  ('system_chat_is_mute', null, 'Признак отлюченного уведомления о новых сообщениях', 'system', null, null, true),
-  ('system_chat_last_message_time', null, 'Дата последнего собщения', 'system', null, null, false),
+  ('chat_is_mute', null, 'Признак отлюченного уведомления о новых сообщениях', 'normal', 'full', 'pallas_project.vd_chat_is_mute', true),
   -- для временных объектов для изменения участников
   ('chat_temp_person_list_persons', 'Сейчас участвуют', 'Список участников чата', 'normal', 'full', null, false),
   ('system_chat_temp_person_list_chat_id', null, 'Идентификатор изменяемого чата', 'system', null, null, false);
@@ -10383,7 +10317,6 @@ begin
   --(v_chat_class_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_debatle"'),
   --(v_chat_class_id, v_mini_card_function_attribute_id, jsonb '"pallas_project.mcard_debatle"'),
   (v_chat_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chat"'),
-  (v_chat_class_id, v_priority_attribute_id, jsonb '100'),
   (v_chat_class_id, v_system_chat_can_invite_attribute_id, jsonb 'true'),
   (v_chat_class_id, v_system_chat_can_leave_attribute_id, jsonb 'true'),
   (v_chat_class_id, v_system_chat_can_mute_attribute_id, jsonb 'true'),
@@ -10392,7 +10325,7 @@ begin
                                                       '{"code": "%s", "attributes": ["%s"], 
                                                                       "actions": ["%s", "%s", "%s"]}',
                                                       'chat_group1',
-                                                      'chat_persons',
+                                                      'chat_is_mute',
                                                       'chat_add_person',
                                                       'chat_leave',
                                                       'chat_mute')::jsonb,
@@ -10429,11 +10362,230 @@ begin
                                                       'group2',
                                                       'chat_temp_person_list_persons')::jsonb));
 
+  -- Чат-бот
+  insert into data.objects(code) values ('chat_bot') returning id into v_chat_bot_id;
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_chat_bot_id, v_title_attribute_id, jsonb '"Чат-бот"');
+
   insert into data.actions(code, function) values
   ('create_chat', 'pallas_project.act_create_chat'),
   ('chat_write', 'pallas_project.act_chat_write'),
-  ('chat_add_person','pallas_project.act_chat_add_person');
+  ('chat_add_person','pallas_project.act_chat_add_person'),
+  ('chat_leave','pallas_project.act_chat_leave');
 
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.init_persons();
+
+create or replace function pallas_project.init_persons()
+returns void
+volatile
+as
+$$
+declare
+  v_type_attribute_id integer := data.get_attribute_id('type');
+  v_title_attribute_id integer := data.get_attribute_id('title');
+  v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
+  v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
+  v_content_attribute_id integer := data.get_attribute_id('content');
+  v_priority_attribute_id integer := data.get_attribute_id('priority');
+  v_full_card_function_attribute_id integer := data.get_attribute_id('full_card_function');
+  v_mini_card_function_attribute_id integer := data.get_attribute_id('mini_card_function');
+  v_actions_function_attribute_id integer := data.get_attribute_id('actions_function');
+  v_template_attribute_id integer := data.get_attribute_id('template');
+
+  v_description_attribute_id integer;
+  v_person_state_attribute_id integer;
+  v_person_occupation_attribute_id integer; 
+  v_system_money_attribute_id integer;
+  v_money_attribute_id integer;
+  v_system_person_deposit_money_attribute_id integer;
+  v_person_deposit_money_attribute_id integer;
+  v_system_person_coin_attribute_id integer;
+  v_person_coin_attribute_id integer;
+  v_system_person_opa_rating_attribute_id integer;
+  v_person_opa_rating_attribute_id integer;
+  v_system_person_un_rating_attribute_id integer;
+  v_person_un_rating_attribute_id integer;
+  v_person_is_master_attribute_id integer;
+
+  v_all_person_group_id integer;
+  v_aster_group_id integer;
+  v_un_group_id integer;
+  v_mars_group_id integer;
+  v_opa_group_id integer;
+  v_master_group_id integer;
+  v_player_group_id integer;
+
+  v_login_id integer;
+  v_person_id integer;
+  v_person_class_id integer;
+begin
+    insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden)
+  values ('person_occupation', null, 'Должность', 'normal', null, null, false)
+  returning id into v_person_occupation_attribute_id;
+
+  insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden)
+  values ('person_state', null, 'Гражданство', 'normal', 'full', 'pallas_project.vd_person_state', false)
+  returning id into v_person_state_attribute_id;
+
+  insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
+  values ('system_money', 'Остаток средств на счёте', 'system', null, null, false)
+  returning id into v_system_money_attribute_id;
+
+  insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
+  values ('money', 'Остаток средств на счёте', 'normal', 'full', null, true)
+  returning id into v_money_attribute_id;
+
+  insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
+  values ('system_person_deposit_money', 'Остаток средств на накопительном счёте', 'system', null, null, false)
+  returning id into v_system_person_deposit_money_attribute_id;
+
+  insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
+  values ('person_deposit_money', 'Остаток средств на накопительном счёте', 'normal', 'full', null, true)
+  returning id into v_person_deposit_money_attribute_id;
+
+  insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
+  values ('system_person_coin', 'Остаток коинов', 'system', null, null, false)
+  returning id into v_system_person_coin_attribute_id;
+
+  insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
+  values ('person_coin', 'Остаток коинов', 'normal', 'full', null, true)
+  returning id into v_person_coin_attribute_id;
+
+  insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
+  values ('system_person_opa_rating', 'Рейтинг в СВП', 'system', null, null, false)
+  returning id into v_system_person_opa_rating_attribute_id;
+
+  insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
+  values ('person_opa_rating', 'Рейтинг в СВП', 'normal', 'full', null, true)
+  returning id into v_person_opa_rating_attribute_id;
+
+  insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
+  values ('system_person_un_rating', 'Рейтинг в ООН', 'system', null, null, false)
+  returning id into v_system_person_un_rating_attribute_id;
+
+  insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
+  values ('person_un_rating', 'Рейтинг в ООН', 'normal', 'full', null, true)
+  returning id into v_person_un_rating_attribute_id;
+
+  --Объект класса для персон
+  insert into data.objects(code, type) values('person', 'class') returning id into v_person_class_id;
+
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_person_class_id, v_type_attribute_id, jsonb '"person"'),
+  (v_person_class_id, v_is_visible_attribute_id, jsonb 'true'),
+  (v_person_class_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_person"'),
+  (v_person_class_id, v_mini_card_function_attribute_id, jsonb '"pallas_project.mcard_person"'),
+  (v_person_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_menu"'),
+  (v_person_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
+                                                      '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"]}',
+                                                      'person_group1',
+                                                      'person_state',
+                                                      'person_occupation',
+                                                      'money',
+                                                      'person_deposit_money',
+                                                      'person_coin',
+                                                      'person_opa_rating',
+                                                      'person_un_rating',
+                                                      'description')::jsonb]));
+
+  -- Группы персон
+  insert into data.objects(code) values ('all_person') returning id into v_all_person_group_id;
+  insert into data.objects(code) values ('aster') returning id into v_aster_group_id;
+  insert into data.objects(code) values ('un') returning id into v_un_group_id;
+  insert into data.objects(code) values ('mars') returning id into v_mars_group_id;
+  insert into data.objects(code) values ('opa') returning id into v_opa_group_id;
+  insert into data.objects(code) values ('master') returning id into v_master_group_id;
+  insert into data.objects(code) values ('player') returning id into v_player_group_id;
+
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_all_person_group_id, v_priority_attribute_id, jsonb '10'),
+  (v_player_group_id, v_priority_attribute_id, jsonb '15'),
+  (v_aster_group_id, v_priority_attribute_id, jsonb '20'),
+  (v_un_group_id, v_priority_attribute_id, jsonb '30'),
+  (v_mars_group_id, v_priority_attribute_id, jsonb '40'),
+  (v_opa_group_id, v_priority_attribute_id, jsonb '50'),
+  (v_master_group_id, v_priority_attribute_id, jsonb '190');
+
+-- Мастера:
+  insert into data.objects(class_id) values(v_person_class_id) returning id into v_person_id;
+  insert into data.logins(code) values('m1') returning id into v_login_id;
+  insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_person_id, v_title_attribute_id, jsonb '"Саша"'),
+  (v_person_id, v_priority_attribute_id, jsonb '200'),
+  (v_person_id, v_person_occupation_attribute_id, jsonb '"Мастер"');
+  perform data.add_object_to_object(v_person_id, v_master_group_id);
+
+  insert into data.objects(class_id) values(v_person_class_id) returning id into v_person_id;
+  insert into data.logins(code) values('m2') returning id into v_login_id;
+  insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_person_id, v_title_attribute_id, jsonb '"Пётр"'),
+  (v_person_id, v_priority_attribute_id, jsonb '200'),
+  (v_person_id, v_person_occupation_attribute_id, jsonb '"Мастер"');
+  perform data.add_object_to_object(v_person_id, v_master_group_id);
+
+  insert into data.objects(class_id) values(v_person_class_id) returning id into v_person_id;
+  insert into data.logins(code) values('m3') returning id into v_login_id;
+  insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_person_id, v_title_attribute_id, jsonb '"Данил"'),
+  (v_person_id, v_priority_attribute_id, jsonb '200'),
+  (v_person_id, v_person_occupation_attribute_id, jsonb '"Мастер"');
+  perform data.add_object_to_object(v_person_id, v_master_group_id);
+
+
+-- Игроки:
+  insert into data.objects(class_id) values(v_person_class_id) returning id into v_person_id;
+  insert into data.logins(code) values('p1') returning id into v_login_id;
+  insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_person_id, v_title_attribute_id, jsonb '"Джерри Адамс"'),
+  (v_person_id, v_priority_attribute_id, jsonb '200'),
+  (v_person_id, v_person_state_attribute_id, jsonb '"un"'),
+  (v_person_id, v_person_occupation_attribute_id, jsonb '"Секретарь администрации"'),
+  (v_person_id, v_system_money_attribute_id, jsonb '0'),
+  (v_person_id, v_system_person_coin_attribute_id, jsonb '50'),
+  (v_person_id, v_system_person_opa_rating_attribute_id, jsonb '1'),
+  (v_person_id, v_system_person_un_rating_attribute_id, jsonb '150');
+  perform data.add_object_to_object(v_person_id, v_all_person_group_id);
+  perform data.add_object_to_object(v_person_id, v_un_group_id);
+  perform data.add_object_to_object(v_person_id, v_player_group_id);
+
+  insert into data.objects(class_id) values(v_person_class_id) returning id into v_person_id;
+  insert into data.logins(code) values('p2') returning id into v_login_id;
+  insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_person_id, v_title_attribute_id, jsonb '"Сьюзан Сидорова"'),
+  (v_person_id, v_priority_attribute_id, jsonb '200'),
+  (v_person_id, v_person_state_attribute_id, jsonb '"aster"'),
+  (v_person_id, v_person_occupation_attribute_id, jsonb '"Шахтёр"'),
+  (v_person_id, v_system_money_attribute_id, jsonb '65000'),
+  (v_person_id, v_system_person_opa_rating_attribute_id, jsonb '5'),
+  (v_person_id, v_system_person_un_rating_attribute_id, jsonb '0');
+  perform data.add_object_to_object(v_person_id, v_all_person_group_id);
+  perform data.add_object_to_object(v_person_id, v_opa_group_id);
+  perform data.add_object_to_object(v_person_id, v_player_group_id);
+  perform data.add_object_to_object(v_person_id, v_aster_group_id);
+
+  insert into data.objects(class_id) values(v_person_class_id) returning id into v_person_id;
+  insert into data.logins(code) values('p3') returning id into v_login_id;
+  insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_person_id, v_title_attribute_id, jsonb '"Чарли Чандрасекар"'),
+  (v_person_id, v_priority_attribute_id, jsonb '200'),
+  (v_person_id, v_person_state_attribute_id, jsonb '"un"'),
+  (v_person_id, v_person_occupation_attribute_id, jsonb '"Главный экономист"'),
+  (v_person_id, v_system_person_coin_attribute_id, jsonb '50'),
+  (v_person_id, v_system_person_opa_rating_attribute_id, jsonb '1'),
+  (v_person_id, v_system_person_un_rating_attribute_id, jsonb '200');
+  perform data.add_object_to_object(v_person_id, v_all_person_group_id);
+  perform data.add_object_to_object(v_person_id, v_player_group_id);
+  perform data.add_object_to_object(v_person_id, v_un_group_id);
 end;
 $$
 language plpgsql;
@@ -10455,7 +10607,7 @@ declare
   v_content_attribute_id integer := data.get_attribute_id('content');
   v_title_attribute_id integer := data.get_attribute_id('title');
 
-  v_chat_title text;
+  v_chat_title text := '';
   v_person_title text;
   v_chat_subtitle text := json.get_string_opt(data.get_attribute_value(v_chat_id, 'subtitle', v_actor_id), '');
 
@@ -10474,11 +10626,21 @@ begin
 -- добавляем в группу с рассылкой
   perform data.process_diffs_and_notify(data.change_object_groups(in_list_object_id, array[v_chat_id], array[]::integer[], v_actor_id));
 
+  -- обновляем список текущих персон
+  for v_name in 
+    (select * from unnest(pallas_project.get_chat_persons_but_masters(v_chat_id))) loop 
+    v_persons := v_persons || '
+'|| json.get_string_opt(v_name, '');
+    v_chat_title := v_chat_title || ', '|| json.get_string_opt(v_name, '');
+   end loop;
+  v_persons := v_persons || '
+'|| '------------------
+Кого добавляем?';
+
+  v_chat_title := trim(v_chat_title, ', ');
+
   -- Меняем заголовок чата
   perform * from data.objects where id = v_chat_id for update;
-  v_chat_title := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), '');
-  v_person_title := json.get_string_opt(data.get_attribute_value(in_list_object_id, v_title_attribute_id, v_actor_id), '');
-  v_chat_title := v_chat_title ||', ' || v_person_title;
   perform data.change_object_and_notify(v_chat_id, 
                                         jsonb_build_array(data.attribute_change2jsonb(v_title_attribute_id, null, to_jsonb(v_chat_title))),
                                         null);
@@ -10494,21 +10656,6 @@ begin
 
   v_content := json.get_string_array_opt(data.get_attribute_value(in_object_id, 'content', v_actor_id), array[]::text[]);
   v_content := array_remove(v_content, v_person_code);
-
-  -- обновляем список текущих персон
-  for v_name in 
-    (select av.value
-      from data.object_objects oo
-      left join data.attribute_values av on av.object_id = oo.object_id and av.attribute_id = v_title_attribute_id and av.value_object_id is null
-      where oo.parent_object_id = v_chat_id
-        and oo.parent_object_id <> oo.object_id
-      order by av.value) loop 
-      v_persons := v_persons || '
-'|| json.get_string_opt(v_name,'');
-   end loop;
- v_persons := v_persons || '
-'|| '------------------
-Кого добавляем?';
 
   v_changes := array[]::jsonb[];
   v_changes := array_append(v_changes, data.attribute_change2jsonb('chat_temp_person_list_persons', null, to_jsonb(v_persons)));
@@ -10746,6 +10893,25 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.vd_chat_is_mute(integer, jsonb, integer);
+
+create or replace function pallas_project.vd_chat_is_mute(in_attribute_id integer, in_value jsonb, in_actor_id integer)
+returns text
+immutable
+as
+$$
+declare
+  v_bool_value boolean := json.get_boolean(in_value);
+begin
+  case when v_bool_value then
+    return 'Уведомления отключены';
+  else
+    return null;
+  end case;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.vd_debatle_bonuses(integer, jsonb, integer);
 
 create or replace function pallas_project.vd_debatle_bonuses(in_attribute_id integer, in_value jsonb, in_actor_id integer)
@@ -10956,13 +11122,43 @@ end;
 $$
 language plpgsql;
 
--- drop function pp_utils.list_prepend_and_notify(integer, text, integer);
+-- drop function pp_utils.list_prepend_and_notify(integer, text, integer, integer);
 
-create or replace function pp_utils.list_prepend_and_notify(in_list_id integer, in_new_object_code text, in_actor_id integer)
+create or replace function pp_utils.list_prepend_and_notify(in_list_id integer, in_new_object_code text, in_value_object_id integer, in_actor_id integer default null::integer)
 returns void
 volatile
 as
 $$
+declare
+  v_content_attribute_id integer := data.get_attribute_id('content');
+
+  v_content text[];
+  v_new_content text[];
+  v_actor_id integer := coalesce(in_actor_id, in_value_object_id);
+begin
+  -- Блокируем список
+  perform * from data.objects where id = in_list_id for update;
+
+  -- Достаём, меняем, кладём назад
+  v_content := json.get_string_array_opt(data.get_attribute_value(in_list_id, 'content', v_actor_id), array[]::text[]);
+  v_new_content := array_prepend(in_new_object_code, v_content);
+  if v_new_content <> v_content then
+    perform data.change_object_and_notify(in_list_id, 
+                                          jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, in_value_object_id, to_jsonb(v_new_content))),
+                                          v_actor_id);
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pp_utils.list_remove_and_notify(integer, text, integer);
+
+create or replace function pp_utils.list_remove_and_notify(in_list_id integer, in_object_code text, in_actor_id integer)
+returns void
+volatile
+as
+$$
+-- Функция перемещает элемент в начало массива
 declare
   v_content_attribute_id integer := data.get_attribute_id('content');
 
@@ -10975,7 +11171,7 @@ begin
 
   -- Достаём, меняем, кладём назад
   v_content := json.get_string_array_opt(data.get_attribute_value(in_list_id, 'content', in_actor_id), array[]::text[]);
-  v_new_content := array_prepend(in_new_object_code, v_content);
+  v_new_content := array_remove(v_content, in_object_code);
   if v_new_content <> v_content then
     perform data.change_object_and_notify(in_list_id, 
                                           jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, in_actor_id, to_jsonb(v_new_content))),

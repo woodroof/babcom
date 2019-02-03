@@ -16,7 +16,7 @@ begin
     v_actions_list := v_actions_list || ', "' || 'login":' || 
       '{"code": "login", "name": "Войти", "disabled": false, "params": {}, "user_params": [{"code": "password", "description": "Введите пароль", "type": "string" }]}';
   else
-    if pp_utils.is_in_group(in_actor_id, 'all_person') then
+    if v_is_master or pp_utils.is_in_group(in_actor_id, 'all_person') then
       v_actions_list := v_actions_list || ', "' || 'debatles":' || 
         '{"code": "act_open_object", "name": "Дебатлы", "disabled": false, "params": {"object_code": "debatles"}}';
       v_actions_list := v_actions_list || ', "' || 'chats":' || 

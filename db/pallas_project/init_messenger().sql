@@ -29,7 +29,7 @@ declare
   v_system_chat_can_leave_attribute_id integer;
   v_system_chat_can_mute_attribute_id integer;
   v_system_chat_can_rename_attribute_id integer;
-
+  v_chat_bot_id integer;
 begin
   -- Атрибуты 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
@@ -38,13 +38,11 @@ begin
   ('system_message_sender', null, 'id объекта-отправителя сообщения', 'system', null, null, false),
   ('system_message_time', null, 'Дата и время отправки сообщения', 'system', null, null, false),
   -- для чатов
-  ('chat_persons', null, 'Участники чата', 'normal', 'full', null, false),
   ('system_chat_can_invite', null, 'Возможность пригласить кого-то в чат', 'system', null, null, true),
   ('system_chat_can_leave', null, 'Возможность покинуть чат', 'system', null, null, true),
   ('system_chat_can_mute', null, 'Возможность Убрать уведомления о новых сообщениях', 'system', null, null, true),
   ('system_chat_can_rename', null, 'Возможность переименовать чат', 'system', null, null, true),
-  ('system_chat_is_mute', null, 'Признак отлюченного уведомления о новых сообщениях', 'system', null, null, true),
-  ('system_chat_last_message_time', null, 'Дата последнего собщения', 'system', null, null, false),
+  ('chat_is_mute', null, 'Признак отлюченного уведомления о новых сообщениях', 'normal', 'full', 'pallas_project.vd_chat_is_mute', true),
   -- для временных объектов для изменения участников
   ('chat_temp_person_list_persons', 'Сейчас участвуют', 'Список участников чата', 'normal', 'full', null, false),
   ('system_chat_temp_person_list_chat_id', null, 'Идентификатор изменяемого чата', 'system', null, null, false);
@@ -94,7 +92,6 @@ begin
   --(v_chat_class_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_debatle"'),
   --(v_chat_class_id, v_mini_card_function_attribute_id, jsonb '"pallas_project.mcard_debatle"'),
   (v_chat_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chat"'),
-  (v_chat_class_id, v_priority_attribute_id, jsonb '100'),
   (v_chat_class_id, v_system_chat_can_invite_attribute_id, jsonb 'true'),
   (v_chat_class_id, v_system_chat_can_leave_attribute_id, jsonb 'true'),
   (v_chat_class_id, v_system_chat_can_mute_attribute_id, jsonb 'true'),
@@ -103,7 +100,7 @@ begin
                                                       '{"code": "%s", "attributes": ["%s"], 
                                                                       "actions": ["%s", "%s", "%s"]}',
                                                       'chat_group1',
-                                                      'chat_persons',
+                                                      'chat_is_mute',
                                                       'chat_add_person',
                                                       'chat_leave',
                                                       'chat_mute')::jsonb,
@@ -140,10 +137,16 @@ begin
                                                       'group2',
                                                       'chat_temp_person_list_persons')::jsonb));
 
+  -- Чат-бот
+  insert into data.objects(code) values ('chat_bot') returning id into v_chat_bot_id;
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_chat_bot_id, v_title_attribute_id, jsonb '"Чат-бот"');
+
   insert into data.actions(code, function) values
   ('create_chat', 'pallas_project.act_create_chat'),
   ('chat_write', 'pallas_project.act_chat_write'),
-  ('chat_add_person','pallas_project.act_chat_add_person');
+  ('chat_add_person','pallas_project.act_chat_add_person'),
+  ('chat_leave','pallas_project.act_chat_leave');
 
 end;
 $$

@@ -17,11 +17,17 @@ begin
 
   if v_is_master or json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_invite', in_actor_id), false) then
     v_actions_list := v_actions_list || 
-        format(', "chat_add_person": {"code": "chat_add_person", "name": "Добавить участника", "disabled": false, '||
+        format(', "chat_add_person": {"code": "chat_add_person", "name": "Добавить/посмотреть участников", "disabled": false, '||
                 '"params": {"chat_code": "%s"}}',
                 v_chat_code);
   end if;
 
+  if pp_utils.is_in_group(in_actor_id, v_chat_code) and json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_leave', in_actor_id), false) then
+    v_actions_list := v_actions_list || 
+        format(', "chat_leave": {"code": "chat_leave", "name": "Выйти из чата", "disabled": false, "warning": "Вы уверены? Этот чат исчезнет из вашего списка чатов, и вернуться вы не сможете.",'||
+                '"params": {"chat_code": "%s"}}',
+                v_chat_code);
+  end if;
 
   v_actions_list := v_actions_list || 
         format(', "chat_write": {"code": "chat_write", "name": "Написать", "disabled": false, '||

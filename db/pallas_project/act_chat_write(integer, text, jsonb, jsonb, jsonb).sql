@@ -59,7 +59,7 @@ begin
     v_message_sent := data.change_current_object(in_client_id, 
                                                  in_request_id,
                                                  v_chat_id, 
-                                                 jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, v_chat_id, to_jsonb(v_new_content))));
+                                                 jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, null, to_jsonb(v_new_content))));
   end if;
 
   -- Перекладываем этот чат в начало в мастерском списке чатов
@@ -74,7 +74,7 @@ begin
   loop
     perform pp_utils.list_replace_to_head_and_notify(v_chats_id, v_chat_code, v_person_id);
     if v_person_id <> v_actor_id 
-      and not json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_mute', v_person_id), false) then
+      and not json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'chat_is_mute', v_person_id), false) then
       perform pp_utils.add_notification_if_not_subscribed(v_person_id, 'Новое сообщение от '|| v_actor_title, v_chat_id);
     end if;
   end loop;
