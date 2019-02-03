@@ -8,7 +8,7 @@ import uuid
 from aiohttp import web, WSMsgType
 from aiojobs.aiohttp import atomic, setup
 from pathlib import Path
-from prometheus_client import Counter, Gauge, Summary, Histogram, start_http_server
+from prometheus_client import Counter, Gauge, Histogram, start_http_server
 from prometheus_async.aio import time
 
 from db_settings import DB_HOST, DB_PORT, DB_NAME
@@ -33,6 +33,10 @@ SQL_EXCEPTION_COUNT = Counter('sql_exception_count', 'Total number of sql errors
 
 CONNECTION_COUNT = Gauge('connection_count', 'Current number of active connections')
 PROCESSING_MESSAGE_COUNT = Gauge('processing_message_count', 'Current number of processing messages')
+
+DB_DEADLOCK_COUNT = Gauge('db_deadlock_count', 'Total number of deadlocks')
+DB_ERROR_COUNT = Gauge('db_error_count', 'Total number of errors')
+DB_MAX_API_TIME = Gauge('db_max_api_time_ms', 'Max time of api request')
 
 async def init_socket(socket, request):
     await socket.prepare(request)
@@ -153,14 +157,31 @@ async def async_listener(app, notification_id):
 
     async with pool.acquire() as connection:
         result = await process_notification(connection, notification_id)
-        client_code = result['client_code']
-        if client_code in connections:
-            connection_object = connections[client_code]
-            ws = connection_object['ws']
-            async with connection_object['lock']:
-                if connection_object['ws'] is ws:
-                    # TODO обработка исключения при закрытии подключения
-                    await ws.send_str(result['message'])
+        if result is not None:
+            notification_type = result['type']
+            if notification_type == 'client_message':
+                client_code = result['client_code']
+                if client_code in connections:
+                    connection_object = connections[client_code]
+                    ws = connection_object['ws']
+                    async with connection_object['lock']:
+                        if connection_object['ws'] is ws:
+                            # TODO обработка исключения при закрытии подключения
+                            await ws.send_json(result['message'])
+            elif notification_type == 'metric':
+                message = result['message']
+                metric_type = message['type']
+                value = message['value']
+                if metric_type == 'max_api_time_ms':
+                    DB_MAX_API_TIME.set(value)
+                elif metric_type == 'error_count':
+                    DB_ERROR_COUNT.set(value)
+                elif metric_type == 'deadlock_count':
+                    DB_DEADLOCK_COUNT.set(value)
+                else:
+                    print('Unsupported metric type ' + metric_type)
+            else:
+                print('Unsupported notification type ' + notification_type)
 
 def listener_creator(app):
     def listener(connection, pid, channel, payload):

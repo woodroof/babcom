@@ -121,6 +121,19 @@ create type data.card_type as enum(
   'full',
   'mini');
 
+-- drop type data.metric_type;
+
+create type data.metric_type as enum(
+  'deadlock_count',
+  'error_count',
+  'max_api_time_ms');
+
+-- drop type data.notification_type;
+
+create type data.notification_type as enum(
+  'client_message',
+  'metric');
+
 -- drop type data.object_type;
 
 create type data.object_type as enum(
@@ -354,33 +367,45 @@ security definer
 as
 $$
 declare
-  v_message text;
+  v_type data.notification_type;
+  v_message jsonb;
   v_client_id integer;
   v_client_code text;
+  v_ret_val jsonb;
 begin
   assert in_notification_code is not null;
 
   delete from data.notifications
   where code = in_notification_code
-  returning message, client_id
-  into v_message, v_client_id;
+  returning type, message, client_id
+  into v_type, v_message, v_client_id;
 
-  if v_client_id is null then
-    raise exception 'Can''t find notification with code "%"', in_notification_code;
+  -- Уведомление могло удалиться из-за отключения клиента
+  if v_type is null then
+    return null;
   end if;
 
-  select code
-  into v_client_code
-  from data.clients
-  where id = v_client_id;
+  if v_client_id is not null then
+    select code
+    into v_client_code
+    from data.clients
+    where id = v_client_id;
 
-  assert v_client_code is not null;
+    assert v_client_code is not null;
+  end if;
 
-  return jsonb_build_object(
-    'client_code',
-    v_client_code,
-    'message',
-    v_message);
+  v_ret_val :=
+    jsonb_build_object(
+      'type',
+      v_type::text,
+      'message',
+      v_message);
+
+  if v_client_code is not null then
+    v_ret_val := v_ret_val || jsonb_build_object('client_code', v_client_code);
+  end if;
+
+  return v_ret_val;
 end;
 $$
 language plpgsql;
@@ -421,6 +446,28 @@ end;
 $$
 language plpgsql;
 
+-- drop function api_utils.create_metric_notification(data.metric_type, integer);
+
+create or replace function api_utils.create_metric_notification(in_type data.metric_type, in_value integer)
+returns void
+volatile
+as
+$$
+declare
+  v_notification_code text;
+begin
+  assert in_type is not null;
+  assert in_value is not null;
+
+  insert into data.notifications(type, message)
+  values('metric', jsonb_build_object('type', in_type::text, 'value', in_value))
+  returning code into v_notification_code;
+
+  perform pg_notify('api_channel', v_notification_code);
+end;
+$$
+language plpgsql;
+
 -- drop function api_utils.create_notification(integer, text, api_utils.output_message_type, jsonb);
 
 create or replace function api_utils.create_notification(in_client_id integer, in_request_id text, in_type api_utils.output_message_type, in_data jsonb)
@@ -439,8 +486,8 @@ begin
   assert in_client_id is not null;
   assert in_type is not null;
 
-  insert into data.notifications(message, client_id)
-  values(v_message, in_client_id)
+  insert into data.notifications(type, message, client_id)
+  values('client_message', v_message, in_client_id)
   returning code into v_notification_code;
 
   perform pg_notify('api_channel', v_notification_code);
@@ -3732,40 +3779,53 @@ end;
 $$
 language plpgsql;
 
--- drop function data.metric_add(text, integer);
+-- drop function data.metric_add(data.metric_type, integer);
 
-create or replace function data.metric_add(in_code text, in_value integer)
+create or replace function data.metric_add(in_type data.metric_type, in_value integer)
 returns void
 volatile
 as
 $$
+declare
+  v_new_value integer;
 begin
-  assert in_code is not null;
+  assert in_type is not null;
   assert in_value is not null;
 
-  insert into data.metrics as m (code, value)
-  values (in_code, in_value)
-  on conflict (code) do update
-  set value = m.value + in_value;
+  insert into data.metrics as m (type, value)
+  values (in_type, in_value)
+  on conflict (type) do update
+  set value = m.value + in_value
+  returning value into v_new_value;
+
+  perform api_utils.create_metric_notification(in_type, v_new_value);
 end;
 $$
 language plpgsql;
 
--- drop function data.metric_set_max(text, integer);
+-- drop function data.metric_set_max(data.metric_type, integer);
 
-create or replace function data.metric_set_max(in_code text, in_value integer)
+create or replace function data.metric_set_max(in_type data.metric_type, in_value integer)
 returns void
 volatile
 as
 $$
+declare
+  v_id integer;
 begin
-  assert in_code is not null;
+  assert in_type is not null;
   assert in_value is not null;
 
-  insert into data.metrics as m (code, value)
-  values (in_code, in_value)
-  on conflict (code) do update
-  set value = greatest(m.value, in_value);
+  insert into data.metrics as m (type, value)
+  values (in_type, in_value)
+  on conflict (type) do update
+  set value = in_value
+  where m.value < in_value
+  returning id into v_id;
+
+  if v_id is not null then
+    perform api_utils.create_metric_notification(in_type, in_value);
+  end if;
 end;
 $$
 language plpgsql;
@@ -14517,10 +14577,10 @@ create table data.logins(
 
 create table data.metrics(
   id integer not null generated always as identity,
-  code text not null,
+  type data.metric_type not null,
   value integer not null,
   constraint metrics_pk primary key(id),
-  constraint metrics_unique_code unique(code)
+  constraint metrics_unique_type unique(type)
 );
 
 -- drop table data.notifications;
@@ -14528,8 +14588,10 @@ create table data.metrics(
 create table data.notifications(
   id integer not null generated always as identity,
   code text not null default (pgcrypto.gen_random_uuid())::text,
+  type data.notification_type not null,
   message jsonb not null,
-  client_id integer not null,
+  client_id integer,
+  constraint notifications_client_check check((type = 'client_message'::data.notification_type) = (client_id is not null)),
   constraint notifications_pk primary key(id),
   constraint notifications_unique_code unique(code)
 );

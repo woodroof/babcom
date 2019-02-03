@@ -16,8 +16,8 @@ begin
   assert in_client_id is not null;
   assert in_type is not null;
 
-  insert into data.notifications(message, client_id)
-  values(v_message, in_client_id)
+  insert into data.notifications(type, message, client_id)
+  values('client_message', v_message, in_client_id)
   returning code into v_notification_code;
 
   perform pg_notify('api_channel', v_notification_code);

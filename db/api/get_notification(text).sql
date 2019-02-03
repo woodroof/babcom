@@ -7,33 +7,45 @@ security definer
 as
 $$
 declare
-  v_message text;
+  v_type data.notification_type;
+  v_message jsonb;
   v_client_id integer;
   v_client_code text;
+  v_ret_val jsonb;
 begin
   assert in_notification_code is not null;
 
   delete from data.notifications
   where code = in_notification_code
-  returning message, client_id
-  into v_message, v_client_id;
+  returning type, message, client_id
+  into v_type, v_message, v_client_id;
 
-  if v_client_id is null then
-    raise exception 'Can''t find notification with code "%"', in_notification_code;
+  -- Уведомление могло удалиться из-за отключения клиента
+  if v_type is null then
+    return null;
   end if;
 
-  select code
-  into v_client_code
-  from data.clients
-  where id = v_client_id;
+  if v_client_id is not null then
+    select code
+    into v_client_code
+    from data.clients
+    where id = v_client_id;
 
-  assert v_client_code is not null;
+    assert v_client_code is not null;
+  end if;
 
-  return jsonb_build_object(
-    'client_code',
-    v_client_code,
-    'message',
-    v_message);
+  v_ret_val :=
+    jsonb_build_object(
+      'type',
+      v_type::text,
+      'message',
+      v_message);
+
+  if v_client_code is not null then
+    v_ret_val := v_ret_val || jsonb_build_object('client_code', v_client_code);
+  end if;
+
+  return v_ret_val;
 end;
 $$
 language plpgsql;
