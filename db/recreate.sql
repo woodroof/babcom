@@ -121,19 +121,6 @@ create type data.card_type as enum(
   'full',
   'mini');
 
--- drop type data.metric_type;
-
-create type data.metric_type as enum(
-  'deadlock_count',
-  'error_count',
-  'max_api_time_ms');
-
--- drop type data.notification_type;
-
-create type data.notification_type as enum(
-  'client_message',
-  'metric');
-
 -- drop type data.object_type;
 
 create type data.object_type as enum(
@@ -367,45 +354,33 @@ security definer
 as
 $$
 declare
-  v_type data.notification_type;
-  v_message jsonb;
+  v_message text;
   v_client_id integer;
   v_client_code text;
-  v_ret_val jsonb;
 begin
   assert in_notification_code is not null;
 
   delete from data.notifications
   where code = in_notification_code
-  returning type, message, client_id
-  into v_type, v_message, v_client_id;
+  returning message, client_id
+  into v_message, v_client_id;
 
-  -- Уведомление могло удалиться из-за отключения клиента
-  if v_type is null then
-    return null;
+  if v_client_id is null then
+    raise exception 'Can''t find notification with code "%"', in_notification_code;
   end if;
 
-  if v_client_id is not null then
-    select code
-    into v_client_code
-    from data.clients
-    where id = v_client_id;
+  select code
+  into v_client_code
+  from data.clients
+  where id = v_client_id;
 
-    assert v_client_code is not null;
-  end if;
+  assert v_client_code is not null;
 
-  v_ret_val :=
-    jsonb_build_object(
-      'type',
-      v_type::text,
-      'message',
-      v_message);
-
-  if v_client_code is not null then
-    v_ret_val := v_ret_val || jsonb_build_object('client_code', v_client_code);
-  end if;
-
-  return v_ret_val;
+  return jsonb_build_object(
+    'client_code',
+    v_client_code,
+    'message',
+    v_message);
 end;
 $$
 language plpgsql;
@@ -446,28 +421,6 @@ end;
 $$
 language plpgsql;
 
--- drop function api_utils.create_metric_notification(data.metric_type, integer);
-
-create or replace function api_utils.create_metric_notification(in_type data.metric_type, in_value integer)
-returns void
-volatile
-as
-$$
-declare
-  v_notification_code text;
-begin
-  assert in_type is not null;
-  assert in_value is not null;
-
-  insert into data.notifications(type, message)
-  values('metric', jsonb_build_object('type', in_type::text, 'value', in_value))
-  returning code into v_notification_code;
-
-  perform pg_notify('api_channel', v_notification_code);
-end;
-$$
-language plpgsql;
-
 -- drop function api_utils.create_notification(integer, text, api_utils.output_message_type, jsonb);
 
 create or replace function api_utils.create_notification(in_client_id integer, in_request_id text, in_type api_utils.output_message_type, in_data jsonb)
@@ -486,8 +439,8 @@ begin
   assert in_client_id is not null;
   assert in_type is not null;
 
-  insert into data.notifications(type, message, client_id)
-  values('client_message', v_message, in_client_id)
+  insert into data.notifications(message, client_id)
+  values(v_message, in_client_id)
   returning code into v_notification_code;
 
   perform pg_notify('api_channel', v_notification_code);
@@ -3779,53 +3732,40 @@ end;
 $$
 language plpgsql;
 
--- drop function data.metric_add(data.metric_type, integer);
+-- drop function data.metric_add(text, integer);
 
-create or replace function data.metric_add(in_type data.metric_type, in_value integer)
+create or replace function data.metric_add(in_code text, in_value integer)
 returns void
 volatile
 as
 $$
-declare
-  v_new_value integer;
 begin
-  assert in_type is not null;
+  assert in_code is not null;
   assert in_value is not null;
 
-  insert into data.metrics as m (type, value)
-  values (in_type, in_value)
-  on conflict (type) do update
-  set value = m.value + in_value
-  returning value into v_new_value;
-
-  perform api_utils.create_metric_notification(in_type, v_new_value);
+  insert into data.metrics as m (code, value)
+  values (in_code, in_value)
+  on conflict (code) do update
+  set value = m.value + in_value;
 end;
 $$
 language plpgsql;
 
--- drop function data.metric_set_max(data.metric_type, integer);
+-- drop function data.metric_set_max(text, integer);
 
-create or replace function data.metric_set_max(in_type data.metric_type, in_value integer)
+create or replace function data.metric_set_max(in_code text, in_value integer)
 returns void
 volatile
 as
 $$
-declare
-  v_id integer;
 begin
-  assert in_type is not null;
+  assert in_code is not null;
   assert in_value is not null;
 
-  insert into data.metrics as m (type, value)
-  values (in_type, in_value)
-  on conflict (type) do update
-  set value = in_value
-  where m.value < in_value
-  returning id into v_id;
-
-  if v_id is not null then
-    perform api_utils.create_metric_notification(in_type, in_value);
-  end if;
+  insert into data.metrics as m (code, value)
+  values (in_code, in_value)
+  on conflict (code) do update
+  set value = greatest(m.value, in_value);
 end;
 $$
 language plpgsql;
@@ -8225,6 +8165,92 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_chat_mute(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_chat_mute(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_chat_code text := json.get_string(in_params, 'chat_code');
+  v_mute_on_off text := json.get_string(in_params, 'mute_on_off');
+  v_chat_id integer := data.get_object_id(v_chat_code);
+  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+
+  v_chat_is_mute boolean;
+  v_new_chat_is_mute boolean;
+
+  v_chat_is_mute_attribute_id integer := data.get_attribute_id('chat_is_mute');
+  v_message_sent boolean := false;
+begin
+  -- mute_on_off: on - заглушить уведомления, off - перестать глушить уведомления
+  assert in_request_id is not null;
+  assert v_mute_on_off in ('on', 'off');
+
+  perform * from data.objects where id = v_chat_id for update;
+
+  v_chat_is_mute := json.get_boolean_opt(data.get_attribute_value(v_chat_id, v_chat_is_mute_attribute_id, v_actor_id), false);
+
+  if not v_chat_is_mute and v_mute_on_off = 'on' then
+  -- проверяем, что отключать можно
+    assert json.get_boolean_opt(data.get_attribute_value(v_actor_id, 'system_chat_can_mute', v_actor_id), true);
+  end if;
+
+  if v_mute_on_off = 'on' then
+    v_new_chat_is_mute := true;
+  end if;
+
+  if coalesce(v_new_chat_is_mute, false) <> v_chat_is_mute then
+    v_message_sent := data.change_current_object(in_client_id, 
+                                                 in_request_id,
+                                                 v_chat_id, 
+                                                 jsonb_build_array(data.attribute_change2jsonb(v_chat_is_mute_attribute_id, v_actor_id, to_jsonb(v_new_chat_is_mute))));
+  end if;
+  if not v_message_sent then
+   perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_chat_rename(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_chat_rename(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_chat_code text := json.get_string(in_params, 'chat_code');
+  v_subtitle text := json.get_string(in_user_params, 'subtitle');
+  v_chat_id integer := data.get_object_id(v_chat_code);
+  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+
+  v_old_subtitle text;
+
+  v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
+  v_message_sent boolean := false;
+begin
+  assert in_request_id is not null;
+
+  perform * from data.objects where id = v_chat_id for update;
+
+  v_old_subtitle := json.get_string_opt(data.get_attribute_value(v_chat_id, v_subtitle_attribute_id, v_actor_id), '');
+
+  if v_old_subtitle <> v_subtitle then
+    v_message_sent := data.change_current_object(in_client_id, 
+                                                 in_request_id,
+                                                 v_chat_id, 
+                                                 jsonb_build_array(data.attribute_change2jsonb(v_subtitle_attribute_id, null, to_jsonb(v_subtitle))));
+  end if;
+  if not v_message_sent then
+   perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_chat_write(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_chat_write(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -8321,12 +8347,14 @@ volatile
 as
 $$
 declare
+  v_chat_subtitle text := json.get_string_opt(in_params, 'subtitle', null);
   v_chat_code text;
   v_chat_id  integer;
   v_chat_class_id integer := data.get_class_id('chat');
   v_actor_id  integer :=data.get_active_actor_id(in_client_id);
 
   v_title_attribute_id integer := data.get_attribute_id('title');
+  v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
   v_priority_attribute_id integer := data.get_attribute_id('priority');
 
@@ -8341,6 +8369,7 @@ begin
 
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_chat_id, v_title_attribute_id, to_jsonb('Чат: '|| json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id, v_actor_id))), null),
+  (v_chat_id, v_subtitle_attribute_id, to_jsonb(v_chat_subtitle), null),
   (v_chat_id, v_priority_attribute_id, jsonb '100', null),
   (v_chat_id, v_is_visible_attribute_id, jsonb 'true', v_chat_id),
   (v_chat_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id);
@@ -9271,6 +9300,7 @@ declare
   v_actions_list text := '';
   v_is_master boolean;
   v_chat_code text;
+  v_chat_is_mute boolean;
 begin
   assert in_actor_id is not null;
 
@@ -9284,11 +9314,33 @@ begin
                 v_chat_code);
   end if;
 
-  if pp_utils.is_in_group(in_actor_id, v_chat_code) and json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_leave', in_actor_id), false) then
+  if pp_utils.is_in_group(in_actor_id, v_chat_code) and (v_is_master or json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_leave', in_actor_id), false)) then
     v_actions_list := v_actions_list || 
         format(', "chat_leave": {"code": "chat_leave", "name": "Выйти из чата", "disabled": false, "warning": "Вы уверены? Этот чат исчезнет из вашего списка чатов, и вернуться вы не сможете.",'||
                 '"params": {"chat_code": "%s"}}',
                 v_chat_code);
+  end if;
+
+  if pp_utils.is_in_group(in_actor_id, v_chat_code) and (v_is_master or json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_mute', in_actor_id), false)) then
+    v_chat_is_mute := json.get_boolean_opt(data.get_attribute_value(in_object_id, 'chat_is_mute', in_actor_id), false);
+    v_actions_list := v_actions_list || 
+        format(', "chat_mute": {"code": "chat_mute", "name": "%s", "disabled": false,'||
+                '"params": {"chat_code": "%s", "mute_on_off": "%s"}}',
+                case when v_chat_is_mute then
+                  'Включить уведомления'
+                else 'Отключить уведомления' end,
+                v_chat_code,
+                case when v_chat_is_mute then
+                  'off'
+                else 'on' end);
+  end if;
+
+  if pp_utils.is_in_group(in_actor_id, v_chat_code) and (v_is_master or json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_rename', in_actor_id), false)) then
+    v_actions_list := v_actions_list || 
+        format(', "chat_rename": {"code": "chat_rename", "name": "Переименовать чат", "disabled": false, "warning": "Чат поменяет имя для всех его участников.",'||
+                '"params": {"chat_code": "%s"}, "user_params": [{"code": "subtitle", "description": "Введите имя чата", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"}]}',
+                v_chat_code,
+                json.get_string_opt(data.get_attribute_value(in_object_id, 'subtitle', in_actor_id), null));
   end if;
 
   v_actions_list := v_actions_list || 
@@ -10327,7 +10379,7 @@ begin
   ('system_chat_can_leave', null, 'Возможность покинуть чат', 'system', null, null, true),
   ('system_chat_can_mute', null, 'Возможность Убрать уведомления о новых сообщениях', 'system', null, null, true),
   ('system_chat_can_rename', null, 'Возможность переименовать чат', 'system', null, null, true),
-  ('chat_is_mute', null, 'Признак отлюченного уведомления о новых сообщениях', 'normal', 'full', 'pallas_project.vd_chat_is_mute', true),
+  ('chat_is_mute', 'Уведомления отключены', 'Признак отлюченного уведомления о новых сообщениях', 'normal', 'full', 'pallas_project.vd_chat_is_mute', true),
   -- для временных объектов для изменения участников
   ('chat_temp_person_list_persons', 'Сейчас участвуют', 'Список участников чата', 'normal', 'full', null, false),
   ('system_chat_temp_person_list_chat_id', null, 'Идентификатор изменяемого чата', 'system', null, null, false);
@@ -10383,12 +10435,13 @@ begin
   (v_chat_class_id, v_system_chat_can_rename_attribute_id, jsonb 'true'),
   (v_chat_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
                                                       '{"code": "%s", "attributes": ["%s"], 
-                                                                      "actions": ["%s", "%s", "%s"]}',
+                                                                      "actions": ["%s", "%s", "%s", "%s"]}',
                                                       'chat_group1',
                                                       'chat_is_mute',
                                                       'chat_add_person',
                                                       'chat_leave',
-                                                      'chat_mute')::jsonb,
+                                                      'chat_mute',
+                                                      'chat_rename')::jsonb,
                                                       format(
                                                       '{"code": "%s", "actions": ["%s"]}',
                                                       'chat_group2',
@@ -10431,7 +10484,9 @@ begin
   ('create_chat', 'pallas_project.act_create_chat'),
   ('chat_write', 'pallas_project.act_chat_write'),
   ('chat_add_person','pallas_project.act_chat_add_person'),
-  ('chat_leave','pallas_project.act_chat_leave');
+  ('chat_leave','pallas_project.act_chat_leave'),
+  ('chat_mute','pallas_project.act_chat_mute'),
+  ('chat_change_subtitle','pallas_project.act_chat_change_subtitle');
 
 end;
 $$
@@ -10961,10 +11016,10 @@ immutable
 as
 $$
 declare
-  v_bool_value boolean := json.get_boolean(in_value);
+  v_bool_value boolean := json.get_boolean_opt(in_value, false);
 begin
   case when v_bool_value then
-    return 'Уведомления отключены';
+    return 'Да';
   else
     return null;
   end case;
@@ -14577,10 +14632,10 @@ create table data.logins(
 
 create table data.metrics(
   id integer not null generated always as identity,
-  type data.metric_type not null,
+  code text not null,
   value integer not null,
   constraint metrics_pk primary key(id),
-  constraint metrics_unique_type unique(type)
+  constraint metrics_unique_code unique(code)
 );
 
 -- drop table data.notifications;
@@ -14588,10 +14643,8 @@ create table data.metrics(
 create table data.notifications(
   id integer not null generated always as identity,
   code text not null default (pgcrypto.gen_random_uuid())::text,
-  type data.notification_type not null,
   message jsonb not null,
-  client_id integer,
-  constraint notifications_client_check check((type = 'client_message'::data.notification_type) = (client_id is not null)),
+  client_id integer not null,
   constraint notifications_pk primary key(id),
   constraint notifications_unique_code unique(code)
 );

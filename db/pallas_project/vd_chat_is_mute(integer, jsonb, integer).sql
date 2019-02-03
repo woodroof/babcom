@@ -6,10 +6,10 @@ immutable
 as
 $$
 declare
-  v_bool_value boolean := json.get_boolean(in_value);
+  v_bool_value boolean := json.get_boolean_opt(in_value, false);
 begin
   case when v_bool_value then
-    return 'Уведомления отключены';
+    return 'Да';
   else
     return null;
   end case;
