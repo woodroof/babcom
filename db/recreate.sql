@@ -121,6 +121,19 @@ create type data.card_type as enum(
   'full',
   'mini');
 
+-- drop type data.metric_type;
+
+create type data.metric_type as enum(
+  'deadlock_count',
+  'error_count',
+  'max_api_time_ms');
+
+-- drop type data.notification_type;
+
+create type data.notification_type as enum(
+  'client_message',
+  'metric');
+
 -- drop type data.object_type;
 
 create type data.object_type as enum(
@@ -354,33 +367,45 @@ security definer
 as
 $$
 declare
-  v_message text;
+  v_type data.notification_type;
+  v_message jsonb;
   v_client_id integer;
   v_client_code text;
+  v_ret_val jsonb;
 begin
   assert in_notification_code is not null;
 
   delete from data.notifications
   where code = in_notification_code
-  returning message, client_id
-  into v_message, v_client_id;
+  returning type, message, client_id
+  into v_type, v_message, v_client_id;
 
-  if v_client_id is null then
-    raise exception 'Can''t find notification with code "%"', in_notification_code;
+  -- Уведомление могло удалиться из-за отключения клиента
+  if v_type is null then
+    return null;
   end if;
 
-  select code
-  into v_client_code
-  from data.clients
-  where id = v_client_id;
+  if v_client_id is not null then
+    select code
+    into v_client_code
+    from data.clients
+    where id = v_client_id;
 
-  assert v_client_code is not null;
+    assert v_client_code is not null;
+  end if;
 
-  return jsonb_build_object(
-    'client_code',
-    v_client_code,
-    'message',
-    v_message);
+  v_ret_val :=
+    jsonb_build_object(
+      'type',
+      v_type::text,
+      'message',
+      v_message);
+
+  if v_client_code is not null then
+    v_ret_val := v_ret_val || jsonb_build_object('client_code', v_client_code);
+  end if;
+
+  return v_ret_val;
 end;
 $$
 language plpgsql;
@@ -421,6 +446,28 @@ end;
 $$
 language plpgsql;
 
+-- drop function api_utils.create_metric_notification(data.metric_type, integer);
+
+create or replace function api_utils.create_metric_notification(in_type data.metric_type, in_value integer)
+returns void
+volatile
+as
+$$
+declare
+  v_notification_code text;
+begin
+  assert in_type is not null;
+  assert in_value is not null;
+
+  insert into data.notifications(type, message)
+  values('metric', jsonb_build_object('type', in_type::text, 'value', in_value))
+  returning code into v_notification_code;
+
+  perform pg_notify('api_channel', v_notification_code);
+end;
+$$
+language plpgsql;
+
 -- drop function api_utils.create_notification(integer, text, api_utils.output_message_type, jsonb);
 
 create or replace function api_utils.create_notification(in_client_id integer, in_request_id text, in_type api_utils.output_message_type, in_data jsonb)
@@ -439,8 +486,8 @@ begin
   assert in_client_id is not null;
   assert in_type is not null;
 
-  insert into data.notifications(message, client_id)
-  values(v_message, in_client_id)
+  insert into data.notifications(type, message, client_id)
+  values('client_message', v_message, in_client_id)
   returning code into v_notification_code;
 
   perform pg_notify('api_channel', v_notification_code);
@@ -3732,40 +3779,53 @@ end;
 $$
 language plpgsql;
 
--- drop function data.metric_add(text, integer);
+-- drop function data.metric_add(data.metric_type, integer);
 
-create or replace function data.metric_add(in_code text, in_value integer)
+create or replace function data.metric_add(in_type data.metric_type, in_value integer)
 returns void
 volatile
 as
 $$
+declare
+  v_new_value integer;
 begin
-  assert in_code is not null;
+  assert in_type is not null;
   assert in_value is not null;
 
-  insert into data.metrics as m (code, value)
-  values (in_code, in_value)
-  on conflict (code) do update
-  set value = m.value + in_value;
+  insert into data.metrics as m (type, value)
+  values (in_type, in_value)
+  on conflict (type) do update
+  set value = m.value + in_value
+  returning value into v_new_value;
+
+  perform api_utils.create_metric_notification(in_type, v_new_value);
 end;
 $$
 language plpgsql;
 
--- drop function data.metric_set_max(text, integer);
+-- drop function data.metric_set_max(data.metric_type, integer);
 
-create or replace function data.metric_set_max(in_code text, in_value integer)
+create or replace function data.metric_set_max(in_type data.metric_type, in_value integer)
 returns void
 volatile
 as
 $$
+declare
+  v_id integer;
 begin
-  assert in_code is not null;
+  assert in_type is not null;
   assert in_value is not null;
 
-  insert into data.metrics as m (code, value)
-  values (in_code, in_value)
-  on conflict (code) do update
-  set value = greatest(m.value, in_value);
+  insert into data.metrics as m (type, value)
+  values (in_type, in_value)
+  on conflict (type) do update
+  set value = in_value
+  where m.value < in_value
+  returning id into v_id;
+
+  if v_id is not null then
+    perform api_utils.create_metric_notification(in_type, in_value);
+  end if;
 end;
 $$
 language plpgsql;
@@ -8289,6 +8349,11 @@ declare
 
   v_actor_title text := json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id, v_actor_id));
   v_title text := to_char(clock_timestamp(),'DD.MM hh24:mi:ss ') || v_actor_title;
+
+  v_chat_unread_messages integer;
+  v_chat_unread_messages_attribute_id integer := data.get_attribute_id('chat_unread_messages');
+
+  v_is_actor_subscribed boolean;
 begin
   assert in_request_id is not null;
   -- создаём новое сообщение
@@ -8326,9 +8391,18 @@ begin
         and oo.parent_object_id <> oo.object_id)
   loop
     perform pp_utils.list_replace_to_head_and_notify(v_chats_id, v_chat_code, v_person_id);
+    v_is_actor_subscribed := pp_utils.is_actor_subscribed(v_person_id, v_chat_id);
+    if v_person_id <> v_actor_id
+      and not v_is_actor_subscribed then
+      v_chat_unread_messages := json.get_integer_opt(data.get_attribute_value(v_chat_id, v_chat_unread_messages_attribute_id, v_person_id), 0);
+      perform data.change_object_and_notify(v_chat_id, 
+                                            jsonb_build_array(data.attribute_change2jsonb(v_chat_unread_messages_attribute_id, v_person_id, to_jsonb(v_chat_unread_messages + 1))),
+                                            v_actor_id);
+    end if;
     if v_person_id <> v_actor_id 
+      and not v_is_actor_subscribed
       and not json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'chat_is_mute', v_person_id), false) then
-      perform pp_utils.add_notification_if_not_subscribed(v_person_id, 'Новое сообщение от '|| v_actor_title, v_chat_id);
+      perform pp_utils.add_notification(v_person_id, 'Новое сообщение от '|| v_actor_title, v_chat_id);
     end if;
   end loop;
 
@@ -10380,6 +10454,7 @@ begin
   ('system_chat_can_mute', null, 'Возможность Убрать уведомления о новых сообщениях', 'system', null, null, true),
   ('system_chat_can_rename', null, 'Возможность переименовать чат', 'system', null, null, true),
   ('chat_is_mute', 'Уведомления отключены', 'Признак отлюченного уведомления о новых сообщениях', 'normal', 'full', 'pallas_project.vd_chat_is_mute', true),
+  ('chat_unread_messages', 'Непрочитанных сообщений', 'Количество непрочитанных сообщений', 'normal', 'mini', null, true),
   -- для временных объектов для изменения участников
   ('chat_temp_person_list_persons', 'Сейчас участвуют', 'Список участников чата', 'normal', 'full', null, false),
   ('system_chat_temp_person_list_chat_id', null, 'Идентификатор изменяемого чата', 'system', null, null, false);
@@ -10398,6 +10473,7 @@ begin
   (v_chats_id, v_title_attribute_id, jsonb '"Чаты"'),
 --  (v_chats_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_debatles"'),
   (v_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"'),
+  (v_chats_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chats"'),
   (v_chats_id, v_content_attribute_id, jsonb '[]'),
   (v_chats_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
                                           '{"code": "%s", "attributes": ["%s"], "actions": ["%s"]}',
@@ -10414,6 +10490,7 @@ begin
   (v_chats_id, v_title_attribute_id, jsonb '"Все чаты"', null),
 --  (v_chats_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_debatles"', null),
   (v_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"', null),
+  (v_chats_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chats"', null),
   (v_chats_id, v_content_attribute_id, jsonb '[]', null),
   (v_chats_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
                                           '{"code": "%s", "attributes": ["%s"], "actions": ["%s"]}',
@@ -10434,10 +10511,11 @@ begin
   (v_chat_class_id, v_system_chat_can_mute_attribute_id, jsonb 'true'),
   (v_chat_class_id, v_system_chat_can_rename_attribute_id, jsonb 'true'),
   (v_chat_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
-                                                      '{"code": "%s", "attributes": ["%s"], 
+                                                      '{"code": "%s", "attributes": ["%s", "%s"], 
                                                                       "actions": ["%s", "%s", "%s", "%s"]}',
                                                       'chat_group1',
                                                       'chat_is_mute',
+                                                      'chat_unread_messages',
                                                       'chat_add_person',
                                                       'chat_leave',
                                                       'chat_mute',
@@ -10486,7 +10564,7 @@ begin
   ('chat_add_person','pallas_project.act_chat_add_person'),
   ('chat_leave','pallas_project.act_chat_leave'),
   ('chat_mute','pallas_project.act_chat_mute'),
-  ('chat_change_subtitle','pallas_project.act_chat_change_subtitle');
+  ('chat_rename','pallas_project.act_chat_rename');
 
 end;
 $$
@@ -10784,6 +10862,31 @@ begin
   if not v_message_sent then
    perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
   end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.lef_chats(integer, text, integer, integer);
+
+create or replace function pallas_project.lef_chats(in_client_id integer, in_request_id text, in_object_id integer, in_list_object_id integer)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+  v_chat_code text := data.get_object_code(in_list_object_id);
+
+  v_chat_unread_messages_attribute_id integer := data.get_attribute_id('chat_unread_messages');
+begin
+  assert in_request_id is not null;
+  assert in_list_object_id is not null;
+
+  perform data.change_object_and_notify(in_list_object_id, 
+                                        jsonb_build_array(data.attribute_change2jsonb(v_chat_unread_messages_attribute_id, v_actor_id, null)),
+                                        v_actor_id);
+
+  perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, v_chat_code);
 end;
 $$
 language plpgsql;
@@ -11209,6 +11312,31 @@ begin
     perform pp_utils.add_notification(in_actor_id, in_text, in_redirect_object);
   end if;
 
+end;
+$$
+language plpgsql;
+
+-- drop function pp_utils.is_actor_subscribed(integer, integer);
+
+create or replace function pp_utils.is_actor_subscribed(in_actor_id integer, in_object integer)
+returns boolean
+volatile
+as
+$$
+declare
+  v_exists integer;
+begin
+  -- Ищем подписку на этот объект у этого актора
+  select count(s.object_id) into v_exists
+  from data.clients c
+  inner join data.client_subscriptions s on s.client_id = c.id and s.object_id = in_object
+  where c.actor_id = in_actor_id;
+
+  if v_exists > 0 then
+    return true;
+  else 
+    return false;
+  end if;
 end;
 $$
 language plpgsql;
@@ -14632,10 +14760,10 @@ create table data.logins(
 
 create table data.metrics(
   id integer not null generated always as identity,
-  code text not null,
+  type data.metric_type not null,
   value integer not null,
   constraint metrics_pk primary key(id),
-  constraint metrics_unique_code unique(code)
+  constraint metrics_unique_type unique(type)
 );
 
 -- drop table data.notifications;
@@ -14643,8 +14771,10 @@ create table data.metrics(
 create table data.notifications(
   id integer not null generated always as identity,
   code text not null default (pgcrypto.gen_random_uuid())::text,
+  type data.notification_type not null,
   message jsonb not null,
-  client_id integer not null,
+  client_id integer,
+  constraint notifications_client_check check((type = 'client_message'::data.notification_type) = (client_id is not null)),
   constraint notifications_pk primary key(id),
   constraint notifications_unique_code unique(code)
 );

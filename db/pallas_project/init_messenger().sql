@@ -43,6 +43,7 @@ begin
   ('system_chat_can_mute', null, 'Возможность Убрать уведомления о новых сообщениях', 'system', null, null, true),
   ('system_chat_can_rename', null, 'Возможность переименовать чат', 'system', null, null, true),
   ('chat_is_mute', 'Уведомления отключены', 'Признак отлюченного уведомления о новых сообщениях', 'normal', 'full', 'pallas_project.vd_chat_is_mute', true),
+  ('chat_unread_messages', 'Непрочитанных сообщений', 'Количество непрочитанных сообщений', 'normal', 'mini', null, true),
   -- для временных объектов для изменения участников
   ('chat_temp_person_list_persons', 'Сейчас участвуют', 'Список участников чата', 'normal', 'full', null, false),
   ('system_chat_temp_person_list_chat_id', null, 'Идентификатор изменяемого чата', 'system', null, null, false);
@@ -61,6 +62,7 @@ begin
   (v_chats_id, v_title_attribute_id, jsonb '"Чаты"'),
 --  (v_chats_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_debatles"'),
   (v_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"'),
+  (v_chats_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chats"'),
   (v_chats_id, v_content_attribute_id, jsonb '[]'),
   (v_chats_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
                                           '{"code": "%s", "attributes": ["%s"], "actions": ["%s"]}',
@@ -77,6 +79,7 @@ begin
   (v_chats_id, v_title_attribute_id, jsonb '"Все чаты"', null),
 --  (v_chats_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_debatles"', null),
   (v_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"', null),
+  (v_chats_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chats"', null),
   (v_chats_id, v_content_attribute_id, jsonb '[]', null),
   (v_chats_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
                                           '{"code": "%s", "attributes": ["%s"], "actions": ["%s"]}',
@@ -97,10 +100,11 @@ begin
   (v_chat_class_id, v_system_chat_can_mute_attribute_id, jsonb 'true'),
   (v_chat_class_id, v_system_chat_can_rename_attribute_id, jsonb 'true'),
   (v_chat_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
-                                                      '{"code": "%s", "attributes": ["%s"], 
+                                                      '{"code": "%s", "attributes": ["%s", "%s"], 
                                                                       "actions": ["%s", "%s", "%s", "%s"]}',
                                                       'chat_group1',
                                                       'chat_is_mute',
+                                                      'chat_unread_messages',
                                                       'chat_add_person',
                                                       'chat_leave',
                                                       'chat_mute',

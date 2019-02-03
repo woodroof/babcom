@@ -36,6 +36,11 @@ declare
 
   v_actor_title text := json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id, v_actor_id));
   v_title text := to_char(clock_timestamp(),'DD.MM hh24:mi:ss ') || v_actor_title;
+
+  v_chat_unread_messages integer;
+  v_chat_unread_messages_attribute_id integer := data.get_attribute_id('chat_unread_messages');
+
+  v_is_actor_subscribed boolean;
 begin
   assert in_request_id is not null;
   -- создаём новое сообщение
@@ -73,9 +78,18 @@ begin
         and oo.parent_object_id <> oo.object_id)
   loop
     perform pp_utils.list_replace_to_head_and_notify(v_chats_id, v_chat_code, v_person_id);
+    v_is_actor_subscribed := pp_utils.is_actor_subscribed(v_person_id, v_chat_id);
+    if v_person_id <> v_actor_id
+      and not v_is_actor_subscribed then
+      v_chat_unread_messages := json.get_integer_opt(data.get_attribute_value(v_chat_id, v_chat_unread_messages_attribute_id, v_person_id), 0);
+      perform data.change_object_and_notify(v_chat_id, 
+                                            jsonb_build_array(data.attribute_change2jsonb(v_chat_unread_messages_attribute_id, v_person_id, to_jsonb(v_chat_unread_messages + 1))),
+                                            v_actor_id);
+    end if;
     if v_person_id <> v_actor_id 
+      and not v_is_actor_subscribed
       and not json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'chat_is_mute', v_person_id), false) then
-      perform pp_utils.add_notification_if_not_subscribed(v_person_id, 'Новое сообщение от '|| v_actor_title, v_chat_id);
+      perform pp_utils.add_notification(v_person_id, 'Новое сообщение от '|| v_actor_title, v_chat_id);
     end if;
   end loop;
 
