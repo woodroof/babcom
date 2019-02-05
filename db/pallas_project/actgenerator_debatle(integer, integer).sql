@@ -138,6 +138,13 @@ begin
                 v_debatle_code);
   end if;
 
+  if v_debatle_status in ('future', 'vote', 'vote_over', 'closed') then
+    v_actions_list := v_actions_list || 
+        format(', "debatle_chat": {"code": "chat_enter", "name": "Обсудить%s", "disabled": false, '||
+                '"params": {"object_code": "%s"}}',
+                '',
+                v_debatle_code);
+  end if;
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;
 $$

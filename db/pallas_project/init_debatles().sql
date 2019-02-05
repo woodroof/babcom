@@ -181,7 +181,11 @@ begin
                                                       'debatle_person1_bonuses',
                                                       'debatle_person2_bonuses',
                                                       'debatle_change_bonuses1',
-                                                      'debatle_change_bonuses2')::jsonb]));
+                                                      'debatle_change_bonuses2')::jsonb,
+                                                      format(
+                                                      '{"code": "%s", "actions": ["%s"]}',
+                                                      'debatle_group5',
+                                                      'debatle_chat')::jsonb]));
 
   -- Объект-класс для временных списков персон для редактирования дебатла
   insert into data.objects(code, type) values('debatle_temp_person_list', 'class') returning id into v_debatle_temp_person_list_class_id;

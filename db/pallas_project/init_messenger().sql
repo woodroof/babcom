@@ -44,7 +44,7 @@ begin
   ('system_chat_can_rename', null, 'Возможность переименовать чат', 'system', null, null, true),
   ('chat_is_mute', 'Уведомления отключены', 'Признак отлюченного уведомления о новых сообщениях', 'normal', 'full', 'pallas_project.vd_chat_is_mute', true),
   ('chat_unread_messages', 'Непрочитанных сообщений', 'Количество непрочитанных сообщений', 'normal', 'mini', null, true),
-  -- для временных объектов для изменения участников
+    -- для временных объектов для изменения участников
   ('chat_temp_person_list_persons', 'Сейчас участвуют', 'Список участников чата', 'normal', 'full', null, false),
   ('system_chat_temp_person_list_chat_id', null, 'Идентификатор изменяемого чата', 'system', null, null, false);
 
@@ -153,7 +153,8 @@ begin
   ('chat_add_person','pallas_project.act_chat_add_person'),
   ('chat_leave','pallas_project.act_chat_leave'),
   ('chat_mute','pallas_project.act_chat_mute'),
-  ('chat_rename','pallas_project.act_chat_rename');
+  ('chat_rename','pallas_project.act_chat_rename'),
+  ('chat_enter','pallas_project.act_chat_enter');
 
 end;
 $$

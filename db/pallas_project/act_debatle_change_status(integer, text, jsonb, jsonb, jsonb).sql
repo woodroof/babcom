@@ -33,6 +33,8 @@ declare
 
   v_changes jsonb[];
   v_message_sent boolean;
+
+  v_chat_id integer;
 begin
   assert in_request_id is not null;
 
@@ -202,7 +204,7 @@ begin
 
   perform * from data.objects where id = v_debatle_id for update;
 
-  -- если статус поменялся на future, то надо добавить видимость второму участнику и судье
+  -- если статус поменялся на future, то надо добавить видимость второму участнику и судье, плюс создать чатик
   -- если статус поменялся на vote, то добавить видимость все
   if v_new_status = 'future' then
     if v_system_debatle_person2 <> -1 then 
@@ -210,6 +212,10 @@ begin
     end if;
     if v_system_debatle_judge <> -1 then 
      v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', v_system_debatle_judge, jsonb 'true'));
+    end if;
+    v_chat_id := pallas_project.create_chat('Обсуждение дебатла ' || json.get_string_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_theme'), ''));
+    if v_chat_id is not null then 
+     v_changes := array_append(v_changes, data.attribute_change2jsonb('system_chat_id', null, to_jsonb(v_chat_id)));
     end if;
   elsif v_new_status = 'vote' then
     v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', null, jsonb 'true'));

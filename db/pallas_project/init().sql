@@ -29,6 +29,9 @@ begin
   values('description', 'Текстовый блок с развёрнутым описанием объекта, string', 'normal', 'full', true)
   returning id into v_description_attribute_id;
 
+  insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
+  ('system_chat_id', null, 'Идентификатор чата для обсуждения объекта', 'system', null, null, true);
+
   -- Создадим актора по умолчанию
   insert into data.objects(code) values('anonymous') returning id into v_test_id;
   insert into data.attribute_values(object_id, attribute_id, value) values
