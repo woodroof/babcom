@@ -10002,6 +10002,19 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.actgenerator_person(integer, integer);
+
+create or replace function pallas_project.actgenerator_person(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+begin
+  return jsonb '{}';
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.fcard_debatle(integer, integer);
 
 create or replace function pallas_project.fcard_debatle(in_object_id integer, in_actor_id integer)
@@ -10305,7 +10318,7 @@ begin
   -- Создадим актора по умолчанию
   insert into data.objects(code) values('anonymous') returning id into v_test_id;
   insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_test_id, v_title_attribute_id, jsonb '"Unknown"'),
+  (v_test_id, v_title_attribute_id, jsonb '"Гость"'),
   (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
   (v_test_id, v_actions_function_attribute_id,'"pallas_project.actgenerator_anonymous"'),
   (v_test_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
@@ -10349,17 +10362,23 @@ begin
   -- Создадим объект для страницы 404
   declare
     v_not_found_object_id integer;
+    v_not_found_description_attribute_id integer;
   begin
     insert into data.objects(code) values('not_found') returning id into v_not_found_object_id;
     insert into data.params(code, value, description)
     values('not_found_object_id', to_jsonb(v_not_found_object_id), 'Идентификатор объекта, отображаемого в случае, если актору недоступен какой-то объект (ну или он реально не существует)');
+
+    insert into data.attributes(code, description, type, card_type, value_description_function, can_be_overridden)
+    values('not_found_description', 'Текст на странице 404', 'normal', 'full', 'pallas_project.vd_not_found_description', true)
+    returning id into v_not_found_description_attribute_id;
 
     insert into data.attribute_values(object_id, attribute_id, value) values
     (v_not_found_object_id, v_type_attribute_id, jsonb '"not_found"'),
     (v_not_found_object_id, v_is_visible_attribute_id, jsonb 'true'),
     (v_not_found_object_id, v_title_attribute_id, jsonb '"404"'),
     (v_not_found_object_id, v_subtitle_attribute_id, jsonb '"Not found"'),
-    (v_not_found_object_id, v_description_attribute_id, jsonb '"Это не те дроиды, которых вы ищете."');
+    (v_not_found_object_id, v_template_attribute_id, jsonb '{"groups": [{"code": "general", "attributes": ["not_found_description"]}]}'),
+    (v_not_found_object_id, v_not_found_description_attribute_id, null);
   end;
 
   insert into data.actions(code, function) values
@@ -10868,7 +10887,7 @@ declare
   v_all_person_group_id integer;
   v_aster_group_id integer;
   v_un_group_id integer;
-  v_mars_group_id integer;
+  v_mcr_group_id integer;
   v_opa_group_id integer;
   v_master_group_id integer;
   v_player_group_id integer;
@@ -10877,12 +10896,12 @@ declare
   v_person_id integer;
   v_person_class_id integer;
 begin
-    insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden)
-  values ('person_occupation', null, 'Должность', 'normal', null, null, false)
+  insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden)
+  values ('person_occupation', null, 'Должность', 'normal', null, null, true)
   returning id into v_person_occupation_attribute_id;
 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden)
-  values ('person_state', null, 'Гражданство', 'normal', 'full', 'pallas_project.vd_person_state', false)
+  values ('person_state', null, 'Гражданство', 'normal', 'full', 'pallas_project.vd_person_state', true)
   returning id into v_person_state_attribute_id;
 
   insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
@@ -10933,7 +10952,7 @@ begin
   (v_person_class_id, v_is_visible_attribute_id, jsonb 'true'),
   (v_person_class_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_person"'),
   (v_person_class_id, v_mini_card_function_attribute_id, jsonb '"pallas_project.mcard_person"'),
-  (v_person_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_menu"'),
+  (v_person_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_person"'),
   (v_person_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
                                                       '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"]}',
                                                       'person_group1',
@@ -10950,7 +10969,7 @@ begin
   insert into data.objects(code) values ('all_person') returning id into v_all_person_group_id;
   insert into data.objects(code) values ('aster') returning id into v_aster_group_id;
   insert into data.objects(code) values ('un') returning id into v_un_group_id;
-  insert into data.objects(code) values ('mars') returning id into v_mars_group_id;
+  insert into data.objects(code) values ('mcr') returning id into v_mcr_group_id;
   insert into data.objects(code) values ('opa') returning id into v_opa_group_id;
   insert into data.objects(code) values ('master') returning id into v_master_group_id;
   insert into data.objects(code) values ('player') returning id into v_player_group_id;
@@ -10960,7 +10979,7 @@ begin
   (v_player_group_id, v_priority_attribute_id, jsonb '15'),
   (v_aster_group_id, v_priority_attribute_id, jsonb '20'),
   (v_un_group_id, v_priority_attribute_id, jsonb '30'),
-  (v_mars_group_id, v_priority_attribute_id, jsonb '40'),
+  (v_mcr_group_id, v_priority_attribute_id, jsonb '40'),
   (v_opa_group_id, v_priority_attribute_id, jsonb '50'),
   (v_master_group_id, v_priority_attribute_id, jsonb '190');
 
@@ -10991,7 +11010,6 @@ begin
   (v_person_id, v_priority_attribute_id, jsonb '200'),
   (v_person_id, v_person_occupation_attribute_id, jsonb '"Мастер"');
   perform data.add_object_to_object(v_person_id, v_master_group_id);
-
 
 -- Игроки:
   insert into data.objects(class_id) values(v_person_class_id) returning id into v_person_id;
@@ -11492,6 +11510,37 @@ begin
   else
     return 'Что-то пошло не так';
   end case;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.vd_not_found_description(integer, jsonb, integer);
+
+create or replace function pallas_project.vd_not_found_description(in_attribute_id integer, in_value jsonb, in_actor_id integer)
+returns text
+immutable
+as
+$$
+declare
+  v_random integer := random.random_integer(1, 8);
+begin
+  if v_random = 1 then
+    return 'Это не те дроиды, которых вы ищете';
+  elsif v_random = 2 then
+    return 'Эта страница заблокирована по решению Комитета общественной безопасности Марсианской Республики Конгресса';
+  elsif v_random = 3 then
+    return 'Истина где-то рядом';
+  elsif v_random = 4 then
+    return 'Большой брат следит за тобой';
+  elsif v_random = 5 then
+    return 'Добро пожаловать в реальный мир';
+  elsif v_random = 6 then
+    return 'Не все ли равно, о чем спрашивать, если ответа все равно не получишь, правда?';
+  elsif v_random = 7 then
+    return 'Мы будем править всей этой землёй, и мы назовём её... Эта Земля.';
+  end if;
+
+  return 'Меньше значит больше';
 end;
 $$
 language plpgsql;

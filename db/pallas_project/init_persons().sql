@@ -35,7 +35,7 @@ declare
   v_all_person_group_id integer;
   v_aster_group_id integer;
   v_un_group_id integer;
-  v_mars_group_id integer;
+  v_mcr_group_id integer;
   v_opa_group_id integer;
   v_master_group_id integer;
   v_player_group_id integer;
@@ -44,12 +44,12 @@ declare
   v_person_id integer;
   v_person_class_id integer;
 begin
-    insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden)
-  values ('person_occupation', null, 'Должность', 'normal', null, null, false)
+  insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden)
+  values ('person_occupation', null, 'Должность', 'normal', null, null, true)
   returning id into v_person_occupation_attribute_id;
 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden)
-  values ('person_state', null, 'Гражданство', 'normal', 'full', 'pallas_project.vd_person_state', false)
+  values ('person_state', null, 'Гражданство', 'normal', 'full', 'pallas_project.vd_person_state', true)
   returning id into v_person_state_attribute_id;
 
   insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden)
@@ -100,7 +100,7 @@ begin
   (v_person_class_id, v_is_visible_attribute_id, jsonb 'true'),
   (v_person_class_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_person"'),
   (v_person_class_id, v_mini_card_function_attribute_id, jsonb '"pallas_project.mcard_person"'),
-  (v_person_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_menu"'),
+  (v_person_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_person"'),
   (v_person_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
                                                       '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"]}',
                                                       'person_group1',
@@ -117,7 +117,7 @@ begin
   insert into data.objects(code) values ('all_person') returning id into v_all_person_group_id;
   insert into data.objects(code) values ('aster') returning id into v_aster_group_id;
   insert into data.objects(code) values ('un') returning id into v_un_group_id;
-  insert into data.objects(code) values ('mars') returning id into v_mars_group_id;
+  insert into data.objects(code) values ('mcr') returning id into v_mcr_group_id;
   insert into data.objects(code) values ('opa') returning id into v_opa_group_id;
   insert into data.objects(code) values ('master') returning id into v_master_group_id;
   insert into data.objects(code) values ('player') returning id into v_player_group_id;
@@ -127,7 +127,7 @@ begin
   (v_player_group_id, v_priority_attribute_id, jsonb '15'),
   (v_aster_group_id, v_priority_attribute_id, jsonb '20'),
   (v_un_group_id, v_priority_attribute_id, jsonb '30'),
-  (v_mars_group_id, v_priority_attribute_id, jsonb '40'),
+  (v_mcr_group_id, v_priority_attribute_id, jsonb '40'),
   (v_opa_group_id, v_priority_attribute_id, jsonb '50'),
   (v_master_group_id, v_priority_attribute_id, jsonb '190');
 
@@ -158,7 +158,6 @@ begin
   (v_person_id, v_priority_attribute_id, jsonb '200'),
   (v_person_id, v_person_occupation_attribute_id, jsonb '"Мастер"');
   perform data.add_object_to_object(v_person_id, v_master_group_id);
-
 
 -- Игроки:
   insert into data.objects(class_id) values(v_person_class_id) returning id into v_person_id;

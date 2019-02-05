@@ -32,7 +32,7 @@ begin
   -- Создадим актора по умолчанию
   insert into data.objects(code) values('anonymous') returning id into v_test_id;
   insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_test_id, v_title_attribute_id, jsonb '"Unknown"'),
+  (v_test_id, v_title_attribute_id, jsonb '"Гость"'),
   (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
   (v_test_id, v_actions_function_attribute_id,'"pallas_project.actgenerator_anonymous"'),
   (v_test_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
@@ -76,17 +76,23 @@ begin
   -- Создадим объект для страницы 404
   declare
     v_not_found_object_id integer;
+    v_not_found_description_attribute_id integer;
   begin
     insert into data.objects(code) values('not_found') returning id into v_not_found_object_id;
     insert into data.params(code, value, description)
     values('not_found_object_id', to_jsonb(v_not_found_object_id), 'Идентификатор объекта, отображаемого в случае, если актору недоступен какой-то объект (ну или он реально не существует)');
+
+    insert into data.attributes(code, description, type, card_type, value_description_function, can_be_overridden)
+    values('not_found_description', 'Текст на странице 404', 'normal', 'full', 'pallas_project.vd_not_found_description', true)
+    returning id into v_not_found_description_attribute_id;
 
     insert into data.attribute_values(object_id, attribute_id, value) values
     (v_not_found_object_id, v_type_attribute_id, jsonb '"not_found"'),
     (v_not_found_object_id, v_is_visible_attribute_id, jsonb 'true'),
     (v_not_found_object_id, v_title_attribute_id, jsonb '"404"'),
     (v_not_found_object_id, v_subtitle_attribute_id, jsonb '"Not found"'),
-    (v_not_found_object_id, v_description_attribute_id, jsonb '"Это не те дроиды, которых вы ищете."');
+    (v_not_found_object_id, v_template_attribute_id, jsonb '{"groups": [{"code": "general", "attributes": ["not_found_description"]}]}'),
+    (v_not_found_object_id, v_not_found_description_attribute_id, null);
   end;
 
   insert into data.actions(code, function) values
