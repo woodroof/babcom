@@ -200,7 +200,7 @@ async def async_listener(app, notification_id):
                     async with connection_object['lock']:
                         if connection_object['ws'] is ws:
                             # TODO обработка исключения при закрытии подключения
-                            await ws.send_json(message)
+                            await ws.send_str(json.dumps(message, ensure_ascii=False))
             elif notification_type == 'metric':
                 metric_type = message['type']
                 value = message['value']
