@@ -3,4 +3,5 @@
 create type data.metric_type as enum(
   'deadlock_count',
   'error_count',
-  'max_api_time_ms');
+  'max_api_time_ms',
+  'max_job_time_ms');

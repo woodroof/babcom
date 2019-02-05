@@ -56,6 +56,10 @@ create schema data;
 
 create schema error;
 
+-- drop schema job_test_project;
+
+create schema job_test_project;
+
 -- drop schema json;
 
 create schema json;
@@ -126,13 +130,15 @@ create type data.card_type as enum(
 create type data.metric_type as enum(
   'deadlock_count',
   'error_count',
-  'max_api_time_ms');
+  'max_api_time_ms',
+  'max_job_time_ms');
 
 -- drop type data.notification_type;
 
 create type data.notification_type as enum(
   'client_message',
-  'metric');
+  'metric',
+  'job');
 
 -- drop type data.object_type;
 
@@ -410,6 +416,82 @@ end;
 $$
 language plpgsql;
 
+-- drop function api.run_jobs();
+
+create or replace function api.run_jobs()
+returns void
+volatile
+security definer
+as
+$$
+declare
+  v_function text;
+  v_params jsonb;
+  v_desired_time timestamp with time zone;
+  v_deadlock_count integer := 0;
+  v_start_time timestamp with time zone;
+begin
+  loop
+    delete from data.jobs
+    where id in (
+      select id
+      from data.jobs
+      where desired_time <= clock_timestamp()
+      order by desired_time
+      limit 1)
+    returning function, params into v_function, v_params;
+
+    if v_function is null then
+      exit;
+    end if;
+
+    v_start_time := clock_timestamp();
+
+    loop
+      begin
+        execute format('select %s($1)', v_function)
+        using v_params;
+
+        exit;
+      exception when deadlock_detected then
+        v_deadlock_count := v_deadlock_count + 1;
+      when others or assert_failure then
+        declare
+          v_exception_message text;
+          v_exception_call_stack text;
+        begin
+          get stacked diagnostics
+            v_exception_message = message_text,
+            v_exception_call_stack = pg_exception_context;
+
+          perform data.log(
+            'error',
+            format(E'Error: %s\nJob function: %s\nJob params: %s\nCall stack:\n%s', v_exception_message, v_function, v_params, v_exception_call_stack));
+
+          -- При ошибке пропускаем job'у, всё равно увидем её и её параметры в логе и сможем повторить
+          exit;
+        end;
+      end;
+    end loop;
+
+    perform data.metric_set_max('max_job_time_ms', extract(milliseconds from clock_timestamp() - v_start_time)::integer);
+  end loop;
+
+  select min(desired_time)
+  into v_desired_time
+  from data.jobs;
+
+  if v_desired_time is not null then
+    perform api_utils.create_job_notification(v_desired_time);
+  end if;
+
+  if v_deadlock_count > 0 then
+    perform data.metric_add('deadlock_count', v_deadlock_count);
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function api_utils.create_action_notification(integer, text, api_utils.action_type, jsonb);
 
 create or replace function api_utils.create_action_notification(in_client_id integer, in_request_id text, in_action_type api_utils.action_type, in_action_data jsonb)
@@ -442,6 +524,28 @@ begin
     in_request_id,
     'go_back',
     jsonb '{}');
+end;
+$$
+language plpgsql;
+
+-- drop function api_utils.create_job_notification(timestamp with time zone);
+
+create or replace function api_utils.create_job_notification(in_desired_time timestamp with time zone)
+returns void
+volatile
+as
+$$
+declare
+  v_timeout_sec double precision := greatest(extract(seconds from in_desired_time - clock_timestamp()), 0.);
+  v_notification_code text;
+begin
+  assert in_desired_time is not null;
+
+  insert into data.notifications(type, message)
+  values('job', to_jsonb(v_timeout_sec))
+  returning code into v_notification_code;
+
+  perform pg_notify('api_channel', v_notification_code);
 end;
 $$
 language plpgsql;
@@ -2624,6 +2728,33 @@ end;
 $$
 language plpgsql;
 
+-- drop function data.create_job(timestamp with time zone, text, jsonb);
+
+create or replace function data.create_job(in_desired_time timestamp with time zone, in_function text, in_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_min_time timestamp with time zone;
+begin
+  assert in_desired_time is not null;
+  assert in_function is not null;
+
+  insert into data.jobs(desired_time, function, params)
+  values(in_desired_time, in_function, in_params);
+
+  select min(desired_time)
+  into v_min_time
+  from data.jobs;
+
+  if v_min_time = in_desired_time then
+    perform api_utils.create_job_notification(in_desired_time);
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function data.delete_attribute_value(integer, integer, integer, integer, text);
 
 create or replace function data.delete_attribute_value(in_object_id integer, in_attribute_id integer, in_value_object_id integer, in_actor_id integer, in_reason text default null::text)
@@ -4169,6 +4300,136 @@ begin
   assert in_param2 is not null;
 
   raise '%', format(in_format, in_param1, in_param2) using errcode = 'invalid_parameter_value';
+end;
+$$
+language plpgsql;
+
+-- drop function job_test_project.change_description(jsonb);
+
+create or replace function job_test_project.change_description(in_params jsonb)
+returns void
+volatile
+as
+$$
+begin
+  perform data.change_object_and_notify(
+    json.get_integer(in_params, 'object_id'),
+    jsonb '[]' || data.attribute_change2jsonb('description', null, in_params->'name'));
+end;
+$$
+language plpgsql;
+
+-- drop function job_test_project.init();
+
+create or replace function job_test_project.init()
+returns void
+volatile
+as
+$$
+declare
+  v_type_attribute_id integer := data.get_attribute_id('type');
+  v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
+  v_content_attribute_id integer := data.get_attribute_id('content');
+  v_actions_function_attribute_id integer := data.get_attribute_id('actions_function');
+  v_template_attribute_id integer := data.get_attribute_id('template');
+
+  v_menu_id integer;
+  v_notifications_id integer;
+
+  v_description_attribute_id integer;
+  v_state_attribute_id integer;
+  v_object_id integer;
+  v_default_login_id integer;
+begin
+  -- Пустой объект меню
+  insert into data.objects(code) values('menu') returning id into v_menu_id;
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_menu_id, v_type_attribute_id, jsonb '"menu"'),
+  (v_menu_id, v_is_visible_attribute_id, jsonb 'true');
+
+  -- Пустой список уведомлений
+  insert into data.objects(code) values('notifications') returning id into v_notifications_id;
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_notifications_id, v_type_attribute_id, jsonb '"notifications"'),
+  (v_notifications_id, v_is_visible_attribute_id, jsonb 'true'),
+  (v_notifications_id, v_content_attribute_id, jsonb '[]');
+
+  -- Атрибуты
+  insert into data.attributes(code, type, card_type, can_be_overridden)
+  values ('description', 'normal', null, true)
+  returning id into v_description_attribute_id;
+
+  insert into data.attributes(code, type, card_type, can_be_overridden)
+  values ('state', 'hidden', null, true)
+  returning id into v_state_attribute_id;
+
+  -- Действия
+  insert into data.actions(code, function) values
+  ('start_countdown', 'job_test_project.start_countdown_action');
+
+  -- И сам объект
+  insert into data.objects(code) values('object') returning id into v_object_id;
+
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_object_id, v_type_attribute_id, jsonb '"object"'),
+  (v_object_id, v_is_visible_attribute_id, jsonb 'true'),
+  (v_object_id, v_state_attribute_id, jsonb '"state1"'),
+  (v_object_id, v_description_attribute_id, jsonb '"Обратный отсчёт!"'),
+  (v_object_id, v_template_attribute_id, jsonb '{"groups": [{"code": "general", "attributes": ["description"], "actions": ["action"]}]}'),
+  (v_object_id, v_actions_function_attribute_id, jsonb '"job_test_project.start_countdown_action_generator"');
+
+  -- Логин по умолчанию
+  insert into data.logins(code) values('default_login') returning id into v_default_login_id;
+  insert into data.login_actors(login_id, actor_id) values(v_default_login_id, v_object_id);
+
+  insert into data.params(code, value, description)
+  values('default_login_id', to_jsonb(v_default_login_id), 'Идентификатор логина по умолчанию');
+end;
+$$
+language plpgsql;
+
+-- drop function job_test_project.start_countdown_action(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function job_test_project.start_countdown_action(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_object_id integer := data.get_active_actor_id(in_client_id);
+  v_time timestamp with time zone := now();
+begin
+  perform data.change_current_object(
+    in_client_id,
+    in_request_id,
+    v_object_id,
+    jsonb '[]' || data.attribute_change2jsonb('state', null, jsonb '"state2"') || data.attribute_change2jsonb('description', null, jsonb '"Ждём начала обратного отсчёта..."'));
+
+  perform data.create_job(v_time + interval '4 second', 'job_test_project.change_description', format('{"name": "4", "object_id": %s}', v_object_id)::jsonb);
+  perform data.create_job(v_time + interval '3 second', 'job_test_project.change_description', format('{"name": "5", "object_id": %s}', v_object_id)::jsonb);
+  perform data.create_job(v_time + interval '5 second', 'job_test_project.change_description', format('{"name": "3", "object_id": %s}', v_object_id)::jsonb);
+  perform data.create_job(v_time + interval '6 second', 'job_test_project.change_description', format('{"name": "2", "object_id": %s}', v_object_id)::jsonb);
+  perform data.create_job(v_time + interval '7 second', 'job_test_project.change_description', format('{"name": "1", "object_id": %s}', v_object_id)::jsonb);
+  perform data.create_job(v_time + interval '8 second', 'job_test_project.change_description', format('{"name": "Ignition!", "object_id": %s}', v_object_id)::jsonb);
+end;
+$$
+language plpgsql;
+
+-- drop function job_test_project.start_countdown_action_generator(integer, integer);
+
+create or replace function job_test_project.start_countdown_action_generator(in_object_id integer, in_actor_id integer)
+returns jsonb
+stable
+as
+$$
+declare
+  v_state text := json.get_string(data.get_attribute_value(in_object_id, 'state', in_actor_id));
+begin
+  if v_state = 'state1' then
+    return format('{"action": {"code": "start_countdown", "name": "Поехали!", "disabled": false, "params": %s}}', in_object_id)::jsonb;
+  end if;
+
+  return jsonb '{}';
 end;
 $$
 language plpgsql;
@@ -14724,6 +14985,16 @@ create table data.clients(
   constraint clients_unique_code unique(code)
 );
 
+-- drop table data.jobs;
+
+create table data.jobs(
+  id integer not null generated always as identity,
+  desired_time timestamp with time zone not null,
+  function text not null,
+  params jsonb,
+  constraint jobs_pk primary key(id)
+);
+
 -- drop table data.log;
 
 create table data.log(
@@ -14940,6 +15211,10 @@ create index client_subscriptions_idx_client on data.client_subscriptions(client
 -- drop index data.clients_idx_actor_id;
 
 create index clients_idx_actor_id on data.clients(actor_id);
+
+-- drop index data.jobs_idx_time;
+
+create index jobs_idx_time on data.jobs(desired_time);
 
 -- drop index data.notifications_idx_client_id;
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import asyncio
 import asyncpg
+import time
 import os
 import json
 import uuid
@@ -9,7 +10,7 @@ from aiohttp import web, WSMsgType
 from aiojobs.aiohttp import atomic, setup
 from pathlib import Path
 from prometheus_client import Counter, Gauge, Histogram, start_http_server
-from prometheus_async.aio import time
+from prometheus_async import aio
 
 from db_settings import DB_HOST, DB_PORT, DB_NAME
 
@@ -37,11 +38,9 @@ PROCESSING_MESSAGE_COUNT = Gauge('processing_message_count', 'Current number of 
 DB_DEADLOCK_COUNT = Gauge('db_deadlock_count', 'Total number of deadlocks')
 DB_ERROR_COUNT = Gauge('db_error_count', 'Total number of errors')
 DB_MAX_API_TIME = Gauge('db_max_api_time_ms', 'Max time of api request')
+DB_MAX_JOB_TIME = Gauge('db_max_job_time_ms', 'Max time of single job processing')
 
-async def init_socket(socket, request):
-    await socket.prepare(request)
-
-@time(SQL_TIME)
+@aio.time(SQL_TIME)
 async def execute_sql(connection, query, *args):
     try:
         await connection.execute(query, *args)
@@ -49,13 +48,45 @@ async def execute_sql(connection, query, *args):
         SQL_EXCEPTION_COUNT.inc()
         raise
 
-@time(SQL_TIME)
+@aio.time(SQL_TIME)
 async def fetchval_sql(connection, query, *args):
     try:
         return await connection.fetchval(query, *args)
     except:
         SQL_EXCEPTION_COUNT.inc()
         raise
+
+class Worker:
+    def __init__(self, pool):
+        self._pool = pool
+        self._job_active = False
+        self._time = None
+        self._task = None
+
+    def set_timeout(self, timeout):
+        new_time = time.monotonic() + timeout
+        if self._time is None or self._time > new_time:
+            self._time = new_time
+            if self._task is None or not self._job_active:
+                if self._task is not None and not self._task.done():
+                    self._task.cancel()
+                self._task = asyncio.ensure_future(self._job())
+
+    async def _job(self):
+        await asyncio.sleep(max(self._time - time.monotonic(), 0))
+        self._time = None
+        self._job_active = True
+        await self._run_db_job()
+        self._job_active = False
+        if self._time is not None:
+            self._task = asyncio.ensure_future(self._job())
+
+    async def _run_db_job(self):
+        async with self._pool.acquire() as connection:
+            await execute_sql(connection, 'select api.run_jobs()')
+
+async def init_socket(socket, request):
+    await socket.prepare(request)
 
 async def connect(connection, client_code, connection_object, request):
     CONNECTION_COUNT.inc()
@@ -85,7 +116,7 @@ async def process_notification(connection, notification_id):
     return await fetchval_sql(connection, 'select api.get_notification($1)', notification_id)
 
 @atomic
-@time(CONNECTION_TIME)
+@aio.time(CONNECTION_TIME)
 async def api(request):
     client_code = request.match_info.get('client_id')
 
@@ -159,6 +190,8 @@ async def async_listener(app, notification_id):
         result = await process_notification(connection, notification_id)
         if result is not None:
             notification_type = result['type']
+            message = result['message']
+
             if notification_type == 'client_message':
                 client_code = result['client_code']
                 if client_code in connections:
@@ -167,19 +200,23 @@ async def async_listener(app, notification_id):
                     async with connection_object['lock']:
                         if connection_object['ws'] is ws:
                             # TODO обработка исключения при закрытии подключения
-                            await ws.send_json(result['message'])
+                            await ws.send_json(message)
             elif notification_type == 'metric':
-                message = result['message']
                 metric_type = message['type']
                 value = message['value']
+
                 if metric_type == 'max_api_time_ms':
                     DB_MAX_API_TIME.set(value)
+                elif metric_type == 'max_job_time_ms':
+                    DB_MAX_JOB_TIME.set(value)
                 elif metric_type == 'error_count':
                     DB_ERROR_COUNT.set(value)
                 elif metric_type == 'deadlock_count':
                     DB_DEADLOCK_COUNT.set(value)
                 else:
                     print('Unsupported metric type ' + metric_type)
+            elif notification_type == 'job':
+                app.worker.set_timeout(message)
             else:
                 print('Unsupported notification type ' + notification_type)
 
@@ -212,6 +249,8 @@ async def init_app():
         await connection.execute('select api.disconnect_all_clients()')
     app.listen_connection = await asyncpg.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME)
     await app.listen_connection.add_listener('api_channel', listener_creator(app))
+    app.worker = Worker(app.db_pool)
+    app.worker.set_timeout(0)
     return app
 
 if __name__ == '__main__':
