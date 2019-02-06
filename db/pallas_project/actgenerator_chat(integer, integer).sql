@@ -47,9 +47,9 @@ begin
   if pp_utils.is_in_group(in_actor_id, v_chat_code) and (v_is_master or json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_rename', in_actor_id), false)) then
     v_actions_list := v_actions_list || 
         format(', "chat_rename": {"code": "chat_rename", "name": "Переименовать чат", "disabled": false, "warning": "Чат поменяет имя для всех его участников.",'||
-                '"params": {"chat_code": "%s"}, "user_params": [{"code": "subtitle", "description": "Введите имя чата", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"}]}',
+                '"params": {"chat_code": "%s"}, "user_params": [{"code": "title", "description": "Введите имя чата", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"}]}',
                 v_chat_code,
-                json.get_string_opt(data.get_attribute_value(in_object_id, 'subtitle', in_actor_id), null));
+                json.get_string_opt(data.get_attribute_value(in_object_id, 'title', in_actor_id), null));
   end if;
 
   v_actions_list := v_actions_list || 

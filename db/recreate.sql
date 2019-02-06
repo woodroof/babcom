@@ -8297,7 +8297,7 @@ declare
   v_chat_temp_person_list_persons_attribute_id integer := data.get_attribute_id('chat_temp_person_list_persons');
   v_system_chat_temp_person_list_chat_id_attribute_id integer := data.get_attribute_id('system_chat_temp_person_list_chat_id');
 
-  v_chat_subtitle text := json.get_string_opt(data.get_attribute_value(v_chat_id, 'subtitle', v_actor_id), '');
+  v_chat_title text := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), '');
   v_persons text := '';
   v_name jsonb;
 
@@ -8335,7 +8335,7 @@ begin
 '|| '------------------
 Кого добавляем?';
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
-  (v_temp_object_id, v_title_attribute_id, to_jsonb(format('Изменение участников чата %s', v_chat_subtitle)), v_actor_id),
+  (v_temp_object_id, v_title_attribute_id, to_jsonb(format('Изменение участников чата %s', v_chat_title)), v_actor_id),
   (v_temp_object_id, v_is_visible_attribute_id, jsonb 'true', v_actor_id),
   (v_temp_object_id, v_chat_temp_person_list_persons_attribute_id, to_jsonb(v_persons), null),
   (v_temp_object_id, v_content_attribute_id, to_jsonb(v_content), null),
@@ -8366,8 +8366,13 @@ declare
 
   v_name jsonb;
   v_chat_title text := '';
+  v_chat_subtitle text;
+  v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
+  v_chat_unread_messages_attribute_id integer := data.get_attribute_id('chat_unread_messages');
 
   v_chats_id integer := data.get_object_id('chats');
+
+  v_changes jsonb[];
 begin
   assert in_request_id is not null;
   assert v_object_code is not null or v_chat_code is not null;
@@ -8394,24 +8399,38 @@ begin
 
       v_chat_title := trim(v_chat_title, ', ');
       perform * from data.objects where id = v_chat_id for update;
+
+      v_changes := array[]::jsonb[];
+      v_chat_subtitle := json.get_string_opt(data.get_attribute_value(v_chat_id, v_subtitle_attribute_id, v_actor_id), null);
+      if v_chat_subtitle is null then 
+        v_changes := array_append(v_changes, data.attribute_change2jsonb('title', null, to_jsonb(v_chat_title)));
+      else
+        v_changes := array_append(v_changes, data.attribute_change2jsonb(v_subtitle_attribute_id, null, to_jsonb(v_chat_title)));
+      end if;
+
       if v_object_code is not null or v_goto_chat then
         perform data.change_object_and_notify(v_chat_id, 
-                                              jsonb_build_array(data.attribute_change2jsonb('title', null, to_jsonb(v_chat_title))),
+                                              to_jsonb(v_changes),
                                               null);
       else
         -- если мы заходили из самого чата, то надо прислать обновления себе
         perform data.change_current_object(in_client_id, 
                                            in_request_id, 
                                            v_chat_id, 
-                                           jsonb_build_array(data.attribute_change2jsonb('title', null, to_jsonb(v_chat_title))));
+                                           to_jsonb(v_changes));
       end if;
     end if;
 
   -- Добавляем чат в список чатов в начало
     perform pp_utils.list_prepend_and_notify(v_chats_id, v_chat_code, v_actor_id);
   end if;
+
   -- Переходим к чату или остаёмся на нём
   if v_object_code is not null or v_goto_chat then
+    perform data.change_object_and_notify(v_chat_id, 
+                                          jsonb_build_array(data.attribute_change2jsonb(v_chat_unread_messages_attribute_id, v_actor_id, null)),
+                                          v_actor_id);
+
     perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, v_chat_code);
   else
     perform api_utils.create_ok_notification(in_client_id, in_request_id);
@@ -8439,6 +8458,7 @@ declare
   v_message_class_id integer := data.get_class_id('message');
 
   v_title_attribute_id integer := data.get_attribute_id('title');
+  v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
   v_message_text_attribute_id integer := data.get_attribute_id('message_text');
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
   v_system_message_sender_attribute_id integer := data.get_attribute_id('system_message_sender');
@@ -8458,10 +8478,11 @@ declare
 
   v_actor_title text := json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id, v_actor_id));
   v_title text := to_char(clock_timestamp(),'DD.MM hh24:mi:ss ') || v_chat_bot_title;
-  v_chat_subtitle text := json.get_string_opt(data.get_attribute_value(v_chat_id, 'subtitle', v_actor_id), '');
+  v_chat_subtitle text := json.get_string_opt(data.get_attribute_value(v_chat_id, v_subtitle_attribute_id, v_actor_id), null);
 
   v_name jsonb;
   v_persons text:= '';
+  v_changes jsonb[];
 begin
   assert in_request_id is not null;
 
@@ -8481,8 +8502,15 @@ begin
       v_persons := v_persons || ','|| json.get_string_opt(v_name, '');
     end loop;
     v_persons := trim(v_persons, ',');
+
+    v_changes := array[]::jsonb[];
+    if v_chat_subtitle is null then 
+      v_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, null, to_jsonb(v_persons)));
+    else
+      v_changes := array_append(v_changes, data.attribute_change2jsonb(v_subtitle_attribute_id, null, to_jsonb(v_persons)));
+    end if;
     perform data.change_object_and_notify(v_chat_id, 
-                                          jsonb_build_array(data.attribute_change2jsonb(v_title_attribute_id, null, to_jsonb('Чат: '|| v_persons))),
+                                          to_jsonb(v_changes),
                                           v_actor_id);
 
     -- Создаём новое сообщение о том, что персонаж вышел из чата
@@ -8581,27 +8609,38 @@ as
 $$
 declare
   v_chat_code text := json.get_string(in_params, 'chat_code');
-  v_subtitle text := json.get_string(in_user_params, 'subtitle');
+  v_title text := json.get_string(in_user_params, 'title');
   v_chat_id integer := data.get_object_id(v_chat_code);
   v_actor_id  integer :=data.get_active_actor_id(in_client_id);
 
-  v_old_subtitle text;
+  v_old_title text;
+  v_subtitle text;
+  v_changes jsonb[];
 
   v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
+  v_title_attribute_id integer := data.get_attribute_id('title');
   v_message_sent boolean := false;
 begin
   assert in_request_id is not null;
 
   perform * from data.objects where id = v_chat_id for update;
 
-  v_old_subtitle := json.get_string_opt(data.get_attribute_value(v_chat_id, v_subtitle_attribute_id, v_actor_id), '');
+  v_old_title := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), '');
+  v_subtitle := json.get_string_opt(data.get_attribute_value(v_chat_id, v_subtitle_attribute_id, v_actor_id), null);
 
-  if v_old_subtitle <> v_subtitle then
+
+  if v_old_title <> v_title then
+    v_changes := array[]::jsonb[];
+    if v_subtitle is null then 
+      v_changes := array_append(v_changes, data.attribute_change2jsonb(v_subtitle_attribute_id, null, to_jsonb(v_old_title)));
+    end if;
+    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, null, to_jsonb(v_title)));
     v_message_sent := data.change_current_object(in_client_id, 
                                                  in_request_id,
                                                  v_chat_id, 
-                                                 jsonb_build_array(data.attribute_change2jsonb(v_subtitle_attribute_id, null, to_jsonb(v_subtitle))));
+                                                 to_jsonb(v_changes));
   end if;
+
   if not v_message_sent then
    perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
   end if;
@@ -8635,6 +8674,7 @@ declare
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
   v_system_message_sender_attribute_id integer := data.get_attribute_id('system_message_sender');
   v_system_message_time_attribute_id integer := data.get_attribute_id('system_message_time');
+  v_system_chat_length_attribute_id integer := data.get_attribute_id('system_chat_length');
 
   v_all_chats_id integer := data.get_object_id('all_chats');
   v_chats_id integer := data.get_object_id('chats');
@@ -8652,6 +8692,7 @@ declare
   v_chat_unread_messages_attribute_id integer := data.get_attribute_id('chat_unread_messages');
 
   v_is_actor_subscribed boolean;
+  v_chat_length integer;
 begin
   assert in_request_id is not null;
   -- создаём новое сообщение
@@ -8672,10 +8713,12 @@ begin
   v_content := json.get_string_array_opt(data.get_attribute_value(v_chat_id, 'content', v_chat_id), array[]::text[]);
   v_new_content := array_prepend(v_message_code, v_content);
   if v_new_content <> v_content then
+    v_chat_length := json.get_integer_opt(data.get_attribute_value(v_chat_id, v_system_chat_length_attribute_id), 0);
     v_message_sent := data.change_current_object(in_client_id, 
                                                  in_request_id,
                                                  v_chat_id, 
-                                                 jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, null, to_jsonb(v_new_content))));
+                                                 jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, null, to_jsonb(v_new_content)),
+                                                                   data.attribute_change2jsonb(v_system_chat_length_attribute_id, null, to_jsonb(v_chat_length + 1))));
   end if;
 
   -- Перекладываем этот чат в начало в мастерском списке чатов
@@ -8719,7 +8762,7 @@ volatile
 as
 $$
 declare
-  v_chat_subtitle text := json.get_string_opt(in_params, 'subtitle', null);
+  v_chat_title text := json.get_string_opt(in_params, 'title', null);
   v_chat_code text;
   v_chat_id integer;
   v_chat_class_id integer := data.get_class_id('chat');
@@ -8730,7 +8773,7 @@ begin
   assert in_request_id is not null;
 
   -- Создаём чат
-  v_chat_id := pallas_project.create_chat(v_chat_subtitle);
+  v_chat_id := pallas_project.create_chat(v_chat_title, null, null, null, null);
   v_chat_code := data.get_object_code(v_chat_id);
 
   -- Добавляем в список к мастерам
@@ -9279,7 +9322,7 @@ begin
     if v_system_debatle_judge <> -1 then 
      v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', v_system_debatle_judge, jsonb 'true'));
     end if;
-    v_chat_id := pallas_project.create_chat('Обсуждение дебатла ' || json.get_string_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_theme'), ''));
+    v_chat_id := pallas_project.create_chat('Обсуждение дебатла ' || json.get_string_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_theme'), ''), false, null, null, false);
     if v_chat_id is not null then 
      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_chat_id', null, to_jsonb(v_chat_id)));
     end if;
@@ -9659,9 +9702,9 @@ begin
   if pp_utils.is_in_group(in_actor_id, v_chat_code) and (v_is_master or json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_rename', in_actor_id), false)) then
     v_actions_list := v_actions_list || 
         format(', "chat_rename": {"code": "chat_rename", "name": "Переименовать чат", "disabled": false, "warning": "Чат поменяет имя для всех его участников.",'||
-                '"params": {"chat_code": "%s"}, "user_params": [{"code": "subtitle", "description": "Введите имя чата", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"}]}',
+                '"params": {"chat_code": "%s"}, "user_params": [{"code": "title", "description": "Введите имя чата", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"}]}',
                 v_chat_code,
-                json.get_string_opt(data.get_attribute_value(in_object_id, 'subtitle', in_actor_id), null));
+                json.get_string_opt(data.get_attribute_value(in_object_id, 'title', in_actor_id), null));
   end if;
 
   v_actions_list := v_actions_list || 
@@ -9738,6 +9781,9 @@ declare
   v_debatle_status text;
   v_system_debatle_theme_attribute_id integer := data.get_attribute_id('system_debatle_theme');
   v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
+  v_chat_id integer;
+  v_chat_length integer;
+  v_chat_unread integer;
 begin
   assert in_actor_id is not null;
 
@@ -9862,11 +9908,19 @@ begin
   end if;
 
   if v_debatle_status in ('future', 'vote', 'vote_over', 'closed') then
-    v_actions_list := v_actions_list || 
-        format(', "debatle_chat": {"code": "chat_enter", "name": "Обсудить%s", "disabled": false, '||
-                '"params": {"object_code": "%s"}}',
-                '',
-                v_debatle_code);
+    v_chat_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_chat_id', in_actor_id), null);
+    if v_chat_id is not null then
+      v_chat_length := json.get_integer_opt(data.get_attribute_value(v_chat_id, 'system_chat_length'), 0);
+      v_chat_unread := json.get_integer_opt(data.get_attribute_value(v_chat_id, 'chat_unread_messages', in_actor_id), null);
+      v_actions_list := v_actions_list || 
+          format(', "debatle_chat": {"code": "chat_enter", "name": "Обсудить%s", "disabled": false, '||
+                  '"params": {"object_code": "%s"}}',
+                  case when v_chat_length = 0 then ''
+                  when v_chat_length > 0 and v_chat_unread is null then ' (' || v_chat_length || ')'
+                  else ' (' || v_chat_length || ', непрочитанных ' || v_chat_unread || ')' 
+                  end,
+                  v_debatle_code);
+    end if;
   end if;
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;
@@ -10008,9 +10062,9 @@ end;
 $$
 language plpgsql;
 
--- drop function pallas_project.create_chat(text);
+-- drop function pallas_project.create_chat(text, boolean, boolean, boolean, boolean);
 
-create or replace function pallas_project.create_chat(in_chat_subtitle text)
+create or replace function pallas_project.create_chat(in_chat_title text, in_can_invite boolean, in_can_leave boolean, in_can_mute boolean, in_can_rename boolean)
 returns integer
 volatile
 as
@@ -10019,9 +10073,13 @@ declare
   v_chat_id  integer;
   v_chat_class_id integer := data.get_class_id('chat');
 
-  v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
+  v_title_attribute_id integer := data.get_attribute_id('title');
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
   v_content_attribute_id integer := data.get_attribute_id('content');
+  v_system_chat_can_invite_attribute_id integer := data.get_attribute_id('system_chat_can_invite');
+  v_system_chat_can_leave_attribute_id integer := data.get_attribute_id('system_chat_can_leave');
+  v_system_chat_can_mute_attribute_id integer := data.get_attribute_id('system_chat_can_mute');
+  v_system_chat_can_rename_attribute_id integer := data.get_attribute_id('system_chat_can_rename');
 
   v_master_group_id integer := data.get_object_id('master');
 begin
@@ -10029,10 +10087,31 @@ begin
   insert into data.objects(class_id) values (v_chat_class_id) returning id, code into v_chat_id;
 
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
-  (v_chat_id, v_subtitle_attribute_id, to_jsonb(in_chat_subtitle), null),
+  (v_chat_id, v_title_attribute_id, to_jsonb(in_chat_title), null),
   (v_chat_id, v_is_visible_attribute_id, jsonb 'true', v_chat_id),
   (v_chat_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
   (v_chat_id, v_content_attribute_id, jsonb '[]', null);
+
+  if not in_can_invite then
+    insert into data.attribute_values(object_id, attribute_id, value) values
+    (v_chat_id, v_system_chat_can_invite_attribute_id, jsonb 'false');
+  end if;
+
+  if not in_can_leave then
+    insert into data.attribute_values(object_id, attribute_id, value) values
+    (v_chat_id, v_system_chat_can_leave_attribute_id, jsonb 'false');
+  end if;
+
+  if not in_can_mute then
+    insert into data.attribute_values(object_id, attribute_id, value) values
+    (v_chat_id, v_system_chat_can_mute_attribute_id, jsonb 'false');
+  end if;
+
+  if not in_can_rename then
+    insert into data.attribute_values(object_id, attribute_id, value) values
+    (v_chat_id, v_system_chat_can_rename_attribute_id, jsonb 'false');
+  end if;
+
 
   return v_chat_id;
 end;
@@ -10824,6 +10903,7 @@ begin
   ('system_chat_can_rename', null, 'Возможность переименовать чат', 'system', null, null, true),
   ('chat_is_mute', 'Уведомления отключены', 'Признак отлюченного уведомления о новых сообщениях', 'normal', 'full', 'pallas_project.vd_chat_is_mute', true),
   ('chat_unread_messages', 'Непрочитанных сообщений', 'Количество непрочитанных сообщений', 'normal', 'mini', null, true),
+  ('system_chat_length', null , 'Количество сообщений', 'system', null, null, false),
     -- для временных объектов для изменения участников
   ('chat_temp_person_list_persons', 'Сейчас участвуют', 'Список участников чата', 'normal', 'full', null, false),
   ('system_chat_temp_person_list_chat_id', null, 'Идентификатор изменяемого чата', 'system', null, null, false);
@@ -10840,7 +10920,6 @@ begin
   (v_chats_id, v_type_attribute_id, jsonb '"chats"'),
   (v_chats_id, v_is_visible_attribute_id, jsonb 'true'),
   (v_chats_id, v_title_attribute_id, jsonb '"Чаты"'),
---  (v_chats_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_debatles"'),
   (v_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"'),
   (v_chats_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chats"'),
   (v_chats_id, v_content_attribute_id, jsonb '[]'),
@@ -10857,7 +10936,6 @@ begin
   (v_chats_id, v_type_attribute_id, jsonb '"all_chats"', null),
   (v_chats_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
   (v_chats_id, v_title_attribute_id, jsonb '"Все чаты"', null),
---  (v_chats_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_debatles"', null),
   (v_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"', null),
   (v_chats_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chats"', null),
   (v_chats_id, v_content_attribute_id, jsonb '[]', null),
@@ -10872,9 +10950,8 @@ begin
 
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_chat_class_id, v_type_attribute_id, jsonb '"chat"'),
-  --(v_chat_class_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_debatle"'),
-  --(v_chat_class_id, v_mini_card_function_attribute_id, jsonb '"pallas_project.mcard_debatle"'),
   (v_chat_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chat"'),
+  (v_chat_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chat"'),
   (v_chat_class_id, v_system_chat_can_invite_attribute_id, jsonb 'true'),
   (v_chat_class_id, v_system_chat_can_leave_attribute_id, jsonb 'true'),
   (v_chat_class_id, v_system_chat_can_mute_attribute_id, jsonb 'true'),
@@ -10900,9 +10977,6 @@ begin
 
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_message_class_id, v_type_attribute_id, jsonb '"message"'),
-  --(v_message_class_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_debatle"'),
-  --(v_message_class_id, v_mini_card_function_attribute_id, jsonb '"pallas_project.mcard_debatle"'),
-  --(v_message_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatle"'),
   (v_message_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
                                                       '{"code": "%s", "attributes": ["%s"]}',
                                                       'message_group1',
@@ -11126,6 +11200,22 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.lef_chat(integer, text, integer, integer);
+
+create or replace function pallas_project.lef_chat(in_client_id integer, in_request_id text, in_object_id integer, in_list_object_id integer)
+returns void
+volatile
+as
+$$
+begin
+  assert in_request_id is not null;
+  assert in_list_object_id is not null;
+
+  perform api_utils.create_ok_notification(in_client_id, in_request_id);
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.lef_chat_temp_person_list(integer, text, integer, integer);
 
 create or replace function pallas_project.lef_chat_temp_person_list(in_client_id integer, in_request_id text, in_object_id integer, in_list_object_id integer)
@@ -11142,10 +11232,12 @@ declare
 
   v_content_attribute_id integer := data.get_attribute_id('content');
   v_title_attribute_id integer := data.get_attribute_id('title');
+  v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
 
-  v_chat_title text := '';
+  v_chat_subtitle text := json.get_string_opt(data.get_attribute_value(v_chat_id, v_subtitle_attribute_id, v_actor_id), null);
+  v_new_chat_subtitle text := '';
   v_person_title text;
-  v_chat_subtitle text := json.get_string_opt(data.get_attribute_value(v_chat_id, 'subtitle', v_actor_id), '');
+  v_chat_title text := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), '');
 
   v_person_code text := data.get_object_code(in_list_object_id);
   v_content text[];
@@ -11167,25 +11259,32 @@ begin
     (select * from unnest(pallas_project.get_chat_persons_but_masters(v_chat_id))) loop 
     v_persons := v_persons || '
 '|| json.get_string_opt(v_name, '');
-    v_chat_title := v_chat_title || ', '|| json.get_string_opt(v_name, '');
+    v_new_chat_subtitle := v_new_chat_subtitle || ', '|| json.get_string_opt(v_name, '');
    end loop;
   v_persons := v_persons || '
 '|| '------------------
 Кого добавляем?';
 
-  v_chat_title := trim(v_chat_title, ', ');
+  v_new_chat_subtitle := trim(v_new_chat_subtitle, ', ');
 
   -- Меняем заголовок чата
   perform * from data.objects where id = v_chat_id for update;
+  v_changes := array[]::jsonb[];
+  if v_chat_subtitle is null then 
+    v_chat_title := v_new_chat_subtitle;
+    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, null, to_jsonb(v_chat_title)));
+  else
+    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_subtitle_attribute_id, null, to_jsonb(v_new_chat_subtitle)));
+  end if;
   perform data.change_object_and_notify(v_chat_id, 
-                                        jsonb_build_array(data.attribute_change2jsonb(v_title_attribute_id, null, to_jsonb(v_chat_title))),
+                                        to_jsonb(v_changes),
                                         null);
 
 -- Добавляем чат в список чатов в начало
   perform pp_utils.list_prepend_and_notify(v_chats_id, v_chat_code, in_list_object_id);
 
   -- отправляем нотификацию, что был добавлен в чат
-  perform pp_utils.add_notification(in_list_object_id, 'Вы добавлены в чат ' || v_chat_subtitle, v_chat_id);
+  perform pp_utils.add_notification(in_list_object_id, 'Вы добавлены в чат ' || v_chat_title, v_chat_id);
 
 -- удаляем персону из временного списка
   perform * from data.objects where id = in_object_id for update;

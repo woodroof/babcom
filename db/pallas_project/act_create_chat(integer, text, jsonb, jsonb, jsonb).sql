@@ -6,7 +6,7 @@ volatile
 as
 $$
 declare
-  v_chat_subtitle text := json.get_string_opt(in_params, 'subtitle', null);
+  v_chat_title text := json.get_string_opt(in_params, 'title', null);
   v_chat_code text;
   v_chat_id integer;
   v_chat_class_id integer := data.get_class_id('chat');
@@ -17,7 +17,7 @@ begin
   assert in_request_id is not null;
 
   -- Создаём чат
-  v_chat_id := pallas_project.create_chat(v_chat_subtitle);
+  v_chat_id := pallas_project.create_chat(v_chat_title, null, null, null, null);
   v_chat_code := data.get_object_code(v_chat_id);
 
   -- Добавляем в список к мастерам

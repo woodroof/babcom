@@ -14,10 +14,12 @@ declare
 
   v_content_attribute_id integer := data.get_attribute_id('content');
   v_title_attribute_id integer := data.get_attribute_id('title');
+  v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
 
-  v_chat_title text := '';
+  v_chat_subtitle text := json.get_string_opt(data.get_attribute_value(v_chat_id, v_subtitle_attribute_id, v_actor_id), null);
+  v_new_chat_subtitle text := '';
   v_person_title text;
-  v_chat_subtitle text := json.get_string_opt(data.get_attribute_value(v_chat_id, 'subtitle', v_actor_id), '');
+  v_chat_title text := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), '');
 
   v_person_code text := data.get_object_code(in_list_object_id);
   v_content text[];
@@ -39,25 +41,32 @@ begin
     (select * from unnest(pallas_project.get_chat_persons_but_masters(v_chat_id))) loop 
     v_persons := v_persons || '
 '|| json.get_string_opt(v_name, '');
-    v_chat_title := v_chat_title || ', '|| json.get_string_opt(v_name, '');
+    v_new_chat_subtitle := v_new_chat_subtitle || ', '|| json.get_string_opt(v_name, '');
    end loop;
   v_persons := v_persons || '
 '|| '------------------
 Кого добавляем?';
 
-  v_chat_title := trim(v_chat_title, ', ');
+  v_new_chat_subtitle := trim(v_new_chat_subtitle, ', ');
 
   -- Меняем заголовок чата
   perform * from data.objects where id = v_chat_id for update;
+  v_changes := array[]::jsonb[];
+  if v_chat_subtitle is null then 
+    v_chat_title := v_new_chat_subtitle;
+    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, null, to_jsonb(v_chat_title)));
+  else
+    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_subtitle_attribute_id, null, to_jsonb(v_new_chat_subtitle)));
+  end if;
   perform data.change_object_and_notify(v_chat_id, 
-                                        jsonb_build_array(data.attribute_change2jsonb(v_title_attribute_id, null, to_jsonb(v_chat_title))),
+                                        to_jsonb(v_changes),
                                         null);
 
 -- Добавляем чат в список чатов в начало
   perform pp_utils.list_prepend_and_notify(v_chats_id, v_chat_code, in_list_object_id);
 
   -- отправляем нотификацию, что был добавлен в чат
-  perform pp_utils.add_notification(in_list_object_id, 'Вы добавлены в чат ' || v_chat_subtitle, v_chat_id);
+  perform pp_utils.add_notification(in_list_object_id, 'Вы добавлены в чат ' || v_chat_title, v_chat_id);
 
 -- удаляем персону из временного списка
   perform * from data.objects where id = in_object_id for update;

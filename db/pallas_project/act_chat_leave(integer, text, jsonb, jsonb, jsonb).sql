@@ -17,6 +17,7 @@ declare
   v_message_class_id integer := data.get_class_id('message');
 
   v_title_attribute_id integer := data.get_attribute_id('title');
+  v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
   v_message_text_attribute_id integer := data.get_attribute_id('message_text');
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
   v_system_message_sender_attribute_id integer := data.get_attribute_id('system_message_sender');
@@ -36,10 +37,11 @@ declare
 
   v_actor_title text := json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id, v_actor_id));
   v_title text := to_char(clock_timestamp(),'DD.MM hh24:mi:ss ') || v_chat_bot_title;
-  v_chat_subtitle text := json.get_string_opt(data.get_attribute_value(v_chat_id, 'subtitle', v_actor_id), '');
+  v_chat_subtitle text := json.get_string_opt(data.get_attribute_value(v_chat_id, v_subtitle_attribute_id, v_actor_id), null);
 
   v_name jsonb;
   v_persons text:= '';
+  v_changes jsonb[];
 begin
   assert in_request_id is not null;
 
@@ -59,8 +61,15 @@ begin
       v_persons := v_persons || ','|| json.get_string_opt(v_name, '');
     end loop;
     v_persons := trim(v_persons, ',');
+
+    v_changes := array[]::jsonb[];
+    if v_chat_subtitle is null then 
+      v_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, null, to_jsonb(v_persons)));
+    else
+      v_changes := array_append(v_changes, data.attribute_change2jsonb(v_subtitle_attribute_id, null, to_jsonb(v_persons)));
+    end if;
     perform data.change_object_and_notify(v_chat_id, 
-                                          jsonb_build_array(data.attribute_change2jsonb(v_title_attribute_id, null, to_jsonb('Чат: '|| v_persons))),
+                                          to_jsonb(v_changes),
                                           v_actor_id);
 
     -- Создаём новое сообщение о том, что персонаж вышел из чата

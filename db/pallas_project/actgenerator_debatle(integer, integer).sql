@@ -15,6 +15,9 @@ declare
   v_debatle_status text;
   v_system_debatle_theme_attribute_id integer := data.get_attribute_id('system_debatle_theme');
   v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
+  v_chat_id integer;
+  v_chat_length integer;
+  v_chat_unread integer;
 begin
   assert in_actor_id is not null;
 
@@ -139,11 +142,19 @@ begin
   end if;
 
   if v_debatle_status in ('future', 'vote', 'vote_over', 'closed') then
-    v_actions_list := v_actions_list || 
-        format(', "debatle_chat": {"code": "chat_enter", "name": "Обсудить%s", "disabled": false, '||
-                '"params": {"object_code": "%s"}}',
-                '',
-                v_debatle_code);
+    v_chat_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_chat_id', in_actor_id), null);
+    if v_chat_id is not null then
+      v_chat_length := json.get_integer_opt(data.get_attribute_value(v_chat_id, 'system_chat_length'), 0);
+      v_chat_unread := json.get_integer_opt(data.get_attribute_value(v_chat_id, 'chat_unread_messages', in_actor_id), null);
+      v_actions_list := v_actions_list || 
+          format(', "debatle_chat": {"code": "chat_enter", "name": "Обсудить%s", "disabled": false, '||
+                  '"params": {"object_code": "%s"}}',
+                  case when v_chat_length = 0 then ''
+                  when v_chat_length > 0 and v_chat_unread is null then ' (' || v_chat_length || ')'
+                  else ' (' || v_chat_length || ', непрочитанных ' || v_chat_unread || ')' 
+                  end,
+                  v_debatle_code);
+    end if;
   end if;
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;

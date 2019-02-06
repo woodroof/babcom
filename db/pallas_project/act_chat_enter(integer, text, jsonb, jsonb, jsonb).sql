@@ -14,8 +14,13 @@ declare
 
   v_name jsonb;
   v_chat_title text := '';
+  v_chat_subtitle text;
+  v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
+  v_chat_unread_messages_attribute_id integer := data.get_attribute_id('chat_unread_messages');
 
   v_chats_id integer := data.get_object_id('chats');
+
+  v_changes jsonb[];
 begin
   assert in_request_id is not null;
   assert v_object_code is not null or v_chat_code is not null;
@@ -42,24 +47,38 @@ begin
 
       v_chat_title := trim(v_chat_title, ', ');
       perform * from data.objects where id = v_chat_id for update;
+
+      v_changes := array[]::jsonb[];
+      v_chat_subtitle := json.get_string_opt(data.get_attribute_value(v_chat_id, v_subtitle_attribute_id, v_actor_id), null);
+      if v_chat_subtitle is null then 
+        v_changes := array_append(v_changes, data.attribute_change2jsonb('title', null, to_jsonb(v_chat_title)));
+      else
+        v_changes := array_append(v_changes, data.attribute_change2jsonb(v_subtitle_attribute_id, null, to_jsonb(v_chat_title)));
+      end if;
+
       if v_object_code is not null or v_goto_chat then
         perform data.change_object_and_notify(v_chat_id, 
-                                              jsonb_build_array(data.attribute_change2jsonb('title', null, to_jsonb(v_chat_title))),
+                                              to_jsonb(v_changes),
                                               null);
       else
         -- если мы заходили из самого чата, то надо прислать обновления себе
         perform data.change_current_object(in_client_id, 
                                            in_request_id, 
                                            v_chat_id, 
-                                           jsonb_build_array(data.attribute_change2jsonb('title', null, to_jsonb(v_chat_title))));
+                                           to_jsonb(v_changes));
       end if;
     end if;
 
   -- Добавляем чат в список чатов в начало
     perform pp_utils.list_prepend_and_notify(v_chats_id, v_chat_code, v_actor_id);
   end if;
+
   -- Переходим к чату или остаёмся на нём
   if v_object_code is not null or v_goto_chat then
+    perform data.change_object_and_notify(v_chat_id, 
+                                          jsonb_build_array(data.attribute_change2jsonb(v_chat_unread_messages_attribute_id, v_actor_id, null)),
+                                          v_actor_id);
+
     perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, v_chat_code);
   else
     perform api_utils.create_ok_notification(in_client_id, in_request_id);
