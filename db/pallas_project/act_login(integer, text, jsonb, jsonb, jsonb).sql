@@ -17,11 +17,13 @@ begin
 
   if v_login_id is not null then
   -- Заменим логин
+    perform data.log('info', format('Set login %s for client %s (password: %s)', v_login_id, in_client_id, v_password));
     perform data.set_login(in_client_id, v_login_id);
     -- И отправим новый список акторов
     perform api_utils.process_get_actors_message(in_client_id, in_request_id);
   else
   -- Вернём ошибку, если на нашли логин в табличке
+    perform data.log('warning', format('Invalid password %s (client: %s)', v_password, in_client_id));
     perform api_utils.create_notification(
       in_client_id,
       in_request_id,
