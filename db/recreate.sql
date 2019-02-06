@@ -11550,7 +11550,7 @@ immutable
 as
 $$
 declare
-  v_random integer := random.random_integer(1, 10);
+  v_random integer := random.random_integer(1, 11);
 begin
   if v_random = 1 then
     return 'Это не те дроиды, которых вы ищете';
