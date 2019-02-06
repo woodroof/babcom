@@ -11550,7 +11550,7 @@ immutable
 as
 $$
 declare
-  v_random integer := random.random_integer(1, 8);
+  v_random integer := random.random_integer(1, 10);
 begin
   if v_random = 1 then
     return 'Это не те дроиды, которых вы ищете';
@@ -11566,6 +11566,12 @@ begin
     return 'Не все ли равно, о чем спрашивать, если ответа все равно не получишь, правда?';
   elsif v_random = 7 then
     return 'Мы будем править всей этой землёй, и мы назовём её... Эта Земля.';
+  elsif v_random = 8 then
+    return 'Ты не пройдёшь!';
+  elsif v_random = 9 then
+    return 'Принцесса в другом замке!';
+  elsif v_random = 10 then
+    return 'Нет никакого торта';
   end if;
 
   return 'Меньше значит больше';
