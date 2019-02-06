@@ -15,7 +15,6 @@ declare
   v_last_names text[] := json.get_string_array(data.get_param('last_names'));
 
   v_title_attribute_id integer := data.get_attribute_id('title');
-  v_priority_attribute_id integer := data.get_attribute_id('priority');
 
   v_all_person_group_id integer := data.get_object_id('all_person');
   v_player_group_id integer := data.get_object_id('player');
@@ -30,8 +29,7 @@ begin
   insert into data.logins default values returning id into v_login_id;
   insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
   insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_person_id, v_title_attribute_id, to_jsonb(v_title)),
-  (v_person_id, v_priority_attribute_id, jsonb '200');
+  (v_person_id, v_title_attribute_id, to_jsonb(v_title));
 
   insert into data.object_objects(parent_object_id, object_id) values
   (v_all_person_group_id, v_person_id),

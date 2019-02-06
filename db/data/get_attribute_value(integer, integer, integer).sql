@@ -24,6 +24,13 @@ begin
     pr.object_id = av.value_object_id and
     pr.attribute_id = v_priority_attribute_id and
     pr.value_object_id is null
+  left join data.objects o on
+    o.id = av.value_object_id and
+    pr.id is null
+  left join data.attribute_values pr2 on
+    pr2.object_id = o.class_id and
+    pr2.attribute_id = v_priority_attribute_id and
+    pr2.value_object_id is null
   where
     av.object_id = in_object_id and
     av.attribute_id = in_attribute_id and
@@ -31,7 +38,7 @@ begin
       av.value_object_id is null or
       oo.id is not null
     )
-  order by json.get_integer_opt(pr.value, 0) desc
+  order by json.get_integer_opt(coalesce(pr2.value, pr.value), 0) desc
   limit 1;
 
   if v_attribute_value is null then

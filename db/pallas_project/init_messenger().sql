@@ -99,6 +99,7 @@ begin
   (v_chat_class_id, v_system_chat_can_leave_attribute_id, jsonb 'true'),
   (v_chat_class_id, v_system_chat_can_mute_attribute_id, jsonb 'true'),
   (v_chat_class_id, v_system_chat_can_rename_attribute_id, jsonb 'true'),
+  (v_chat_class_id, v_priority_attribute_id, jsonb '100'),
   (v_chat_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
                                                       '{"code": "%s", "attributes": ["%s", "%s"], 
                                                                       "actions": ["%s", "%s", "%s", "%s"]}',

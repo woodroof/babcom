@@ -98,6 +98,7 @@ begin
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_person_class_id, v_type_attribute_id, jsonb '"person"'),
   (v_person_class_id, v_is_visible_attribute_id, jsonb 'true'),
+  (v_person_class_id, v_priority_attribute_id, jsonb '200'),
   (v_person_class_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_person"'),
   (v_person_class_id, v_mini_card_function_attribute_id, jsonb '"pallas_project.mcard_person"'),
   (v_person_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_person"'),
@@ -137,7 +138,6 @@ begin
   insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_person_id, v_title_attribute_id, jsonb '"Саша"'),
-  (v_person_id, v_priority_attribute_id, jsonb '200'),
   (v_person_id, v_person_occupation_attribute_id, jsonb '"Мастер"');
   perform data.add_object_to_object(v_person_id, v_master_group_id);
 
@@ -146,7 +146,6 @@ begin
   insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_person_id, v_title_attribute_id, jsonb '"Пётр"'),
-  (v_person_id, v_priority_attribute_id, jsonb '200'),
   (v_person_id, v_person_occupation_attribute_id, jsonb '"Мастер"');
   perform data.add_object_to_object(v_person_id, v_master_group_id);
 
@@ -155,7 +154,6 @@ begin
   insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_person_id, v_title_attribute_id, jsonb '"Данил"'),
-  (v_person_id, v_priority_attribute_id, jsonb '200'),
   (v_person_id, v_person_occupation_attribute_id, jsonb '"Мастер"');
   perform data.add_object_to_object(v_person_id, v_master_group_id);
 
@@ -165,7 +163,6 @@ begin
   insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_person_id, v_title_attribute_id, jsonb '"Джерри Адамс"'),
-  (v_person_id, v_priority_attribute_id, jsonb '200'),
   (v_person_id, v_person_state_attribute_id, jsonb '"un"'),
   (v_person_id, v_person_occupation_attribute_id, jsonb '"Секретарь администрации"'),
   (v_person_id, v_system_money_attribute_id, jsonb '0'),
@@ -181,7 +178,6 @@ begin
   insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_person_id, v_title_attribute_id, jsonb '"Сьюзан Сидорова"'),
-  (v_person_id, v_priority_attribute_id, jsonb '200'),
   (v_person_id, v_person_state_attribute_id, jsonb '"aster"'),
   (v_person_id, v_person_occupation_attribute_id, jsonb '"Шахтёр"'),
   (v_person_id, v_system_money_attribute_id, jsonb '65000'),
@@ -197,7 +193,6 @@ begin
   insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_person_id, v_title_attribute_id, jsonb '"Чарли Чандрасекар"'),
-  (v_person_id, v_priority_attribute_id, jsonb '200'),
   (v_person_id, v_person_state_attribute_id, jsonb '"un"'),
   (v_person_id, v_person_occupation_attribute_id, jsonb '"Главный экономист"'),
   (v_person_id, v_system_person_coin_attribute_id, jsonb '50'),

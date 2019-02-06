@@ -3058,6 +3058,13 @@ begin
     pr.object_id = av.value_object_id and
     pr.attribute_id = v_priority_attribute_id and
     pr.value_object_id is null
+  left join data.objects o on
+    o.id = av.value_object_id and
+    pr.id is null
+  left join data.attribute_values pr2 on
+    pr2.object_id = o.class_id and
+    pr2.attribute_id = v_priority_attribute_id and
+    pr2.value_object_id is null
   where
     av.object_id = in_object_id and
     av.attribute_id = in_attribute_id and
@@ -3065,7 +3072,7 @@ begin
       av.value_object_id is null or
       oo.id is not null
     )
-  order by json.get_integer_opt(pr.value, 0) desc
+  order by json.get_integer_opt(coalesce(pr2.value, pr.value), 0) desc
   limit 1;
 
   if v_attribute_value is null then
@@ -3440,7 +3447,10 @@ begin
         av.attribute_id,
         av.value,
         case
-          when lag(av.attribute_id) over (partition by av.attribute_id order by av.priority desc, json.get_integer_opt(pr.value, 0) desc) is null
+          when
+            lag(av.attribute_id) over(
+              partition by av.attribute_id order by av.priority desc, json.get_integer_opt(coalesce(pr2.value, pr.value), 0) desc
+            ) is null
           then true
           else false
         end as needed
@@ -3466,6 +3476,13 @@ begin
         pr.object_id = av.value_object_id and
         pr.attribute_id = v_priority_attribute_id and
         pr.value_object_id is null
+      left join data.objects o on
+        o.id = av.value_object_id and
+        pr.id is null
+      left join data.attribute_values pr2 on
+        pr2.object_id = o.class_id and
+        pr2.attribute_id = v_priority_attribute_id and
+        pr2.value_object_id is null
       where
         av.value_object_id is null or
         oo.id is not null
@@ -8788,7 +8805,6 @@ declare
   v_last_names text[] := json.get_string_array(data.get_param('last_names'));
 
   v_title_attribute_id integer := data.get_attribute_id('title');
-  v_priority_attribute_id integer := data.get_attribute_id('priority');
 
   v_all_person_group_id integer := data.get_object_id('all_person');
   v_player_group_id integer := data.get_object_id('player');
@@ -8803,8 +8819,7 @@ begin
   insert into data.logins default values returning id into v_login_id;
   insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
   insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_person_id, v_title_attribute_id, to_jsonb(v_title)),
-  (v_person_id, v_priority_attribute_id, jsonb '200');
+  (v_person_id, v_title_attribute_id, to_jsonb(v_title));
 
   insert into data.object_objects(parent_object_id, object_id) values
   (v_all_person_group_id, v_person_id),
@@ -10006,7 +10021,6 @@ declare
 
   v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
-  v_priority_attribute_id integer := data.get_attribute_id('priority');
   v_content_attribute_id integer := data.get_attribute_id('content');
 
   v_master_group_id integer := data.get_object_id('master');
@@ -10016,7 +10030,6 @@ begin
 
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_chat_id, v_subtitle_attribute_id, to_jsonb(in_chat_subtitle), null),
-  (v_chat_id, v_priority_attribute_id, jsonb '100', null),
   (v_chat_id, v_is_visible_attribute_id, jsonb 'true', v_chat_id),
   (v_chat_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
   (v_chat_id, v_content_attribute_id, jsonb '[]', null);
@@ -10808,6 +10821,7 @@ begin
   (v_chat_class_id, v_system_chat_can_leave_attribute_id, jsonb 'true'),
   (v_chat_class_id, v_system_chat_can_mute_attribute_id, jsonb 'true'),
   (v_chat_class_id, v_system_chat_can_rename_attribute_id, jsonb 'true'),
+  (v_chat_class_id, v_priority_attribute_id, jsonb '100'),
   (v_chat_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
                                                       '{"code": "%s", "attributes": ["%s", "%s"], 
                                                                       "actions": ["%s", "%s", "%s", "%s"]}',
@@ -10969,6 +10983,7 @@ begin
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_person_class_id, v_type_attribute_id, jsonb '"person"'),
   (v_person_class_id, v_is_visible_attribute_id, jsonb 'true'),
+  (v_person_class_id, v_priority_attribute_id, jsonb '200'),
   (v_person_class_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_person"'),
   (v_person_class_id, v_mini_card_function_attribute_id, jsonb '"pallas_project.mcard_person"'),
   (v_person_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_person"'),
@@ -11008,7 +11023,6 @@ begin
   insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_person_id, v_title_attribute_id, jsonb '"Саша"'),
-  (v_person_id, v_priority_attribute_id, jsonb '200'),
   (v_person_id, v_person_occupation_attribute_id, jsonb '"Мастер"');
   perform data.add_object_to_object(v_person_id, v_master_group_id);
 
@@ -11017,7 +11031,6 @@ begin
   insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_person_id, v_title_attribute_id, jsonb '"Пётр"'),
-  (v_person_id, v_priority_attribute_id, jsonb '200'),
   (v_person_id, v_person_occupation_attribute_id, jsonb '"Мастер"');
   perform data.add_object_to_object(v_person_id, v_master_group_id);
 
@@ -11026,7 +11039,6 @@ begin
   insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_person_id, v_title_attribute_id, jsonb '"Данил"'),
-  (v_person_id, v_priority_attribute_id, jsonb '200'),
   (v_person_id, v_person_occupation_attribute_id, jsonb '"Мастер"');
   perform data.add_object_to_object(v_person_id, v_master_group_id);
 
@@ -11036,7 +11048,6 @@ begin
   insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_person_id, v_title_attribute_id, jsonb '"Джерри Адамс"'),
-  (v_person_id, v_priority_attribute_id, jsonb '200'),
   (v_person_id, v_person_state_attribute_id, jsonb '"un"'),
   (v_person_id, v_person_occupation_attribute_id, jsonb '"Секретарь администрации"'),
   (v_person_id, v_system_money_attribute_id, jsonb '0'),
@@ -11052,7 +11063,6 @@ begin
   insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_person_id, v_title_attribute_id, jsonb '"Сьюзан Сидорова"'),
-  (v_person_id, v_priority_attribute_id, jsonb '200'),
   (v_person_id, v_person_state_attribute_id, jsonb '"aster"'),
   (v_person_id, v_person_occupation_attribute_id, jsonb '"Шахтёр"'),
   (v_person_id, v_system_money_attribute_id, jsonb '65000'),
@@ -11068,7 +11078,6 @@ begin
   insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_person_id, v_title_attribute_id, jsonb '"Чарли Чандрасекар"'),
-  (v_person_id, v_priority_attribute_id, jsonb '200'),
   (v_person_id, v_person_state_attribute_id, jsonb '"un"'),
   (v_person_id, v_person_occupation_attribute_id, jsonb '"Главный экономист"'),
   (v_person_id, v_system_person_coin_attribute_id, jsonb '50'),

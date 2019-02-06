@@ -34,7 +34,10 @@ begin
         av.attribute_id,
         av.value,
         case
-          when lag(av.attribute_id) over (partition by av.attribute_id order by av.priority desc, json.get_integer_opt(pr.value, 0) desc) is null
+          when
+            lag(av.attribute_id) over(
+              partition by av.attribute_id order by av.priority desc, json.get_integer_opt(coalesce(pr2.value, pr.value), 0) desc
+            ) is null
           then true
           else false
         end as needed
@@ -60,6 +63,13 @@ begin
         pr.object_id = av.value_object_id and
         pr.attribute_id = v_priority_attribute_id and
         pr.value_object_id is null
+      left join data.objects o on
+        o.id = av.value_object_id and
+        pr.id is null
+      left join data.attribute_values pr2 on
+        pr2.object_id = o.class_id and
+        pr2.attribute_id = v_priority_attribute_id and
+        pr2.value_object_id is null
       where
         av.value_object_id is null or
         oo.id is not null
