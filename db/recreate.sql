@@ -9957,7 +9957,7 @@ begin
 
   if data.get_object_code(in_actor_id) = 'anonymous' then
     v_actions_list := v_actions_list || ', "' || 'login":' || 
-      '{"code": "login", "name": "Войти", "disabled": false, "params": {}, "user_params": [{"code": "password", "description": "Введите пароль", "type": "string" }]}';
+      '{"code": "login", "name": "Войти", "disabled": false, "params": {}, "user_params": [{"code": "password", "description": "Введите пароль", "type": "string", "restrictions": {"password": true}}]}';
   else
     if v_is_master or pp_utils.is_in_group(in_actor_id, 'all_person') then
       v_actions_list := v_actions_list || ', "' || 'debatles":' || 
