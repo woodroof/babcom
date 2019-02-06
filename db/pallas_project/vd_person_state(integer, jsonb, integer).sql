@@ -10,12 +10,12 @@ declare
 begin
   case when v_text_value = 'un' then
     return 'Гражданин ООН';
-  when v_text_value = 'aster' then
-    return 'Астер';
-  when v_text_value = 'mars' then
-    return 'Марсианин';
+  when v_text_value = 'un_base' then
+    return 'Догражданин ООН';
+  when v_text_value = 'mcr' then
+    return 'Гражданин МРК';
   else
-    return 'Неизвестно';
+    return '';
   end case;
 end;
 $$

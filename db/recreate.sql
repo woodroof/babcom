@@ -10039,23 +10039,27 @@ end;
 $$
 language plpgsql;
 
--- drop function pallas_project.create_person(text, jsonb, text[]);
+-- drop function pallas_project.create_object(text, text, jsonb, text[]);
 
-create or replace function pallas_project.create_person(in_login_code text, in_attributes jsonb, in_groups text[])
-returns void
+create or replace function pallas_project.create_object(in_code text, in_class_code text, in_attributes jsonb, in_groups text[])
+returns integer
 volatile
 as
 $$
 declare
-  v_person_class_id integer := data.get_class_id('person');
-  v_person_id integer;
-  v_login_id integer;
+  v_object_id integer;
   v_attribute record;
   v_group_code text;
 begin
-  insert into data.objects(class_id) values(v_person_class_id) returning id into v_person_id;
-  insert into data.logins(code) values(in_login_code) returning id into v_login_id;
-  insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
+  if in_code is null then
+    insert into data.objects(class_id)
+    values(case when in_class_code is not null then data.get_class_id(in_class_code) else null end)
+    returning id into v_object_id;
+  else
+    insert into data.objects(code, class_id)
+    values(in_code, case when in_class_code is not null then data.get_class_id(in_class_code) else null end)
+    returning id into v_object_id;
+  end if;
 
   for v_attribute in
   (
@@ -10064,7 +10068,7 @@ begin
   )
   loop
     insert into data.attribute_values(object_id, attribute_id, value)
-    values(v_person_id, data.get_attribute_id(v_attribute.key), v_attribute.value);
+    values(v_object_id, data.get_attribute_id(v_attribute.key), v_attribute.value);
   end loop;
 
   for v_group_code in
@@ -10073,8 +10077,27 @@ begin
     from unnest(in_groups) a(value)
   )
   loop
-    perform data.add_object_to_object(v_person_id, data.get_object_id(v_group_code));
+    perform data.add_object_to_object(v_object_id, data.get_object_id(v_group_code));
   end loop;
+
+  return v_object_id;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.create_person(text, jsonb, text[]);
+
+create or replace function pallas_project.create_person(in_login_code text, in_attributes jsonb, in_groups text[])
+returns void
+volatile
+as
+$$
+declare
+  v_person_id integer := pallas_project.create_object(null, 'person', in_attributes, in_groups);
+  v_login_id integer;
+begin
+  insert into data.logins(code) values(in_login_code) returning id into v_login_id;
+  insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
 end;
 $$
 language plpgsql;
@@ -10356,46 +10379,28 @@ volatile
 as
 $$
 declare
-  v_type_attribute_id integer := data.get_attribute_id('type');
-  v_title_attribute_id integer := data.get_attribute_id('title');
-  v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
-  v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
-  v_content_attribute_id integer := data.get_attribute_id('content');
-  v_priority_attribute_id integer := data.get_attribute_id('priority');
-  v_full_card_function_attribute_id integer := data.get_attribute_id('full_card_function');
-  v_mini_card_function_attribute_id integer := data.get_attribute_id('mini_card_function');
-  v_actions_function_attribute_id integer := data.get_attribute_id('actions_function');
-  v_template_attribute_id integer := data.get_attribute_id('template');
-
-  v_description_attribute_id integer;
-
+  v_default_actor_id integer;
   v_default_login_id integer;
-  v_menu_id integer;
-  v_notifications_id integer;
-  v_test_id integer;
-
 begin
-  insert into data.attributes(code, description, type, card_type, can_be_overridden)
-  values('description', 'Текстовый блок с развёрнутым описанием объекта, string', 'normal', 'full', true)
-  returning id into v_description_attribute_id;
-
-  insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
-  ('system_chat_id', null, 'Идентификатор чата для обсуждения объекта', 'system', null, null, true);
+  insert into data.attributes(code, description, type, card_type, can_be_overridden) values
+  ('description', 'Текстовый блок с развёрнутым описанием объекта, string', 'normal', 'full', true),
+  ('system_chat_id', 'Идентификатор чата для обсуждения объекта', 'system', null, true);
 
   -- Создадим актора по умолчанию
-  insert into data.objects(code) values('anonymous') returning id into v_test_id;
-  insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_test_id, v_title_attribute_id, jsonb '"Гость"'),
-  (v_test_id, v_is_visible_attribute_id, jsonb 'true'),
-  (v_test_id, v_actions_function_attribute_id,'"pallas_project.actgenerator_anonymous"'),
-  (v_test_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
-                                      '{"code": "%s", "actions": ["%s"]}',
-                                      'group1',
-                                      'create_random_person')::jsonb]));
+  v_default_actor_id :=
+    pallas_project.create_object(
+      'anonymous',
+      null,
+      jsonb '{
+        "title": "Гость",
+        "is_visible": true,
+        "actions_function": "pallas_project.actgenerator_anonymous",
+        "template": {"groups": [{"code": "group1", "actions": ["create_random_person"]}]}}',
+      null);
 
   -- Логин по умолчанию
-  insert into data.logins(code) values('default_login') returning id into v_default_login_id;
-  insert into data.login_actors(login_id, actor_id) values(v_default_login_id, v_test_id);
+  insert into data.logins default values returning id into v_default_login_id;
+  insert into data.login_actors(login_id, actor_id) values(v_default_login_id, v_default_actor_id);
 
   insert into data.params(code, value, description) values
   ('default_login_id', to_jsonb(v_default_login_id), 'Идентификатор логина по умолчанию'),
@@ -10405,47 +10410,46 @@ begin
   ' Флинн Холл Винсон Уайтинг Хасси Хейвуд Стивенс Робинсон Йорк Гудман Махони Гордон Вуд Рид Грэй Тодд Иствуд Брукс Бродер Ховард Смит Нельсон Синклер Мур Тернер Китон Норрис', ' ')), 'Список фамилий');
 
   -- Также для работы нам понадобится объект меню
-  insert into data.objects(code) values('menu') returning id into v_menu_id;
-  insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_menu_id, v_type_attribute_id, jsonb '"menu"'),
-  (v_menu_id, v_is_visible_attribute_id, jsonb 'true'),
-  (v_menu_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_menu"'),
-  (v_menu_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
-                                      '{"code": "%s", "actions": ["%s", "%s", "%s", "%s", "%s"]}',
-                                      'menu_group1',
-                                      'login',
-                                      'debatles',
-                                      'chats',
-                                      'all_chats',
-                                      'logout')::jsonb]));
+  perform pallas_project.create_object(
+    'menu',
+    null,
+    jsonb '{
+      "is_visible": true,
+      "actions_function": "pallas_project.actgenerator_menu",
+      "template": {"groups": [{"code": "menu_group1", "actions": ["login", "debatles", "chats", "all_chats", "logout"]}]}}',
+    null);
 
   -- И пустой список уведомлений
-  insert into data.objects(code) values('notifications') returning id into v_notifications_id;
-  insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_notifications_id, v_type_attribute_id, jsonb '"notifications"'),
-  (v_notifications_id, v_is_visible_attribute_id, jsonb 'true'),
-  (v_notifications_id, v_content_attribute_id, jsonb '[]');
+  perform pallas_project.create_object(
+    'notifications',
+    null,
+    jsonb '{
+      "is_visible": true,
+      "content": []}',
+    null);
 
   -- Создадим объект для страницы 404
   declare
     v_not_found_object_id integer;
-    v_not_found_description_attribute_id integer;
   begin
-    insert into data.objects(code) values('not_found') returning id into v_not_found_object_id;
+    insert into data.attributes(code, description, type, card_type, value_description_function, can_be_overridden)
+    values('not_found_description', 'Текст на странице 404', 'normal', 'full', 'pallas_project.vd_not_found_description', true);
+
+    v_not_found_object_id :=
+      pallas_project.create_object(
+        'not_found',
+        null,
+        jsonb '{
+          "type": "not_found",
+          "is_visible": true,
+          "title": "404",
+          "subtitle": "Not found",
+          "template": {"groups": [{"code": "general", "attributes": ["not_found_description"]}]},
+          "not_found_description": null}',
+        null);
+
     insert into data.params(code, value, description)
     values('not_found_object_id', to_jsonb(v_not_found_object_id), 'Идентификатор объекта, отображаемого в случае, если актору недоступен какой-то объект (ну или он реально не существует)');
-
-    insert into data.attributes(code, description, type, card_type, value_description_function, can_be_overridden)
-    values('not_found_description', 'Текст на странице 404', 'normal', 'full', 'pallas_project.vd_not_found_description', true)
-    returning id into v_not_found_description_attribute_id;
-
-    insert into data.attribute_values(object_id, attribute_id, value) values
-    (v_not_found_object_id, v_type_attribute_id, jsonb '"not_found"'),
-    (v_not_found_object_id, v_is_visible_attribute_id, jsonb 'true'),
-    (v_not_found_object_id, v_title_attribute_id, jsonb '"404"'),
-    (v_not_found_object_id, v_subtitle_attribute_id, jsonb '"Not found"'),
-    (v_not_found_object_id, v_template_attribute_id, jsonb '{"groups": [{"code": "general", "attributes": ["not_found_description"]}]}'),
-    (v_not_found_object_id, v_not_found_description_attribute_id, null);
   end;
 
   insert into data.actions(code, function) values
@@ -10458,6 +10462,7 @@ begin
   perform pallas_project.init_persons();
   perform pallas_project.init_debatles();
   perform pallas_project.init_messenger();
+  perform pallas_project.init_economics();
 end;
 $$
 language plpgsql;
@@ -10760,6 +10765,19 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.init_economics();
+
+create or replace function pallas_project.init_economics()
+returns void
+volatile
+as
+$$
+declare
+begin
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.init_messenger();
 
 create or replace function pallas_project.init_messenger()
@@ -10953,7 +10971,24 @@ begin
   ('system_person_opa_rating', 'Рейтинг в СВП', 'system', null, null, false),
   ('person_opa_rating', 'Рейтинг в СВП', 'normal', 'full', null, true),
   ('system_person_un_rating', 'Рейтинг в ООН', 'system', null, null, false),
-  ('person_un_rating', 'Рейтинг в ООН', 'normal', 'full', null, true);
+  ('person_un_rating', 'Рейтинг в ООН', 'normal', 'full', null, true),
+  ('system_person_economy_type', 'Тип экономики', 'system', null, null, false),
+  ('person_economy_type', 'Тип экономики', 'normal', 'full', 'pallas_project.vd_person_economy_type', true),
+  ('system_person_life_support_status', 'Жизнеобеспечение', 'system', null, null, false),
+  ('person_life_support_status', 'Жизнеобеспечение', 'normal', 'full', 'pallas_project.vd_person_status', true),
+  ('system_person_health_care_status', 'Медицина', 'system', null, null, false),
+  ('person_health_care_status', 'Медицина', 'normal', 'full', 'pallas_project.vd_person_status', true),
+  ('system_person_recreation_status', 'Развлечения', 'system', null, null, false),
+  ('person_recreation_status', 'Развлечения', 'normal', 'full', 'pallas_project.vd_person_status', true),
+  ('system_person_police_status', 'Полиция', 'system', null, null, false),
+  ('person_police_status', 'Полиция', 'normal', 'full', 'pallas_project.vd_person_status', true),
+  ('system_person_administrative_services_status', 'Административное обслуживание', 'system', null, null, false),
+  ('person_administrative_services_status', 'Административное обслуживание', 'normal', 'full', 'pallas_project.vd_person_status', true),
+  ('system_person_next_life_support_status', null, 'system', null, null, false),
+  ('system_person_next_health_care_status', null, 'system', null, null, false),
+  ('system_person_next_recreation_status', null, 'system', null, null, false),
+  ('system_person_next_police_status', null, 'system', null, null, false),
+  ('system_person_next_administrative_services_status', null, 'system', null, null, false);
 
   --Объект класса для персон
   insert into data.objects(code, type) values('person', 'class') returning id into v_person_class_id;
@@ -10973,11 +11008,23 @@ begin
         {
           "code": "person_personal",
           "attributes": [
+            "person_economy_type",
             "money",
             "person_deposit_money",
             "person_coin",
             "person_opa_rating",
             "person_un_rating"
+          ]
+        },
+        {
+          "code": "person_statuses",
+          "name": "Текущие статусы",
+          "attributes": [
+            "person_life_support_status",
+            "person_health_care_status",
+            "person_recreation_status",
+            "person_police_status",
+            "person_administrative_services_status"
           ]
         },
         {
@@ -11037,7 +11084,13 @@ begin
       "person_state": "un",
       "system_person_coin": 50,
       "system_person_opa_rating": 1,
-      "system_person_un_rating": 150}',
+      "system_person_un_rating": 150,
+      "system_person_economy_type": "un",
+      "system_person_life_support_status": 3,
+      "system_person_health_care_status": 3,
+      "system_person_recreation_status": 2,
+      "system_person_police_status": 3,
+      "system_person_administrative_services_status": 3}',
     array['all_person', 'un', 'player']);
   perform pallas_project.create_person(
     'p2',
@@ -11045,7 +11098,13 @@ begin
       "title": "Сьюзан Сидорова",
       "person_occupation": "Шахтёр",
       "system_money": 65000,
-      "system_person_opa_rating": 5}',
+      "system_person_opa_rating": 5,
+      "system_person_economy_type": "un",
+      "system_person_life_support_status": 2,
+      "system_person_health_care_status": 1,
+      "system_person_recreation_status": 2,
+      "system_person_police_status": 1,
+      "system_person_administrative_services_status": 1}',
     array['all_person', 'opa', 'player', 'aster']);
   perform pallas_project.create_person(
     'p3',
@@ -11055,7 +11114,13 @@ begin
       "person_state": "un",
       "system_person_coin": 50,
       "system_person_opa_rating": 1,
-      "system_person_un_rating": 200}',
+      "system_person_un_rating": 200,
+      "system_person_economy_type": "un",
+      "system_person_life_support_status": 3,
+      "system_person_health_care_status": 3,
+      "system_person_recreation_status": 2,
+      "system_person_police_status": 3,
+      "system_person_administrative_services_status": 3}',
     array['all_person', 'un', 'player']);
 end;
 $$
@@ -11550,6 +11615,29 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.vd_person_economy_type(integer, jsonb, integer);
+
+create or replace function pallas_project.vd_person_economy_type(in_attribute_id integer, in_value jsonb, in_actor_id integer)
+returns text
+immutable
+as
+$$
+begin
+  if in_value = jsonb 'un' then
+    return 'ООН — только токены';
+  elsif in_value = jsonb 'mcr' then
+    return 'МРК — только текущий счёт';
+  elsif in_value = jsonb 'asters' then
+    return 'Астеры — накопительный и обнуляемый текущий счета';
+  elsif in_value = jsonb 'fixed' then
+    return 'Фиксированные статусы — нет счетов, нет распределения токенов';
+  end if;
+
+  assert false;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.vd_person_state(integer, jsonb, integer);
 
 create or replace function pallas_project.vd_person_state(in_attribute_id integer, in_value jsonb, in_actor_id integer)
@@ -11562,13 +11650,36 @@ declare
 begin
   case when v_text_value = 'un' then
     return 'Гражданин ООН';
-  when v_text_value = 'aster' then
-    return 'Астер';
-  when v_text_value = 'mars' then
-    return 'Марсианин';
+  when v_text_value = 'un_base' then
+    return 'Догражданин ООН';
+  when v_text_value = 'mcr' then
+    return 'Гражданин МРК';
   else
-    return 'Неизвестно';
+    return '';
   end case;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.vd_person_status(integer, jsonb, integer);
+
+create or replace function pallas_project.vd_person_status(in_attribute_id integer, in_value jsonb, in_actor_id integer)
+returns text
+immutable
+as
+$$
+begin
+  if in_value = jsonb '0' then
+    return 'нет';
+  elsif in_value = jsonb '1' then
+    return 'бронзовый';
+  elsif in_value = jsonb '2' then
+    return 'серебряный';
+  elsif in_value = jsonb '3' then
+    return 'золотой';
+  end if;
+
+  assert false;
 end;
 $$
 language plpgsql;

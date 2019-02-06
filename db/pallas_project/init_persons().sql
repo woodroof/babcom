@@ -28,7 +28,24 @@ begin
   ('system_person_opa_rating', 'Рейтинг в СВП', 'system', null, null, false),
   ('person_opa_rating', 'Рейтинг в СВП', 'normal', 'full', null, true),
   ('system_person_un_rating', 'Рейтинг в ООН', 'system', null, null, false),
-  ('person_un_rating', 'Рейтинг в ООН', 'normal', 'full', null, true);
+  ('person_un_rating', 'Рейтинг в ООН', 'normal', 'full', null, true),
+  ('system_person_economy_type', 'Тип экономики', 'system', null, null, false),
+  ('person_economy_type', 'Тип экономики', 'normal', 'full', 'pallas_project.vd_person_economy_type', true),
+  ('system_person_life_support_status', 'Жизнеобеспечение', 'system', null, null, false),
+  ('person_life_support_status', 'Жизнеобеспечение', 'normal', 'full', 'pallas_project.vd_person_status', true),
+  ('system_person_health_care_status', 'Медицина', 'system', null, null, false),
+  ('person_health_care_status', 'Медицина', 'normal', 'full', 'pallas_project.vd_person_status', true),
+  ('system_person_recreation_status', 'Развлечения', 'system', null, null, false),
+  ('person_recreation_status', 'Развлечения', 'normal', 'full', 'pallas_project.vd_person_status', true),
+  ('system_person_police_status', 'Полиция', 'system', null, null, false),
+  ('person_police_status', 'Полиция', 'normal', 'full', 'pallas_project.vd_person_status', true),
+  ('system_person_administrative_services_status', 'Административное обслуживание', 'system', null, null, false),
+  ('person_administrative_services_status', 'Административное обслуживание', 'normal', 'full', 'pallas_project.vd_person_status', true),
+  ('system_person_next_life_support_status', null, 'system', null, null, false),
+  ('system_person_next_health_care_status', null, 'system', null, null, false),
+  ('system_person_next_recreation_status', null, 'system', null, null, false),
+  ('system_person_next_police_status', null, 'system', null, null, false),
+  ('system_person_next_administrative_services_status', null, 'system', null, null, false);
 
   --Объект класса для персон
   insert into data.objects(code, type) values('person', 'class') returning id into v_person_class_id;
@@ -48,11 +65,23 @@ begin
         {
           "code": "person_personal",
           "attributes": [
+            "person_economy_type",
             "money",
             "person_deposit_money",
             "person_coin",
             "person_opa_rating",
             "person_un_rating"
+          ]
+        },
+        {
+          "code": "person_statuses",
+          "name": "Текущие статусы",
+          "attributes": [
+            "person_life_support_status",
+            "person_health_care_status",
+            "person_recreation_status",
+            "person_police_status",
+            "person_administrative_services_status"
           ]
         },
         {
@@ -112,7 +141,13 @@ begin
       "person_state": "un",
       "system_person_coin": 50,
       "system_person_opa_rating": 1,
-      "system_person_un_rating": 150}',
+      "system_person_un_rating": 150,
+      "system_person_economy_type": "un",
+      "system_person_life_support_status": 3,
+      "system_person_health_care_status": 3,
+      "system_person_recreation_status": 2,
+      "system_person_police_status": 3,
+      "system_person_administrative_services_status": 3}',
     array['all_person', 'un', 'player']);
   perform pallas_project.create_person(
     'p2',
@@ -120,7 +155,13 @@ begin
       "title": "Сьюзан Сидорова",
       "person_occupation": "Шахтёр",
       "system_money": 65000,
-      "system_person_opa_rating": 5}',
+      "system_person_opa_rating": 5,
+      "system_person_economy_type": "un",
+      "system_person_life_support_status": 2,
+      "system_person_health_care_status": 1,
+      "system_person_recreation_status": 2,
+      "system_person_police_status": 1,
+      "system_person_administrative_services_status": 1}',
     array['all_person', 'opa', 'player', 'aster']);
   perform pallas_project.create_person(
     'p3',
@@ -130,7 +171,13 @@ begin
       "person_state": "un",
       "system_person_coin": 50,
       "system_person_opa_rating": 1,
-      "system_person_un_rating": 200}',
+      "system_person_un_rating": 200,
+      "system_person_economy_type": "un",
+      "system_person_life_support_status": 3,
+      "system_person_health_care_status": 3,
+      "system_person_recreation_status": 2,
+      "system_person_police_status": 3,
+      "system_person_administrative_services_status": 3}',
     array['all_person', 'un', 'player']);
 end;
 $$
