@@ -13,7 +13,6 @@ $$
 declare
   v_changes jsonb := data.filter_changes(in_object_id, in_changes);
   v_object_code text;
-  v_default_template jsonb;
 
   v_subscriptions jsonb := jsonb '[]';
   v_subscription_objects jsonb := jsonb '[]';
@@ -33,7 +32,6 @@ begin
   end if;
 
   v_object_code := data.get_object_code(in_object_id);
-  v_default_template := data.get_param('template');
 
   perform *
   from data.objects
@@ -243,7 +241,6 @@ begin
       v_list_changes jsonb;
       v_attributes jsonb;
       v_actions jsonb;
-      v_object_template jsonb;
       v_ret_val_element jsonb;
     begin
       for v_subscription in
@@ -462,7 +459,6 @@ begin
       v_new_data jsonb;
       v_attributes jsonb;
       v_actions jsonb;
-      v_object_template jsonb;
       v_position_object_id integer;
       v_add jsonb;
       v_subscription_object_code text;

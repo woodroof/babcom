@@ -54,7 +54,7 @@ begin
   (v_object_id, v_is_visible_attribute_id, jsonb 'true'),
   (v_object_id, v_state_attribute_id, jsonb '"state1"'),
   (v_object_id, v_description_attribute_id, jsonb '"Обратный отсчёт!"'),
-  (v_object_id, v_template_attribute_id, jsonb '{"groups": [{"code": "general", "attributes": ["description"], "actions": ["action"]}]}'),
+  (v_object_id, v_template_attribute_id, jsonb '{"title": "title", "groups": [{"code": "general", "attributes": ["description"], "actions": ["action"]}]}'),
   (v_object_id, v_actions_function_attribute_id, jsonb '"job_test_project.start_countdown_action_generator"');
 
   -- Логин по умолчанию

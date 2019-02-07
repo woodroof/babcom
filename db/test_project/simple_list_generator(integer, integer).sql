@@ -28,7 +28,7 @@ begin
   (v_object_id, data.get_attribute_id('type'), jsonb '"list_object"'),
   (v_object_id, data.get_attribute_id('is_visible'), jsonb 'true'),
   (v_object_id, data.get_attribute_id('title'), jsonb '"Uno"'),
-  (v_object_id, data.get_attribute_id('template'), jsonb '{"groups": [{"code": "main", "attributes": ["description2"]}]}'),
+  (v_object_id, data.get_attribute_id('template'), jsonb '{"title": "title", "groups": [{"code": "main", "attributes": ["description2"]}]}'),
   (v_object_id, data.get_attribute_id('description2'), jsonb '"Первый элемент списка"');
 
   -- Второй объект
@@ -46,7 +46,7 @@ begin
   (v_object_id, data.get_attribute_id('subtitle'), jsonb '"Второй элемент списка"'),
   (v_object_id, data.get_attribute_id('attribute_with_description'), jsonb '"значение"'),
   (v_object_id, data.get_attribute_id('attribute'), jsonb '"значение"'),
-  (v_object_id, data.get_attribute_id('template'), jsonb '{"groups": [{"code": "main", "attributes": ["description2"]}, {"code": "additional", "name": "Группа элемента списка", "attributes": ["short_card_attribute", "attribute_with_description", "attribute"], "actions": ["action"]}]}'),
+  (v_object_id, data.get_attribute_id('template'), jsonb '{"title": "title", "subtitle": "subtitle", "groups": [{"code": "main", "attributes": ["description2"]}, {"code": "additional", "name": "Группа элемента списка", "attributes": ["short_card_attribute", "attribute_with_description", "attribute"], "actions": ["action"]}]}'),
   (v_object_id, data.get_attribute_id('description2'), to_jsonb(text
 '**Проверка 1:** В этом объекте списка две группы.
 **Проверка 2:** У второй группы есть имя "Группа элемента списка".
@@ -69,7 +69,7 @@ begin
   (v_object_id, data.get_attribute_id('type'), jsonb '"list_object"'),
   (v_object_id, data.get_attribute_id('is_visible'), jsonb 'true'),
   (v_object_id, data.get_attribute_id('title'), jsonb '"Далее"'),
-  (v_object_id, data.get_attribute_id('template'), jsonb '{"groups": [{"code": "main", "attributes": ["description2"]}]}'),
+  (v_object_id, data.get_attribute_id('template'), jsonb '{"title": "title", "groups": [{"code": "main", "attributes": ["description2"]}]}'),
   (v_object_id, data.get_attribute_id('description2'), jsonb '"Ничтоже сумняшеся выбираем этот элемент для перехода к следующему тесту"');
 
   -- Заполняем параметры оригинального объекта

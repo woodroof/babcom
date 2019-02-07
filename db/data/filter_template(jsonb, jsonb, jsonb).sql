@@ -19,6 +19,9 @@ declare
   v_filtered_groups jsonb[] := array[]::jsonb[];
   v_filtered_attributes text[];
   v_filtered_actions text[];
+  v_title text;
+  v_subtitle text;
+  v_ret_val jsonb;
 begin
   assert json.get_object(in_attributes) is not null;
 
@@ -83,7 +86,25 @@ begin
     end if;
   end loop;
 
-  return jsonb_build_object('groups', to_jsonb(v_filtered_groups));
+  v_ret_val := jsonb_build_object('groups', to_jsonb(v_filtered_groups));
+
+  if in_template ? 'title' then
+    v_title := json.get_string(in_template, 'title');
+
+    if in_attributes ? v_title then
+      v_ret_val := v_ret_val || jsonb_build_object('title', v_title);
+    end if;
+  end if;
+
+  if in_template ? 'subtitle' then
+    v_subtitle := json.get_string(in_template, 'subtitle');
+
+    if in_attributes ? v_subtitle then
+      v_ret_val := v_ret_val || jsonb_build_object('subtitle', v_subtitle);
+    end if;
+  end if;
+
+  return v_ret_val;
 end;
 $$
 language plpgsql;

@@ -71,17 +71,23 @@ begin
   (v_debatles_id, v_title_attribute_id, jsonb '"Дебатлы"'),
   (v_debatles_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_debatles"'),
   (v_debatles_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatles"'),
-  (v_debatles_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
-                                          '{"code": "%s", "attributes": ["%s"], "actions": ["%s"]}',
-                                          'debatles_group1',
-                                          'description',
-                                          'create_debatle_step1')::jsonb]));
+  (
+    v_debatles_id,
+    v_template_attribute_id,
+    jsonb '{
+      "title": "title",
+      "subtitle": "subtitle",
+      "groups": [
+        {"code": "debatles_group1", "attributes": ["description"], "actions": ["create_debatle_step1"]}
+      ]
+    }'
+  );
 
     -- Объект-класс для списка дебатлов
   insert into data.objects(code, type) values('debatle_list', 'class') returning id into v_debatle_list_class_id;
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_debatle_list_class_id, v_type_attribute_id, jsonb '"debatle_list"'),
-  (v_debatle_list_class_id, v_template_attribute_id, jsonb_build_object('groups', array[]::text[]));
+  (v_debatle_list_class_id, v_template_attribute_id, jsonb '{"title": "title", "subtitle": "subtitle", "groups": []}');
 
   -- Списки дебатлов
   insert into data.objects(code, class_id) values ('debatles_all', v_debatle_list_class_id) returning id into v_debatles_all_id;
@@ -140,52 +146,52 @@ begin
   (v_debatle_class_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_debatle"'),
   (v_debatle_class_id, v_mini_card_function_attribute_id, jsonb '"pallas_project.mcard_debatle"'),
   (v_debatle_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatle"'),
-  (v_debatle_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
-                                                      '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s", "%s", "%s"], 
-                                                                      "actions": ["%s", "%s", "%s", "%s", "%s"]}',
-                                                      'debatle_group1',
-                                                      'debatle_theme',
-                                                      'debatle_status',
-                                                      'debatle_person1',
-                                                      'debatle_person2',
-                                                      'debatle_judge',
-                                                      'debatle_target_audience',
-                                                      'debatle_change_instigator',
-                                                      'debatle_change_opponent',
-                                                      'debatle_change_judge',
-                                                      'debatle_change_theme',
-                                                      'debatle_change_subtitle')::jsonb,
-                                                      format(
-                                                      '{"code": "%s", "actions": ["%s", "%s", "%s", "%s", "%s", "%s"]}',
-                                                      'debatle_group2',
-                                                      'debatle_change_status_new',
-                                                      'debatle_change_status_future',
-                                                      'debatle_change_status_vote',
-                                                      'debatle_change_status_vote_over',
-                                                      'debatle_change_status_closed',
-                                                      'debatle_change_status_deleted')::jsonb,
-                                                      format(
-                                                      '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s"], 
-                                                                      "actions": ["%s", "%s"]}',
-                                                      'debatle_group3',
-                                                      'debatle_person1_votes',
-                                                      'debatle_person2_votes',
-                                                      'debatle_vote_price',
-                                                      'debatle_my_vote',
-                                                      'debatle_vote_person1',
-                                                      'debatle_vote_person2')::jsonb,
-                                                      format(
-                                                      '{"code": "%s", "attributes": ["%s", "%s"], 
-                                                                      "actions": ["%s", "%s"]}',
-                                                      'debatle_group4',
-                                                      'debatle_person1_bonuses',
-                                                      'debatle_person2_bonuses',
-                                                      'debatle_change_bonuses1',
-                                                      'debatle_change_bonuses2')::jsonb,
-                                                      format(
-                                                      '{"code": "%s", "actions": ["%s"]}',
-                                                      'debatle_group5',
-                                                      'debatle_chat')::jsonb]));
+  (
+    v_debatle_class_id,
+    v_template_attribute_id,
+    jsonb '{
+      "title": "title",
+      "subtitle": "subtitle",
+      "groups": [
+        {
+          "code": "debatle_group1",
+          "attributes": ["debatle_theme", "debatle_status", "debatle_person1", "debatle_person2", "debatle_judge", "debatle_target_audience"],
+          "actions": [
+            "debatle_change_instigator",
+            "debatle_change_opponent",
+            "debatle_change_judge",
+            "debatle_change_theme",
+            "debatle_change_subtitle"
+          ]
+        },
+        {
+          "code": "debatle_group2",
+          "actions": [
+            "debatle_change_status_new",
+            "debatle_change_status_future",
+            "debatle_change_status_vote",
+            "debatle_change_status_vote_over",
+            "debatle_change_status_closed",
+            "debatle_change_status_deleted"
+          ]
+        },
+        {
+          "code": "debatle_group3",
+          "attributes": ["debatle_person1_votes", "debatle_person2_votes", "debatle_vote_price", "debatle_my_vote"],
+          "actions": ["debatle_vote_person1", "debatle_vote_person2"]
+        },
+        {
+          "code": "debatle_group4",
+          "attributes": ["debatle_person1_bonuses", "debatle_person2_bonuses"],
+          "actions": ["debatle_change_bonuses1", "debatle_change_bonuses2"]
+        },
+        {
+          "code": "debatle_group5",
+          "actions": ["debatle_chat"]
+        }
+      ]
+    }'
+  );
 
   -- Объект-класс для временных списков персон для редактирования дебатла
   insert into data.objects(code, type) values('debatle_temp_person_list', 'class') returning id into v_debatle_temp_person_list_class_id;
@@ -195,12 +201,24 @@ begin
   (v_debatle_temp_person_list_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatle_temp_person_list"'),
   (v_debatle_temp_person_list_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_debatle_temp_person_list"'),
   (v_debatle_temp_person_list_class_id, v_temporary_object_attribute_id, jsonb 'true'),
-  (v_debatle_temp_person_list_class_id, v_template_attribute_id, jsonb_build_object('groups', format(
-                                                      '[{"code": "%s", "actions": ["%s"]}, {"code": "%s", "attributes": ["%s"]}]',
-                                                      'group1',
-                                                      'debatle_change_person_back',
-                                                      'group2',
-                                                      'debatle_temp_person_list_edited_person')::jsonb));
+  (
+    v_debatle_temp_person_list_class_id,
+    v_template_attribute_id,
+    jsonb '{
+      "title": "title",
+      "subtitle": "subtitle",
+      "groups": [
+        {
+          "code": "group1",
+          "actions": ["debatle_change_person_back"]
+        },
+        {
+          "code": "group2",
+          "actions": ["debatle_temp_person_list_edited_person"]
+        }
+      ]
+    }'
+  );
 
   declare
     v_debatle_temp_bonus_list_class_id integer;
@@ -221,15 +239,25 @@ begin
     (v_debatle_temp_bonus_list_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatle_temp_bonus_list"'),
     (v_debatle_temp_bonus_list_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_debatle_temp_bonus_list"'),
     (v_debatle_temp_bonus_list_class_id, v_temporary_object_attribute_id, jsonb 'true'),
-    (v_debatle_temp_bonus_list_class_id, v_template_attribute_id, jsonb_build_object('groups', format(
-                                                        '[{"code": "%s", "actions": ["%s"]}, {"code": "%s", "attributes": ["%s", "%s"], "actions": ["%s", "%s"]}]',
-                                                        'group1',
-                                                        'debatle_change_bonus_back',
-                                                        'group2',
-                                                        'debatle_temp_bonus_list_bonuses',
-                                                        'debatle_temp_bonus_list_person',
-                                                        'debatle_change_other_bonus',
-                                                        'debatle_change_other_fine')::jsonb));
+    (
+      v_debatle_temp_bonus_list_class_id,
+      v_template_attribute_id,
+      jsonb '{
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [
+          {
+            "code": "group1",
+            "actions": ["debatle_change_bonus_back"]
+          },
+          {
+            "code": "group2",
+            "attributes": ["debatle_temp_bonus_list_bonuses", "debatle_temp_bonus_list_person"],
+            "actions": ["debatle_change_other_bonus", "debatle_change_other_fine"]
+          }
+        ]
+      }'
+    );
 
     -- Объекты для списка изменений бонусов и штрафов
     -- Класс
@@ -237,10 +265,20 @@ begin
     insert into data.attribute_values(object_id, attribute_id, value) values
     (v_debatle_bonus_class_id, v_type_attribute_id, jsonb '"debatle_bonus"'),
     (v_debatle_bonus_class_id, v_is_visible_attribute_id, jsonb 'true'),
-    (v_debatle_bonus_class_id, v_template_attribute_id, jsonb_build_object('groups', format(
-                                                      '[{"code": "%s", "attributes": ["%s"]}]',
-                                                      'group1',
-                                                      'debatle_bonus_votes')::jsonb));
+    (
+      v_debatle_bonus_class_id,
+      v_template_attribute_id,
+      jsonb '{
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [
+          {
+            "code": "group1",
+            "attributes": ["debatle_bonus_votes"]
+          }
+        ]
+      }'
+    );
 
     insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
     ('debatle_bonus_votes', 'Количество голосов' , 'Количество голосов бонуса или штрафа', 'normal', null, null, false) returning id into v_debatle_bonus_votes_attribute_id;
@@ -279,7 +317,6 @@ begin
     insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
     (v_debatle_bonus_id, v_title_attribute_id, jsonb '"поддержку аудитории"', null),
     (v_debatle_bonus_id, v_debatle_bonus_votes_attribute_id, jsonb '1', null);
-
   end;
 
   insert into data.actions(code, function) values

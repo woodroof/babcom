@@ -61,6 +61,8 @@ begin
     v_person_class_id,
     v_template_attribute_id,
     jsonb '{
+      "title": "title",
+      "subtitle": "subtitle",
       "groups": [
         {
           "code": "person_personal",

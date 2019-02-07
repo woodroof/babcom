@@ -23,7 +23,7 @@ begin
         "title": "Гость",
         "is_visible": true,
         "actions_function": "pallas_project.actgenerator_anonymous",
-        "template": {"groups": [{"code": "group1", "actions": ["create_random_person"]}]}}',
+        "template": {"title": "title", "groups": [{"code": "group1", "actions": ["create_random_person"]}]}}',
       null);
 
   -- Логин по умолчанию
@@ -73,7 +73,7 @@ begin
           "is_visible": true,
           "title": "404",
           "subtitle": "Not found",
-          "template": {"groups": [{"code": "general", "attributes": ["not_found_description"]}]},
+          "template": {"title": "title", "subtitle": "subtitle", "groups": [{"code": "general", "attributes": ["not_found_description"]}]},
           "not_found_description": null}',
         null);
 

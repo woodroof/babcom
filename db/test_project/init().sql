@@ -1083,7 +1083,7 @@ Markdown — формат, который все реализуют по-раз�
 
   -- Заполним шаблон
   update data.params
-  set value = jsonb_build_object('groups', to_jsonb(v_template_groups))
+  set value = jsonb_build_object('title', 'title', 'subtitle', 'subtitle', 'groups', to_jsonb(v_template_groups))
   where code = 'template';
 end;
 $$

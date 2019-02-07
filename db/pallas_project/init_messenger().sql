@@ -64,11 +64,17 @@ begin
   (v_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"'),
   (v_chats_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chats"'),
   (v_chats_id, v_content_attribute_id, jsonb '[]'),
-  (v_chats_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
-                                          '{"code": "%s", "attributes": ["%s"], "actions": ["%s"]}',
-                                          'chats_group1',
-                                          'description',
-                                          'create_chat')::jsonb]));
+  (
+    v_chats_id,
+    v_template_attribute_id,
+    jsonb '{
+      "title": "title",
+      "subtitle": "subtitle",
+      "groups": [
+        {"code": "chats_group1", "attributes": ["description"], "actions": ["create_chat"]}
+      ]
+    }'
+  );
 
   -- Объект со списком всех чатов (для мастеров)
   insert into data.objects(code) values('all_chats') returning id into v_chats_id;
@@ -80,11 +86,17 @@ begin
   (v_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"', null),
   (v_chats_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chats"', null),
   (v_chats_id, v_content_attribute_id, jsonb '[]', null),
-  (v_chats_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
-                                          '{"code": "%s", "attributes": ["%s"], "actions": ["%s"]}',
-                                          'chats_group1',
-                                          'description',
-                                          'create_chat')::jsonb]), null);
+  (
+    v_chats_id,
+    v_template_attribute_id,
+    jsonb '{
+      "title": "title",
+      "subtitle": "subtitle",
+      "groups": [
+        {"code": "chats_group1", "attributes": ["description"], "actions": ["create_chat"]}
+      ]
+    }'
+  );
 
   -- Объект-класс для чата
   insert into data.objects(code, type) values('chat', 'class') returning id into v_chat_class_id;
@@ -98,30 +110,42 @@ begin
   (v_chat_class_id, v_system_chat_can_mute_attribute_id, jsonb 'true'),
   (v_chat_class_id, v_system_chat_can_rename_attribute_id, jsonb 'true'),
   (v_chat_class_id, v_priority_attribute_id, jsonb '100'),
-  (v_chat_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
-                                                      '{"code": "%s", "attributes": ["%s", "%s"], 
-                                                                      "actions": ["%s", "%s", "%s", "%s"]}',
-                                                      'chat_group1',
-                                                      'chat_is_mute',
-                                                      'chat_unread_messages',
-                                                      'chat_add_person',
-                                                      'chat_leave',
-                                                      'chat_mute',
-                                                      'chat_rename')::jsonb,
-                                                      format(
-                                                      '{"code": "%s", "actions": ["%s"]}',
-                                                      'chat_group2',
-                                                      'chat_write')::jsonb]));
+  (
+    v_chat_class_id,
+    v_template_attribute_id,
+    jsonb '{
+      "title": "title",
+      "subtitle": "subtitle",
+      "groups": [
+        {
+          "code": "chats_group1",
+          "attributes": ["chat_is_mute", "chat_unread_messages"],
+          "actions": ["chat_add_person", "chat_leave", "chat_mute", "chat_rename"]
+        },
+        {
+          "code": "chat_group2",
+          "actions": ["chat_write"]
+        }
+      ]
+    }'
+  );
 
   -- Объект-класс для сообщения
   insert into data.objects(code, type) values('message', 'class') returning id into v_message_class_id;
 
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_message_class_id, v_type_attribute_id, jsonb '"message"'),
-  (v_message_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
-                                                      '{"code": "%s", "attributes": ["%s"]}',
-                                                      'message_group1',
-                                                      'message_text')::jsonb]));
+  (
+    v_chats_id,
+    v_template_attribute_id,
+    jsonb '{
+      "title": "title",
+      "subtitle": "subtitle",
+      "groups": [
+        {"code": "message_group1", "attributes": ["message_text"]}
+      ]
+    }'
+  );
 
   -- Объект-класс для временных списков персон для редактирования участников чата
   insert into data.objects(code, type) values('chat_temp_person_list', 'class') returning id into v_chat_temp_person_list_class_id;
@@ -131,12 +155,18 @@ begin
   (v_chat_temp_person_list_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chat_temp_person_list"'),
   (v_chat_temp_person_list_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chat_temp_person_list"'),
   (v_chat_temp_person_list_class_id, v_temporary_object_attribute_id, jsonb 'true'),
-  (v_chat_temp_person_list_class_id, v_template_attribute_id, jsonb_build_object('groups', format(
-                                                      '[{"code": "%s", "actions": ["%s"]},{"code": "%s", "attributes": ["%s"]}]',
-                                                      'group1',
-                                                      'chat_add_person_back',
-                                                      'group2',
-                                                      'chat_temp_person_list_persons')::jsonb));
+  (
+    v_chats_id,
+    v_template_attribute_id,
+    jsonb '{
+      "title": "title",
+      "subtitle": "subtitle",
+      "groups": [
+        {"code": "group1", "actions": ["chat_add_person_back"]},
+        {"code": "group2", "attributes": ["chat_temp_person_list_persons"]}
+      ]
+    }'
+  );
 
   -- Чат-бот
   insert into data.objects(code) values ('chat_bot') returning id into v_chat_bot_id;
@@ -151,7 +181,6 @@ begin
   ('chat_mute','pallas_project.act_chat_mute'),
   ('chat_rename','pallas_project.act_chat_rename'),
   ('chat_enter','pallas_project.act_chat_enter');
-
 end;
 $$
 language plpgsql;

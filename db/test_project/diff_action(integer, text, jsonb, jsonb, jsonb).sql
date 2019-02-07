@@ -28,7 +28,7 @@ begin
     v_changes := v_changes || data.attribute_change2jsonb('title', null, to_jsonb(v_title));
     v_changes := v_changes || data.attribute_change2jsonb('subtitle', null, jsonb '"Тест на удаление и добавление атрибутов"');
     v_changes := v_changes || data.attribute_change2jsonb('description', null, null);
-    v_changes := v_changes || data.attribute_change2jsonb('template', null, jsonb '{"groups": [{"code": "not_so_common", "attributes": ["description2"]}]}');
+    v_changes := v_changes || data.attribute_change2jsonb('template', null, jsonb '{"title": "title", "subtitle": "subtitle", "groups": [{"code": "not_so_common", "attributes": ["description2"]}]}');
     v_changes := v_changes || data.attribute_change2jsonb('description2', null, to_jsonb(text
 'В этот раз мы не изменяли значение атрибута, а удалили старый и добавили новый. Также какое-то действие возвращается, но оно отсутствует в шаблоне.
 

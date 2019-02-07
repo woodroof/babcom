@@ -17,7 +17,15 @@ begin
     jsonb '{
       "full_card_function": "pallas_project.fcard_status_page",
       "mini_card_function": "pallas_project.mcard_status_page",
-      "template": {"groups": [{"code": "status_group", "attributes": ["description", "mini_description"]}]}
+      "mini_card_template": {
+        "title": "title",
+        "groups": [{"code": "status_group", "attributes": ["mini_description"]}]
+      }
+      "template": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [{"code": "status_group", "attributes": ["description"]}]
+      }
     }');
 
   perform pallas_project.create_object(

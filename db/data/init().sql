@@ -66,6 +66,7 @@ begin
     null,
     false
   ),
+  ('mini_card_template', null, 'Шаблон миникарточки объекта, object', 'system', null, null, true),
   (
     'priority',
     null,

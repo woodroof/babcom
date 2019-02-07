@@ -29,7 +29,7 @@ begin
     (v_object_id, data.get_attribute_id('type'), jsonb '"list_object"'),
     (v_object_id, data.get_attribute_id('is_visible'), jsonb 'true'),
     (v_object_id, data.get_attribute_id('title'), jsonb '"One"'),
-    (v_object_id, data.get_attribute_id('template'), jsonb '{"groups":[]}');
+    (v_object_id, data.get_attribute_id('template'), jsonb '{"title": "title", "groups":[]}');
 
     insert into data.objects
     default values
@@ -41,7 +41,7 @@ begin
     (v_object_id, data.get_attribute_id('type'), jsonb '"list_object"'),
     (v_object_id, data.get_attribute_id('is_visible'), jsonb 'true'),
     (v_object_id, data.get_attribute_id('title'), jsonb '"Two"'),
-    (v_object_id, data.get_attribute_id('template'), jsonb '{"groups":[]}');
+    (v_object_id, data.get_attribute_id('template'), jsonb '{"title": "title", "groups":[]}');
 
     -- И основной объект
 
@@ -58,7 +58,7 @@ begin
     (v_object_id, data.get_attribute_id('list_element_function'), jsonb '"test_project.next_or_do_nothing_list_action"'),
     (v_object_id, data.get_attribute_id('title'), to_jsonb(v_object_title)),
     (v_object_id, data.get_attribute_id('subtitle'), jsonb '"Тест удаления списка"'),
-    (v_object_id, data.get_attribute_id('template'), jsonb '{"groups": [{"code": "main", "attributes": ["description2"], "actions": ["action"]}]}'),
+    (v_object_id, data.get_attribute_id('template'), jsonb '{"title": "title", "subtitle": "subtitle", "groups": [{"code": "main", "attributes": ["description2"], "actions": ["action"]}]}'),
     (v_object_id, data.get_attribute_id('description2'), to_jsonb(text
 '**Проверка:** По нажатию на кнопку "Далее" изменится заголовок, подзаголовок, описание объекта, а также удалится список!'));
 

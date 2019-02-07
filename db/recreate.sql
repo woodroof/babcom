@@ -668,11 +668,15 @@ volatile
 as
 $$
 declare
+  v_default_template jsonb;
   v_login_id integer;
   v_actor_function record;
   v_actor record;
+  v_template jsonb;
   v_title text;
+  v_title_attribute_id text;
   v_subtitle text;
+  v_subtitle_attribute_id text;
   v_actors jsonb[];
 begin
   assert in_request_id is not null;
@@ -706,22 +710,53 @@ begin
 
   for v_actor in
     select
-      o.code as id,
-      json.get_string_opt(data.get_attribute_value(actor_id, 'title', actor_id), null) as title,
-      json.get_string_opt(data.get_attribute_value(actor_id, 'subtitle', actor_id), null) as subtitle
+      o.id id,
+      o.code as code,
+      json.get_object_opt(data.get_attribute_value(la.actor_id, 'template', la.actor_id), null) as template
     from data.login_actors la
     join data.objects o
       on o.id = la.actor_id
     where la.login_id = v_login_id
     order by title
   loop
+    v_template := v_actor.template;
+
+    if v_template is null then
+      if v_default_template is null then
+        v_default_template := data.get_object_param('template');
+      end if;
+      v_template := v_default_template;
+    end if;
+
+    assert v_template is not null;
+
+    if v_template ? 'title' then
+      v_title_attribute_id := data.get_attribute_id(json.get_string(v_template, 'title'));
+
+      if data.can_attribute_be_overridden(v_title_attribute_id) then
+        v_title := json.get_string_opt(data.get_attribute_value(v_actor.id, v_title_attribute_id), null);
+      else
+        v_title := json.get_string_opt(data.get_attribute_value(v_actor.id, v_title_attribute_id, v_actor.id), null);
+      end if;
+    end if;
+
+    if v_template ? 'subtitle' then
+      v_subtitle_attribute_id := data.get_attribute_id(json.get_string(v_template, 'subtitle'));
+
+      if data.can_attribute_be_overridden(v_subtitle_attribute_id) then
+        v_subtitle := json.get_string_opt(data.get_attribute_value(v_actor.id, v_subtitle_attribute_id), null);
+      else
+        v_subtitle := json.get_string_opt(data.get_attribute_value(v_actor.id, v_subtitle_attribute_id, v_actor.id), null);
+      end if;
+    end if;
+
     v_actors :=
       array_append(
         v_actors,
         (
-          jsonb_build_object('id', v_actor.id) ||
-          case when v_actor.title is not null then jsonb_build_object('title', v_actor.title) else jsonb '{}' end ||
-          case when v_actor.subtitle is not null then jsonb_build_object('subtitle', v_actor.subtitle) else jsonb '{}' end
+          jsonb_build_object('id', v_actor.code) ||
+          case when v_title is not null then jsonb_build_object('title', v_title) else jsonb '{}' end ||
+          case when v_subtitle is not null then jsonb_build_object('subtitle', v_subtitle) else jsonb '{}' end
         ));
   end loop;
 
@@ -1622,7 +1657,6 @@ $$
 declare
   v_changes jsonb := data.filter_changes(in_object_id, in_changes);
   v_object_code text;
-  v_default_template jsonb;
 
   v_subscriptions jsonb := jsonb '[]';
   v_subscription_objects jsonb := jsonb '[]';
@@ -1642,7 +1676,6 @@ begin
   end if;
 
   v_object_code := data.get_object_code(in_object_id);
-  v_default_template := data.get_param('template');
 
   perform *
   from data.objects
@@ -1852,7 +1885,6 @@ begin
       v_list_changes jsonb;
       v_attributes jsonb;
       v_actions jsonb;
-      v_object_template jsonb;
       v_ret_val_element jsonb;
     begin
       for v_subscription in
@@ -2071,7 +2103,6 @@ begin
       v_new_data jsonb;
       v_attributes jsonb;
       v_actions jsonb;
-      v_object_template jsonb;
       v_position_object_id integer;
       v_add jsonb;
       v_subscription_object_code text;
@@ -2824,6 +2855,9 @@ declare
   v_filtered_groups jsonb[] := array[]::jsonb[];
   v_filtered_attributes text[];
   v_filtered_actions text[];
+  v_title text;
+  v_subtitle text;
+  v_ret_val jsonb;
 begin
   assert json.get_object(in_attributes) is not null;
 
@@ -2888,7 +2922,25 @@ begin
     end if;
   end loop;
 
-  return jsonb_build_object('groups', to_jsonb(v_filtered_groups));
+  v_ret_val := jsonb_build_object('groups', to_jsonb(v_filtered_groups));
+
+  if in_template ? 'title' then
+    v_title := json.get_string(in_template, 'title');
+
+    if in_attributes ? v_title then
+      v_ret_val := v_ret_val || jsonb_build_object('title', v_title);
+    end if;
+  end if;
+
+  if in_template ? 'subtitle' then
+    v_subtitle := json.get_string(in_template, 'subtitle');
+
+    if in_attributes ? v_subtitle then
+      v_ret_val := v_ret_val || jsonb_build_object('subtitle', v_subtitle);
+    end if;
+  end if;
+
+  return v_ret_val;
 end;
 $$
 language plpgsql;
@@ -3369,7 +3421,18 @@ declare
   v_object_data jsonb := data.get_object_data(in_object_id, in_actor_id, in_card_type, in_actions_object_id);
   v_attributes jsonb := json.get_object(v_object_data, 'attributes');
   v_actions jsonb := json.get_object_opt(v_object_data, 'actions', null);
-  v_template jsonb := json.get_object_opt(data.get_attribute_value(in_object_id, 'template', in_actor_id), null);
+  v_template jsonb :=
+    json.get_object_opt(
+      (
+        case when in_card_type = 'full' then
+          data.get_attribute_value(in_object_id, 'template', in_actor_id)
+        else
+          coalesce(
+            data.get_attribute_value(in_object_id, 'mini_card_template', in_actor_id),
+            data.get_attribute_value(in_object_id, 'template', in_actor_id))
+        end
+      ),
+      null);
 begin
   if v_template is null then
     v_template := data.get_param('template');
@@ -3752,6 +3815,7 @@ begin
     null,
     false
   ),
+  ('mini_card_template', null, 'Шаблон миникарточки объекта, object', 'system', null, null, true),
   (
     'priority',
     null,
@@ -4342,7 +4406,7 @@ begin
   (v_object_id, v_is_visible_attribute_id, jsonb 'true'),
   (v_object_id, v_state_attribute_id, jsonb '"state1"'),
   (v_object_id, v_description_attribute_id, jsonb '"Обратный отсчёт!"'),
-  (v_object_id, v_template_attribute_id, jsonb '{"groups": [{"code": "general", "attributes": ["description"], "actions": ["action"]}]}'),
+  (v_object_id, v_template_attribute_id, jsonb '{"title": "title", "groups": [{"code": "general", "attributes": ["description"], "actions": ["action"]}]}'),
   (v_object_id, v_actions_function_attribute_id, jsonb '"job_test_project.start_countdown_action_generator"');
 
   -- Логин по умолчанию
@@ -10561,7 +10625,7 @@ begin
         "title": "Гость",
         "is_visible": true,
         "actions_function": "pallas_project.actgenerator_anonymous",
-        "template": {"groups": [{"code": "group1", "actions": ["create_random_person"]}]}}',
+        "template": {"title": "title", "groups": [{"code": "group1", "actions": ["create_random_person"]}]}}',
       null);
 
   -- Логин по умолчанию
@@ -10611,7 +10675,7 @@ begin
           "is_visible": true,
           "title": "404",
           "subtitle": "Not found",
-          "template": {"groups": [{"code": "general", "attributes": ["not_found_description"]}]},
+          "template": {"title": "title", "subtitle": "subtitle", "groups": [{"code": "general", "attributes": ["not_found_description"]}]},
           "not_found_description": null}',
         null);
 
@@ -10707,17 +10771,23 @@ begin
   (v_debatles_id, v_title_attribute_id, jsonb '"Дебатлы"'),
   (v_debatles_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_debatles"'),
   (v_debatles_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatles"'),
-  (v_debatles_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
-                                          '{"code": "%s", "attributes": ["%s"], "actions": ["%s"]}',
-                                          'debatles_group1',
-                                          'description',
-                                          'create_debatle_step1')::jsonb]));
+  (
+    v_debatles_id,
+    v_template_attribute_id,
+    jsonb '{
+      "title": "title",
+      "subtitle": "subtitle",
+      "groups": [
+        {"code": "debatles_group1", "attributes": ["description"], "actions": ["create_debatle_step1"]}
+      ]
+    }'
+  );
 
     -- Объект-класс для списка дебатлов
   insert into data.objects(code, type) values('debatle_list', 'class') returning id into v_debatle_list_class_id;
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_debatle_list_class_id, v_type_attribute_id, jsonb '"debatle_list"'),
-  (v_debatle_list_class_id, v_template_attribute_id, jsonb_build_object('groups', array[]::text[]));
+  (v_debatle_list_class_id, v_template_attribute_id, jsonb '{"title": "title", "subtitle": "subtitle", "groups": []}');
 
   -- Списки дебатлов
   insert into data.objects(code, class_id) values ('debatles_all', v_debatle_list_class_id) returning id into v_debatles_all_id;
@@ -10776,52 +10846,52 @@ begin
   (v_debatle_class_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_debatle"'),
   (v_debatle_class_id, v_mini_card_function_attribute_id, jsonb '"pallas_project.mcard_debatle"'),
   (v_debatle_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatle"'),
-  (v_debatle_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
-                                                      '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s", "%s", "%s"], 
-                                                                      "actions": ["%s", "%s", "%s", "%s", "%s"]}',
-                                                      'debatle_group1',
-                                                      'debatle_theme',
-                                                      'debatle_status',
-                                                      'debatle_person1',
-                                                      'debatle_person2',
-                                                      'debatle_judge',
-                                                      'debatle_target_audience',
-                                                      'debatle_change_instigator',
-                                                      'debatle_change_opponent',
-                                                      'debatle_change_judge',
-                                                      'debatle_change_theme',
-                                                      'debatle_change_subtitle')::jsonb,
-                                                      format(
-                                                      '{"code": "%s", "actions": ["%s", "%s", "%s", "%s", "%s", "%s"]}',
-                                                      'debatle_group2',
-                                                      'debatle_change_status_new',
-                                                      'debatle_change_status_future',
-                                                      'debatle_change_status_vote',
-                                                      'debatle_change_status_vote_over',
-                                                      'debatle_change_status_closed',
-                                                      'debatle_change_status_deleted')::jsonb,
-                                                      format(
-                                                      '{"code": "%s", "attributes": ["%s", "%s", "%s", "%s"], 
-                                                                      "actions": ["%s", "%s"]}',
-                                                      'debatle_group3',
-                                                      'debatle_person1_votes',
-                                                      'debatle_person2_votes',
-                                                      'debatle_vote_price',
-                                                      'debatle_my_vote',
-                                                      'debatle_vote_person1',
-                                                      'debatle_vote_person2')::jsonb,
-                                                      format(
-                                                      '{"code": "%s", "attributes": ["%s", "%s"], 
-                                                                      "actions": ["%s", "%s"]}',
-                                                      'debatle_group4',
-                                                      'debatle_person1_bonuses',
-                                                      'debatle_person2_bonuses',
-                                                      'debatle_change_bonuses1',
-                                                      'debatle_change_bonuses2')::jsonb,
-                                                      format(
-                                                      '{"code": "%s", "actions": ["%s"]}',
-                                                      'debatle_group5',
-                                                      'debatle_chat')::jsonb]));
+  (
+    v_debatle_class_id,
+    v_template_attribute_id,
+    jsonb '{
+      "title": "title",
+      "subtitle": "subtitle",
+      "groups": [
+        {
+          "code": "debatle_group1",
+          "attributes": ["debatle_theme", "debatle_status", "debatle_person1", "debatle_person2", "debatle_judge", "debatle_target_audience"],
+          "actions": [
+            "debatle_change_instigator",
+            "debatle_change_opponent",
+            "debatle_change_judge",
+            "debatle_change_theme",
+            "debatle_change_subtitle"
+          ]
+        },
+        {
+          "code": "debatle_group2",
+          "actions": [
+            "debatle_change_status_new",
+            "debatle_change_status_future",
+            "debatle_change_status_vote",
+            "debatle_change_status_vote_over",
+            "debatle_change_status_closed",
+            "debatle_change_status_deleted"
+          ]
+        },
+        {
+          "code": "debatle_group3",
+          "attributes": ["debatle_person1_votes", "debatle_person2_votes", "debatle_vote_price", "debatle_my_vote"],
+          "actions": ["debatle_vote_person1", "debatle_vote_person2"]
+        },
+        {
+          "code": "debatle_group4",
+          "attributes": ["debatle_person1_bonuses", "debatle_person2_bonuses"],
+          "actions": ["debatle_change_bonuses1", "debatle_change_bonuses2"]
+        },
+        {
+          "code": "debatle_group5",
+          "actions": ["debatle_chat"]
+        }
+      ]
+    }'
+  );
 
   -- Объект-класс для временных списков персон для редактирования дебатла
   insert into data.objects(code, type) values('debatle_temp_person_list', 'class') returning id into v_debatle_temp_person_list_class_id;
@@ -10831,12 +10901,24 @@ begin
   (v_debatle_temp_person_list_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatle_temp_person_list"'),
   (v_debatle_temp_person_list_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_debatle_temp_person_list"'),
   (v_debatle_temp_person_list_class_id, v_temporary_object_attribute_id, jsonb 'true'),
-  (v_debatle_temp_person_list_class_id, v_template_attribute_id, jsonb_build_object('groups', format(
-                                                      '[{"code": "%s", "actions": ["%s"]}, {"code": "%s", "attributes": ["%s"]}]',
-                                                      'group1',
-                                                      'debatle_change_person_back',
-                                                      'group2',
-                                                      'debatle_temp_person_list_edited_person')::jsonb));
+  (
+    v_debatle_temp_person_list_class_id,
+    v_template_attribute_id,
+    jsonb '{
+      "title": "title",
+      "subtitle": "subtitle",
+      "groups": [
+        {
+          "code": "group1",
+          "actions": ["debatle_change_person_back"]
+        },
+        {
+          "code": "group2",
+          "actions": ["debatle_temp_person_list_edited_person"]
+        }
+      ]
+    }'
+  );
 
   declare
     v_debatle_temp_bonus_list_class_id integer;
@@ -10857,15 +10939,25 @@ begin
     (v_debatle_temp_bonus_list_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_debatle_temp_bonus_list"'),
     (v_debatle_temp_bonus_list_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_debatle_temp_bonus_list"'),
     (v_debatle_temp_bonus_list_class_id, v_temporary_object_attribute_id, jsonb 'true'),
-    (v_debatle_temp_bonus_list_class_id, v_template_attribute_id, jsonb_build_object('groups', format(
-                                                        '[{"code": "%s", "actions": ["%s"]}, {"code": "%s", "attributes": ["%s", "%s"], "actions": ["%s", "%s"]}]',
-                                                        'group1',
-                                                        'debatle_change_bonus_back',
-                                                        'group2',
-                                                        'debatle_temp_bonus_list_bonuses',
-                                                        'debatle_temp_bonus_list_person',
-                                                        'debatle_change_other_bonus',
-                                                        'debatle_change_other_fine')::jsonb));
+    (
+      v_debatle_temp_bonus_list_class_id,
+      v_template_attribute_id,
+      jsonb '{
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [
+          {
+            "code": "group1",
+            "actions": ["debatle_change_bonus_back"]
+          },
+          {
+            "code": "group2",
+            "attributes": ["debatle_temp_bonus_list_bonuses", "debatle_temp_bonus_list_person"],
+            "actions": ["debatle_change_other_bonus", "debatle_change_other_fine"]
+          }
+        ]
+      }'
+    );
 
     -- Объекты для списка изменений бонусов и штрафов
     -- Класс
@@ -10873,10 +10965,20 @@ begin
     insert into data.attribute_values(object_id, attribute_id, value) values
     (v_debatle_bonus_class_id, v_type_attribute_id, jsonb '"debatle_bonus"'),
     (v_debatle_bonus_class_id, v_is_visible_attribute_id, jsonb 'true'),
-    (v_debatle_bonus_class_id, v_template_attribute_id, jsonb_build_object('groups', format(
-                                                      '[{"code": "%s", "attributes": ["%s"]}]',
-                                                      'group1',
-                                                      'debatle_bonus_votes')::jsonb));
+    (
+      v_debatle_bonus_class_id,
+      v_template_attribute_id,
+      jsonb '{
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [
+          {
+            "code": "group1",
+            "attributes": ["debatle_bonus_votes"]
+          }
+        ]
+      }'
+    );
 
     insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
     ('debatle_bonus_votes', 'Количество голосов' , 'Количество голосов бонуса или штрафа', 'normal', null, null, false) returning id into v_debatle_bonus_votes_attribute_id;
@@ -10915,7 +11017,6 @@ begin
     insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
     (v_debatle_bonus_id, v_title_attribute_id, jsonb '"поддержку аудитории"', null),
     (v_debatle_bonus_id, v_debatle_bonus_votes_attribute_id, jsonb '1', null);
-
   end;
 
   insert into data.actions(code, function) values
@@ -10951,7 +11052,15 @@ begin
     jsonb '{
       "full_card_function": "pallas_project.fcard_status_page",
       "mini_card_function": "pallas_project.mcard_status_page",
-      "template": {"groups": [{"code": "status_group", "attributes": ["description", "mini_description"]}]}
+      "mini_card_template": {
+        "title": "title",
+        "groups": [{"code": "status_group", "attributes": ["mini_description"]}]
+      }
+      "template": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [{"code": "status_group", "attributes": ["description"]}]
+      }
     }');
 
   perform pallas_project.create_object(
@@ -11084,11 +11193,17 @@ begin
   (v_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"'),
   (v_chats_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chats"'),
   (v_chats_id, v_content_attribute_id, jsonb '[]'),
-  (v_chats_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
-                                          '{"code": "%s", "attributes": ["%s"], "actions": ["%s"]}',
-                                          'chats_group1',
-                                          'description',
-                                          'create_chat')::jsonb]));
+  (
+    v_chats_id,
+    v_template_attribute_id,
+    jsonb '{
+      "title": "title",
+      "subtitle": "subtitle",
+      "groups": [
+        {"code": "chats_group1", "attributes": ["description"], "actions": ["create_chat"]}
+      ]
+    }'
+  );
 
   -- Объект со списком всех чатов (для мастеров)
   insert into data.objects(code) values('all_chats') returning id into v_chats_id;
@@ -11100,11 +11215,17 @@ begin
   (v_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"', null),
   (v_chats_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chats"', null),
   (v_chats_id, v_content_attribute_id, jsonb '[]', null),
-  (v_chats_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
-                                          '{"code": "%s", "attributes": ["%s"], "actions": ["%s"]}',
-                                          'chats_group1',
-                                          'description',
-                                          'create_chat')::jsonb]), null);
+  (
+    v_chats_id,
+    v_template_attribute_id,
+    jsonb '{
+      "title": "title",
+      "subtitle": "subtitle",
+      "groups": [
+        {"code": "chats_group1", "attributes": ["description"], "actions": ["create_chat"]}
+      ]
+    }'
+  );
 
   -- Объект-класс для чата
   insert into data.objects(code, type) values('chat', 'class') returning id into v_chat_class_id;
@@ -11118,30 +11239,42 @@ begin
   (v_chat_class_id, v_system_chat_can_mute_attribute_id, jsonb 'true'),
   (v_chat_class_id, v_system_chat_can_rename_attribute_id, jsonb 'true'),
   (v_chat_class_id, v_priority_attribute_id, jsonb '100'),
-  (v_chat_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
-                                                      '{"code": "%s", "attributes": ["%s", "%s"], 
-                                                                      "actions": ["%s", "%s", "%s", "%s"]}',
-                                                      'chat_group1',
-                                                      'chat_is_mute',
-                                                      'chat_unread_messages',
-                                                      'chat_add_person',
-                                                      'chat_leave',
-                                                      'chat_mute',
-                                                      'chat_rename')::jsonb,
-                                                      format(
-                                                      '{"code": "%s", "actions": ["%s"]}',
-                                                      'chat_group2',
-                                                      'chat_write')::jsonb]));
+  (
+    v_chat_class_id,
+    v_template_attribute_id,
+    jsonb '{
+      "title": "title",
+      "subtitle": "subtitle",
+      "groups": [
+        {
+          "code": "chats_group1",
+          "attributes": ["chat_is_mute", "chat_unread_messages"],
+          "actions": ["chat_add_person", "chat_leave", "chat_mute", "chat_rename"]
+        },
+        {
+          "code": "chat_group2",
+          "actions": ["chat_write"]
+        }
+      ]
+    }'
+  );
 
   -- Объект-класс для сообщения
   insert into data.objects(code, type) values('message', 'class') returning id into v_message_class_id;
 
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_message_class_id, v_type_attribute_id, jsonb '"message"'),
-  (v_message_class_id, v_template_attribute_id, jsonb_build_object('groups', array[format(
-                                                      '{"code": "%s", "attributes": ["%s"]}',
-                                                      'message_group1',
-                                                      'message_text')::jsonb]));
+  (
+    v_chats_id,
+    v_template_attribute_id,
+    jsonb '{
+      "title": "title",
+      "subtitle": "subtitle",
+      "groups": [
+        {"code": "message_group1", "attributes": ["message_text"]}
+      ]
+    }'
+  );
 
   -- Объект-класс для временных списков персон для редактирования участников чата
   insert into data.objects(code, type) values('chat_temp_person_list', 'class') returning id into v_chat_temp_person_list_class_id;
@@ -11151,12 +11284,18 @@ begin
   (v_chat_temp_person_list_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chat_temp_person_list"'),
   (v_chat_temp_person_list_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chat_temp_person_list"'),
   (v_chat_temp_person_list_class_id, v_temporary_object_attribute_id, jsonb 'true'),
-  (v_chat_temp_person_list_class_id, v_template_attribute_id, jsonb_build_object('groups', format(
-                                                      '[{"code": "%s", "actions": ["%s"]},{"code": "%s", "attributes": ["%s"]}]',
-                                                      'group1',
-                                                      'chat_add_person_back',
-                                                      'group2',
-                                                      'chat_temp_person_list_persons')::jsonb));
+  (
+    v_chats_id,
+    v_template_attribute_id,
+    jsonb '{
+      "title": "title",
+      "subtitle": "subtitle",
+      "groups": [
+        {"code": "group1", "actions": ["chat_add_person_back"]},
+        {"code": "group2", "attributes": ["chat_temp_person_list_persons"]}
+      ]
+    }'
+  );
 
   -- Чат-бот
   insert into data.objects(code) values ('chat_bot') returning id into v_chat_bot_id;
@@ -11171,7 +11310,6 @@ begin
   ('chat_mute','pallas_project.act_chat_mute'),
   ('chat_rename','pallas_project.act_chat_rename'),
   ('chat_enter','pallas_project.act_chat_enter');
-
 end;
 $$
 language plpgsql;
@@ -11239,6 +11377,8 @@ begin
     v_person_class_id,
     v_template_attribute_id,
     jsonb '{
+      "title": "title",
+      "subtitle": "subtitle",
       "groups": [
         {
           "code": "person_personal",
@@ -13334,7 +13474,7 @@ begin
     v_changes := v_changes || data.attribute_change2jsonb('title', null, to_jsonb(v_title));
     v_changes := v_changes || data.attribute_change2jsonb('subtitle', null, jsonb '"Тест на удаление и добавление атрибутов"');
     v_changes := v_changes || data.attribute_change2jsonb('description', null, null);
-    v_changes := v_changes || data.attribute_change2jsonb('template', null, jsonb '{"groups": [{"code": "not_so_common", "attributes": ["description2"]}]}');
+    v_changes := v_changes || data.attribute_change2jsonb('template', null, jsonb '{"title": "title", "subtitle": "subtitle", "groups": [{"code": "not_so_common", "attributes": ["description2"]}]}');
     v_changes := v_changes || data.attribute_change2jsonb('description2', null, to_jsonb(text
 'В этот раз мы не изменяли значение атрибута, а удалили старый и добавили новый. Также какое-то действие возвращается, но оно отсутствует в шаблоне.
 
@@ -14512,7 +14652,7 @@ Markdown — формат, который все реализуют по-раз�
 
   -- Заполним шаблон
   update data.params
-  set value = jsonb_build_object('groups', to_jsonb(v_template_groups))
+  set value = jsonb_build_object('title', 'title', 'subtitle', 'subtitle', 'groups', to_jsonb(v_template_groups))
   where code = 'template';
 end;
 $$
@@ -15097,7 +15237,7 @@ begin
     (v_object_id, data.get_attribute_id('type'), jsonb '"list_object"'),
     (v_object_id, data.get_attribute_id('is_visible'), jsonb 'true'),
     (v_object_id, data.get_attribute_id('title'), jsonb '"One"'),
-    (v_object_id, data.get_attribute_id('template'), jsonb '{"groups":[]}');
+    (v_object_id, data.get_attribute_id('template'), jsonb '{"title": "title", "groups":[]}');
 
     insert into data.objects
     default values
@@ -15109,7 +15249,7 @@ begin
     (v_object_id, data.get_attribute_id('type'), jsonb '"list_object"'),
     (v_object_id, data.get_attribute_id('is_visible'), jsonb 'true'),
     (v_object_id, data.get_attribute_id('title'), jsonb '"Two"'),
-    (v_object_id, data.get_attribute_id('template'), jsonb '{"groups":[]}');
+    (v_object_id, data.get_attribute_id('template'), jsonb '{"title": "title", "groups":[]}');
 
     -- И основной объект
 
@@ -15126,7 +15266,7 @@ begin
     (v_object_id, data.get_attribute_id('list_element_function'), jsonb '"test_project.next_or_do_nothing_list_action"'),
     (v_object_id, data.get_attribute_id('title'), to_jsonb(v_object_title)),
     (v_object_id, data.get_attribute_id('subtitle'), jsonb '"Тест удаления списка"'),
-    (v_object_id, data.get_attribute_id('template'), jsonb '{"groups": [{"code": "main", "attributes": ["description2"], "actions": ["action"]}]}'),
+    (v_object_id, data.get_attribute_id('template'), jsonb '{"title": "title", "subtitle": "subtitle", "groups": [{"code": "main", "attributes": ["description2"], "actions": ["action"]}]}'),
     (v_object_id, data.get_attribute_id('description2'), to_jsonb(text
 '**Проверка:** По нажатию на кнопку "Далее" изменится заголовок, подзаголовок, описание объекта, а также удалится список!'));
 
@@ -15241,7 +15381,7 @@ begin
   (v_object_id, data.get_attribute_id('type'), jsonb '"list_object"'),
   (v_object_id, data.get_attribute_id('is_visible'), jsonb 'true'),
   (v_object_id, data.get_attribute_id('title'), jsonb '"Uno"'),
-  (v_object_id, data.get_attribute_id('template'), jsonb '{"groups": [{"code": "main", "attributes": ["description2"]}]}'),
+  (v_object_id, data.get_attribute_id('template'), jsonb '{"title": "title", "groups": [{"code": "main", "attributes": ["description2"]}]}'),
   (v_object_id, data.get_attribute_id('description2'), jsonb '"Первый элемент списка"');
 
   -- Второй объект
@@ -15259,7 +15399,7 @@ begin
   (v_object_id, data.get_attribute_id('subtitle'), jsonb '"Второй элемент списка"'),
   (v_object_id, data.get_attribute_id('attribute_with_description'), jsonb '"значение"'),
   (v_object_id, data.get_attribute_id('attribute'), jsonb '"значение"'),
-  (v_object_id, data.get_attribute_id('template'), jsonb '{"groups": [{"code": "main", "attributes": ["description2"]}, {"code": "additional", "name": "Группа элемента списка", "attributes": ["short_card_attribute", "attribute_with_description", "attribute"], "actions": ["action"]}]}'),
+  (v_object_id, data.get_attribute_id('template'), jsonb '{"title": "title", "subtitle": "subtitle", "groups": [{"code": "main", "attributes": ["description2"]}, {"code": "additional", "name": "Группа элемента списка", "attributes": ["short_card_attribute", "attribute_with_description", "attribute"], "actions": ["action"]}]}'),
   (v_object_id, data.get_attribute_id('description2'), to_jsonb(text
 '**Проверка 1:** В этом объекте списка две группы.
 **Проверка 2:** У второй группы есть имя "Группа элемента списка".
@@ -15282,7 +15422,7 @@ begin
   (v_object_id, data.get_attribute_id('type'), jsonb '"list_object"'),
   (v_object_id, data.get_attribute_id('is_visible'), jsonb 'true'),
   (v_object_id, data.get_attribute_id('title'), jsonb '"Далее"'),
-  (v_object_id, data.get_attribute_id('template'), jsonb '{"groups": [{"code": "main", "attributes": ["description2"]}]}'),
+  (v_object_id, data.get_attribute_id('template'), jsonb '{"title": "title", "groups": [{"code": "main", "attributes": ["description2"]}]}'),
   (v_object_id, data.get_attribute_id('description2'), jsonb '"Ничтоже сумняшеся выбираем этот элемент для перехода к следующему тесту"');
 
   -- Заполняем параметры оригинального объекта

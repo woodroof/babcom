@@ -9,7 +9,18 @@ declare
   v_object_data jsonb := data.get_object_data(in_object_id, in_actor_id, in_card_type, in_actions_object_id);
   v_attributes jsonb := json.get_object(v_object_data, 'attributes');
   v_actions jsonb := json.get_object_opt(v_object_data, 'actions', null);
-  v_template jsonb := json.get_object_opt(data.get_attribute_value(in_object_id, 'template', in_actor_id), null);
+  v_template jsonb :=
+    json.get_object_opt(
+      (
+        case when in_card_type = 'full' then
+          data.get_attribute_value(in_object_id, 'template', in_actor_id)
+        else
+          coalesce(
+            data.get_attribute_value(in_object_id, 'mini_card_template', in_actor_id),
+            data.get_attribute_value(in_object_id, 'template', in_actor_id))
+        end
+      ),
+      null);
 begin
   if v_template is null then
     v_template := data.get_param('template');
