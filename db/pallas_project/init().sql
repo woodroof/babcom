@@ -11,6 +11,7 @@ declare
 begin
   insert into data.attributes(code, description, type, card_type, can_be_overridden) values
   ('description', 'Текстовый блок с развёрнутым описанием объекта, string', 'normal', 'full', true),
+  ('mini_description', 'Текстовый блок с коротким описанием объекта, string', 'normal', 'mini', true),
   ('system_chat_id', 'Идентификатор чата для обсуждения объекта', 'system', null, true);
 
   -- Создадим актора по умолчанию
@@ -31,6 +32,7 @@ begin
 
   insert into data.params(code, value, description) values
   ('default_login_id', to_jsonb(v_default_login_id), 'Идентификатор логина по умолчанию'),
+  ('images_url', jsonb '"http://localhost:8000/images/"', 'Абсолютный или относительный URL к папке с изображениями, загружаемыми на сервер'),
   ('first_names', to_jsonb(string_to_array('Джон Джек Пол Джордж Билл Кевин Уильям Кристофер Энтони Алекс Джош Томас Фред Филипп Джеймс Брюс Питер Рональд Люк Энди Антонио Итан Сэм Марк Карл Роберт'||
   ' Эльза Лидия Лия Роза Кейт Тесса Рэйчел Амали Шарлотта Эшли София Саманта Элоиз Талия Молли Анна Виктория Мария Натали Келли Ванесса Мишель Элизабет Кимберли Кортни Лоис Сьюзен Эмма', ' ')), 'Список имён'),
   ('last_names', to_jsonb(string_to_array('Янг Коннери Питерс Паркер Уэйн Ли Максуэлл Калвер Кэмерон Альба Сэндерсон Бэйли Блэкшоу Браун Клеменс Хаузер Кендалл Патридж Рой Сойер Стоун Фостер Хэнкс Грегг'||
@@ -43,7 +45,7 @@ begin
     jsonb '{
       "is_visible": true,
       "actions_function": "pallas_project.actgenerator_menu",
-      "template": {"groups": [{"code": "menu_group1", "actions": ["login", "debatles", "chats", "all_chats", "logout"]}]}}',
+      "template": {"groups": [{"code": "menu_group1", "actions": ["login", "statuses", "debatles", "chats", "all_chats", "logout"]}]}}',
     null);
 
   -- И пустой список уведомлений
