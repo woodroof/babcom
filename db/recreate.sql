@@ -11055,7 +11055,7 @@ begin
       "mini_card_template": {
         "title": "title",
         "groups": [{"code": "status_group", "attributes": ["mini_description"]}]
-      }
+      },
       "template": {
         "title": "title",
         "subtitle": "subtitle",
@@ -11224,7 +11224,8 @@ begin
       "groups": [
         {"code": "chats_group1", "attributes": ["description"], "actions": ["create_chat"]}
       ]
-    }'
+    }',
+    null
   );
 
   -- Объект-класс для чата
@@ -11265,7 +11266,7 @@ begin
   insert into data.attribute_values(object_id, attribute_id, value) values
   (v_message_class_id, v_type_attribute_id, jsonb '"message"'),
   (
-    v_chats_id,
+    v_message_class_id,
     v_template_attribute_id,
     jsonb '{
       "title": "title",
@@ -11285,7 +11286,7 @@ begin
   (v_chat_temp_person_list_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chat_temp_person_list"'),
   (v_chat_temp_person_list_class_id, v_temporary_object_attribute_id, jsonb 'true'),
   (
-    v_chats_id,
+    v_chat_temp_person_list_class_id,
     v_template_attribute_id,
     jsonb '{
       "title": "title",

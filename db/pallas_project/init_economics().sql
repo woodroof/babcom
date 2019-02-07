@@ -20,7 +20,7 @@ begin
       "mini_card_template": {
         "title": "title",
         "groups": [{"code": "status_group", "attributes": ["mini_description"]}]
-      }
+      },
       "template": {
         "title": "title",
         "subtitle": "subtitle",
