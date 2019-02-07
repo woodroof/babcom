@@ -674,10 +674,10 @@ declare
   v_actor record;
   v_template jsonb;
   v_title text;
-  v_title_attribute_id text;
+  v_title_attribute_id integer;
   v_subtitle text;
-  v_subtitle_attribute_id text;
-  v_actors jsonb[];
+  v_subtitle_attribute_id integer;
+  v_actors jsonb := '[]';
 begin
   assert in_request_id is not null;
 
@@ -717,7 +717,6 @@ begin
     join data.objects o
       on o.id = la.actor_id
     where la.login_id = v_login_id
-    order by title
   loop
     v_template := v_actor.template;
 
@@ -734,9 +733,9 @@ begin
       v_title_attribute_id := data.get_attribute_id(json.get_string(v_template, 'title'));
 
       if data.can_attribute_be_overridden(v_title_attribute_id) then
-        v_title := json.get_string_opt(data.get_attribute_value(v_actor.id, v_title_attribute_id), null);
-      else
         v_title := json.get_string_opt(data.get_attribute_value(v_actor.id, v_title_attribute_id, v_actor.id), null);
+      else
+        v_title := json.get_string_opt(data.get_attribute_value(v_actor.id, v_title_attribute_id), null);
       end if;
     end if;
 
@@ -744,25 +743,32 @@ begin
       v_subtitle_attribute_id := data.get_attribute_id(json.get_string(v_template, 'subtitle'));
 
       if data.can_attribute_be_overridden(v_subtitle_attribute_id) then
-        v_subtitle := json.get_string_opt(data.get_attribute_value(v_actor.id, v_subtitle_attribute_id), null);
-      else
         v_subtitle := json.get_string_opt(data.get_attribute_value(v_actor.id, v_subtitle_attribute_id, v_actor.id), null);
+      else
+        v_subtitle := json.get_string_opt(data.get_attribute_value(v_actor.id, v_subtitle_attribute_id), null);
       end if;
     end if;
 
     v_actors :=
-      array_append(
-        v_actors,
-        (
-          jsonb_build_object('id', v_actor.code) ||
-          case when v_title is not null then jsonb_build_object('title', v_title) else jsonb '{}' end ||
-          case when v_subtitle is not null then jsonb_build_object('subtitle', v_subtitle) else jsonb '{}' end
-        ));
+      v_actors ||
+      (
+        jsonb_build_object('id', v_actor.code) ||
+        case when v_title is not null then jsonb_build_object('title', v_title) else jsonb '{}' end ||
+        case when v_subtitle is not null then jsonb_build_object('subtitle', v_subtitle) else jsonb '{}' end
+      );
   end loop;
 
   assert v_actors is not null;
 
-  perform api_utils.create_notification(in_client_id, in_request_id, 'actors', jsonb_build_object('actors', to_jsonb(v_actors)));
+  -- Сортируем по имени
+  select jsonb_agg(a.value)
+  into v_actors
+  from (
+    select value
+    from jsonb_array_elements(v_actors)
+    order by value->'title', value->'subtitle') a;
+
+  perform api_utils.create_notification(in_client_id, in_request_id, 'actors', jsonb_build_object('actors', v_actors));
 end;
 $$
 language plpgsql;
