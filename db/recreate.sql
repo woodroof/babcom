@@ -10278,18 +10278,28 @@ begin
     v_actions :=
       v_actions ||
       jsonb '{"login": {"code": "login", "name": "Войти", "disabled": false, "params": {}, "user_params": [{"code": "password", "description": "Введите пароль", "type": "string", "restrictions": {"password": true}}]}}';
-  else
-    if v_is_master or pp_utils.is_in_group(in_actor_id, 'all_person') then
+  elsif v_is_master or pp_utils.is_in_group(in_actor_id, 'all_person') then
+    v_actions :=
+      v_actions ||
+      jsonb '{
+        "statuses": {"code": "act_open_object", "name": "Статусы", "disabled": false, "params": {"object_code": "statuses"}},
+        "debatles": {"code": "act_open_object", "name": "Дебатлы", "disabled": false, "params": {"object_code": "debatles"}},
+        "chats": {"code": "act_open_object", "name": "Чаты", "disabled": false, "params": {"object_code": "chats"}}
+      }';
+
+    if v_is_master then
       v_actions :=
         v_actions ||
         jsonb '{
-          "statuses": {"code": "act_open_object", "name": "Статусы", "disabled": false, "params": {"object_code": "statuses"}},
-          "debatles": {"code": "act_open_object", "name": "Дебатлы", "disabled": false, "params": {"object_code": "debatles"}},
-          "chats": {"code": "act_open_object", "name": "Чаты", "disabled": false, "params": {"object_code": "chats"}},
-          "all_chats": {"code": "act_open_object", "name": "Все чаты", "disabled": false, "params": {"object_code": "all_chats"}},
-          "logout": {"code": "logout", "name": "Выход", "disabled": false, "params": {}}
+          "all_chats": {"code": "act_open_object", "name": "Все чаты", "disabled": false, "params": {"object_code": "all_chats"}}
         }';
     end if;
+
+    v_actions :=
+      v_actions ||
+      jsonb '{
+        "logout": {"code": "logout", "name": "Выход", "disabled": false, "params": {}}
+      }';
   end if;
 
   return v_actions;
