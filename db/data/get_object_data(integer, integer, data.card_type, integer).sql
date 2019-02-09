@@ -36,26 +36,12 @@ begin
         case
           when
             lag(av.attribute_id) over(
-              partition by av.attribute_id order by av.priority desc, json.get_integer_opt(coalesce(pr2.value, pr.value), 0) desc
+              partition by av.attribute_id order by greatest(json.get_integer_opt(pr2.value, 0), json.get_integer_opt(pr.value, 0)) desc
             ) is null
           then true
           else false
         end as needed
-      from
-      (
-        select attribute_id, value, value_object_id, 1 as priority
-        from data.attribute_values
-        where object_id = in_object_id
-        union all
-        select attribute_id, value, null, 0
-        from data.attribute_values
-        where
-          object_id in (
-            select class_id
-            from data.objects
-            where id = in_object_id
-          )
-      ) av
+      from data.attribute_values av
       left join data.object_objects oo on
         av.value_object_id = oo.parent_object_id and
         oo.object_id = in_actor_id
@@ -71,8 +57,8 @@ begin
         pr2.attribute_id = v_priority_attribute_id and
         pr2.value_object_id is null
       where
-        av.value_object_id is null or
-        oo.id is not null
+        (av.object_id = in_object_id or av.object_id = data.get_object_class_id(in_object_id)) and
+        (av.value_object_id is null or oo.id is not null)
     ) attr
     join data.attributes a
       on a.id = attr.attribute_id

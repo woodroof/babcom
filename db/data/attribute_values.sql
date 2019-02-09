@@ -10,7 +10,7 @@ create table data.attribute_values(
   start_reason text,
   start_actor_id integer,
   constraint attribute_values_pk primary key(id),
-  constraint attribute_values_value_object_check check((value_object_id is null) or (data.is_instance(object_id) and data.can_attribute_be_overridden(attribute_id) and data.is_instance(value_object_id)))
+  constraint attribute_values_value_object_check check((value_object_id is null) or (data.can_attribute_be_overridden(attribute_id) and data.is_instance(value_object_id)))
 );
 
 comment on column data.attribute_values.value_object_id is 'Объект, для которого переопределено значение атрибута. В случае, если видно несколько переопределённых значений, выбирается значение для объекта с наивысшим приоритетом.';

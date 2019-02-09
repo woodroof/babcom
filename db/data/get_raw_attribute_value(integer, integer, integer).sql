@@ -26,7 +26,6 @@ begin
       attribute_id = in_attribute_id and
       value_object_id is null;
   else
-    assert data.is_instance(in_object_id);
     assert data.can_attribute_be_overridden(in_attribute_id);
 
     select value

@@ -21,10 +21,7 @@ begin
     value_object_id is null;
 
   if v_attribute_value is null then
-    select class_id
-    into v_class_id
-    from data.objects
-    where id = in_object_id;
+    v_class_id := data.get_object_class_id(in_object_id);
 
     if v_class_id is not null then
       select value

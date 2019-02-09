@@ -3069,10 +3069,7 @@ begin
     value_object_id is null;
 
   if v_attribute_value is null then
-    select class_id
-    into v_class_id
-    from data.objects
-    where id = in_object_id;
+    v_class_id := data.get_object_class_id(in_object_id);
 
     if v_class_id is not null then
       select value
@@ -3113,42 +3110,25 @@ begin
     av.value_object_id = oo.parent_object_id and
     oo.object_id = in_actor_id
   left join data.attribute_values pr on
-    pr.object_id = av.value_object_id and
+    pr.object_id = oo.parent_object_id and
     pr.attribute_id = v_priority_attribute_id and
     pr.value_object_id is null
   left join data.objects o on
-    o.id = av.value_object_id and
+    o.id = oo.parent_object_id and
     pr.id is null
   left join data.attribute_values pr2 on
     pr2.object_id = o.class_id and
     pr2.attribute_id = v_priority_attribute_id and
     pr2.value_object_id is null
   where
-    av.object_id = in_object_id and
+    (av.object_id = in_object_id or av.object_id = data.get_object_class_id(in_object_id)) and
     av.attribute_id = in_attribute_id and
     (
       av.value_object_id is null or
       oo.id is not null
     )
-  order by json.get_integer_opt(coalesce(pr2.value, pr.value), 0) desc
+  order by greatest(json.get_integer_opt(pr.value, 0), json.get_integer_opt(pr2.value, 0)) desc
   limit 1;
-
-  if v_attribute_value is null then
-    select class_id
-    into v_class_id
-    from data.objects
-    where id = in_object_id;
-
-    if v_class_id is not null then
-      select value
-      into v_attribute_value
-      from data.attribute_values
-      where
-        object_id = v_class_id and
-        attribute_id = in_attribute_id and
-        value_object_id is null;
-    end if;
-  end if;
 
   return v_attribute_value;
 end;
@@ -3177,56 +3157,6 @@ as
 $$
 begin
   return data.get_attribute_value(in_object_id, data.get_attribute_id(in_attribute_code), in_actor_id);
-end;
-$$
-language plpgsql;
-
--- drop function data.get_attribute_value_modification_date(integer, integer, integer);
-
-create or replace function data.get_attribute_value_modification_date(in_object_id integer, in_attribute_id integer, in_value_object_id integer)
-returns timestamp with time zone
-stable
-as
-$$
-declare
-  v_date timestamp with time zone;
-begin
-  -- Странно пользоваться этой функцией, если мы работаем с атрибутами классов
-  assert data.is_instance(in_object_id);
-  perform data.get_attribute_code(in_attribute_id);
-
-  if in_value_object_id is null then
-    select start_time
-    into v_date
-    from data.attribute_values
-    where
-      object_id = in_object_id and
-      attribute_id = in_attribute_id and
-      value_object_id is null;
-  else
-    select start_time
-    into v_date
-    from data.attribute_values
-    where
-      object_id = in_object_id and
-      attribute_id = in_attribute_id and
-      value_object_id = in_value_object_id;
-  end if;
-
-  return v_date;
-end;
-$$
-language plpgsql;
-
--- drop function data.get_attribute_value_modification_date(integer, text, integer);
-
-create or replace function data.get_attribute_value_modification_date(in_object_id integer, in_attribute_code text, in_value_object_id integer)
-returns timestamp with time zone
-stable
-as
-$$
-begin
-  return data.get_attribute_value_modification_date(in_object_id, data.get_attribute_id(in_attribute_code), in_value_object_id);
 end;
 $$
 language plpgsql;
@@ -3452,6 +3382,28 @@ end;
 $$
 language plpgsql;
 
+-- drop function data.get_object_class_id(integer);
+
+create or replace function data.get_object_class_id(in_object_id integer)
+returns integer
+stable
+as
+$$
+declare
+  v_class_id integer;
+begin
+  assert data.is_instance(in_object_id);
+
+  select class_id
+  into v_class_id
+  from data.objects
+  where id = in_object_id;
+
+  return v_class_id;
+end;
+$$
+language plpgsql;
+
 -- drop function data.get_object_code(integer);
 
 create or replace function data.get_object_code(in_object_id integer)
@@ -3518,26 +3470,12 @@ begin
         case
           when
             lag(av.attribute_id) over(
-              partition by av.attribute_id order by av.priority desc, json.get_integer_opt(coalesce(pr2.value, pr.value), 0) desc
+              partition by av.attribute_id order by greatest(json.get_integer_opt(pr2.value, 0), json.get_integer_opt(pr.value, 0)) desc
             ) is null
           then true
           else false
         end as needed
-      from
-      (
-        select attribute_id, value, value_object_id, 1 as priority
-        from data.attribute_values
-        where object_id = in_object_id
-        union all
-        select attribute_id, value, null, 0
-        from data.attribute_values
-        where
-          object_id in (
-            select class_id
-            from data.objects
-            where id = in_object_id
-          )
-      ) av
+      from data.attribute_values av
       left join data.object_objects oo on
         av.value_object_id = oo.parent_object_id and
         oo.object_id = in_actor_id
@@ -3553,8 +3491,8 @@ begin
         pr2.attribute_id = v_priority_attribute_id and
         pr2.value_object_id is null
       where
-        av.value_object_id is null or
-        oo.id is not null
+        (av.object_id = in_object_id or av.object_id = data.get_object_class_id(in_object_id)) and
+        (av.value_object_id is null or oo.id is not null)
     ) attr
     join data.attributes a
       on a.id = attr.attribute_id
@@ -3704,7 +3642,6 @@ begin
       attribute_id = in_attribute_id and
       value_object_id is null;
   else
-    assert data.is_instance(in_object_id);
     assert data.can_attribute_be_overridden(in_attribute_id);
 
     select value
@@ -4250,45 +4187,6 @@ begin
     delete from data.client_subscriptions
     where client_id = in_client_id;
   end if;
-end;
-$$
-language plpgsql;
-
--- drop function data.should_attribute_value_be_changed(integer, integer, integer, integer, integer);
-
-create or replace function data.should_attribute_value_be_changed(in_object_id integer, in_source_attribute_id integer, in_source_value_object_id integer, in_destination_attribute_id integer, in_destination_value_object_id integer)
-returns boolean
-stable
-as
-$$
-declare
-  v_source_attribute_modification_date timestamp with time zone :=
-    data.get_attribute_value_modification_date(in_object_id, in_source_attribute_id, in_source_value_object_id);
-  v_destination_attribute_modification_date timestamp with time zone :=
-    data.get_attribute_value_modification_date(in_object_id, in_destination_attribute_id, in_destination_value_object_id);
-begin
-  return
-    v_destination_attribute_modification_date is null and v_source_attribute_modification_date is not null or
-    v_source_attribute_modification_date is null and v_destination_attribute_modification_date is not null or
-    v_source_attribute_modification_date > v_destination_attribute_modification_date;
-end;
-$$
-language plpgsql;
-
--- drop function data.should_attribute_value_be_changed(integer, text, integer, text, integer);
-
-create or replace function data.should_attribute_value_be_changed(in_object_id integer, in_source_attribute_code text, in_source_value_object_id integer, in_destination_attribute_code text, in_destination_value_object_id integer)
-returns boolean
-stable
-as
-$$
-begin
-  return data.should_attribute_value_be_changed(
-    in_object_id,
-    data.get_attribute_id(in_source_attribute_code),
-    in_source_value_object_id,
-    data.get_attribute_id(in_destination_attribute_code),
-    in_destination_value_object_id);
 end;
 $$
 language plpgsql;
@@ -10476,57 +10374,6 @@ end;
 $$
 language plpgsql;
 
--- drop function pallas_project.fcard_person(integer, integer);
-
-create or replace function pallas_project.fcard_person(in_object_id integer, in_actor_id integer)
-returns void
-volatile
-as
-$$
-declare
-  v_value jsonb;
-  v_is_master boolean;
-  v_changes jsonb[];
-  v_money_attribute_id integer :=  data.get_attribute_id('money');
-  v_system_money_attribute_id integer :=  data.get_attribute_id('system_money');
-  v_person_deposit_money_attribute_id integer :=  data.get_attribute_id('person_deposit_money');
-  v_system_person_deposit_money_attribute_id integer :=  data.get_attribute_id('system_person_deposit_money');
-  v_person_coin_attribute_id integer :=  data.get_attribute_id('person_coin');
-  v_system_person_coin_attribute_id integer :=  data.get_attribute_id('system_person_coin');
-  v_person_opa_rating_attribute_id integer :=  data.get_attribute_id('person_opa_rating');
-  v_system_person_opa_rating_attribute_id integer :=  data.get_attribute_id('system_person_opa_rating');
-  v_person_un_rating_attribute_id integer :=  data.get_attribute_id('person_un_rating');
-  v_system_person_un_rating_attribute_id integer :=  data.get_attribute_id('system_person_un_rating');
-begin
-  perform * from data.objects where id = in_object_id for update;
-
-  v_is_master := pp_utils.is_in_group(in_actor_id, 'master');
-  if v_is_master or in_object_id = in_actor_id then
-    v_value := data.get_attribute_value(in_object_id, v_system_money_attribute_id);
-    if data.should_attribute_value_be_changed(in_object_id, v_system_money_attribute_id, null, v_money_attribute_id, in_actor_id) then
-      perform data.set_attribute_value(in_object_id, v_money_attribute_id, v_value, in_actor_id, in_actor_id);
-    end if;
-    v_value := data.get_attribute_value(in_object_id, v_system_person_deposit_money_attribute_id);
-    if data.should_attribute_value_be_changed(in_object_id, v_system_person_deposit_money_attribute_id, null, v_person_deposit_money_attribute_id, in_actor_id) then
-      perform data.set_attribute_value(in_object_id, v_person_deposit_money_attribute_id, v_value, in_actor_id, in_actor_id);
-    end if;
-    v_value := data.get_attribute_value(in_object_id, v_system_person_coin_attribute_id);
-    if data.should_attribute_value_be_changed(in_object_id, v_system_person_coin_attribute_id, null, v_person_coin_attribute_id, in_actor_id) then
-      perform data.set_attribute_value(in_object_id, v_person_coin_attribute_id, v_value, in_actor_id, in_actor_id);
-    end if;
-    v_value := data.get_attribute_value(in_object_id, v_system_person_opa_rating_attribute_id);
-    if data.should_attribute_value_be_changed(in_object_id, v_system_person_opa_rating_attribute_id, null, v_person_opa_rating_attribute_id, in_actor_id) then
-      perform data.set_attribute_value(in_object_id, v_person_opa_rating_attribute_id, v_value, in_actor_id, in_actor_id);
-    end if;
-    v_value := data.get_attribute_value(in_object_id, v_system_person_un_rating_attribute_id);
-    if data.should_attribute_value_be_changed(in_object_id, v_system_person_un_rating_attribute_id, null, v_person_un_rating_attribute_id, in_actor_id) then
-      perform data.set_attribute_value(in_object_id, v_person_un_rating_attribute_id, v_value, in_actor_id, in_actor_id);
-    end if;
-  end if;
-end;
-$$
-language plpgsql;
-
 -- drop function pallas_project.fcard_status_page(integer, integer);
 
 create or replace function pallas_project.fcard_status_page(in_object_id integer, in_actor_id integer)
@@ -11377,8 +11224,6 @@ begin
   (v_person_class_id, v_type_attribute_id, jsonb '"person"'),
   (v_person_class_id, v_is_visible_attribute_id, jsonb 'true'),
   (v_person_class_id, v_priority_attribute_id, jsonb '200'),
-  (v_person_class_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_person"'),
-  (v_person_class_id, v_mini_card_function_attribute_id, jsonb '"pallas_project.mcard_person"'),
   (v_person_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_person"'),
   (
     v_person_class_id,
@@ -11837,25 +11682,6 @@ declare
   if coalesce(data.get_raw_attribute_value(in_object_id, v_title_attribute_id, in_actor_id), jsonb '"~~~"') <>  coalesce(v_new_title, jsonb '"~~~"') then
     perform data.set_attribute_value(in_object_id, v_title_attribute_id, v_new_title, in_actor_id, in_actor_id);
   end if;
-
-end;
-$$
-language plpgsql;
-
--- drop function pallas_project.mcard_person(integer, integer);
-
-create or replace function pallas_project.mcard_person(in_object_id integer, in_actor_id integer)
-returns void
-volatile
-as
-$$
-declare
-  v_value jsonb;
-  v_is_master boolean;
-  v_changes jsonb[];
-begin
-
-  null;
 
 end;
 $$
@@ -15499,7 +15325,7 @@ create table data.attribute_values(
   start_reason text,
   start_actor_id integer,
   constraint attribute_values_pk primary key(id),
-  constraint attribute_values_value_object_check check((value_object_id is null) or (data.is_instance(object_id) and data.can_attribute_be_overridden(attribute_id) and data.is_instance(value_object_id)))
+  constraint attribute_values_value_object_check check((value_object_id is null) or (data.can_attribute_be_overridden(attribute_id) and data.is_instance(value_object_id)))
 );
 
 comment on column data.attribute_values.value_object_id is 'Объект, для которого переопределено значение атрибута. В случае, если видно несколько переопределённых значений, выбирается значение для объекта с наивысшим приоритетом.';

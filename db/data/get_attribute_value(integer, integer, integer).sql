@@ -21,42 +21,25 @@ begin
     av.value_object_id = oo.parent_object_id and
     oo.object_id = in_actor_id
   left join data.attribute_values pr on
-    pr.object_id = av.value_object_id and
+    pr.object_id = oo.parent_object_id and
     pr.attribute_id = v_priority_attribute_id and
     pr.value_object_id is null
   left join data.objects o on
-    o.id = av.value_object_id and
+    o.id = oo.parent_object_id and
     pr.id is null
   left join data.attribute_values pr2 on
     pr2.object_id = o.class_id and
     pr2.attribute_id = v_priority_attribute_id and
     pr2.value_object_id is null
   where
-    av.object_id = in_object_id and
+    (av.object_id = in_object_id or av.object_id = data.get_object_class_id(in_object_id)) and
     av.attribute_id = in_attribute_id and
     (
       av.value_object_id is null or
       oo.id is not null
     )
-  order by json.get_integer_opt(coalesce(pr2.value, pr.value), 0) desc
+  order by greatest(json.get_integer_opt(pr.value, 0), json.get_integer_opt(pr2.value, 0)) desc
   limit 1;
-
-  if v_attribute_value is null then
-    select class_id
-    into v_class_id
-    from data.objects
-    where id = in_object_id;
-
-    if v_class_id is not null then
-      select value
-      into v_attribute_value
-      from data.attribute_values
-      where
-        object_id = v_class_id and
-        attribute_id = in_attribute_id and
-        value_object_id is null;
-    end if;
-  end if;
 
   return v_attribute_value;
 end;

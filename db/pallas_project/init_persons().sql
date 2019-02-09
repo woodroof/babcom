@@ -54,8 +54,6 @@ begin
   (v_person_class_id, v_type_attribute_id, jsonb '"person"'),
   (v_person_class_id, v_is_visible_attribute_id, jsonb 'true'),
   (v_person_class_id, v_priority_attribute_id, jsonb '200'),
-  (v_person_class_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_person"'),
-  (v_person_class_id, v_mini_card_function_attribute_id, jsonb '"pallas_project.mcard_person"'),
   (v_person_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_person"'),
   (
     v_person_class_id,
