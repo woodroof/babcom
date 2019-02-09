@@ -46,6 +46,7 @@ begin
   ('chat_unread_messages', 'Непрочитанных сообщений', 'Количество непрочитанных сообщений', 'normal', 'mini', null, true),
   ('system_chat_length', null , 'Количество сообщений', 'system', null, null, false),
   ('system_chat_is_renamed', null, 'Признак, что чат был переименован', 'system', null, null, false),
+  ('system_chat_is_master', null, 'Признак, что чат был мастерский', 'system', null, null, false),
     -- для временных объектов для изменения участников
   ('chat_temp_person_list_persons', 'Сейчас участвуют', 'Список участников чата', 'normal', 'full', null, false),
   ('system_chat_temp_person_list_chat_id', null, 'Идентификатор изменяемого чата', 'system', null, null, false);
@@ -58,13 +59,14 @@ begin
   -- Объект со списком чатов
   insert into data.objects(code) values('chats') returning id into v_chats_id;
 
-  insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_chats_id, v_type_attribute_id, jsonb '"chats"'),
-  (v_chats_id, v_is_visible_attribute_id, jsonb 'true'),
-  (v_chats_id, v_title_attribute_id, jsonb '"Чаты"'),
-  (v_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"'),
-  (v_chats_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chats"'),
-  (v_chats_id, v_content_attribute_id, jsonb '[]'),
+  insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
+  (v_chats_id, v_type_attribute_id, jsonb '"chats"', null),
+  (v_chats_id, v_is_visible_attribute_id, jsonb 'true', null),
+  (v_chats_id, v_title_attribute_id, jsonb '"Чаты"', null),
+  (v_chats_id, v_title_attribute_id, jsonb '"Отслеживаемые игровые чаты"', v_master_group_id),
+  (v_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"', null),
+  (v_chats_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chats"', null),
+  (v_chats_id, v_content_attribute_id, jsonb '[]', null),
   (
     v_chats_id,
     v_template_attribute_id,
@@ -74,16 +76,16 @@ begin
       "groups": [
         {"code": "chats_group1", "attributes": ["description"], "actions": ["create_chat"]}
       ]
-    }'
-  );
+    }',
+  null);
 
   -- Объект со списком всех чатов (для мастеров)
   insert into data.objects(code) values('all_chats') returning id into v_chats_id;
 
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
-  (v_chats_id, v_type_attribute_id, jsonb '"all_chats"', null),
+  (v_chats_id, v_type_attribute_id, jsonb '"chats"', null),
   (v_chats_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
-  (v_chats_id, v_title_attribute_id, jsonb '"Все чаты"', null),
+  (v_chats_id, v_title_attribute_id, jsonb '"Все игровые чаты"', null),
   (v_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"', null),
   (v_chats_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chats"', null),
   (v_chats_id, v_content_attribute_id, jsonb '[]', null),
@@ -99,6 +101,31 @@ begin
     }',
     null
   );
+
+  -- Объект со списком мастерских чатов
+  insert into data.objects(code) values('master_chats') returning id into v_chats_id;
+
+  insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
+  (v_chats_id, v_type_attribute_id, jsonb '"chats"', null),
+  (v_chats_id, v_is_visible_attribute_id, jsonb 'true', null),
+  (v_chats_id, v_title_attribute_id, jsonb '"Связь с мастерами"', null),
+  (v_chats_id, v_title_attribute_id, jsonb '"Мастерские чаты"', v_master_group_id),
+  (v_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"', null),
+  (v_chats_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chats"', null),
+  (v_chats_id, v_content_attribute_id, jsonb '[]', null),
+  (
+    v_chats_id,
+    v_template_attribute_id,
+    jsonb '{
+      "title": "title",
+      "subtitle": "subtitle",
+      "groups": [
+        {"code": "chats_group1", "attributes": ["description"], "actions": ["create_chat"]}
+      ]
+    }',
+    null
+  );
+
 
   -- Объект-класс для чата
   insert into data.objects(code, type) values('chat', 'class') returning id into v_chat_class_id;
@@ -122,7 +149,7 @@ begin
         {
           "code": "chats_group1",
           "attributes": ["chat_is_mute", "chat_unread_messages"],
-          "actions": ["chat_add_person", "chat_leave", "chat_mute", "chat_rename"]
+          "actions": ["chat_add_person", "chat_leave", "chat_mute", "chat_rename", "chat_enter"]
         },
         {
           "code": "chat_group2",
@@ -140,8 +167,9 @@ begin
   -- Объект-класс для сообщения
   insert into data.objects(code, type) values('message', 'class') returning id into v_message_class_id;
 
-  insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_message_class_id, v_type_attribute_id, jsonb '"message"'),
+  insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
+  (v_message_class_id, v_type_attribute_id, jsonb '"message"', null),
+  (v_message_class_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
   (
     v_message_class_id,
     v_template_attribute_id,
@@ -151,8 +179,8 @@ begin
       "groups": [
         {"code": "message_group1", "attributes": ["message_text"]}
       ]
-    }'
-  );
+    }',
+  null);
 
   -- Объект-класс для временных списков персон для редактирования участников чата
   insert into data.objects(code, type) values('chat_temp_person_list', 'class') returning id into v_chat_temp_person_list_class_id;

@@ -28,6 +28,7 @@ declare
 
   v_all_chats_id integer := data.get_object_id('all_chats');
   v_chats_id integer := data.get_object_id('chats');
+  v_master_chats_id integer := data.get_object_id('master_chats');
 
   v_master_group_id integer := data.get_object_id('master');
 
@@ -43,8 +44,15 @@ declare
 
   v_is_actor_subscribed boolean;
   v_chat_length integer;
+  v_is_master_chat boolean := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_master'), false);
+  v_chat_title text;
 begin
   assert in_request_id is not null;
+
+  -- Берём имя чата только если оно осознанное
+  if json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_renamed'), false) then
+    v_chat_title := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), null);
+  end if;
   -- создаём новое сообщение
   insert into data.objects(class_id) values (v_message_class_id) returning id, code into v_message_id, v_message_code;
 
@@ -52,7 +60,6 @@ begin
   (v_message_id, v_title_attribute_id, to_jsonb(v_title), null),
   (v_message_id, v_message_text_attribute_id, to_jsonb(v_message_text), null),
   (v_message_id, v_is_visible_attribute_id, jsonb 'true', v_chat_id),
-  (v_message_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
   (v_message_id, v_system_message_sender_attribute_id, to_jsonb(v_actor_id), null),
   (v_message_id, v_system_message_time_attribute_id, to_jsonb(to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss') ), null);
 
@@ -71,9 +78,13 @@ begin
                                                                    data.attribute_change2jsonb(v_system_chat_length_attribute_id, null, to_jsonb(v_chat_length + 1))));
   end if;
 
-  -- Перекладываем этот чат в начало в мастерском списке чатов
-  perform pp_utils.list_replace_to_head_and_notify(v_all_chats_id, v_chat_code, v_master_group_id);
-
+  if v_is_master_chat then
+  -- Перекладываем этот чат в начало в списке мастерских чатов
+    perform pp_utils.list_replace_to_head_and_notify(v_master_chats_id, v_chat_code, v_master_group_id);
+  else
+  -- Перекладываем этот чат в начало в списке всех игровых чатов
+    perform pp_utils.list_replace_to_head_and_notify(v_all_chats_id, v_chat_code, v_master_group_id);
+  end if;
   -- Отправляем нотификацию о новом сообщении всем неподписанным на этот чат
   -- и перекладываем у всех участников этот чат вверх списка
   for v_person_id in 
@@ -81,7 +92,13 @@ begin
       where oo.parent_object_id = v_chat_id
         and oo.parent_object_id <> oo.object_id)
   loop
-    perform pp_utils.list_replace_to_head_and_notify(v_chats_id, v_chat_code, v_person_id);
+    if v_is_master_chat then
+      if pp_utils.is_in_group(v_person_id, 'master') then
+        perform pp_utils.list_replace_to_head_and_notify(v_master_chats_id, v_chat_code, v_person_id);
+      end if;
+    else
+      perform pp_utils.list_replace_to_head_and_notify(v_chats_id, v_chat_code, v_person_id);
+    end if;
     v_is_actor_subscribed := pp_utils.is_actor_subscribed(v_person_id, v_chat_id);
     if v_person_id <> v_actor_id
       and not v_is_actor_subscribed then
@@ -93,7 +110,7 @@ begin
     if v_person_id <> v_actor_id 
       and not v_is_actor_subscribed
       and not json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'chat_is_mute', v_person_id), false) then
-      perform pp_utils.add_notification(v_person_id, 'Новое сообщение от '|| v_actor_title, v_chat_id);
+      perform pp_utils.add_notification(v_person_id, 'Новое сообщение ' || (case when v_chat_title is not null then ' в чате '|| v_chat_title  || ' ' else '' end) || 'от '|| v_actor_title , v_chat_id);
     end if;
   end loop;
 

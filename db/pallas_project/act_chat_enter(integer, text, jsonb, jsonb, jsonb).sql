@@ -11,6 +11,7 @@ declare
   v_goto_chat boolean := json.get_boolean_opt(in_params, 'goto_chat', false);
   v_actor_id integer :=data.get_active_actor_id(in_client_id);
   v_chat_id integer;
+  v_is_master_chat boolean;
 
   v_name jsonb;
   v_chat_title text := '';
@@ -18,6 +19,9 @@ declare
   v_chat_unread_messages_attribute_id integer := data.get_attribute_id('chat_unread_messages');
 
   v_chats_id integer := data.get_object_id('chats');
+  v_master_chats_id integer := data.get_object_id('master_chats');
+
+  v_is_master boolean := pp_utils.is_in_group(v_actor_id, 'master');
 
   v_changes jsonb[];
 begin
@@ -31,16 +35,17 @@ begin
     v_chat_id := data.get_object_id(v_chat_code);
   end if;
 
+  v_is_master_chat := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_master'), false);
+
   --Проверяем, может мы уже в этом чате, тогда ничего делать не надо, только перейти
   if not pp_utils.is_in_group(v_actor_id, v_chat_code) then
   -- добавляем в группу с рассылкой
     perform data.process_diffs_and_notify(data.change_object_groups(v_actor_id, array[v_chat_id], array[]::integer[], v_actor_id));
 
     -- Меняем заголовок чата, если зашёл не мастер
-    if not pp_utils.is_in_group(v_actor_id, 'master') then
-    -- обновляем список текущих персон
+    if not v_is_master or v_is_master_chat then
       for v_name in 
-        (select * from unnest(pallas_project.get_chat_persons_but_masters(v_chat_id)) limit 3) loop 
+        (select * from unnest(pallas_project.get_chat_persons(v_chat_id, not v_is_master_chat)) limit 3) loop 
         v_chat_title := v_chat_title || ', '|| json.get_string_opt(v_name, '');
       end loop;
 
@@ -68,8 +73,13 @@ begin
       end if;
     end if;
 
-  -- Добавляем чат в список чатов в начало
-    perform pp_utils.list_prepend_and_notify(v_chats_id, v_chat_code, v_actor_id);
+    if v_is_master_chat then
+      if not v_is_master then
+        perform pp_utils.list_prepend_and_notify(v_master_chats_id, v_chat_code, v_actor_id);
+      end if;
+    else
+      perform pp_utils.list_prepend_and_notify(v_chats_id, v_chat_code, v_actor_id);
+    end if;
   end if;
 
   -- Переходим к чату или остаёмся на нём

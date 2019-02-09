@@ -25,6 +25,7 @@ declare
 
   v_all_chats_id integer := data.get_object_id('all_chats');
   v_chats_id integer := data.get_object_id('chats');
+  v_master_chats_id integer := data.get_object_id('master_chats');
 
   v_master_group_id integer := data.get_object_id('master');
 
@@ -35,10 +36,12 @@ declare
   v_chat_bot_id integer := data.get_object_id('chat_bot');
   v_chat_bot_title text := json.get_string(data.get_attribute_value(v_chat_bot_id, v_title_attribute_id, v_actor_id));
 
+  v_is_master boolean := pp_utils.is_in_group(v_actor_id, 'master');
   v_actor_title text := json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id, v_actor_id));
   v_title text := to_char(clock_timestamp(),'DD.MM hh24:mi:ss ') || v_chat_bot_title;
   v_chat_title text := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), null);
   v_chat_is_renamed boolean := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_renamed'), false);
+  v_is_master_chat boolean := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_master'), false);
 
   v_name jsonb;
   v_persons text:= '';
@@ -47,18 +50,24 @@ begin
   assert in_request_id is not null;
 
   -- проверяем, что выходить можно
-  assert json.get_boolean_opt(data.get_attribute_value(v_actor_id, 'system_chat_can_leave', v_actor_id), true);
+  assert v_is_master or json.get_boolean_opt(data.get_attribute_value(v_actor_id, 'system_chat_can_leave', v_actor_id), true);
 
   -- Удаляемся из группы чата
   perform data.process_diffs_and_notify(data.change_object_groups(v_actor_id, array[]::integer[], array[v_chat_id], v_actor_id));
 
   -- Удаляем чат из своего списка чатов
-  perform pp_utils.list_remove_and_notify(v_chats_id, v_chat_code, v_actor_id);
+  if v_is_master_chat then
+    if not v_is_master then
+      perform pp_utils.list_remove_and_notify(v_master_chats_id, v_chat_code, v_actor_id);
+    end if;
+  else
+    perform pp_utils.list_remove_and_notify(v_chats_id, v_chat_code, v_actor_id);
+  end if;
 
   -- Мастера в чате не видно, поэтому светить его выход не надо
-  if not pp_utils.is_in_group(v_actor_id, 'master') then
+  if not v_is_master or v_is_master_chat then
     -- Меняем список участников чата в заголовке
-    for v_name in (select * from unnest(pallas_project.get_chat_persons_but_masters(v_chat_id)) limit 3) loop 
+    for v_name in (select * from unnest(pallas_project.get_chat_persons(v_chat_id, not v_is_master_chat)) limit 3) loop 
       v_persons := v_persons || ','|| json.get_string_opt(v_name, '');
     end loop;
     v_persons := trim(v_persons, ',');
@@ -80,7 +89,6 @@ begin
     (v_message_id, v_title_attribute_id, to_jsonb(v_title), null),
     (v_message_id, v_message_text_attribute_id, to_jsonb(v_actor_title || ' вышел из чата'), null),
     (v_message_id, v_is_visible_attribute_id, jsonb 'true', v_chat_id),
-    (v_message_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
     (v_message_id, v_system_message_sender_attribute_id, to_jsonb(v_chat_bot_id), null),
     (v_message_id, v_system_message_time_attribute_id, to_jsonb(to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss') ), null);
 
@@ -88,7 +96,11 @@ begin
     perform pp_utils.list_prepend_and_notify(v_chat_id, v_message_code, null, v_chat_id);
 
     -- Перекладываем этот чат в начало в мастерском списке чатов
-    perform pp_utils.list_replace_to_head_and_notify(v_all_chats_id, v_chat_code, v_master_group_id);
+    if v_is_master_chat then
+      perform pp_utils.list_replace_to_head_and_notify(v_master_chats_id, v_chat_code, v_master_group_id);
+    else
+      perform pp_utils.list_replace_to_head_and_notify(v_all_chats_id, v_chat_code, v_master_group_id);
+    end if;
 
     -- Отправляем нотификацию о новом сообщении всем неподписанным на этот чат
     -- и перекладываем у всех участников этот чат вверх списка

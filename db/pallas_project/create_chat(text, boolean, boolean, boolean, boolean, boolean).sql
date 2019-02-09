@@ -1,6 +1,6 @@
--- drop function pallas_project.create_chat(text, boolean, boolean, boolean, boolean);
+-- drop function pallas_project.create_chat(text, boolean, boolean, boolean, boolean, boolean);
 
-create or replace function pallas_project.create_chat(in_chat_title text, in_can_invite boolean, in_can_leave boolean, in_can_mute boolean, in_can_rename boolean)
+create or replace function pallas_project.create_chat(in_chat_title text, in_can_invite boolean, in_can_leave boolean, in_can_mute boolean, in_can_rename boolean, in_chat_is_master boolean default false)
 returns integer
 volatile
 as
@@ -17,6 +17,7 @@ declare
   v_system_chat_can_mute_attribute_id integer := data.get_attribute_id('system_chat_can_mute');
   v_system_chat_can_rename_attribute_id integer := data.get_attribute_id('system_chat_can_rename');
   v_system_chat_is_renamed_attribute_id integer := data.get_attribute_id('system_chat_is_renamed');
+  v_system_chat_is_master_attribute_id integer := data.get_attribute_id('system_chat_is_master');
 
   v_master_group_id integer := data.get_object_id('master');
 begin
@@ -52,6 +53,11 @@ begin
   if not in_can_rename then
     insert into data.attribute_values(object_id, attribute_id, value) values
     (v_chat_id, v_system_chat_can_rename_attribute_id, jsonb 'false');
+  end if;
+
+  if in_chat_is_master then
+    insert into data.attribute_values(object_id, attribute_id, value) values
+    (v_chat_id, v_system_chat_is_master_attribute_id, jsonb 'true');  
   end if;
 
 

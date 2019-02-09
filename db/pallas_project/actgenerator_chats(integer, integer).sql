@@ -7,13 +7,16 @@ as
 $$
 declare
   v_actions_list text := '';
+  v_object_code text := data.get_object_code(in_object_id);
 begin
   assert in_actor_id is not null;
 
-  if pp_utils.is_in_group(in_actor_id, 'all_person') or pp_utils.is_in_group(in_actor_id, 'master') then
+  if (v_object_code = 'chats' and pp_utils.is_in_group(in_actor_id, 'all_person')) 
+    or pp_utils.is_in_group(in_actor_id, 'master') then
     v_actions_list := v_actions_list || 
-      ', "create_chat": {"code": "create_chat", "name": "Создать чат", "disabled": false, '||
-      '"params": {}}';
+      format(', "create_chat": {"code": "create_chat", "name": "Создать чат", "disabled": false, "params": {%s}}',
+             case v_object_code when 'master_chats' then '"chat_is_master": true' else '' end
+            );
   end if;
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;

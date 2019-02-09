@@ -14,6 +14,8 @@ declare
   v_chat_is_mute boolean;
   v_new_chat_is_mute boolean;
 
+  v_is_master boolean := pp_utils.is_in_group(v_actor_id, 'master');
+
   v_chat_is_mute_attribute_id integer := data.get_attribute_id('chat_is_mute');
   v_message_sent boolean := false;
 begin
@@ -27,7 +29,7 @@ begin
 
   if not v_chat_is_mute and v_mute_on_off = 'on' then
   -- проверяем, что отключать можно
-    assert json.get_boolean_opt(data.get_attribute_value(v_actor_id, 'system_chat_can_mute', v_actor_id), true);
+    assert v_is_master or json.get_boolean_opt(data.get_attribute_value(v_actor_id, 'system_chat_can_mute', v_actor_id), true);
   end if;
 
   if v_mute_on_off = 'on' then
@@ -41,7 +43,7 @@ begin
                                                  jsonb_build_array(data.attribute_change2jsonb(v_chat_is_mute_attribute_id, v_actor_id, to_jsonb(v_new_chat_is_mute))));
   end if;
   if not v_message_sent then
-   perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+   perform api_utils.create_ok_notification(in_client_id, in_request_id);
   end if;
 end;
 $$

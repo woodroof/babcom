@@ -14,27 +14,34 @@ declare
   v_chat_can_leave boolean;
   v_chat_can_mute boolean;
   v_chat_can_rename boolean;
+  v_is_master_chat boolean;
 begin
   assert in_actor_id is not null;
 
   v_is_master := pp_utils.is_in_group(in_actor_id, 'master');
   v_chat_code := data.get_object_code(in_object_id);
 
-  if v_is_master or json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_invite', in_actor_id), false) then
+  v_is_master_chat := json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_is_master'), false);
+  v_chat_can_invite := json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_invite', in_actor_id), false);
+  v_chat_can_leave := json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_leave', in_actor_id), false);
+  v_chat_can_mute := json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_mute', in_actor_id), false);
+  v_chat_can_rename := json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_rename', in_actor_id), false);
+
+  if v_is_master and not v_is_master_chat or v_chat_can_invite then
     v_actions_list := v_actions_list || 
         format(', "chat_add_person": {"code": "chat_add_person", "name": "Добавить/посмотреть участников", "disabled": false, '||
                 '"params": {"chat_code": "%s"}}',
                 v_chat_code);
   end if;
 
-  if pp_utils.is_in_group(in_actor_id, v_chat_code) and (v_is_master or json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_leave', in_actor_id), false)) then
+  if pp_utils.is_in_group(in_actor_id, v_chat_code) and (v_is_master and not v_is_master_chat or v_chat_can_leave) then
     v_actions_list := v_actions_list || 
         format(', "chat_leave": {"code": "chat_leave", "name": "Выйти из чата", "disabled": false, "warning": "Вы уверены? Этот чат исчезнет из вашего списка чатов, и вернуться вы не сможете.",'||
                 '"params": {"chat_code": "%s"}}',
                 v_chat_code);
   end if;
 
-  if pp_utils.is_in_group(in_actor_id, v_chat_code) and (v_is_master or json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_mute', in_actor_id), false)) then
+  if pp_utils.is_in_group(in_actor_id, v_chat_code) and (v_is_master and not v_is_master_chat or v_chat_can_mute) then
     v_chat_is_mute := json.get_boolean_opt(data.get_attribute_value(in_object_id, 'chat_is_mute', in_actor_id), false);
     v_actions_list := v_actions_list || 
         format(', "chat_mute": {"code": "chat_mute", "name": "%s", "disabled": false,'||
@@ -48,7 +55,7 @@ begin
                 else 'on' end);
   end if;
 
-  if v_is_master or (pp_utils.is_in_group(in_actor_id, v_chat_code) and json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_rename', in_actor_id), false)) then
+  if (v_is_master and not v_is_master_chat) or v_chat_can_rename then
     v_actions_list := v_actions_list || 
         format(', "chat_rename": {"code": "chat_rename", "name": "Переименовать чат", "disabled": false, "warning": "Чат поменяет имя для всех его участников.",'||
                 '"params": {"chat_code": "%s"}, "user_params": [{"code": "title", "description": "Введите имя чата", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"}]}',
@@ -56,20 +63,21 @@ begin
                 json.get_string_opt(data.get_attribute_value(in_object_id, 'title', in_actor_id), null));
   end if;
 
-  v_actions_list := v_actions_list || 
+  if not v_is_master or v_is_master_chat then
+    v_actions_list := v_actions_list || 
         format(', "chat_write": {"code": "chat_write", "name": "Написать", "disabled": false, '||
                 '"params": {"chat_code": "%s"}, "user_params": [{"code": "message_text", "description": "Введите текст сообщения", "type": "string", "restrictions": {"multiline": true}}]}',
                 v_chat_code);
+  end if;
 
-  if v_is_master then
-    if not pp_utils.is_in_group(in_actor_id, v_chat_code) then
-      v_actions_list := v_actions_list || 
+  if v_is_master and not pp_utils.is_in_group(in_actor_id, v_chat_code) then
+    v_actions_list := v_actions_list || 
           format(', "chat_enter": {"code": "chat_enter", "name": "Следить", "disabled": false, '||
                   '"params": {"chat_code": "%s"}}',
                   v_chat_code);
-    end if;
+  end if;
 
-    v_chat_can_invite := json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_invite', in_actor_id), false);
+  if v_is_master then
     v_actions_list := v_actions_list || 
         format(', "chat_change_can_invite": {"code": "chat_change_settings", "name": "%s приглашать участников", "disabled": false, '||
                 '"params": {"chat_code": "%s", "parameter": "can_invite", "value": "%s"}}',
@@ -77,7 +85,6 @@ begin
                 v_chat_code,
                 case when v_chat_can_invite then 'off' else 'on' end);
 
-    v_chat_can_leave := json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_leave', in_actor_id), false);
     v_actions_list := v_actions_list || 
         format(', "chat_change_can_leave": {"code": "chat_change_settings", "name": "%s выходить из чата", "disabled": false, '||
                 '"params": {"chat_code": "%s", "parameter": "can_leave", "value": "%s"}}',
@@ -85,7 +92,6 @@ begin
                 v_chat_code,
                 case when v_chat_can_leave then 'off' else 'on' end);
 
-    v_chat_can_mute := json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_mute', in_actor_id), false);
     v_actions_list := v_actions_list || 
         format(', "chat_change_can_mute": {"code": "chat_change_settings", "name": "%s отключать уведомления", "disabled": false, %s'||
                 '"params": {"chat_code": "%s", "parameter": "can_mute", "value": "%s"}}',
@@ -94,7 +100,6 @@ begin
                 v_chat_code,
                 case when v_chat_can_mute then 'off' else 'on' end);
 
-    v_chat_can_rename := json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_rename', in_actor_id), false);
     v_actions_list := v_actions_list || 
         format(', "chat_change_can_rename": {"code": "chat_change_settings", "name": "%s переименование чата", "disabled": false, '||
                 '"params": {"chat_code": "%s", "parameter": "can_rename", "value": "%s"}}',
