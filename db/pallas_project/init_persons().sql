@@ -13,8 +13,6 @@ declare
   v_mini_card_function_attribute_id integer := data.get_attribute_id('mini_card_function');
   v_actions_function_attribute_id integer := data.get_attribute_id('actions_function');
   v_template_attribute_id integer := data.get_attribute_id('template');
-
-  v_person_class_id integer;
 begin
   insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden) values
   ('person_occupation', 'Должность', 'normal', null, null, true),
@@ -48,81 +46,59 @@ begin
   ('system_person_next_administrative_services_status', null, 'system', null, null, false);
 
   --Объект класса для персон
-  insert into data.objects(code, type) values('person', 'class') returning id into v_person_class_id;
-
-  insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_person_class_id, v_type_attribute_id, jsonb '"person"'),
-  (v_person_class_id, v_is_visible_attribute_id, jsonb 'true'),
-  (v_person_class_id, v_priority_attribute_id, jsonb '200'),
-  (v_person_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_person"'),
-  (
-    v_person_class_id,
-    v_template_attribute_id,
+  perform data.create_class(
+    'person',
     jsonb '{
-      "title": "title",
-      "subtitle": "subtitle",
-      "groups": [
-        {
-          "code": "person_personal",
-          "attributes": [
-            "person_economy_type",
-            "money",
-            "person_deposit_money",
-            "person_coin",
-            "person_opa_rating",
-            "person_un_rating"
-          ]
-        },
-        {
-          "code": "person_statuses",
-          "name": "Текущие статусы",
-          "attributes": [
-            "person_life_support_status",
-            "person_health_care_status",
-            "person_recreation_status",
-            "person_police_status",
-            "person_administrative_services_status"
-          ]
-        },
-        {
-          "code": "person_public",
-          "attributes": [
-            "person_state",
-            "person_occupation",
-            "description"
-          ]
-        }
-      ]
-    }'
-  );
+      "type": "person",
+      "is_visible": true,
+      "priority": 200,
+      "actions_function": "pallas_project.actgenerator_person",
+      "template": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [
+          {
+            "code": "person_personal",
+            "attributes": [
+              "person_economy_type",
+              "money",
+              "person_deposit_money",
+              "person_coin",
+              "person_opa_rating",
+              "person_un_rating"
+            ]
+          },
+          {
+            "code": "person_statuses",
+            "name": "Текущие статусы",
+            "attributes": [
+              "person_life_support_status",
+              "person_health_care_status",
+              "person_recreation_status",
+              "person_police_status",
+              "person_administrative_services_status"
+            ]
+          },
+          {
+            "code": "person_public",
+            "attributes": [
+              "person_state",
+              "person_occupation",
+              "description"
+            ]
+          }
+        ]
+      }
+    }');
 
   -- Группы персон
-  declare
-    v_all_person_group_id integer;
-    v_aster_group_id integer;
-    v_un_group_id integer;
-    v_mcr_group_id integer;
-    v_opa_group_id integer;
-    v_master_group_id integer;
-    v_player_group_id integer;
-  begin
-    insert into data.objects(code) values ('all_person') returning id into v_all_person_group_id;
-    insert into data.objects(code) values ('aster') returning id into v_aster_group_id;
-    insert into data.objects(code) values ('un') returning id into v_un_group_id;
-    insert into data.objects(code) values ('mcr') returning id into v_mcr_group_id;
-    insert into data.objects(code) values ('opa') returning id into v_opa_group_id;
-    insert into data.objects(code) values ('master') returning id into v_master_group_id;
-    insert into data.objects(code) values ('player') returning id into v_player_group_id;
-
-    insert into data.attribute_values(object_id, attribute_id, value) values
-    (v_all_person_group_id, v_priority_attribute_id, jsonb '10'),
-    (v_player_group_id, v_priority_attribute_id, jsonb '15'),
-    (v_aster_group_id, v_priority_attribute_id, jsonb '20'),
-    (v_un_group_id, v_priority_attribute_id, jsonb '30'),
-    (v_mcr_group_id, v_priority_attribute_id, jsonb '40'),
-    (v_opa_group_id, v_priority_attribute_id, jsonb '50'),
-    (v_master_group_id, v_priority_attribute_id, jsonb '190');
-  end;
+  perform data.create_object('all_person', jsonb '{"priority": 10}');
+  perform data.create_object('player', jsonb '{"priority": 15}');
+  perform data.create_object('aster', jsonb '{"priority": 20}');
+  perform data.create_object('un', jsonb '{"priority": 30}');
+  perform data.create_object('mcr', jsonb '{"priority": 40}');
+  perform data.create_object('opa', jsonb '{"priority": 50}');
+  perform data.create_object('master', jsonb '{"priority": 190}');
 
   -- Мастера
   perform pallas_project.create_person('m1', jsonb '{"title": "Саша", "person_occupation": "Мастер"}', array['master']);

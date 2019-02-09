@@ -522,8 +522,8 @@ Markdown — формат, который все реализуют по-раз�
 **Проверка 6:** Слово ipsum должно быть жирным.
 **Проверка 7:** Все атрибуты идут именно в указанном порядке.')
     ),
-    (v_test_id, v_short_attr_id, null),
-    (v_test_id, v_long_attr_id, null),
+    (v_test_id, v_short_attr_id, jsonb 'null'),
+    (v_test_id, v_long_attr_id, jsonb 'null'),
     (v_test_id, v_short_value_attr_id, jsonb '100'),
     (v_test_id, v_long_value_descr_attr_id, jsonb '"lorem ipsum"'),
     (

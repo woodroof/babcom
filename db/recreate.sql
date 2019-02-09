@@ -1655,13 +1655,15 @@ returns jsonb
 volatile
 as
 $$
--- В параметре in_changes приходит массив объектов с полями id, value_object_id, value
--- Если присутствует, value_object_id меняет именно значение, задаваемое для указанного объекта
+-- У параметра in_changes есть два возможных формата:
+-- 1. Только для установки значения: объект, где ключ - код атрибута, а значение - значение атрибута
+-- 2. Массив объектов с полями id или code, value_object_id, или value_object_code, value
+-- Если присутствует value_object_id или value_object_code, то изменится именно значение, задаваемое для указанного объекта
 -- Если value отсутствует (именно отсутствует, а не равно jsonb 'null'!), то указанное значение удаляется, в противном случае - устанавливается
 
 -- Возвращается массив объектов с полями object_id, client_id, object и list_changes, поля object и list_changes могут отсутствовать
 declare
-  v_changes jsonb := data.filter_changes(in_object_id, in_changes);
+  v_changes jsonb := data.filter_changes(in_object_id, data.preprocess_changes_with_codes(in_changes));
   v_object_code text;
 
   v_subscriptions jsonb := jsonb '[]';
@@ -2715,6 +2717,45 @@ end;
 $$
 language plpgsql;
 
+-- drop function data.create_class(text, jsonb);
+
+create or replace function data.create_class(in_code text, in_attributes jsonb)
+returns integer
+volatile
+as
+$$
+-- У параметра in_changes есть два возможных формата:
+-- 1. Объект, где ключ - код атрибута, а значение - значение атрибута
+-- 2. Массив объектов с полями id или code, value_object_id, или value_object_code, value
+declare
+  v_attributes jsonb := data.preprocess_changes_with_codes(in_attributes);
+  v_class_id integer;
+  v_attribute record;
+begin
+  assert in_code is not null;
+
+  insert into data.objects(code, type)
+  values(in_code, 'class')
+  returning id into v_class_id;
+
+  for v_attribute in
+  (
+    select
+      json.get_integer(value, 'id') id,
+      json.get_integer_opt(value, 'value_object_id', null) value_object_id,
+      value->'value' as value
+    from jsonb_array_elements(v_attributes)
+  )
+  loop
+    insert into data.attribute_values(object_id, attribute_id, value, value_object_id)
+    values(v_class_id, v_attribute.id, v_attribute.value, v_attribute.value_object_id);
+  end loop;
+
+  return v_class_id;
+end;
+$$
+language plpgsql;
+
 -- drop function data.create_job(timestamp with time zone, text, jsonb);
 
 create or replace function data.create_job(in_desired_time timestamp with time zone, in_function text, in_params jsonb)
@@ -2738,6 +2779,61 @@ begin
   if v_min_time = in_desired_time then
     perform api_utils.create_job_notification(in_desired_time);
   end if;
+end;
+$$
+language plpgsql;
+
+-- drop function data.create_object(text, jsonb, text, text[]);
+
+create or replace function data.create_object(in_code text, in_attributes jsonb, in_class_code text default null::text, in_groups text[] default null::text[])
+returns integer
+volatile
+as
+$$
+-- У параметра in_changes есть два возможных формата:
+-- 1. Объект, где ключ - код атрибута, а значение - значение атрибута
+-- 2. Массив объектов с полями id или code, value_object_id, или value_object_code, value
+declare
+  v_attributes jsonb;
+  v_object_id integer;
+  v_attribute record;
+  v_group_code text;
+begin
+  if in_code is null then
+    insert into data.objects(class_id)
+    values(case when in_class_code is not null then data.get_class_id(in_class_code) else null end)
+    returning id into v_object_id;
+  else
+    insert into data.objects(code, class_id)
+    values(in_code, case when in_class_code is not null then data.get_class_id(in_class_code) else null end)
+    returning id into v_object_id;
+  end if;
+
+  v_attributes := data.preprocess_changes_with_codes(in_attributes);
+
+  for v_attribute in
+  (
+    select
+      json.get_integer(value, 'id') id,
+      json.get_integer_opt(value, 'value_object_id', null) value_object_id,
+      value->'value' as value
+    from jsonb_array_elements(v_attributes)
+  )
+  loop
+    insert into data.attribute_values(object_id, attribute_id, value, value_object_id)
+    values(v_object_id, v_attribute.id, v_attribute.value, v_attribute.value_object_id);
+  end loop;
+
+  for v_group_code in
+  (
+    select value
+    from unnest(in_groups) a(value)
+  )
+  loop
+    perform data.add_object_to_object(v_object_id, data.get_object_id(v_group_code));
+  end loop;
+
+  return v_object_id;
 end;
 $$
 language plpgsql;
@@ -3949,6 +4045,81 @@ begin
   end if;
 
   return null;
+end;
+$$
+language plpgsql;
+
+-- drop function data.preprocess_changes_with_codes(jsonb);
+
+create or replace function data.preprocess_changes_with_codes(in_changes jsonb)
+returns jsonb
+volatile
+as
+$$
+-- У параметра in_changes есть два возможных формата:
+-- 1. Только для установки значения: объект, где ключ - код атрибута, а значение - значение атрибута
+-- 2. Массив объектов с полями id или code, value_object_id, или value_object_code, value
+
+-- Возвращается массив объектов с полями id, value_object_id, value
+declare
+  v_change record;
+  v_object_id integer;
+  v_elem jsonb;
+  v_ret_val jsonb := '[]';
+begin
+  assert in_changes is not null;
+
+  if jsonb_typeof(in_changes) = 'object' then
+    for v_change in
+    (
+      select key, value
+      from jsonb_each(in_changes)
+    )
+    loop
+      v_ret_val := v_ret_val || jsonb_build_object('id', data.get_attribute_id(v_change.key), 'value', v_change.value);
+    end loop;
+  else
+    for v_change in
+    (
+      select
+        json.get_integer_opt(value, 'id', null) id,
+        json.get_string_opt(value, 'code', null) code,
+        json.get_integer_opt(value, 'value_object_id', null) value_object_id,
+        json.get_string_opt(value, 'value_object_code', null) value_object_code,
+        value->'value' as value
+      from jsonb_array_elements(in_changes)
+    )
+    loop
+      v_elem := jsonb_build_object('value', v_change.value);
+
+      if v_change.id is not null then
+        assert v_change.code is null;
+
+        v_elem := v_elem || jsonb_build_object('id', v_change.id);
+      else
+        assert v_change.code is not null;
+
+        v_elem := v_elem || jsonb_build_object('id', data.get_attribute_id(v_change.code));
+      end if;
+
+      if v_change.value_object_id is not null then
+        assert v_change.value_object_code is null;
+
+        v_elem := v_elem || jsonb_build_object('value_object_id', v_change.value_object_id);
+      elsif v_change.value_object_code is not null then
+        select id
+        into v_object_id
+        from data.objects
+        where code = v_change.value_object_code;
+
+        v_elem := v_elem || jsonb_build_object('value_object_id', v_object_id);
+      end if;
+
+      v_ret_val := v_ret_val || v_elem;
+    end loop;
+  end if;
+
+  return v_ret_val;
 end;
 $$
 language plpgsql;
@@ -10201,84 +10372,6 @@ end;
 $$
 language plpgsql;
 
--- drop function pallas_project.create_class(text, jsonb);
-
-create or replace function pallas_project.create_class(in_code text, in_attributes jsonb)
-returns integer
-volatile
-as
-$$
-declare
-  v_class_id integer;
-  v_attribute record;
-begin
-  assert in_code is not null;
-
-  insert into data.objects(code, type)
-  values(in_code, 'class')
-  returning id into v_class_id;
-
-  for v_attribute in
-  (
-    select key, value
-    from jsonb_each(in_attributes)
-  )
-  loop
-    insert into data.attribute_values(object_id, attribute_id, value)
-    values(v_class_id, data.get_attribute_id(v_attribute.key), v_attribute.value);
-  end loop;
-
-  return v_class_id;
-end;
-$$
-language plpgsql;
-
--- drop function pallas_project.create_object(text, text, jsonb, text[]);
-
-create or replace function pallas_project.create_object(in_code text, in_class_code text, in_attributes jsonb, in_groups text[])
-returns integer
-volatile
-as
-$$
-declare
-  v_object_id integer;
-  v_attribute record;
-  v_group_code text;
-begin
-  if in_code is null then
-    insert into data.objects(class_id)
-    values(case when in_class_code is not null then data.get_class_id(in_class_code) else null end)
-    returning id into v_object_id;
-  else
-    insert into data.objects(code, class_id)
-    values(in_code, case when in_class_code is not null then data.get_class_id(in_class_code) else null end)
-    returning id into v_object_id;
-  end if;
-
-  for v_attribute in
-  (
-    select key, value
-    from jsonb_each(in_attributes)
-  )
-  loop
-    insert into data.attribute_values(object_id, attribute_id, value)
-    values(v_object_id, data.get_attribute_id(v_attribute.key), v_attribute.value);
-  end loop;
-
-  for v_group_code in
-  (
-    select value
-    from unnest(in_groups) a(value)
-  )
-  loop
-    perform data.add_object_to_object(v_object_id, data.get_object_id(v_group_code));
-  end loop;
-
-  return v_object_id;
-end;
-$$
-language plpgsql;
-
 -- drop function pallas_project.create_person(text, jsonb, text[]);
 
 create or replace function pallas_project.create_person(in_login_code text, in_attributes jsonb, in_groups text[])
@@ -10287,7 +10380,7 @@ volatile
 as
 $$
 declare
-  v_person_id integer := pallas_project.create_object(null, 'person', in_attributes, in_groups);
+  v_person_id integer := data.create_object(null, in_attributes, 'person', in_groups);
   v_login_id integer;
 begin
   insert into data.logins(code) values(in_login_code) returning id into v_login_id;
@@ -10516,7 +10609,7 @@ begin
     in_object_id,
     jsonb '[]' ||
     data.attribute_change2jsonb('subtitle', null, to_jsonb(v_cycle_number || ' цикл')) ||
-    data.attribute_change2jsonb('description', null, to_jsonb(v_description_text)),
+    data.attribute_change2jsonb('description', in_actor_id, to_jsonb(v_description_text)),
     in_actor_id);
 end;
 $$
@@ -10586,15 +10679,14 @@ begin
 
   -- Создадим актора по умолчанию
   v_default_actor_id :=
-    pallas_project.create_object(
+    data.create_object(
       'anonymous',
-      null,
-      jsonb '{
-        "title": "Гость",
-        "is_visible": true,
-        "actions_function": "pallas_project.actgenerator_anonymous",
-        "template": {"title": "title", "groups": [{"code": "group1", "actions": ["create_random_person"]}]}}',
-      null);
+      jsonb '[
+        {"code": "title", "value": "Гость"},
+        {"code": "is_visible", "value": true, "value_object_code": "anonymous"},
+        {"code": "actions_function", "value": "pallas_project.actgenerator_anonymous"},
+        {"code": "template", "value": {"title": "title", "groups": [{"code": "group1", "actions": ["create_random_person"]}]}}
+      ]');
 
   -- Логин по умолчанию
   insert into data.logins default values returning id into v_default_login_id;
@@ -10609,23 +10701,21 @@ begin
   ' Флинн Холл Винсон Уайтинг Хасси Хейвуд Стивенс Робинсон Йорк Гудман Махони Гордон Вуд Рид Грэй Тодд Иствуд Брукс Бродер Ховард Смит Нельсон Синклер Мур Тернер Китон Норрис', ' ')), 'Список фамилий');
 
   -- Также для работы нам понадобится объект меню
-  perform pallas_project.create_object(
+  perform data.create_object(
     'menu',
-    null,
     jsonb '{
       "is_visible": true,
       "actions_function": "pallas_project.actgenerator_menu",
-      "template": {"groups": [{"code": "menu_group1", "actions": ["login", "statuses", "debatles", "chats", "all_chats", "logout"]}]}}',
-    null);
+      "template": {"groups": [{"code": "menu_group1", "actions": ["login", "statuses", "debatles", "chats", "all_chats", "logout"]}]}
+    }');
 
   -- И пустой список уведомлений
-  perform pallas_project.create_object(
+  perform data.create_object(
     'notifications',
-    null,
     jsonb '{
       "is_visible": true,
-      "content": []}',
-    null);
+      "content": []
+    }');
 
   -- Создадим объект для страницы 404
   declare
@@ -10635,17 +10725,16 @@ begin
     values('not_found_description', 'Текст на странице 404', 'normal', 'full', 'pallas_project.vd_not_found_description', true);
 
     v_not_found_object_id :=
-      pallas_project.create_object(
+      data.create_object(
         'not_found',
-        null,
         jsonb '{
           "type": "not_found",
           "is_visible": true,
           "title": "404",
           "subtitle": "Not found",
           "template": {"title": "title", "subtitle": "subtitle", "groups": [{"code": "general", "attributes": ["not_found_description"]}]},
-          "not_found_description": null}',
-        null);
+          "not_found_description": null
+        }');
 
     insert into data.params(code, value, description)
     values('not_found_object_id', to_jsonb(v_not_found_object_id), 'Идентификатор объекта, отображаемого в случае, если актору недоступен какой-то объект (ну или он реально не существует)');
@@ -11008,89 +11097,71 @@ returns void
 volatile
 as
 $$
-declare
-  v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
-  v_all_person_group_id integer := data.get_object_id('all_person');
 begin
   insert into data.params(code, value) values
   ('economic_cycle_number', jsonb '1');
 
-  perform pallas_project.create_class(
+  perform data.create_class(
     'status_page',
-    jsonb '{
-      "full_card_function": "pallas_project.fcard_status_page",
-      "mini_card_function": "pallas_project.mcard_status_page",
-      "mini_card_template": {
-        "title": "title",
-        "groups": [{"code": "status_group", "attributes": ["mini_description"]}]
+    jsonb '[
+      {"code": "full_card_function", "value": "pallas_project.fcard_status_page"},
+      {"code": "mini_card_function", "value": "pallas_project.mcard_status_page"},
+      {"code": "is_visible", "value": true, "value_object_code": "all_person"},
+      {
+        "code": "mini_card_template",
+        "value": {
+          "title": "title",
+          "groups": [{"code": "status_group", "attributes": ["mini_description"]}]
+        }
       },
-      "template": {
-        "title": "title",
-        "subtitle": "subtitle",
-        "groups": [{"code": "status_group", "attributes": ["description"]}]
+      {
+        "code": "template",
+        "value": {
+          "title": "title",
+          "subtitle": "subtitle",
+          "groups": [{"code": "status_group", "attributes": ["description"]}]
+        }
       }
-    }');
+    ]');
 
-  perform pallas_project.create_object(
+  perform data.create_object(
     'life_support_status_page',
-    'status_page',
-    jsonb '{
-      "title": "Жизнеобеспечение"
-    }',
-    null);
-  perform pallas_project.create_object(
+    jsonb '{"title": "Жизнеобеспечение"}',
+    'status_page');
+  perform data.create_object(
     'health_care_status_page',
-    'status_page',
-    jsonb '{
-      "title": "Медицина"
-    }',
-    null);
-  perform pallas_project.create_object(
+    jsonb '{"title": "Медицина"}',
+    'status_page');
+  perform data.create_object(
     'recreation_status_page',
-    'status_page',
-    jsonb '{
-      "title": "Развлечения"
-    }',
-    null);
-  perform pallas_project.create_object(
+    jsonb '{"title": "Развлечения"}',
+    'status_page');
+  perform data.create_object(
     'police_status_page',
-    'status_page',
-    jsonb '{
-      "title": "Полиция"
-    }',
-    null);
-  perform pallas_project.create_object(
+    jsonb '{"title": "Полиция"}',
+    'status_page');
+  perform data.create_object(
     'administrative_services_status_page',
-    'status_page',
-    jsonb '{
-      "title": "Административное обслуживание"
-    }',
-    null);
+    jsonb '{"title": "Административное обслуживание"}',
+    'status_page');
 
-  perform pallas_project.create_object(
+  perform data.create_object(
     'statuses',
-    null,
-    jsonb '{
-      "is_visible": true,
-      "title": "Статусы",
-      "full_card_function": "pallas_project.fcard_statuses",
-      "content": [
-        "life_support_status_page",
-        "health_care_status_page",
-        "recreation_status_page",
-        "police_status_page",
-        "administrative_services_status_page"
-      ]
-    }',
-    null);
-
-  insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
-  (data.get_object_id('statuses'), v_is_visible_attribute_id, jsonb 'true', v_all_person_group_id),
-  (data.get_object_id('life_support_status_page'), v_is_visible_attribute_id, jsonb 'true', v_all_person_group_id),
-  (data.get_object_id('health_care_status_page'), v_is_visible_attribute_id, jsonb 'true', v_all_person_group_id),
-  (data.get_object_id('recreation_status_page'), v_is_visible_attribute_id, jsonb 'true', v_all_person_group_id),
-  (data.get_object_id('police_status_page'), v_is_visible_attribute_id, jsonb 'true', v_all_person_group_id),
-  (data.get_object_id('administrative_services_status_page'), v_is_visible_attribute_id, jsonb 'true', v_all_person_group_id);
+    jsonb '[
+      {"code": "is_visible", "value": true, "value_object_code": "all_person"},
+      {"code": "title", "value": "Статусы"},
+      {"code": "full_card_function", "value": "pallas_project.fcard_statuses"},
+      {
+        "code": "content",
+        "value": [
+          "life_support_status_page",
+          "health_care_status_page",
+          "recreation_status_page",
+          "police_status_page",
+          "administrative_services_status_page"
+        ]
+      }
+    ]');
 end;
 $$
 language plpgsql;
@@ -11305,8 +11376,6 @@ declare
   v_mini_card_function_attribute_id integer := data.get_attribute_id('mini_card_function');
   v_actions_function_attribute_id integer := data.get_attribute_id('actions_function');
   v_template_attribute_id integer := data.get_attribute_id('template');
-
-  v_person_class_id integer;
 begin
   insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden) values
   ('person_occupation', 'Должность', 'normal', null, null, true),
@@ -11340,81 +11409,59 @@ begin
   ('system_person_next_administrative_services_status', null, 'system', null, null, false);
 
   --Объект класса для персон
-  insert into data.objects(code, type) values('person', 'class') returning id into v_person_class_id;
-
-  insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_person_class_id, v_type_attribute_id, jsonb '"person"'),
-  (v_person_class_id, v_is_visible_attribute_id, jsonb 'true'),
-  (v_person_class_id, v_priority_attribute_id, jsonb '200'),
-  (v_person_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_person"'),
-  (
-    v_person_class_id,
-    v_template_attribute_id,
+  perform data.create_class(
+    'person',
     jsonb '{
-      "title": "title",
-      "subtitle": "subtitle",
-      "groups": [
-        {
-          "code": "person_personal",
-          "attributes": [
-            "person_economy_type",
-            "money",
-            "person_deposit_money",
-            "person_coin",
-            "person_opa_rating",
-            "person_un_rating"
-          ]
-        },
-        {
-          "code": "person_statuses",
-          "name": "Текущие статусы",
-          "attributes": [
-            "person_life_support_status",
-            "person_health_care_status",
-            "person_recreation_status",
-            "person_police_status",
-            "person_administrative_services_status"
-          ]
-        },
-        {
-          "code": "person_public",
-          "attributes": [
-            "person_state",
-            "person_occupation",
-            "description"
-          ]
-        }
-      ]
-    }'
-  );
+      "type": "person",
+      "is_visible": true,
+      "priority": 200,
+      "actions_function": "pallas_project.actgenerator_person",
+      "template": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [
+          {
+            "code": "person_personal",
+            "attributes": [
+              "person_economy_type",
+              "money",
+              "person_deposit_money",
+              "person_coin",
+              "person_opa_rating",
+              "person_un_rating"
+            ]
+          },
+          {
+            "code": "person_statuses",
+            "name": "Текущие статусы",
+            "attributes": [
+              "person_life_support_status",
+              "person_health_care_status",
+              "person_recreation_status",
+              "person_police_status",
+              "person_administrative_services_status"
+            ]
+          },
+          {
+            "code": "person_public",
+            "attributes": [
+              "person_state",
+              "person_occupation",
+              "description"
+            ]
+          }
+        ]
+      }
+    }');
 
   -- Группы персон
-  declare
-    v_all_person_group_id integer;
-    v_aster_group_id integer;
-    v_un_group_id integer;
-    v_mcr_group_id integer;
-    v_opa_group_id integer;
-    v_master_group_id integer;
-    v_player_group_id integer;
-  begin
-    insert into data.objects(code) values ('all_person') returning id into v_all_person_group_id;
-    insert into data.objects(code) values ('aster') returning id into v_aster_group_id;
-    insert into data.objects(code) values ('un') returning id into v_un_group_id;
-    insert into data.objects(code) values ('mcr') returning id into v_mcr_group_id;
-    insert into data.objects(code) values ('opa') returning id into v_opa_group_id;
-    insert into data.objects(code) values ('master') returning id into v_master_group_id;
-    insert into data.objects(code) values ('player') returning id into v_player_group_id;
-
-    insert into data.attribute_values(object_id, attribute_id, value) values
-    (v_all_person_group_id, v_priority_attribute_id, jsonb '10'),
-    (v_player_group_id, v_priority_attribute_id, jsonb '15'),
-    (v_aster_group_id, v_priority_attribute_id, jsonb '20'),
-    (v_un_group_id, v_priority_attribute_id, jsonb '30'),
-    (v_mcr_group_id, v_priority_attribute_id, jsonb '40'),
-    (v_opa_group_id, v_priority_attribute_id, jsonb '50'),
-    (v_master_group_id, v_priority_attribute_id, jsonb '190');
-  end;
+  perform data.create_object('all_person', jsonb '{"priority": 10}');
+  perform data.create_object('player', jsonb '{"priority": 15}');
+  perform data.create_object('aster', jsonb '{"priority": 20}');
+  perform data.create_object('un', jsonb '{"priority": 30}');
+  perform data.create_object('mcr', jsonb '{"priority": 40}');
+  perform data.create_object('opa', jsonb '{"priority": 50}');
+  perform data.create_object('master', jsonb '{"priority": 190}');
 
   -- Мастера
   perform pallas_project.create_person('m1', jsonb '{"title": "Саша", "person_occupation": "Мастер"}', array['master']);
@@ -11833,7 +11880,7 @@ begin
   perform data.change_object_and_notify(
     in_object_id,
     jsonb '[]' ||
-    data.attribute_change2jsonb('mini_description', null, to_jsonb(v_status_text)),
+    data.attribute_change2jsonb('mini_description', in_actor_id, to_jsonb(v_status_text)),
     in_actor_id);
 end;
 $$
@@ -14052,8 +14099,8 @@ Markdown — формат, который все реализуют по-раз�
 **Проверка 6:** Слово ipsum должно быть жирным.
 **Проверка 7:** Все атрибуты идут именно в указанном порядке.')
     ),
-    (v_test_id, v_short_attr_id, null),
-    (v_test_id, v_long_attr_id, null),
+    (v_test_id, v_short_attr_id, jsonb 'null'),
+    (v_test_id, v_long_attr_id, jsonb 'null'),
     (v_test_id, v_short_value_attr_id, jsonb '100'),
     (v_test_id, v_long_value_descr_attr_id, jsonb '"lorem ipsum"'),
     (
@@ -15448,7 +15495,7 @@ create table data.attribute_values(
   object_id integer not null,
   attribute_id integer not null,
   value_object_id integer,
-  value jsonb,
+  value jsonb not null,
   start_time timestamp with time zone not null default clock_timestamp(),
   start_reason text,
   start_actor_id integer,
@@ -15465,7 +15512,7 @@ create table data.attribute_values_journal(
   object_id integer not null,
   attribute_id integer not null,
   value_object_id integer,
-  value jsonb,
+  value jsonb not null,
   start_time timestamp with time zone not null,
   start_reason text,
   start_actor_id integer,

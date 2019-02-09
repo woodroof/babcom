@@ -5,7 +5,7 @@ create table data.attribute_values(
   object_id integer not null,
   attribute_id integer not null,
   value_object_id integer,
-  value jsonb,
+  value jsonb not null,
   start_time timestamp with time zone not null default clock_timestamp(),
   start_reason text,
   start_actor_id integer,

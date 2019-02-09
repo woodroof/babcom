@@ -16,7 +16,7 @@ begin
   perform data.change_object_and_notify(
     in_object_id,
     jsonb '[]' ||
-    data.attribute_change2jsonb('mini_description', null, to_jsonb(v_status_text)),
+    data.attribute_change2jsonb('mini_description', in_actor_id, to_jsonb(v_status_text)),
     in_actor_id);
 end;
 $$

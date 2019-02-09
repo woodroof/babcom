@@ -5,13 +5,15 @@ returns jsonb
 volatile
 as
 $$
--- В параметре in_changes приходит массив объектов с полями id, value_object_id, value
--- Если присутствует, value_object_id меняет именно значение, задаваемое для указанного объекта
+-- У параметра in_changes есть два возможных формата:
+-- 1. Только для установки значения: объект, где ключ - код атрибута, а значение - значение атрибута
+-- 2. Массив объектов с полями id или code, value_object_id, или value_object_code, value
+-- Если присутствует value_object_id или value_object_code, то изменится именно значение, задаваемое для указанного объекта
 -- Если value отсутствует (именно отсутствует, а не равно jsonb 'null'!), то указанное значение удаляется, в противном случае - устанавливается
 
 -- Возвращается массив объектов с полями object_id, client_id, object и list_changes, поля object и list_changes могут отсутствовать
 declare
-  v_changes jsonb := data.filter_changes(in_object_id, in_changes);
+  v_changes jsonb := data.filter_changes(in_object_id, data.preprocess_changes_with_codes(in_changes));
   v_object_code text;
 
   v_subscriptions jsonb := jsonb '[]';

@@ -25,7 +25,7 @@ begin
     in_object_id,
     jsonb '[]' ||
     data.attribute_change2jsonb('subtitle', null, to_jsonb(v_cycle_number || ' цикл')) ||
-    data.attribute_change2jsonb('description', null, to_jsonb(v_description_text)),
+    data.attribute_change2jsonb('description', in_actor_id, to_jsonb(v_description_text)),
     in_actor_id);
 end;
 $$
