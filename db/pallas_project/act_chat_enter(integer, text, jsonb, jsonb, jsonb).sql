@@ -14,8 +14,7 @@ declare
 
   v_name jsonb;
   v_chat_title text := '';
-  v_chat_subtitle text;
-  v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
+  v_chat_is_renamed boolean;
   v_chat_unread_messages_attribute_id integer := data.get_attribute_id('chat_unread_messages');
 
   v_chats_id integer := data.get_object_id('chats');
@@ -41,7 +40,7 @@ begin
     if not pp_utils.is_in_group(v_actor_id, 'master') then
     -- обновляем список текущих персон
       for v_name in 
-        (select * from unnest(pallas_project.get_chat_persons_but_masters(v_chat_id))) loop 
+        (select * from unnest(pallas_project.get_chat_persons_but_masters(v_chat_id)) limit 3) loop 
         v_chat_title := v_chat_title || ', '|| json.get_string_opt(v_name, '');
       end loop;
 
@@ -49,11 +48,11 @@ begin
       perform * from data.objects where id = v_chat_id for update;
 
       v_changes := array[]::jsonb[];
-      v_chat_subtitle := json.get_string_opt(data.get_attribute_value(v_chat_id, v_subtitle_attribute_id, v_actor_id), null);
-      if v_chat_subtitle is null then 
+      v_chat_is_renamed := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_renamed'), false);
+      if not v_chat_is_renamed then 
         v_changes := array_append(v_changes, data.attribute_change2jsonb('title', null, to_jsonb(v_chat_title)));
       else
-        v_changes := array_append(v_changes, data.attribute_change2jsonb(v_subtitle_attribute_id, null, to_jsonb(v_chat_title)));
+        v_changes := array_append(v_changes, data.attribute_change2jsonb('subtitle', null, to_jsonb(v_chat_title)));
       end if;
 
       if v_object_code is not null or v_goto_chat then

@@ -12,11 +12,12 @@ declare
   v_actor_id  integer :=data.get_active_actor_id(in_client_id);
 
   v_old_title text;
-  v_subtitle text;
+  v_chat_is_renamed boolean;
   v_changes jsonb[];
 
   v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
   v_title_attribute_id integer := data.get_attribute_id('title');
+  v_system_chat_is_renamed_attribute_id integer := data.get_attribute_id('system_chat_is_renamed');
   v_message_sent boolean := false;
 begin
   assert in_request_id is not null;
@@ -24,13 +25,13 @@ begin
   perform * from data.objects where id = v_chat_id for update;
 
   v_old_title := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), '');
-  v_subtitle := json.get_string_opt(data.get_attribute_value(v_chat_id, v_subtitle_attribute_id, v_actor_id), null);
-
+  v_chat_is_renamed := json.get_boolean_opt(data.get_attribute_value(v_chat_id, v_system_chat_is_renamed_attribute_id), false);
 
   if v_old_title <> v_title then
     v_changes := array[]::jsonb[];
-    if v_subtitle is null then 
+    if not v_chat_is_renamed then
       v_changes := array_append(v_changes, data.attribute_change2jsonb(v_subtitle_attribute_id, null, to_jsonb(v_old_title)));
+      v_changes := array_append(v_changes, data.attribute_change2jsonb(v_system_chat_is_renamed_attribute_id, null, to_jsonb(true)));
     end if;
     v_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, null, to_jsonb(v_title)));
     v_message_sent := data.change_current_object(in_client_id, 

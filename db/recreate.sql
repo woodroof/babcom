@@ -8318,6 +8318,67 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_chat_change_settings(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_chat_change_settings(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_chat_code text := json.get_string(in_params, 'chat_code');
+  v_parameter text := json.get_string(in_params, 'parameter');
+  v_value text := json.get_string(in_params, 'value');
+  v_chat_id integer := data.get_object_id(v_chat_code);
+  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+
+  v_changes jsonb[] := array[]::jsonb[];
+  v_person_id integer;
+
+  v_message_sent boolean := false;
+begin
+  assert in_request_id is not null;
+  assert v_parameter in ('can_leave', 'can_invite', 'can_mute', 'can_rename');
+  assert v_value in ('on', 'off');
+
+  perform * from data.objects where id = v_chat_id for update;
+
+  if v_parameter = 'can_leave' then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('system_chat_can_leave', null, case v_value when 'on' then null else to_jsonb(false) end));
+  end if;
+  if v_parameter = 'can_invite' then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('system_chat_can_invite', null, case v_value when 'on' then null else to_jsonb(false) end));
+  end if;
+  if v_parameter = 'can_mute' then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('system_chat_can_mute', null, case v_value when 'on' then null else to_jsonb(false) end));
+    if v_value = 'off' then
+      for v_person_id in 
+        (select oo.object_id from data.object_objects oo 
+         where oo.parent_object_id = v_chat_id
+           and oo.parent_object_id <> oo.object_id)
+      loop
+        v_changes := array_append(v_changes, data.attribute_change2jsonb('chat_is_mute', v_person_id, null));
+      end loop;
+    end if;
+  end if;
+  if v_parameter = 'can_rename' then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('system_chat_can_rename', null, case v_value when 'on' then null else to_jsonb(false) end));
+  end if;
+
+  if array_length(v_changes, 1) > 0 then
+    v_message_sent := data.change_current_object(in_client_id, 
+                                                 in_request_id,
+                                                 v_chat_id, 
+                                                 to_jsonb(v_changes));
+  end if;
+
+  if not v_message_sent then
+   perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_chat_enter(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_chat_enter(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -8334,8 +8395,7 @@ declare
 
   v_name jsonb;
   v_chat_title text := '';
-  v_chat_subtitle text;
-  v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
+  v_chat_is_renamed boolean;
   v_chat_unread_messages_attribute_id integer := data.get_attribute_id('chat_unread_messages');
 
   v_chats_id integer := data.get_object_id('chats');
@@ -8361,7 +8421,7 @@ begin
     if not pp_utils.is_in_group(v_actor_id, 'master') then
     -- обновляем список текущих персон
       for v_name in 
-        (select * from unnest(pallas_project.get_chat_persons_but_masters(v_chat_id))) loop 
+        (select * from unnest(pallas_project.get_chat_persons_but_masters(v_chat_id)) limit 3) loop 
         v_chat_title := v_chat_title || ', '|| json.get_string_opt(v_name, '');
       end loop;
 
@@ -8369,11 +8429,11 @@ begin
       perform * from data.objects where id = v_chat_id for update;
 
       v_changes := array[]::jsonb[];
-      v_chat_subtitle := json.get_string_opt(data.get_attribute_value(v_chat_id, v_subtitle_attribute_id, v_actor_id), null);
-      if v_chat_subtitle is null then 
+      v_chat_is_renamed := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_renamed'), false);
+      if not v_chat_is_renamed then 
         v_changes := array_append(v_changes, data.attribute_change2jsonb('title', null, to_jsonb(v_chat_title)));
       else
-        v_changes := array_append(v_changes, data.attribute_change2jsonb(v_subtitle_attribute_id, null, to_jsonb(v_chat_title)));
+        v_changes := array_append(v_changes, data.attribute_change2jsonb('subtitle', null, to_jsonb(v_chat_title)));
       end if;
 
       if v_object_code is not null or v_goto_chat then
@@ -8446,7 +8506,8 @@ declare
 
   v_actor_title text := json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id, v_actor_id));
   v_title text := to_char(clock_timestamp(),'DD.MM hh24:mi:ss ') || v_chat_bot_title;
-  v_chat_subtitle text := json.get_string_opt(data.get_attribute_value(v_chat_id, v_subtitle_attribute_id, v_actor_id), null);
+  v_chat_title text := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), null);
+  v_chat_is_renamed boolean := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_renamed'), false);
 
   v_name jsonb;
   v_persons text:= '';
@@ -8466,13 +8527,13 @@ begin
   -- Мастера в чате не видно, поэтому светить его выход не надо
   if not pp_utils.is_in_group(v_actor_id, 'master') then
     -- Меняем список участников чата в заголовке
-    for v_name in (select * from unnest(pallas_project.get_chat_persons_but_masters(v_chat_id))) loop 
+    for v_name in (select * from unnest(pallas_project.get_chat_persons_but_masters(v_chat_id)) limit 3) loop 
       v_persons := v_persons || ','|| json.get_string_opt(v_name, '');
     end loop;
     v_persons := trim(v_persons, ',');
 
     v_changes := array[]::jsonb[];
-    if v_chat_subtitle is null then 
+    if not v_chat_is_renamed then
       v_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, null, to_jsonb(v_persons)));
     else
       v_changes := array_append(v_changes, data.attribute_change2jsonb(v_subtitle_attribute_id, null, to_jsonb(v_persons)));
@@ -8508,7 +8569,7 @@ begin
       perform pp_utils.list_replace_to_head_and_notify(v_chats_id, v_chat_code, v_person_id);
       if v_person_id <> v_actor_id 
         and not json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'chat_is_mute', v_person_id), false) then
-        perform pp_utils.add_notification_if_not_subscribed(v_person_id, v_actor_title || ' вышел из чата ' || v_chat_subtitle, v_chat_id);
+        perform pp_utils.add_notification_if_not_subscribed(v_person_id, v_actor_title || ' вышел из чата ' || v_chat_title, v_chat_id);
       end if;
     end loop;
   end if;
@@ -8582,11 +8643,12 @@ declare
   v_actor_id  integer :=data.get_active_actor_id(in_client_id);
 
   v_old_title text;
-  v_subtitle text;
+  v_chat_is_renamed boolean;
   v_changes jsonb[];
 
   v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
   v_title_attribute_id integer := data.get_attribute_id('title');
+  v_system_chat_is_renamed_attribute_id integer := data.get_attribute_id('system_chat_is_renamed');
   v_message_sent boolean := false;
 begin
   assert in_request_id is not null;
@@ -8594,13 +8656,13 @@ begin
   perform * from data.objects where id = v_chat_id for update;
 
   v_old_title := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), '');
-  v_subtitle := json.get_string_opt(data.get_attribute_value(v_chat_id, v_subtitle_attribute_id, v_actor_id), null);
-
+  v_chat_is_renamed := json.get_boolean_opt(data.get_attribute_value(v_chat_id, v_system_chat_is_renamed_attribute_id), false);
 
   if v_old_title <> v_title then
     v_changes := array[]::jsonb[];
-    if v_subtitle is null then 
+    if not v_chat_is_renamed then
       v_changes := array_append(v_changes, data.attribute_change2jsonb(v_subtitle_attribute_id, null, to_jsonb(v_old_title)));
+      v_changes := array_append(v_changes, data.attribute_change2jsonb(v_system_chat_is_renamed_attribute_id, null, to_jsonb(true)));
     end if;
     v_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, null, to_jsonb(v_title)));
     v_message_sent := data.change_current_object(in_client_id, 
@@ -9633,6 +9695,10 @@ declare
   v_is_master boolean;
   v_chat_code text;
   v_chat_is_mute boolean;
+  v_chat_can_invite boolean;
+  v_chat_can_leave boolean;
+  v_chat_can_mute boolean;
+  v_chat_can_rename boolean;
 begin
   assert in_actor_id is not null;
 
@@ -9667,7 +9733,7 @@ begin
                 else 'on' end);
   end if;
 
-  if pp_utils.is_in_group(in_actor_id, v_chat_code) and (v_is_master or json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_rename', in_actor_id), false)) then
+  if v_is_master or (pp_utils.is_in_group(in_actor_id, v_chat_code) and json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_rename', in_actor_id), false)) then
     v_actions_list := v_actions_list || 
         format(', "chat_rename": {"code": "chat_rename", "name": "Переименовать чат", "disabled": false, "warning": "Чат поменяет имя для всех его участников.",'||
                 '"params": {"chat_code": "%s"}, "user_params": [{"code": "title", "description": "Введите имя чата", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"}]}',
@@ -9679,6 +9745,49 @@ begin
         format(', "chat_write": {"code": "chat_write", "name": "Написать", "disabled": false, '||
                 '"params": {"chat_code": "%s"}, "user_params": [{"code": "message_text", "description": "Введите текст сообщения", "type": "string", "restrictions": {"multiline": true}}]}',
                 v_chat_code);
+
+  if v_is_master then
+    if not pp_utils.is_in_group(in_actor_id, v_chat_code) then
+      v_actions_list := v_actions_list || 
+          format(', "chat_enter": {"code": "chat_enter", "name": "Следить", "disabled": false, '||
+                  '"params": {"chat_code": "%s"}}',
+                  v_chat_code);
+    end if;
+
+    v_chat_can_invite := json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_invite', in_actor_id), false);
+    v_actions_list := v_actions_list || 
+        format(', "chat_change_can_invite": {"code": "chat_change_settings", "name": "%s приглашать участников", "disabled": false, '||
+                '"params": {"chat_code": "%s", "parameter": "can_invite", "value": "%s"}}',
+                case when v_chat_can_invite then 'Запретить' else 'Разрешить' end,
+                v_chat_code,
+                case when v_chat_can_invite then 'off' else 'on' end);
+
+    v_chat_can_leave := json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_leave', in_actor_id), false);
+    v_actions_list := v_actions_list || 
+        format(', "chat_change_can_leave": {"code": "chat_change_settings", "name": "%s выходить из чата", "disabled": false, '||
+                '"params": {"chat_code": "%s", "parameter": "can_leave", "value": "%s"}}',
+                case when v_chat_can_leave then 'Запретить' else 'Разрешить' end,
+                v_chat_code,
+                case when v_chat_can_leave then 'off' else 'on' end);
+
+    v_chat_can_mute := json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_mute', in_actor_id), false);
+    v_actions_list := v_actions_list || 
+        format(', "chat_change_can_mute": {"code": "chat_change_settings", "name": "%s отключать уведомления", "disabled": false, %s'||
+                '"params": {"chat_code": "%s", "parameter": "can_mute", "value": "%s"}}',
+                case when v_chat_can_mute then 'Запретить' else 'Разрешить' end,
+                case when v_chat_can_mute then '"warning": "Это действие включит уведомления для всех участников чата",' else '' end,
+                v_chat_code,
+                case when v_chat_can_mute then 'off' else 'on' end);
+
+    v_chat_can_rename := json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_rename', in_actor_id), false);
+    v_actions_list := v_actions_list || 
+        format(', "chat_change_can_rename": {"code": "chat_change_settings", "name": "%s переименование чата", "disabled": false, '||
+                '"params": {"chat_code": "%s", "parameter": "can_rename", "value": "%s"}}',
+                case when v_chat_can_rename then 'Запретить' else 'Разрешить' end,
+                v_chat_code,
+                case when v_chat_can_rename then 'off' else 'on' end);
+  end if;
+
 
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;
@@ -10048,6 +10157,7 @@ declare
   v_system_chat_can_leave_attribute_id integer := data.get_attribute_id('system_chat_can_leave');
   v_system_chat_can_mute_attribute_id integer := data.get_attribute_id('system_chat_can_mute');
   v_system_chat_can_rename_attribute_id integer := data.get_attribute_id('system_chat_can_rename');
+  v_system_chat_is_renamed_attribute_id integer := data.get_attribute_id('system_chat_is_renamed');
 
   v_master_group_id integer := data.get_object_id('master');
 begin
@@ -10055,10 +10165,15 @@ begin
   insert into data.objects(class_id) values (v_chat_class_id) returning id, code into v_chat_id;
 
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
-  (v_chat_id, v_title_attribute_id, to_jsonb(in_chat_title), null),
   (v_chat_id, v_is_visible_attribute_id, jsonb 'true', v_chat_id),
   (v_chat_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
   (v_chat_id, v_content_attribute_id, jsonb '[]', null);
+
+  if in_chat_title is not null then
+    insert into data.attribute_values(object_id, attribute_id, value) values
+    (v_chat_id, v_title_attribute_id, to_jsonb(in_chat_title)),
+    (v_chat_id, v_system_chat_is_renamed_attribute_id, to_jsonb(true));
+  end if;
 
   if not in_can_invite then
     insert into data.attribute_values(object_id, attribute_id, value) values
@@ -11027,6 +11142,7 @@ begin
   ('chat_is_mute', 'Уведомления отключены', 'Признак отлюченного уведомления о новых сообщениях', 'normal', 'full', 'pallas_project.vd_chat_is_mute', true),
   ('chat_unread_messages', 'Непрочитанных сообщений', 'Количество непрочитанных сообщений', 'normal', 'mini', null, true),
   ('system_chat_length', null , 'Количество сообщений', 'system', null, null, false),
+  ('system_chat_is_renamed', null, 'Признак, что чат был переименован', 'system', null, null, false),
     -- для временных объектов для изменения участников
   ('chat_temp_person_list_persons', 'Сейчас участвуют', 'Список участников чата', 'normal', 'full', null, false),
   ('system_chat_temp_person_list_chat_id', null, 'Идентификатор изменяемого чата', 'system', null, null, false);
@@ -11107,6 +11223,11 @@ begin
         },
         {
           "code": "chat_group2",
+          "name": "Настройки чата",
+          "actions": ["chat_change_can_invite", "chat_change_can_leave", "chat_change_can_mute", "chat_change_can_rename"]
+        },
+        {
+          "code": "chat_group3",
           "actions": ["chat_write"]
         }
       ]
@@ -11163,7 +11284,8 @@ begin
   ('chat_leave','pallas_project.act_chat_leave'),
   ('chat_mute','pallas_project.act_chat_mute'),
   ('chat_rename','pallas_project.act_chat_rename'),
-  ('chat_enter','pallas_project.act_chat_enter');
+  ('chat_enter','pallas_project.act_chat_enter'),
+  ('chat_change_settings','pallas_project.act_chat_change_settings');
 end;
 $$
 language plpgsql;
@@ -11387,7 +11509,7 @@ declare
   v_title_attribute_id integer := data.get_attribute_id('title');
   v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
 
-  v_chat_subtitle text := json.get_string_opt(data.get_attribute_value(v_chat_id, v_subtitle_attribute_id, v_actor_id), null);
+  v_chat_is_renamed boolean := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_renamed'), false);
   v_new_chat_subtitle text := '';
   v_person_title text;
   v_chat_title text := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), '');
@@ -11399,6 +11521,7 @@ declare
   v_message_sent boolean;
 
   v_name jsonb;
+  v_names jsonb[];
   v_persons text := '';
 begin
   assert in_request_id is not null;
@@ -11408,22 +11531,27 @@ begin
   perform data.process_diffs_and_notify(data.change_object_groups(in_list_object_id, array[v_chat_id], array[]::integer[], v_actor_id));
 
   -- обновляем список текущих персон
+  v_names := pallas_project.get_chat_persons_but_masters(v_chat_id);
   for v_name in 
-    (select * from unnest(pallas_project.get_chat_persons_but_masters(v_chat_id))) loop 
+    (select * from unnest(v_names)) loop 
     v_persons := v_persons || '
 '|| json.get_string_opt(v_name, '');
-    v_new_chat_subtitle := v_new_chat_subtitle || ', '|| json.get_string_opt(v_name, '');
    end loop;
   v_persons := v_persons || '
 '|| '------------------
 Кого добавляем?';
+
+  for v_name in 
+    (select * from unnest(v_names) limit 3) loop 
+    v_new_chat_subtitle := v_new_chat_subtitle || ', '|| json.get_string_opt(v_name, '');
+   end loop;
 
   v_new_chat_subtitle := trim(v_new_chat_subtitle, ', ');
 
   -- Меняем заголовок чата
   perform * from data.objects where id = v_chat_id for update;
   v_changes := array[]::jsonb[];
-  if v_chat_subtitle is null then 
+  if not v_chat_is_renamed then 
     v_chat_title := v_new_chat_subtitle;
     v_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, null, to_jsonb(v_chat_title)));
   else

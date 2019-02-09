@@ -45,6 +45,7 @@ begin
   ('chat_is_mute', 'Уведомления отключены', 'Признак отлюченного уведомления о новых сообщениях', 'normal', 'full', 'pallas_project.vd_chat_is_mute', true),
   ('chat_unread_messages', 'Непрочитанных сообщений', 'Количество непрочитанных сообщений', 'normal', 'mini', null, true),
   ('system_chat_length', null , 'Количество сообщений', 'system', null, null, false),
+  ('system_chat_is_renamed', null, 'Признак, что чат был переименован', 'system', null, null, false),
     -- для временных объектов для изменения участников
   ('chat_temp_person_list_persons', 'Сейчас участвуют', 'Список участников чата', 'normal', 'full', null, false),
   ('system_chat_temp_person_list_chat_id', null, 'Идентификатор изменяемого чата', 'system', null, null, false);
@@ -125,6 +126,11 @@ begin
         },
         {
           "code": "chat_group2",
+          "name": "Настройки чата",
+          "actions": ["chat_change_can_invite", "chat_change_can_leave", "chat_change_can_mute", "chat_change_can_rename"]
+        },
+        {
+          "code": "chat_group3",
           "actions": ["chat_write"]
         }
       ]
@@ -181,7 +187,8 @@ begin
   ('chat_leave','pallas_project.act_chat_leave'),
   ('chat_mute','pallas_project.act_chat_mute'),
   ('chat_rename','pallas_project.act_chat_rename'),
-  ('chat_enter','pallas_project.act_chat_enter');
+  ('chat_enter','pallas_project.act_chat_enter'),
+  ('chat_change_settings','pallas_project.act_chat_change_settings');
 end;
 $$
 language plpgsql;

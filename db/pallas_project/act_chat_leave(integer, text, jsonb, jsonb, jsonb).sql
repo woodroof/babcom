@@ -37,7 +37,8 @@ declare
 
   v_actor_title text := json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id, v_actor_id));
   v_title text := to_char(clock_timestamp(),'DD.MM hh24:mi:ss ') || v_chat_bot_title;
-  v_chat_subtitle text := json.get_string_opt(data.get_attribute_value(v_chat_id, v_subtitle_attribute_id, v_actor_id), null);
+  v_chat_title text := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), null);
+  v_chat_is_renamed boolean := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_renamed'), false);
 
   v_name jsonb;
   v_persons text:= '';
@@ -57,13 +58,13 @@ begin
   -- Мастера в чате не видно, поэтому светить его выход не надо
   if not pp_utils.is_in_group(v_actor_id, 'master') then
     -- Меняем список участников чата в заголовке
-    for v_name in (select * from unnest(pallas_project.get_chat_persons_but_masters(v_chat_id))) loop 
+    for v_name in (select * from unnest(pallas_project.get_chat_persons_but_masters(v_chat_id)) limit 3) loop 
       v_persons := v_persons || ','|| json.get_string_opt(v_name, '');
     end loop;
     v_persons := trim(v_persons, ',');
 
     v_changes := array[]::jsonb[];
-    if v_chat_subtitle is null then 
+    if not v_chat_is_renamed then
       v_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, null, to_jsonb(v_persons)));
     else
       v_changes := array_append(v_changes, data.attribute_change2jsonb(v_subtitle_attribute_id, null, to_jsonb(v_persons)));
@@ -99,7 +100,7 @@ begin
       perform pp_utils.list_replace_to_head_and_notify(v_chats_id, v_chat_code, v_person_id);
       if v_person_id <> v_actor_id 
         and not json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'chat_is_mute', v_person_id), false) then
-        perform pp_utils.add_notification_if_not_subscribed(v_person_id, v_actor_title || ' вышел из чата ' || v_chat_subtitle, v_chat_id);
+        perform pp_utils.add_notification_if_not_subscribed(v_person_id, v_actor_title || ' вышел из чата ' || v_chat_title, v_chat_id);
       end if;
     end loop;
   end if;

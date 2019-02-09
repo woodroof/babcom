@@ -16,7 +16,7 @@ declare
   v_title_attribute_id integer := data.get_attribute_id('title');
   v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
 
-  v_chat_subtitle text := json.get_string_opt(data.get_attribute_value(v_chat_id, v_subtitle_attribute_id, v_actor_id), null);
+  v_chat_is_renamed boolean := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_renamed'), false);
   v_new_chat_subtitle text := '';
   v_person_title text;
   v_chat_title text := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), '');
@@ -28,6 +28,7 @@ declare
   v_message_sent boolean;
 
   v_name jsonb;
+  v_names jsonb[];
   v_persons text := '';
 begin
   assert in_request_id is not null;
@@ -37,22 +38,27 @@ begin
   perform data.process_diffs_and_notify(data.change_object_groups(in_list_object_id, array[v_chat_id], array[]::integer[], v_actor_id));
 
   -- обновляем список текущих персон
+  v_names := pallas_project.get_chat_persons_but_masters(v_chat_id);
   for v_name in 
-    (select * from unnest(pallas_project.get_chat_persons_but_masters(v_chat_id))) loop 
+    (select * from unnest(v_names)) loop 
     v_persons := v_persons || '
 '|| json.get_string_opt(v_name, '');
-    v_new_chat_subtitle := v_new_chat_subtitle || ', '|| json.get_string_opt(v_name, '');
    end loop;
   v_persons := v_persons || '
 '|| '------------------
 Кого добавляем?';
+
+  for v_name in 
+    (select * from unnest(v_names) limit 3) loop 
+    v_new_chat_subtitle := v_new_chat_subtitle || ', '|| json.get_string_opt(v_name, '');
+   end loop;
 
   v_new_chat_subtitle := trim(v_new_chat_subtitle, ', ');
 
   -- Меняем заголовок чата
   perform * from data.objects where id = v_chat_id for update;
   v_changes := array[]::jsonb[];
-  if v_chat_subtitle is null then 
+  if not v_chat_is_renamed then 
     v_chat_title := v_new_chat_subtitle;
     v_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, null, to_jsonb(v_chat_title)));
   else
