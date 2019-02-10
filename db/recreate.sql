@@ -11639,9 +11639,7 @@ begin
   ('person_deposit_money', 'Остаток средств на накопительном счёте', 'normal', 'full', null, true),
   ('system_person_coin', null, 'system', null, null, false),
   ('person_coin', 'Нераспределённые коины', 'normal', 'full', null, true),
-  ('system_person_opa_rating', null, 'system', null, null, false),
-  ('person_opa_rating', 'Рейтинг в СВП', 'normal', 'full', null, true),
-  ('system_person_un_rating', null, 'system', null, null, false),
+  ('person_opa_rating', 'Популярность среди астеров', 'normal', 'full', 'pallas_project.vd_person_opa_rating', true),
   ('person_un_rating', 'Рейтинг в ООН', 'normal', 'full', null, true),
   ('system_person_economy_type', null, 'system', null, null, false),
   ('person_economy_type', 'Тип экономики', 'normal', 'full', 'pallas_project.vd_person_economy_type', true),
@@ -11726,8 +11724,8 @@ begin
       "person_occupation": "Секретарь администрации",
       "person_state": "un",
       "system_person_coin": 50,
-      "system_person_opa_rating": 1,
-      "system_person_un_rating": 150,
+      "person_opa_rating": 1,
+      "person_un_rating": 150,
       "system_person_economy_type": "un",
       "system_person_life_support_status": 3,
       "system_person_health_care_status": 3,
@@ -11741,7 +11739,7 @@ begin
       "title": "Сьюзан Сидорова",
       "person_occupation": "Шахтёр",
       "system_money": 65000,
-      "system_person_opa_rating": 5,
+      "person_opa_rating": 5,
       "system_person_economy_type": "un",
       "system_person_life_support_status": 2,
       "system_person_health_care_status": 1,
@@ -11756,8 +11754,8 @@ begin
       "person_occupation": "Главный экономист",
       "person_state": "un",
       "system_person_coin": 50,
-      "system_person_opa_rating": 1,
-      "system_person_un_rating": 200,
+      "person_opa_rating": 1,
+      "person_un_rating": 200,
       "system_person_economy_type": "un",
       "system_person_life_support_status": 3,
       "system_person_health_care_status": 3,
@@ -12411,6 +12409,37 @@ begin
   end if;
 
   assert false;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.vd_person_opa_rating(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_person_opa_rating(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+declare
+  v_rating integer := json.get_integer(in_value);
+begin
+  assert v_rating > 0;
+
+  if v_rating = 1 then
+    return 'хрен с горы';
+  elsif v_rating = 2 then
+    return 'чей-то мальчик';
+  elsif v_rating = 3 then
+    return 'норм пацан';
+  elsif v_rating = 4 then
+    return 'настоящий белталода';
+  elsif v_rating = 5 then
+    return 'учитель';
+  elsif v_rating = 6 then
+    return 'гуру';
+  end if;
+
+  return 'лидер фракции';
 end;
 $$
 language plpgsql;
