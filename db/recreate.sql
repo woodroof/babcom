@@ -4090,7 +4090,7 @@ begin
       from jsonb_array_elements(in_changes)
     )
     loop
-      v_elem := jsonb_build_object('value', v_change.value);
+      v_elem := '{}';
 
       if v_change.id is not null then
         assert v_change.code is null;
@@ -4113,6 +4113,10 @@ begin
         where code = v_change.value_object_code;
 
         v_elem := v_elem || jsonb_build_object('value_object_id', v_object_id);
+      end if;
+
+      if v_change.value is not null then
+        v_elem := v_elem || jsonb_build_object('value', v_change.value);
       end if;
 
       v_ret_val := v_ret_val || v_elem;
