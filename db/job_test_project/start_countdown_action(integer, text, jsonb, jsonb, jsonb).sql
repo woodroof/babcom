@@ -13,7 +13,7 @@ begin
     in_client_id,
     in_request_id,
     v_object_id,
-    jsonb '[]' || data.attribute_change2jsonb('state', null, jsonb '"state2"') || data.attribute_change2jsonb('description', null, jsonb '"Ждём начала обратного отсчёта..."'));
+    jsonb '[]' || data.attribute_change2jsonb('state', jsonb '"state2"') || data.attribute_change2jsonb('description', jsonb '"Ждём начала обратного отсчёта..."'));
 
   perform data.create_job(v_time + interval '4 second', 'job_test_project.change_description', format('{"name": "4", "object_id": %s}', v_object_id)::jsonb);
   perform data.create_job(v_time + interval '3 second', 'job_test_project.change_description', format('{"name": "5", "object_id": %s}', v_object_id)::jsonb);

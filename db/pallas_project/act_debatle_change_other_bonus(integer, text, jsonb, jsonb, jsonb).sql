@@ -17,7 +17,6 @@ declare
   v_debatle_id integer := json.get_integer(data.get_attribute_value(v_debatle_change_id,'system_debatle_temp_bonus_list_debatle_id'));
   v_actor_id  integer :=data.get_active_actor_id(in_client_id);
 
-
   v_debatle_person_bonuses jsonb;
 
   v_changes jsonb[];
@@ -44,11 +43,11 @@ begin
   if v_judged_person = 'instigator' then
     v_debatle_person_bonuses := coalesce(data.get_attribute_value(v_debatle_id, 'debatle_person1_bonuses'), jsonb '[]');
     v_debatle_person_bonuses := jsonb_insert(v_debatle_person_bonuses, '{1}', jsonb_build_object('code', 'other', 'name', v_bonus_reason, 'votes', v_votes));
-    v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_person1_bonuses', null, v_debatle_person_bonuses));
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_person1_bonuses', v_debatle_person_bonuses));
   elsif v_judged_person = 'opponent' then
     v_debatle_person_bonuses := coalesce(data.get_attribute_value(v_debatle_id, 'debatle_person2_bonuses'), jsonb '[]');
     v_debatle_person_bonuses := jsonb_insert(v_debatle_person_bonuses, '{1}', jsonb_build_object('code', 'other', 'name', v_bonus_reason, 'votes', v_votes));
-    v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_person2_bonuses', null, v_debatle_person_bonuses));
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_person2_bonuses', v_debatle_person_bonuses));
   end if;
 
   perform data.change_object_and_notify(v_debatle_id, to_jsonb(v_changes), v_actor_id);
@@ -56,7 +55,7 @@ begin
   perform * from data.objects where id = v_debatle_change_id for update;
 
   v_changes := array[]::jsonb[];
-  v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_temp_bonus_list_bonuses', null, v_debatle_person_bonuses));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_temp_bonus_list_bonuses', v_debatle_person_bonuses));
   v_message_sent := data.change_current_object(in_client_id,
                                                in_request_id,
                                                v_debatle_change_id, 

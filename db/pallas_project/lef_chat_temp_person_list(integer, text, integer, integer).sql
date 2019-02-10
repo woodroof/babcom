@@ -62,9 +62,9 @@ begin
   v_changes := array[]::jsonb[];
   if not v_chat_is_renamed then 
     v_chat_title := v_new_chat_subtitle;
-    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, null, to_jsonb(v_chat_title)));
+    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, to_jsonb(v_chat_title)));
   else
-    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_subtitle_attribute_id, null, to_jsonb(v_new_chat_subtitle)));
+    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_subtitle_attribute_id, to_jsonb(v_new_chat_subtitle)));
   end if;
   perform data.change_object_and_notify(v_chat_id, 
                                         to_jsonb(v_changes),
@@ -89,8 +89,8 @@ begin
   v_content := array_remove(v_content, v_person_code);
 
   v_changes := array[]::jsonb[];
-  v_changes := array_append(v_changes, data.attribute_change2jsonb('chat_temp_person_list_persons', null, to_jsonb(v_persons)));
-  v_changes := array_append(v_changes, data.attribute_change2jsonb('content', null, to_jsonb(v_content)));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('chat_temp_person_list_persons', to_jsonb(v_persons)));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('content', to_jsonb(v_content)));
 
   -- рассылаем обновление списка себе
   v_message_sent := data.change_current_object(in_client_id,

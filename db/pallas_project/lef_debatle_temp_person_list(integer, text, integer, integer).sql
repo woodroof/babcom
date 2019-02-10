@@ -45,28 +45,28 @@ begin
   if v_edited_person = 'instigator' then
     v_old_person := v_system_debatle_person1;
     if v_old_person <> in_list_object_id then
-      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person1', null, to_jsonb(in_list_object_id)));
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person1', to_jsonb(in_list_object_id)));
     end if;
   elsif v_edited_person = 'opponent' then
     v_old_person := v_system_debatle_person2;
     if v_old_person <> in_list_object_id then
-      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person2', null, to_jsonb(in_list_object_id)));
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person2', to_jsonb(in_list_object_id)));
     end if;
   elsif v_edited_person = 'judge' then
     v_old_person := v_system_debatle_judge;
     if v_old_person <> in_list_object_id then
-      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_judge', null, to_jsonb(in_list_object_id)));
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_judge', to_jsonb(in_list_object_id)));
     end if;
   end if;
 
   -- TODO тут по идее ещё надо проверять, что персона не попадает в аудиторию дебатла, и тогда тоже убирать даже в случае публичных статусов
   if v_old_person <> -1 
   and v_debatle_status not in ('vote', 'vote_over', 'closed') then
-    v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', v_old_person, null::jsonb));
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', null::jsonb, v_old_person));
   end if;
   if v_edited_person = 'instigator' 
     or (v_edited_person in ('opponent','judge') and v_debatle_status in ('future', 'vote', 'vote_over', 'closed')) then
-    v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', in_list_object_id, jsonb 'true'));
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', jsonb 'true', in_list_object_id));
   end if;
   perform data.change_object_and_notify(v_debatle_id, to_jsonb(v_changes), v_actor_id);
 
@@ -76,14 +76,14 @@ begin
     v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_my_id, 'content', v_old_person), array[]::text[]);
     v_new_content := array_remove(v_content, v_debatle_code);
     if v_content <> v_new_content then
-      v_change_debatles_my := array_prepend(data.attribute_change2jsonb(v_content_attribute_id, v_old_person, to_jsonb(v_new_content)), v_change_debatles_my);
+      v_change_debatles_my := array_prepend(data.attribute_change2jsonb(v_content_attribute_id, to_jsonb(v_new_content), v_old_person), v_change_debatles_my);
     end if;
   end if;
   -- Добавляем в мои дебатлы новой персоне
   v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_my_id, 'content', in_list_object_id), array[]::text[]);
   v_new_content := array_prepend(v_debatle_code, v_content);
   if v_content <> v_new_content then
-    v_change_debatles_my := array_prepend(data.attribute_change2jsonb(v_content_attribute_id, in_list_object_id, to_jsonb(v_new_content)), v_change_debatles_my);
+    v_change_debatles_my := array_prepend(data.attribute_change2jsonb(v_content_attribute_id, to_jsonb(v_new_content), in_list_object_id), v_change_debatles_my);
   end if;
   if array_length(v_change_debatles_my, 1) > 0 then
     perform data.change_object_and_notify(v_debatles_my_id, 

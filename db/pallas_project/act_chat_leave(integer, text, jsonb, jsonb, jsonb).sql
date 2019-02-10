@@ -74,9 +74,9 @@ begin
 
     v_changes := array[]::jsonb[];
     if not v_chat_is_renamed then
-      v_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, null, to_jsonb(v_persons)));
+      v_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, to_jsonb(v_persons)));
     else
-      v_changes := array_append(v_changes, data.attribute_change2jsonb(v_subtitle_attribute_id, null, to_jsonb(v_persons)));
+      v_changes := array_append(v_changes, data.attribute_change2jsonb(v_subtitle_attribute_id, to_jsonb(v_persons)));
     end if;
     perform data.change_object_and_notify(v_chat_id, 
                                           to_jsonb(v_changes),

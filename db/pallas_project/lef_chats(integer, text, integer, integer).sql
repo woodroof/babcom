@@ -15,7 +15,7 @@ begin
   assert in_list_object_id is not null;
 
   perform data.change_object_and_notify(in_list_object_id, 
-                                        jsonb_build_array(data.attribute_change2jsonb(v_chat_unread_messages_attribute_id, v_actor_id, null)),
+                                        jsonb_build_array(data.attribute_change2jsonb(v_chat_unread_messages_attribute_id, null, v_actor_id)),
                                         v_actor_id);
 
   perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, v_chat_code);

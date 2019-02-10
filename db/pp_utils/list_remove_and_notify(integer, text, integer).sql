@@ -21,7 +21,7 @@ begin
   v_new_content := array_remove(v_content, in_object_code);
   if v_new_content <> v_content then
     perform data.change_object_and_notify(in_list_id, 
-                                          jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, in_actor_id, to_jsonb(v_new_content))),
+                                          jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, to_jsonb(v_new_content), in_actor_id)),
                                           in_actor_id);
   end if;
 end;

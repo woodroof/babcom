@@ -72,16 +72,16 @@ begin
     v_person2_votes_new := v_system_debatle_person2_votes + v_person2_my_vote_new - v_system_debatle_person2_my_vote;
 
     if v_system_debatle_person1_my_vote <> v_person1_my_vote_new then 
-      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person1_my_vote', v_actor_id, to_jsonb(v_person1_my_vote_new)));
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person1_my_vote', to_jsonb(v_person1_my_vote_new), v_actor_id));
     end if;
     if v_system_debatle_person2_my_vote <> v_person2_my_vote_new then 
-      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person2_my_vote', v_actor_id, to_jsonb(v_person2_my_vote_new)));
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person2_my_vote', to_jsonb(v_person2_my_vote_new), v_actor_id));
     end if;
     if v_system_debatle_person1_votes <> v_person1_votes_new then 
-      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person1_votes', null, to_jsonb(v_person1_votes_new)));
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person1_votes', to_jsonb(v_person1_votes_new)));
     end if;
     if v_system_debatle_person2_votes <> v_person2_votes_new then 
-      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person2_votes', null, to_jsonb(v_person2_votes_new)));
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person2_votes', to_jsonb(v_person2_votes_new)));
     end if;
     if array_length(v_changes, 1) > 0 then
       v_message_sent := data.change_current_object(in_client_id, 

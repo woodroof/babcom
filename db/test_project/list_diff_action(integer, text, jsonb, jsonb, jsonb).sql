@@ -19,7 +19,6 @@ begin
     v_changes ||
     data.attribute_change2jsonb(
       'title',
-      null,
       to_jsonb(
         test_project.next_code(
           json.get_string(
@@ -28,17 +27,17 @@ begin
               'title',
               v_actor_id)))));
   if v_test_state = 'remove_list' then
-    v_changes := v_changes || data.attribute_change2jsonb('subtitle', null, jsonb '"Тест добавления списка"');
-    v_changes := v_changes || data.attribute_change2jsonb('content', v_actor_id, jsonb '[]');
-    v_changes := v_changes || data.attribute_change2jsonb('test_state', null, jsonb '"add_list"');
-    v_changes := v_changes || data.attribute_change2jsonb('description2', null, to_jsonb(text
+    v_changes := v_changes || data.attribute_change2jsonb('subtitle', jsonb '"Тест добавления списка"');
+    v_changes := v_changes || data.attribute_change2jsonb('content', jsonb '[]', v_actor_id);
+    v_changes := v_changes || data.attribute_change2jsonb('test_state', jsonb '"add_list"');
+    v_changes := v_changes || data.attribute_change2jsonb('description2', to_jsonb(text
 '**Проверка 1:** Вместо удалённого списка появилась заглушка.
 **Проверка 2:** По действию изменится заголовок, подзаголовок, описание, а также добавится два элемента списка.'));
   elsif v_test_state = 'add_list' then
-    v_changes := v_changes || data.attribute_change2jsonb('subtitle', null, jsonb '"Тест изменения элемента списка"');
-    v_changes := v_changes || data.attribute_change2jsonb('content', v_actor_id, null);
-    v_changes := v_changes || data.attribute_change2jsonb('test_state', null, jsonb '"modify_list_element"');
-    v_changes := v_changes || data.attribute_change2jsonb('description2', null, to_jsonb(text
+    v_changes := v_changes || data.attribute_change2jsonb('subtitle', jsonb '"Тест изменения элемента списка"');
+    v_changes := v_changes || data.attribute_change2jsonb('content', null, v_actor_id);
+    v_changes := v_changes || data.attribute_change2jsonb('test_state', jsonb '"modify_list_element"');
+    v_changes := v_changes || data.attribute_change2jsonb('description2', to_jsonb(text
 '**Проверка 1:** Заглушка исчезла, вместо неё отображается два элемента списка.
 **Проверка 2:** По действию изменится заголовок, подзаголовок, описание, а также изменится второй объект списка.'));
   elsif v_test_state = 'modify_list_element' then

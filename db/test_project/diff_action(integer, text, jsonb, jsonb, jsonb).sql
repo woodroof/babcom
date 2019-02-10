@@ -17,19 +17,19 @@ begin
   assert in_default_params is null;
 
   if v_state = 'state1' then
-    v_changes := v_changes || data.attribute_change2jsonb('test_state', null, jsonb '"state2"');
-    v_changes := v_changes || data.attribute_change2jsonb('title', null, to_jsonb(v_title));
-    v_changes := v_changes || data.attribute_change2jsonb('description', null, to_jsonb(
+    v_changes := v_changes || data.attribute_change2jsonb('test_state', jsonb '"state2"');
+    v_changes := v_changes || data.attribute_change2jsonb('title', to_jsonb(v_title));
+    v_changes := v_changes || data.attribute_change2jsonb('description', to_jsonb(
 '**Проверка 1:** Заголовок изменился на "' || v_title || '".
 **Проверка 2:** Название кнопки поменялось на "Вперёд!".
 **Проверка 3:** Действие в очередной раз полностью меняет отображаемые данные.'));
   elsif v_state = 'state2' then
-    v_changes := v_changes || data.attribute_change2jsonb('test_state', null, jsonb '"state3"');
-    v_changes := v_changes || data.attribute_change2jsonb('title', null, to_jsonb(v_title));
-    v_changes := v_changes || data.attribute_change2jsonb('subtitle', null, jsonb '"Тест на удаление и добавление атрибутов"');
-    v_changes := v_changes || data.attribute_change2jsonb('description', null, null);
-    v_changes := v_changes || data.attribute_change2jsonb('template', null, jsonb '{"title": "title", "subtitle": "subtitle", "groups": [{"code": "not_so_common", "attributes": ["description2"]}]}');
-    v_changes := v_changes || data.attribute_change2jsonb('description2', null, to_jsonb(text
+    v_changes := v_changes || data.attribute_change2jsonb('test_state', jsonb '"state3"');
+    v_changes := v_changes || data.attribute_change2jsonb('title', to_jsonb(v_title));
+    v_changes := v_changes || data.attribute_change2jsonb('subtitle', jsonb '"Тест на удаление и добавление атрибутов"');
+    v_changes := v_changes || data.attribute_change2jsonb('description', null);
+    v_changes := v_changes || data.attribute_change2jsonb('template', jsonb '{"title": "title", "subtitle": "subtitle", "groups": [{"code": "not_so_common", "attributes": ["description2"]}]}');
+    v_changes := v_changes || data.attribute_change2jsonb('description2', to_jsonb(text
 'В этот раз мы не изменяли значение атрибута, а удалили старый и добавили новый. Также какое-то действие возвращается, но оно отсутствует в шаблоне.
 
 **Проверка 1:** Под заголовком гордо красуется подзаголовок.

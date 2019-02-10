@@ -40,7 +40,7 @@ begin
     v_message_sent := data.change_current_object(in_client_id, 
                                                  in_request_id,
                                                  v_chat_id, 
-                                                 jsonb_build_array(data.attribute_change2jsonb(v_chat_is_mute_attribute_id, v_actor_id, to_jsonb(v_new_chat_is_mute))));
+                                                 jsonb_build_array(data.attribute_change2jsonb(v_chat_is_mute_attribute_id, to_jsonb(v_new_chat_is_mute), v_actor_id)));
   end if;
   if not v_message_sent then
    perform api_utils.create_ok_notification(in_client_id, in_request_id);

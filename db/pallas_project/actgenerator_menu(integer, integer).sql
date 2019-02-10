@@ -13,6 +13,8 @@ declare
 begin
   assert in_actor_id is not null;
 
+  -- Тут порядок не важен, т.к. он задаётся в шаблоне
+
   if v_actor_code = 'anonymous' then
     v_actions :=
       v_actions ||
@@ -26,16 +28,7 @@ begin
             "statuses": {"code": "act_open_object", "name": "Статусы", "disabled": false, "params": {"object_code": "%s_statuses"}}
           }',
           v_actor_code)::jsonb;
-    end if;
-
-    v_actions :=
-      v_actions ||
-      jsonb '{
-        "debatles": {"code": "act_open_object", "name": "Дебатлы", "disabled": false, "params": {"object_code": "debatles"}},
-        "chats": {"code": "act_open_object", "name": "Чаты", "disabled": false, "params": {"object_code": "chats"}}
-      }';
-
-    if v_is_master then
+    else
       v_actions :=
         v_actions ||
         jsonb '{
@@ -46,9 +39,15 @@ begin
     v_actions :=
       v_actions ||
       jsonb '{
+        "debatles": {"code": "act_open_object", "name": "Дебатлы", "disabled": false, "params": {"object_code": "debatles"}},
+        "chats": {"code": "act_open_object", "name": "Чаты", "disabled": false, "params": {"object_code": "chats"}},
         "logout": {"code": "logout", "name": "Выход", "disabled": false, "params": {}}
       }';
   end if;
+
+  v_actions :=
+    v_actions ||
+    jsonb '{"persons": {"code": "act_open_object", "name": "Люди", "disabled": false, "params": {"object_code": "persons"}}}';
 
   return v_actions;
 end;

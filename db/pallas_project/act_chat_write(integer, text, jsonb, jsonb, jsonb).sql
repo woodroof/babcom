@@ -74,8 +74,8 @@ begin
     v_message_sent := data.change_current_object(in_client_id, 
                                                  in_request_id,
                                                  v_chat_id, 
-                                                 jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, null, to_jsonb(v_new_content)),
-                                                                   data.attribute_change2jsonb(v_system_chat_length_attribute_id, null, to_jsonb(v_chat_length + 1))));
+                                                 jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, to_jsonb(v_new_content)),
+                                                                   data.attribute_change2jsonb(v_system_chat_length_attribute_id, to_jsonb(v_chat_length + 1))));
   end if;
 
   if v_is_master_chat then
@@ -104,7 +104,7 @@ begin
       and not v_is_actor_subscribed then
       v_chat_unread_messages := json.get_integer_opt(data.get_attribute_value(v_chat_id, v_chat_unread_messages_attribute_id, v_person_id), 0);
       perform data.change_object_and_notify(v_chat_id, 
-                                            jsonb_build_array(data.attribute_change2jsonb(v_chat_unread_messages_attribute_id, v_person_id, to_jsonb(v_chat_unread_messages + 1))),
+                                            jsonb_build_array(data.attribute_change2jsonb(v_chat_unread_messages_attribute_id, to_jsonb(v_chat_unread_messages + 1), v_person_id)),
                                             v_actor_id);
     end if;
     if v_person_id <> v_actor_id 

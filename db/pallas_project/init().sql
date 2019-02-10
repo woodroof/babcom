@@ -43,7 +43,13 @@ begin
     jsonb '{
       "is_visible": true,
       "actions_function": "pallas_project.actgenerator_menu",
-      "template": {"groups": [{"code": "menu_group1", "actions": ["login", "statuses", "debatles", "chats", "all_chats", "logout"]}]}
+      "template": {
+        "groups": [
+          {"code": "menu_group1", "actions": ["login"]},
+          {"code": "menu_group2", "actions": ["statuses", "debatles", "chats", "all_chats", "persons"]},
+          {"code": "menu_group3", "actions": ["logout"]}
+        ]
+      }
     }');
 
   -- И пустой список уведомлений
@@ -89,6 +95,7 @@ begin
   perform pallas_project.init_persons();
   perform pallas_project.init_debatles();
   perform pallas_project.init_messenger();
+  perform pallas_project.init_person_list();
 end;
 $$
 language plpgsql;

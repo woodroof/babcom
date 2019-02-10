@@ -147,6 +147,14 @@ begin
       "system_person_police_status": 3,
       "system_person_administrative_services_status": 3}',
     array['all_person', 'un', 'player']);
+
+  -- Игротехнический персонаж
+  perform pallas_project.create_person(
+    'p10',
+    jsonb '{
+      "title": "АСС",
+      "person_occupation": "Автоматическая система судопроизводства"}',
+    array['all_person']);
 end;
 $$
 language plpgsql;

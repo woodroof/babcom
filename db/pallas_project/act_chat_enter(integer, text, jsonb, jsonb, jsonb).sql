@@ -55,9 +55,9 @@ begin
       v_changes := array[]::jsonb[];
       v_chat_is_renamed := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_renamed'), false);
       if not v_chat_is_renamed then 
-        v_changes := array_append(v_changes, data.attribute_change2jsonb('title', null, to_jsonb(v_chat_title)));
+        v_changes := array_append(v_changes, data.attribute_change2jsonb('title', to_jsonb(v_chat_title)));
       else
-        v_changes := array_append(v_changes, data.attribute_change2jsonb('subtitle', null, to_jsonb(v_chat_title)));
+        v_changes := array_append(v_changes, data.attribute_change2jsonb('subtitle', to_jsonb(v_chat_title)));
       end if;
 
       if v_object_code is not null or v_goto_chat then
@@ -85,7 +85,7 @@ begin
   -- Переходим к чату или остаёмся на нём
   if v_object_code is not null or v_goto_chat then
     perform data.change_object_and_notify(v_chat_id, 
-                                          jsonb_build_array(data.attribute_change2jsonb(v_chat_unread_messages_attribute_id, v_actor_id, null)),
+                                          jsonb_build_array(data.attribute_change2jsonb(v_chat_unread_messages_attribute_id, null, v_actor_id)),
                                           v_actor_id);
 
     perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, v_chat_code);

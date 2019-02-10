@@ -42,7 +42,7 @@ begin
     v_message_sent := data.change_current_object(in_client_id, 
                                                in_request_id,
                                                v_debatle_id, 
-                                               jsonb_build_array(data.attribute_change2jsonb('system_debatle_theme', null, to_jsonb(v_title))));
+                                               jsonb_build_array(data.attribute_change2jsonb('system_debatle_theme', to_jsonb(v_title))));
   end if;
   if not v_message_sent then
    perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');

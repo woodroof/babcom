@@ -30,10 +30,10 @@ begin
   if v_old_title <> v_title then
     v_changes := array[]::jsonb[];
     if not v_chat_is_renamed then
-      v_changes := array_append(v_changes, data.attribute_change2jsonb(v_subtitle_attribute_id, null, to_jsonb(v_old_title)));
-      v_changes := array_append(v_changes, data.attribute_change2jsonb(v_system_chat_is_renamed_attribute_id, null, to_jsonb(true)));
+      v_changes := array_append(v_changes, data.attribute_change2jsonb(v_subtitle_attribute_id, to_jsonb(v_old_title)));
+      v_changes := array_append(v_changes, data.attribute_change2jsonb(v_system_chat_is_renamed_attribute_id, to_jsonb(true)));
     end if;
-    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, null, to_jsonb(v_title)));
+    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, to_jsonb(v_title)));
     v_message_sent := data.change_current_object(in_client_id, 
                                                  in_request_id,
                                                  v_chat_id, 

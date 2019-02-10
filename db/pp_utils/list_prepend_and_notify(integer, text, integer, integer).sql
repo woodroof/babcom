@@ -20,7 +20,7 @@ begin
   v_new_content := array_prepend(in_new_object_code, v_content);
   if v_new_content <> v_content then
     perform data.change_object_and_notify(in_list_id, 
-                                          jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, in_value_object_id, to_jsonb(v_new_content))),
+                                          jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, to_jsonb(v_new_content), in_value_object_id)),
                                           v_actor_id);
   end if;
 end;
