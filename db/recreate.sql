@@ -4394,6 +4394,20 @@ end;
 $$
 language plpgsql;
 
+-- drop function data.set_attribute_value(integer, text, jsonb, integer, integer, text);
+
+create or replace function data.set_attribute_value(in_object_id integer, in_attribute_code text, in_value jsonb, in_value_object_id integer default null::integer, in_actor_id integer default null::integer, in_reason text default null::text)
+returns void
+volatile
+as
+$$
+-- Как правило вместо этой функции следует вызывать data.change_object
+begin
+  perform data.set_attribute_value(in_object_id, data.get_attribute_id(in_attribute_code), in_value, in_value_object_id, in_actor_id, in_reason);
+end;
+$$
+language plpgsql;
+
 -- drop function data.set_login(integer, integer);
 
 create or replace function data.set_login(in_client_id integer, in_login_id integer)
@@ -10569,104 +10583,126 @@ declare
   v_login_id integer;
   v_master_group_id integer := data.get_object_id('master');
   v_economy_type jsonb := data.get_attribute_value(v_person_id, 'system_person_economy_type');
-  v_cycle integer;
 begin
   insert into data.logins(code) values(in_login_code) returning id into v_login_id;
   insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
 
   if v_economy_type is not null then
-    perform data.set_attribute_value(v_person_id, data.get_attribute_id('person_economy_type'), v_economy_type, v_master_group_id);
+    declare
+      v_cycle integer;
+      v_money jsonb;
+      v_deposit_money jsonb;
+    begin
+      perform data.set_attribute_value(v_person_id, 'person_economy_type', v_economy_type, v_master_group_id);
 
-    v_cycle := data.get_integer_param('economic_cycle_number');
+      v_cycle := data.get_integer_param('economic_cycle_number');
 
-    -- Создадим страницу для статусов
-    perform data.create_object(
-      v_person_code || '_statuses',
-      format(
-        '[
-          {"code": "cycle", "value": %s},
-          {"code": "is_visible", "value": true, "value_object_id": %s},
-          {
-            "code": "content",
-            "value": [
-              "%s_life_support_status_page",
-              "%s_health_care_status_page",
-              "%s_recreation_status_page",
-              "%s_police_status_page",
-              "%s_administrative_services_status_page"
-            ]
-          }
-        ]',
-        v_cycle,
-        v_person_id,
-        v_person_code,
-        v_person_code,
-        v_person_code,
-        v_person_code,
-        v_person_code)::jsonb,
-      'statuses');
+      -- Переложим суммы остатков
+      if v_economy_type != jsonb '"un"' and v_economy_type != jsonb '"fixed"' then
+        v_money := data.get_attribute_value(v_person_id, 'system_money');
+        perform json.get_integer(v_money);
 
-    -- И страницы текущих статусов
-    perform data.create_object(
-      v_person_code || '_life_support_status_page',
-      format(
-        '[
-          {"code": "cycle", "value": %s},
-          {"code": "is_visible", "value": true, "value_object_id": %s},
-          {"code": "life_support_status", "value": %s}
-        ]',
-        v_cycle,
-        v_person_id,
-        json.get_integer(data.get_attribute_value(v_person_id, 'system_person_life_support_status')))::jsonb,
-      'life_support_status_page');
-    perform data.create_object(
-      v_person_code || '_health_care_status_page',
-      format(
-        '[
-          {"code": "cycle", "value": %s},
-          {"code": "is_visible", "value": true, "value_object_id": %s},
-          {"code": "health_care_status", "value": %s}
-        ]',
-        v_cycle,
-        v_person_id,
-        json.get_integer(data.get_attribute_value(v_person_id, 'system_person_health_care_status')))::jsonb,
-      'health_care_status_page');
-    perform data.create_object(
-      v_person_code || '_recreation_status_page',
-      format(
-        '[
-          {"code": "cycle", "value": %s},
-          {"code": "is_visible", "value": true, "value_object_id": %s},
-          {"code": "recreation_status", "value": %s}
-        ]',
-        v_cycle,
-        v_person_id,
-        json.get_integer(data.get_attribute_value(v_person_id, 'system_person_recreation_status')))::jsonb,
-      'recreation_status_page');
-    perform data.create_object(
-      v_person_code || '_police_status_page',
-      format(
-        '[
-          {"code": "cycle", "value": %s},
-          {"code": "is_visible", "value": true, "value_object_id": %s},
-          {"code": "police_status", "value": %s}
-        ]',
-        v_cycle,
-        v_person_id,
-        json.get_integer(data.get_attribute_value(v_person_id, 'system_person_police_status')))::jsonb,
-      'police_status_page');
-    perform data.create_object(
-      v_person_code || '_administrative_services_status_page',
-      format(
-        '[
-          {"code": "cycle", "value": %s},
-          {"code": "is_visible", "value": true, "value_object_id": %s},
-          {"code": "administrative_services_status", "value": %s}
-        ]',
-        v_cycle,
-        v_person_id,
-        json.get_integer(data.get_attribute_value(v_person_id, 'system_person_administrative_services_status')))::jsonb,
-      'administrative_services_status_page');
+        perform data.set_attribute_value(v_person_id, 'money', v_money, v_person_id);
+        perform data.set_attribute_value(v_person_id, 'money', v_money, v_master_group_id);
+      end if;
+
+      if v_economy_type = jsonb '"asters"' then
+        v_deposit_money := data.get_attribute_value(v_person_id, 'system_person_deposit_money');
+        perform json.get_integer(v_deposit_money);
+
+        perform data.set_attribute_value(v_person_id, 'person_deposit_money', v_deposit_money, v_person_id);
+        perform data.set_attribute_value(v_person_id, 'person_deposit_money', v_deposit_money, v_master_group_id);
+      end if;
+
+      -- Создадим страницу для статусов
+      perform data.create_object(
+        v_person_code || '_statuses',
+        format(
+          '[
+            {"code": "cycle", "value": %s},
+            {"code": "is_visible", "value": true, "value_object_id": %s},
+            {
+              "code": "content",
+              "value": [
+                "%s_life_support_status_page",
+                "%s_health_care_status_page",
+                "%s_recreation_status_page",
+                "%s_police_status_page",
+                "%s_administrative_services_status_page"
+              ]
+            }
+          ]',
+          v_cycle,
+          v_person_id,
+          v_person_code,
+          v_person_code,
+          v_person_code,
+          v_person_code,
+          v_person_code)::jsonb,
+        'statuses');
+
+      -- И страницы текущих статусов
+      perform data.create_object(
+        v_person_code || '_life_support_status_page',
+        format(
+          '[
+            {"code": "cycle", "value": %s},
+            {"code": "is_visible", "value": true, "value_object_id": %s},
+            {"code": "life_support_status", "value": %s}
+          ]',
+          v_cycle,
+          v_person_id,
+          json.get_integer(data.get_attribute_value(v_person_id, 'system_person_life_support_status')))::jsonb,
+        'life_support_status_page');
+      perform data.create_object(
+        v_person_code || '_health_care_status_page',
+        format(
+          '[
+            {"code": "cycle", "value": %s},
+            {"code": "is_visible", "value": true, "value_object_id": %s},
+            {"code": "health_care_status", "value": %s}
+          ]',
+          v_cycle,
+          v_person_id,
+          json.get_integer(data.get_attribute_value(v_person_id, 'system_person_health_care_status')))::jsonb,
+        'health_care_status_page');
+      perform data.create_object(
+        v_person_code || '_recreation_status_page',
+        format(
+          '[
+            {"code": "cycle", "value": %s},
+            {"code": "is_visible", "value": true, "value_object_id": %s},
+            {"code": "recreation_status", "value": %s}
+          ]',
+          v_cycle,
+          v_person_id,
+          json.get_integer(data.get_attribute_value(v_person_id, 'system_person_recreation_status')))::jsonb,
+        'recreation_status_page');
+      perform data.create_object(
+        v_person_code || '_police_status_page',
+        format(
+          '[
+            {"code": "cycle", "value": %s},
+            {"code": "is_visible", "value": true, "value_object_id": %s},
+            {"code": "police_status", "value": %s}
+          ]',
+          v_cycle,
+          v_person_id,
+          json.get_integer(data.get_attribute_value(v_person_id, 'system_person_police_status')))::jsonb,
+        'police_status_page');
+      perform data.create_object(
+        v_person_code || '_administrative_services_status_page',
+        format(
+          '[
+            {"code": "cycle", "value": %s},
+            {"code": "is_visible", "value": true, "value_object_id": %s},
+            {"code": "administrative_services_status", "value": %s}
+          ]',
+          v_cycle,
+          v_person_id,
+          json.get_integer(data.get_attribute_value(v_person_id, 'system_person_administrative_services_status')))::jsonb,
+        'administrative_services_status_page');
+    end;
   end if;
 end;
 $$
@@ -11852,8 +11888,9 @@ begin
       "title": "Сьюзан Сидорова",
       "person_occupation": "Шахтёр",
       "system_money": 65000,
+      "system_person_deposit_money": 100000,
       "person_opa_rating": 5,
-      "system_person_economy_type": "un",
+      "system_person_economy_type": "asters",
       "system_person_life_support_status": 2,
       "system_person_health_care_status": 1,
       "system_person_recreation_status": 2,

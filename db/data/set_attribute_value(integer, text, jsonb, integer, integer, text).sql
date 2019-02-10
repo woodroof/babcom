@@ -1,0 +1,13 @@
+-- drop function data.set_attribute_value(integer, text, jsonb, integer, integer, text);
+
+create or replace function data.set_attribute_value(in_object_id integer, in_attribute_code text, in_value jsonb, in_value_object_id integer default null::integer, in_actor_id integer default null::integer, in_reason text default null::text)
+returns void
+volatile
+as
+$$
+-- Как правило вместо этой функции следует вызывать data.change_object
+begin
+  perform data.set_attribute_value(in_object_id, data.get_attribute_id(in_attribute_code), in_value, in_value_object_id, in_actor_id, in_reason);
+end;
+$$
+language plpgsql;
