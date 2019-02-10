@@ -28,7 +28,6 @@ begin
             "statuses": {"code": "act_open_object", "name": "Статусы", "disabled": false, "params": {"object_code": "%s_statuses"}}
           }',
           v_actor_code)::jsonb;
-    else
       v_actions :=
         v_actions ||
         jsonb '{
