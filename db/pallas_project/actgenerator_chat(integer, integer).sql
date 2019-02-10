@@ -27,12 +27,12 @@ begin
   v_chat_can_mute := json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_mute', in_actor_id), false);
   v_chat_can_rename := json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_rename', in_actor_id), false);
 
-  if v_is_master and not v_is_master_chat or v_chat_can_invite then
-    v_actions_list := v_actions_list || 
-        format(', "chat_add_person": {"code": "chat_add_person", "name": "Добавить/посмотреть участников", "disabled": false, '||
-                '"params": {"chat_code": "%s"}}',
-                v_chat_code);
-  end if;
+  v_actions_list := v_actions_list || 
+      format(', "chat_add_person": {"code": "chat_add_person", "name": "%s участников", "disabled": false, '||
+              '"params": {"chat_code": "%s"}}',
+              case when v_is_master and not v_is_master_chat or v_chat_can_invite then 'Добавить/посмотреть'
+              else 'Посмотреть' end,
+              v_chat_code);
 
   if pp_utils.is_in_group(in_actor_id, v_chat_code) and (v_is_master and not v_is_master_chat or v_chat_can_leave) then
     v_actions_list := v_actions_list || 

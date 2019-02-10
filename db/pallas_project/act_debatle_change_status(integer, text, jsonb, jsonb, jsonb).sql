@@ -58,6 +58,8 @@ begin
                                           jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, to_jsonb(v_new_content), v_master_group_id)),
                                           v_actor_id);
     end if;
+    -- Отправляем мастерам в чат уведомление 
+    perform pallas_project.send_to_master_chat('Создан новый дебатл', v_debatle_code);
 
   elsif v_new_status = 'future' and v_debatle_status = 'new' and v_is_master then
     if v_system_debatle_person1 =-1 or v_system_debatle_person2 =-1 then

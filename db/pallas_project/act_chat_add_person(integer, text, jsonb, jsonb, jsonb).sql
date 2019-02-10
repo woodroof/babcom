@@ -15,11 +15,13 @@ declare
   v_title_attribute_id integer := data.get_attribute_id('title');
   v_chat_temp_person_list_persons_attribute_id integer := data.get_attribute_id('chat_temp_person_list_persons');
   v_system_chat_temp_person_list_chat_id_attribute_id integer := data.get_attribute_id('system_chat_temp_person_list_chat_id');
+  v_chat_can_invite boolean := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_can_invite', v_actor_id), false);
 
   v_chat_title text := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), '');
   v_is_master_chat boolean := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_master'), false);
+  v_is_master boolean := pp_utils.is_in_group(in_client_id, 'master');
   v_persons text := '';
-  v_name jsonb;
+  v_name record;
 
   v_chat_temp_person_list_class_id integer := data.get_class_id('chat_temp_person_list');
   v_content text[];
@@ -32,35 +34,42 @@ declare
 begin
   assert in_request_id is not null;
 
-  -- создаём темповый список персон
+-- создаём темповый список персон
   insert into data.objects(class_id) values (v_chat_temp_person_list_class_id) returning id, code into v_temp_object_id, v_temp_object_code;
 
-  -- Собираем список всех персонажей, кроме тех, кто уже в чате
-  select array_agg(o.code order by av.value) into v_content
-  from data.object_objects oo
-    left join data.objects o on o.id = oo.object_id
-    left join data.attribute_values av on av.object_id = o.id and av.attribute_id = v_title_attribute_id and av.value_object_id is null
-  where (oo.parent_object_id = v_all_person_id or oo.parent_object_id = v_master_id and v_is_master_chat)
-    and oo.object_id not in (oo.parent_object_id)
-    and oo.object_id not in (select chat.object_id from data.object_objects chat where chat.parent_object_id = v_chat_id);
+  if v_is_master and not v_is_master_chat or v_chat_can_invite then
+    -- Собираем список всех персонажей, кроме тех, кто уже в чате
+    select array_agg(o.code order by av.value) into v_content
+    from data.object_objects oo
+      left join data.objects o on o.id = oo.object_id
+      left join data.attribute_values av on av.object_id = o.id and av.attribute_id = v_title_attribute_id and av.value_object_id is null
+    where (oo.parent_object_id = v_all_person_id or oo.parent_object_id = v_master_id and v_is_master_chat)
+      and oo.object_id not in (oo.parent_object_id)
+      and oo.object_id not in (select chat.object_id from data.object_objects chat where chat.parent_object_id = v_chat_id);
 
-  if v_content is null then
-    v_content := array[]::integer[];
+    if v_content is null then
+      v_content := array[]::integer[];
+    end if;
+    insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
+    (v_temp_object_id, v_content_attribute_id, to_jsonb(v_content), null);
   end if;
 
   -- Собираем список тех, кто уже в чате, просто чтобы показать
-  for v_name in (select * from unnest(pallas_project.get_chat_persons(v_chat_id, not v_is_master_chat))) loop 
+  for v_name in (select x.code, x.name 
+    from jsonb_to_recordset(pallas_project.get_chat_persons(v_chat_id, not v_is_master_chat)) as x(code text, name jsonb)) loop 
     v_persons := v_persons || '
-'|| json.get_string_opt(v_name, '');
+'|| '['||json.get_string(v_name.name)||'](babcom:'||v_name.code||')';
   end loop;
-  v_persons := v_persons || '
+  if v_is_master and not v_is_master_chat or v_chat_can_invite then
+    v_persons := v_persons || '
 '|| '------------------
 Кого добавляем?';
+  end if;
+
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
-  (v_temp_object_id, v_title_attribute_id, to_jsonb(format('Изменение участников чата %s', v_chat_title)), v_actor_id),
+  (v_temp_object_id, v_title_attribute_id, to_jsonb(format('Участники чата %s', v_chat_title)), v_actor_id),
   (v_temp_object_id, v_is_visible_attribute_id, jsonb 'true', v_actor_id),
   (v_temp_object_id, v_chat_temp_person_list_persons_attribute_id, to_jsonb(v_persons), null),
-  (v_temp_object_id, v_content_attribute_id, to_jsonb(v_content), null),
   (v_temp_object_id, v_system_chat_temp_person_list_chat_id_attribute_id, to_jsonb(v_chat_id), null);
 
   perform api_utils.create_notification(

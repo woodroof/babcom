@@ -1,19 +1,20 @@
 -- drop function pallas_project.get_chat_persons(integer, boolean);
 
 create or replace function pallas_project.get_chat_persons(in_chat_id integer, in_but_masters boolean default false)
-returns jsonb[]
+returns jsonb
 volatile
 as
 $$
 declare
-  v_persons jsonb[] := array[]::jsonb[];
+  v_persons jsonb ;
   v_title_attribute_id integer := data.get_attribute_id('title');
 begin
 -- Список участников чата
 -- in_but_masters = true - кроме мастеров
-  select array_agg(av.value order by av.value) into v_persons
+  select jsonb_agg(jsonb_build_object('code', o.code, 'name', av.value) order by av.value) into v_persons
       from data.object_objects oo
       left join data.attribute_values av on av.object_id = oo.object_id and av.attribute_id = v_title_attribute_id and av.value_object_id is null
+      left join data.objects o on oo.object_id = o.id
       where oo.parent_object_id = in_chat_id
         and oo.parent_object_id <> oo.object_id
         and (not coalesce(in_but_masters, false) 

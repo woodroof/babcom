@@ -67,8 +67,8 @@ begin
   -- Мастера в чате не видно, поэтому светить его выход не надо
   if not v_is_master or v_is_master_chat then
     -- Меняем список участников чата в заголовке
-    for v_name in (select * from unnest(pallas_project.get_chat_persons(v_chat_id, not v_is_master_chat)) limit 3) loop 
-      v_persons := v_persons || ','|| json.get_string_opt(v_name, '');
+    for v_name in (select x.name from jsonb_to_recordset(pallas_project.get_chat_persons(v_chat_id, not v_is_master_chat)) as x(code text, name jsonb) limit 3) loop 
+      v_persons := v_persons || ','|| json.get_string(v_name);
     end loop;
     v_persons := trim(v_persons, ',');
 
@@ -109,7 +109,13 @@ begin
        where oo.parent_object_id = v_chat_id
          and oo.parent_object_id <> oo.object_id)
     loop
-      perform pp_utils.list_replace_to_head_and_notify(v_chats_id, v_chat_code, v_person_id);
+      if v_is_master_chat then
+        if not v_is_master then
+          perform pp_utils.list_replace_to_head_and_notify(v_master_chats_id, v_chat_code, v_person_id);
+        end if;
+      else
+        perform pp_utils.list_replace_to_head_and_notify(v_chats_id, v_chat_code, v_person_id);
+      end if;
       if v_person_id <> v_actor_id 
         and not json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'chat_is_mute', v_person_id), false) then
         perform pp_utils.add_notification_if_not_subscribed(v_person_id, v_actor_title || ' вышел из чата ' || v_chat_title, v_chat_id);

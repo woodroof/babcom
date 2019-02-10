@@ -26,7 +26,6 @@ begin
 
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_chat_id, v_is_visible_attribute_id, jsonb 'true', v_chat_id),
-  (v_chat_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
   (v_chat_id, v_content_attribute_id, jsonb '[]', null);
 
   if in_chat_title is not null then

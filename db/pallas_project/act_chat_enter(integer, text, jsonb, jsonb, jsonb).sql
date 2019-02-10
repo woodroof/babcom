@@ -45,8 +45,8 @@ begin
     -- Меняем заголовок чата, если зашёл не мастер
     if not v_is_master or v_is_master_chat then
       for v_name in 
-        (select * from unnest(pallas_project.get_chat_persons(v_chat_id, not v_is_master_chat)) limit 3) loop 
-        v_chat_title := v_chat_title || ', '|| json.get_string_opt(v_name, '');
+        (select x.name from jsonb_to_recordset(pallas_project.get_chat_persons(v_chat_id, not v_is_master_chat))as x(code text, name jsonb) limit 3) loop 
+        v_chat_title := v_chat_title || ', '|| json.get_string(v_name);
       end loop;
 
       v_chat_title := trim(v_chat_title, ', ');

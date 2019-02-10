@@ -32,7 +32,16 @@ begin
       v_actions :=
         v_actions ||
         jsonb '{
-          "all_chats": {"code": "act_open_object", "name": "Все чаты", "disabled": false, "params": {"object_code": "all_chats"}}
+          "chats": {"code": "act_open_object", "name": "Чаты", "disabled": false, "params": {"object_code": "chats"}},
+          "master_chats": {"code": "act_open_object", "name": "Связь с мастерами", "disabled": false, "params": {"object_code": "master_chats"}}
+        }';
+    else
+      v_actions :=
+        v_actions ||
+        jsonb '{
+          "chats": {"code": "act_open_object", "name": " Отслеживаемые игровые чаты", "disabled": false, "params": {"object_code": "chats"}},
+          "all_chats": {"code": "act_open_object", "name": "Все игровые чаты", "disabled": false, "params": {"object_code": "all_chats"}},
+          "master_chats": {"code": "act_open_object", "name": "Мастерские чаты", "disabled": false, "params": {"object_code": "master_chats"}}
         }';
     end if;
 
