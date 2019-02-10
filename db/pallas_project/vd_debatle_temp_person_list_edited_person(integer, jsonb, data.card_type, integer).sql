@@ -1,6 +1,6 @@
--- drop function pallas_project.vd_debatle_temp_person_list_edited_person(integer, jsonb, integer);
+-- drop function pallas_project.vd_debatle_temp_person_list_edited_person(integer, jsonb, data.card_type, integer);
 
-create or replace function pallas_project.vd_debatle_temp_person_list_edited_person(in_attribute_id integer, in_value jsonb, in_actor_id integer)
+create or replace function pallas_project.vd_debatle_temp_person_list_edited_person(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
 returns text
 immutable
 as

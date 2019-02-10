@@ -84,10 +84,11 @@ begin
   ('go_back', 'pallas_project.act_go_back'),
   ('create_random_person', 'pallas_project.act_create_random_person');
 
+  perform pallas_project.init_groups();
+  perform pallas_project.init_economics();
   perform pallas_project.init_persons();
   perform pallas_project.init_debatles();
   perform pallas_project.init_messenger();
-  perform pallas_project.init_economics();
 end;
 $$
 language plpgsql;

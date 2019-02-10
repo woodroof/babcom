@@ -1,12 +1,12 @@
--- drop function pallas_project.vd_not_found_description(integer, jsonb, integer);
+-- drop function pallas_project.vd_not_found_description(integer, jsonb, data.card_type, integer);
 
-create or replace function pallas_project.vd_not_found_description(in_attribute_id integer, in_value jsonb, in_actor_id integer)
+create or replace function pallas_project.vd_not_found_description(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
 returns text
 immutable
 as
 $$
 declare
-  v_random integer := random.random_integer(1, 11);
+  v_random integer := random.random_integer(1, 12);
 begin
   if v_random = 1 then
     return 'Это не те дроиды, которых вы ищете';
@@ -27,7 +27,9 @@ begin
   elsif v_random = 9 then
     return 'Принцесса в другом замке!';
   elsif v_random = 10 then
-    return 'Нет никакого торта';
+    return 'Торта нет';
+  elsif v_random = 11 then
+    return 'Ложки не существует';
   end if;
 
   return 'Меньше значит больше';

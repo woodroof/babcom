@@ -1,18 +1,18 @@
--- drop function pallas_project.vd_person_economy_type(integer, jsonb, integer);
+-- drop function pallas_project.vd_person_economy_type(integer, jsonb, data.card_type, integer);
 
-create or replace function pallas_project.vd_person_economy_type(in_attribute_id integer, in_value jsonb, in_actor_id integer)
+create or replace function pallas_project.vd_person_economy_type(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
 returns text
 immutable
 as
 $$
 begin
-  if in_value = jsonb 'un' then
+  if in_value = jsonb '"un"' then
     return 'ООН — только токены';
-  elsif in_value = jsonb 'mcr' then
+  elsif in_value = jsonb '"mcr"' then
     return 'МРК — только текущий счёт';
-  elsif in_value = jsonb 'asters' then
+  elsif in_value = jsonb '"asters"' then
     return 'Астеры — накопительный и обнуляемый текущий счета';
-  elsif in_value = jsonb 'fixed' then
+  elsif in_value = jsonb '"fixed"' then
     return 'Фиксированные статусы — нет счетов, нет распределения токенов';
   end if;
 

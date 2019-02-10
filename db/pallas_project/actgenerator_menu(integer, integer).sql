@@ -7,20 +7,30 @@ as
 $$
 declare
   v_object_code text := data.get_object_code(in_object_id);
+  v_actor_code text := data.get_object_code(in_actor_id);
   v_actions jsonb := '{}';
   v_is_master boolean := pp_utils.is_in_group(in_actor_id, 'master');
 begin
   assert in_actor_id is not null;
 
-  if data.get_object_code(in_actor_id) = 'anonymous' then
+  if v_actor_code = 'anonymous' then
     v_actions :=
       v_actions ||
       jsonb '{"login": {"code": "login", "name": "Войти", "disabled": false, "params": {}, "user_params": [{"code": "password", "description": "Введите пароль", "type": "string", "restrictions": {"password": true}}]}}';
   elsif v_is_master or pp_utils.is_in_group(in_actor_id, 'all_person') then
+    if not v_is_master then
+      v_actions :=
+        v_actions ||
+        format(
+          '{
+            "statuses": {"code": "act_open_object", "name": "Статусы", "disabled": false, "params": {"object_code": "%s_statuses"}}
+          }',
+          v_actor_code)::jsonb;
+    end if;
+
     v_actions :=
       v_actions ||
       jsonb '{
-        "statuses": {"code": "act_open_object", "name": "Статусы", "disabled": false, "params": {"object_code": "statuses"}},
         "debatles": {"code": "act_open_object", "name": "Дебатлы", "disabled": false, "params": {"object_code": "debatles"}},
         "chats": {"code": "act_open_object", "name": "Чаты", "disabled": false, "params": {"object_code": "chats"}}
       }';

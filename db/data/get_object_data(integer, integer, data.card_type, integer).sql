@@ -69,8 +69,8 @@ begin
   loop
     v_attribute_json := jsonb '{}';
     if v_attribute.value_description_function is not null then
-      execute format('select %s($1, $2, $3)', v_attribute.value_description_function)
-      using v_attribute.id, v_attribute.value, in_actor_id
+      execute format('select %s($1, $2, $3, $4)', v_attribute.value_description_function)
+      using v_attribute.id, v_attribute.value, in_card_type, in_actor_id
       into v_value_description;
 
       if v_value_description is not null then

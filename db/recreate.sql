@@ -3599,8 +3599,8 @@ begin
   loop
     v_attribute_json := jsonb '{}';
     if v_attribute.value_description_function is not null then
-      execute format('select %s($1, $2, $3)', v_attribute.value_description_function)
-      using v_attribute.id, v_attribute.value, in_actor_id
+      execute format('select %s($1, $2, $3, $4)', v_attribute.value_description_function)
+      using v_attribute.id, v_attribute.value, in_card_type, in_actor_id
       into v_value_description;
 
       if v_value_description is not null then
@@ -4253,7 +4253,7 @@ language plpgsql;
 
 -- drop function data.set_attribute_value(integer, integer, jsonb, integer, integer, text);
 
-create or replace function data.set_attribute_value(in_object_id integer, in_attribute_id integer, in_value jsonb, in_value_object_id integer, in_actor_id integer, in_reason text default null::text)
+create or replace function data.set_attribute_value(in_object_id integer, in_attribute_id integer, in_value jsonb, in_value_object_id integer default null::integer, in_actor_id integer default null::integer, in_reason text default null::text)
 returns void
 volatile
 as
@@ -10326,20 +10326,30 @@ as
 $$
 declare
   v_object_code text := data.get_object_code(in_object_id);
+  v_actor_code text := data.get_object_code(in_actor_id);
   v_actions jsonb := '{}';
   v_is_master boolean := pp_utils.is_in_group(in_actor_id, 'master');
 begin
   assert in_actor_id is not null;
 
-  if data.get_object_code(in_actor_id) = 'anonymous' then
+  if v_actor_code = 'anonymous' then
     v_actions :=
       v_actions ||
       jsonb '{"login": {"code": "login", "name": "Войти", "disabled": false, "params": {}, "user_params": [{"code": "password", "description": "Введите пароль", "type": "string", "restrictions": {"password": true}}]}}';
   elsif v_is_master or pp_utils.is_in_group(in_actor_id, 'all_person') then
+    if not v_is_master then
+      v_actions :=
+        v_actions ||
+        format(
+          '{
+            "statuses": {"code": "act_open_object", "name": "Статусы", "disabled": false, "params": {"object_code": "%s_statuses"}}
+          }',
+          v_actor_code)::jsonb;
+    end if;
+
     v_actions :=
       v_actions ||
       jsonb '{
-        "statuses": {"code": "act_open_object", "name": "Статусы", "disabled": false, "params": {"object_code": "statuses"}},
         "debatles": {"code": "act_open_object", "name": "Дебатлы", "disabled": false, "params": {"object_code": "debatles"}},
         "chats": {"code": "act_open_object", "name": "Чаты", "disabled": false, "params": {"object_code": "chats"}}
       }';
@@ -10371,8 +10381,45 @@ returns jsonb
 volatile
 as
 $$
+declare
+  v_object_code text := data.get_object_code(in_object_id);
+  v_master boolean := pp_utils.is_in_group(in_actor_id, 'master');
+  v_economy_type jsonb;
+  v_actions jsonb := jsonb '{}';
 begin
-  return jsonb '{}';
+  if v_master then
+    v_economy_type := data.get_attribute_value(in_object_id, 'system_person_economy_type');
+    if v_economy_type is not null then
+      v_actions :=
+        v_actions ||
+        format('{
+          "open_current_statuses": {
+            "code": "act_open_object",
+            "name": "Посмотреть текущие статусы",
+            "disabled": false,
+            "params": {
+              "object_code": "%s_statuses"
+            }
+          }
+        }', v_object_code)::jsonb;
+      if v_economy_type != jsonb '"fixed"' then
+        v_actions :=
+          v_actions ||
+          format('{
+            "open_next_statuses": {
+              "code": "act_open_object",
+              "name": "Посмотреть купленные статусы на следующий цикл",
+              "disabled": false,
+              "params": {
+                "object_code": "%s_next_statuses"
+              }
+            }
+          }', v_object_code)::jsonb;
+      end if;
+    end if;
+  end if;
+
+  return v_actions;
 end;
 $$
 language plpgsql;
@@ -10454,10 +10501,109 @@ as
 $$
 declare
   v_person_id integer := data.create_object(null, in_attributes, 'person', in_groups);
+  v_person_code text := data.get_object_code(v_person_id);
   v_login_id integer;
+  v_master_group_id integer := data.get_object_id('master');
+  v_economy_type jsonb := data.get_attribute_value(v_person_id, 'system_person_economy_type');
+  v_cycle integer;
 begin
   insert into data.logins(code) values(in_login_code) returning id into v_login_id;
   insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
+
+  if v_economy_type is not null then
+    perform data.set_attribute_value(v_person_id, data.get_attribute_id('person_economy_type'), v_economy_type, v_master_group_id);
+
+    v_cycle := data.get_integer_param('economic_cycle_number');
+
+    -- Создадим страницу для статусов
+    perform data.create_object(
+      v_person_code || '_statuses',
+      format(
+        '[
+          {"code": "cycle", "value": %s},
+          {"code": "is_visible", "value": true, "value_object_id": %s},
+          {
+            "code": "content",
+            "value": [
+              "%s_life_support_status_page",
+              "%s_health_care_status_page",
+              "%s_recreation_status_page",
+              "%s_police_status_page",
+              "%s_administrative_services_status_page"
+            ]
+          }
+        ]',
+        v_cycle,
+        v_person_id,
+        v_person_code,
+        v_person_code,
+        v_person_code,
+        v_person_code,
+        v_person_code)::jsonb,
+      'statuses');
+
+    -- И страницы текущих статусов
+    perform data.create_object(
+      v_person_code || '_life_support_status_page',
+      format(
+        '[
+          {"code": "cycle", "value": %s},
+          {"code": "is_visible", "value": true, "value_object_id": %s},
+          {"code": "life_support_status", "value": %s}
+        ]',
+        v_cycle,
+        v_person_id,
+        json.get_integer(data.get_attribute_value(v_person_id, 'system_person_life_support_status')))::jsonb,
+      'life_support_status_page');
+    perform data.create_object(
+      v_person_code || '_health_care_status_page',
+      format(
+        '[
+          {"code": "cycle", "value": %s},
+          {"code": "is_visible", "value": true, "value_object_id": %s},
+          {"code": "health_care_status", "value": %s}
+        ]',
+        v_cycle,
+        v_person_id,
+        json.get_integer(data.get_attribute_value(v_person_id, 'system_person_health_care_status')))::jsonb,
+      'health_care_status_page');
+    perform data.create_object(
+      v_person_code || '_recreation_status_page',
+      format(
+        '[
+          {"code": "cycle", "value": %s},
+          {"code": "is_visible", "value": true, "value_object_id": %s},
+          {"code": "recreation_status", "value": %s}
+        ]',
+        v_cycle,
+        v_person_id,
+        json.get_integer(data.get_attribute_value(v_person_id, 'system_person_recreation_status')))::jsonb,
+      'recreation_status_page');
+    perform data.create_object(
+      v_person_code || '_police_status_page',
+      format(
+        '[
+          {"code": "cycle", "value": %s},
+          {"code": "is_visible", "value": true, "value_object_id": %s},
+          {"code": "police_status", "value": %s}
+        ]',
+        v_cycle,
+        v_person_id,
+        json.get_integer(data.get_attribute_value(v_person_id, 'system_person_police_status')))::jsonb,
+      'police_status_page');
+    perform data.create_object(
+      v_person_code || '_administrative_services_status_page',
+      format(
+        '[
+          {"code": "cycle", "value": %s},
+          {"code": "is_visible", "value": true, "value_object_id": %s},
+          {"code": "administrative_services_status", "value": %s}
+        ]',
+        v_cycle,
+        v_person_id,
+        json.get_integer(data.get_attribute_value(v_person_id, 'system_person_administrative_services_status')))::jsonb,
+      'administrative_services_status_page');
+  end if;
 end;
 $$
 language plpgsql;
@@ -10629,86 +10775,6 @@ end;
 $$
 language plpgsql;
 
--- drop function pallas_project.fcard_menu(integer, integer);
-
-create or replace function pallas_project.fcard_menu(in_object_id integer, in_actor_id integer)
-returns void
-volatile
-as
-$$
-declare
-  v_is_master boolean := pp_utils.is_in_group(in_actor_id, 'master');
-
-  v_content text[];
-
-  v_changes jsonb[];
-begin
-  perform * from data.objects where id = in_object_id for update;
-
-  v_content := array['debatles'];
-
-  v_changes := array_append(v_changes, data.attribute_change2jsonb('content', in_actor_id, to_jsonb(v_content)));
-
-
-  perform data.change_object(in_object_id, to_jsonb(v_changes), in_actor_id);
-end;
-$$
-language plpgsql;
-
--- drop function pallas_project.fcard_status_page(integer, integer);
-
-create or replace function pallas_project.fcard_status_page(in_object_id integer, in_actor_id integer)
-returns void
-volatile
-as
-$$
-declare
-  v_code text := data.get_object_code(in_object_id);
-  v_prefix text := substring(v_code for position('_status_page' in v_code) - 1);
-  v_status integer := json.get_integer(data.get_attribute_value(in_actor_id, 'system_person_' || v_prefix || '_status'));
-  v_cycle_number integer := data.get_integer_param('economic_cycle_number');
-  v_image_suffix text := (case when v_status = 1 then 'bronze' when v_status = 2 then 'silver' when v_status = 3 then 'gold' else '' end);
-  v_image_prefix text := (case
-    when v_prefix = 'life_support' then 'life'
-    when v_prefix = 'health_care' then 'health'
-    when v_prefix = 'recreation' then 'recreation'
-    when v_prefix = 'police' then 'police'
-    when v_prefix = 'administrative_services' then 'adm'
-    else '' end);
-  v_images_url text := data.get_string_param('images_url');
-  v_description_text text := (case when v_status = 0 then '' else '![](' || v_images_url || v_image_prefix || '_' || v_image_suffix || '.svg)' end);
-begin
-  perform data.change_object_and_notify(
-    in_object_id,
-    jsonb '[]' ||
-    data.attribute_change2jsonb('subtitle', null, to_jsonb(v_cycle_number || ' цикл')) ||
-    data.attribute_change2jsonb('description', in_actor_id, to_jsonb(v_description_text)),
-    in_actor_id);
-end;
-$$
-language plpgsql;
-
--- drop function pallas_project.fcard_statuses(integer, integer);
-
-create or replace function pallas_project.fcard_statuses(in_object_id integer, in_actor_id integer)
-returns void
-volatile
-as
-$$
-declare
-  v_cycle_number integer := data.get_integer_param('economic_cycle_number');
-begin
-  assert in_actor_id is not null;
-
-  perform data.change_object_and_notify(
-    in_object_id,
-    jsonb '[]' ||
-    data.attribute_change2jsonb('subtitle', null, to_jsonb(v_cycle_number || ' цикл')),
-    in_actor_id);
-end;
-$$
-language plpgsql;
-
 -- drop function pallas_project.get_chat_persons(integer, boolean);
 
 create or replace function pallas_project.get_chat_persons(in_chat_id integer, in_but_masters boolean default false)
@@ -10822,10 +10888,11 @@ begin
   ('go_back', 'pallas_project.act_go_back'),
   ('create_random_person', 'pallas_project.act_create_random_person');
 
+  perform pallas_project.init_groups();
+  perform pallas_project.init_economics();
   perform pallas_project.init_persons();
   perform pallas_project.init_debatles();
   perform pallas_project.init_messenger();
-  perform pallas_project.init_economics();
 end;
 $$
 language plpgsql;
@@ -11176,67 +11243,146 @@ begin
   insert into data.params(code, value) values
   ('economic_cycle_number', jsonb '1');
 
+  insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
+  ('life_support_status', null, 'Описание на странице статуса', 'normal', null, 'pallas_project.vd_life_support_status', false),
+  ('health_care_status', null, 'Описание на странице статуса', 'normal', null, 'pallas_project.vd_health_care_status', false),
+  ('recreation_status', null, 'Описание на странице статуса', 'normal', null, 'pallas_project.vd_recreation_status', false),
+  ('police_status', null, 'Описание на странице статуса', 'normal', null, 'pallas_project.vd_police_status', false),
+  ('administrative_services_status', null, 'Описание на странице статуса', 'normal', null, 'pallas_project.vd_administrative_services_status', false),
+  ('cycle', null, 'Текущий экономический цикл', 'normal', null, 'pallas_project.vd_cycle', false);
+
   perform data.create_class(
-    'status_page',
+    'life_support_status_page',
     jsonb '[
-      {"code": "full_card_function", "value": "pallas_project.fcard_status_page"},
-      {"code": "mini_card_function", "value": "pallas_project.mcard_status_page"},
-      {"code": "is_visible", "value": true, "value_object_code": "all_person"},
+      {"code": "title", "value": "Жизнеобеспечение"},
+      {"code": "is_visible", "value": true, "value_object_code": "master"},
       {
         "code": "mini_card_template",
         "value": {
           "title": "title",
-          "groups": [{"code": "status_group", "attributes": ["mini_description"]}]
+          "groups": [{"code": "status_group", "attributes": ["life_support_status"]}]
         }
       },
       {
         "code": "template",
         "value": {
           "title": "title",
-          "subtitle": "subtitle",
-          "groups": [{"code": "status_group", "attributes": ["description"]}]
+          "subtitle": "cycle",
+          "groups": [{"code": "status_group", "attributes": ["life_support_status"]}]
+        }
+      }
+    ]');
+  perform data.create_class(
+    'health_care_status_page',
+    jsonb '[
+      {"code": "title", "value": "Медицина"},
+      {"code": "is_visible", "value": true, "value_object_code": "master"},
+      {
+        "code": "mini_card_template",
+        "value": {
+          "title": "title",
+          "groups": [{"code": "status_group", "attributes": ["health_care_status"]}]
+        }
+      },
+      {
+        "code": "template",
+        "value": {
+          "title": "title",
+          "subtitle": "cycle",
+          "groups": [{"code": "status_group", "attributes": ["health_care_status"]}]
+        }
+      }
+    ]');
+  perform data.create_class(
+    'recreation_status_page',
+    jsonb '[
+      {"code": "title", "value": "Развлечения"},
+      {"code": "is_visible", "value": true, "value_object_code": "master"},
+      {
+        "code": "mini_card_template",
+        "value": {
+          "title": "title",
+          "groups": [{"code": "status_group", "attributes": ["recreation_status"]}]
+        }
+      },
+      {
+        "code": "template",
+        "value": {
+          "title": "title",
+          "subtitle": "cycle",
+          "groups": [{"code": "status_group", "attributes": ["recreation_status"]}]
+        }
+      }
+    ]');
+  perform data.create_class(
+    'police_status_page',
+    jsonb '[
+      {"code": "title", "value": "Полиция"},
+      {"code": "is_visible", "value": true, "value_object_code": "master"},
+      {
+        "code": "mini_card_template",
+        "value": {
+          "title": "title",
+          "groups": [{"code": "status_group", "attributes": ["police_status"]}]
+        }
+      },
+      {
+        "code": "template",
+        "value": {
+          "title": "title",
+          "subtitle": "cycle",
+          "groups": [{"code": "status_group", "attributes": ["police_status"]}]
+        }
+      }
+    ]');
+  perform data.create_class(
+    'administrative_services_status_page',
+    jsonb '[
+      {"code": "title", "value": "Административное обслуживание"},
+      {"code": "is_visible", "value": true, "value_object_code": "master"},
+      {
+        "code": "mini_card_template",
+        "value": {
+          "title": "title",
+          "groups": [{"code": "status_group", "attributes": ["administrative_services_status"]}]
+        }
+      },
+      {
+        "code": "template",
+        "value": {
+          "title": "title",
+          "subtitle": "cycle",
+          "groups": [{"code": "status_group", "attributes": ["administrative_services_status"]}]
         }
       }
     ]');
 
-  perform data.create_object(
-    'life_support_status_page',
-    jsonb '{"title": "Жизнеобеспечение"}',
-    'status_page');
-  perform data.create_object(
-    'health_care_status_page',
-    jsonb '{"title": "Медицина"}',
-    'status_page');
-  perform data.create_object(
-    'recreation_status_page',
-    jsonb '{"title": "Развлечения"}',
-    'status_page');
-  perform data.create_object(
-    'police_status_page',
-    jsonb '{"title": "Полиция"}',
-    'status_page');
-  perform data.create_object(
-    'administrative_services_status_page',
-    jsonb '{"title": "Административное обслуживание"}',
-    'status_page');
-
-  perform data.create_object(
+  perform data.create_class(
     'statuses',
     jsonb '[
-      {"code": "is_visible", "value": true, "value_object_code": "all_person"},
-      {"code": "title", "value": "Статусы"},
-      {"code": "full_card_function", "value": "pallas_project.fcard_statuses"},
-      {
-        "code": "content",
-        "value": [
-          "life_support_status_page",
-          "health_care_status_page",
-          "recreation_status_page",
-          "police_status_page",
-          "administrative_services_status_page"
-        ]
-      }
+      {"code": "is_visible", "value": true, "value_object_code": "master"},
+      {"code": "title", "value": "Статусы"}
     ]');
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.init_groups();
+
+create or replace function pallas_project.init_groups()
+returns void
+volatile
+as
+$$
+begin
+  -- Группы персон
+  perform data.create_object('all_person', jsonb '{"priority": 10}');
+  perform data.create_object('player', jsonb '{"priority": 15}');
+  perform data.create_object('aster', jsonb '{"priority": 20}');
+  perform data.create_object('un', jsonb '{"priority": 30}');
+  perform data.create_object('mcr', jsonb '{"priority": 40}');
+  perform data.create_object('opa', jsonb '{"priority": 50}');
+  perform data.create_object('master', jsonb '{"priority": 190}');
 end;
 $$
 language plpgsql;
@@ -11483,27 +11629,27 @@ begin
   insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden) values
   ('person_occupation', 'Должность', 'normal', null, null, true),
   ('person_state', 'Гражданство', 'normal', 'full', 'pallas_project.vd_person_state', true),
-  ('system_money', 'Остаток средств на счёте', 'system', null, null, false),
+  ('system_money', null, 'system', null, null, false),
   ('money', 'Остаток средств на счёте', 'normal', 'full', null, true),
-  ('system_person_deposit_money', 'Остаток средств на накопительном счёте', 'system', null, null, false),
+  ('system_person_deposit_money', null, 'system', null, null, false),
   ('person_deposit_money', 'Остаток средств на накопительном счёте', 'normal', 'full', null, true),
-  ('system_person_coin', 'Остаток коинов', 'system', null, null, false),
-  ('person_coin', 'Остаток коинов', 'normal', 'full', null, true),
-  ('system_person_opa_rating', 'Рейтинг в СВП', 'system', null, null, false),
+  ('system_person_coin', null, 'system', null, null, false),
+  ('person_coin', 'Нераспределённые коины', 'normal', 'full', null, true),
+  ('system_person_opa_rating', null, 'system', null, null, false),
   ('person_opa_rating', 'Рейтинг в СВП', 'normal', 'full', null, true),
-  ('system_person_un_rating', 'Рейтинг в ООН', 'system', null, null, false),
+  ('system_person_un_rating', null, 'system', null, null, false),
   ('person_un_rating', 'Рейтинг в ООН', 'normal', 'full', null, true),
-  ('system_person_economy_type', 'Тип экономики', 'system', null, null, false),
+  ('system_person_economy_type', null, 'system', null, null, false),
   ('person_economy_type', 'Тип экономики', 'normal', 'full', 'pallas_project.vd_person_economy_type', true),
-  ('system_person_life_support_status', 'Жизнеобеспечение', 'system', null, null, false),
+  ('system_person_life_support_status', null, 'system', null, null, false),
   ('person_life_support_status', 'Жизнеобеспечение', 'normal', 'full', 'pallas_project.vd_person_status', true),
-  ('system_person_health_care_status', 'Медицина', 'system', null, null, false),
+  ('system_person_health_care_status', null, 'system', null, null, false),
   ('person_health_care_status', 'Медицина', 'normal', 'full', 'pallas_project.vd_person_status', true),
-  ('system_person_recreation_status', 'Развлечения', 'system', null, null, false),
+  ('system_person_recreation_status', null, 'system', null, null, false),
   ('person_recreation_status', 'Развлечения', 'normal', 'full', 'pallas_project.vd_person_status', true),
-  ('system_person_police_status', 'Полиция', 'system', null, null, false),
+  ('system_person_police_status', null, 'system', null, null, false),
   ('person_police_status', 'Полиция', 'normal', 'full', 'pallas_project.vd_person_status', true),
-  ('system_person_administrative_services_status', 'Административное обслуживание', 'system', null, null, false),
+  ('system_person_administrative_services_status', null, 'system', null, null, false),
   ('person_administrative_services_status', 'Административное обслуживание', 'normal', 'full', 'pallas_project.vd_person_status', true),
   ('system_person_next_life_support_status', null, 'system', null, null, false),
   ('system_person_next_health_care_status', null, 'system', null, null, false),
@@ -11511,7 +11657,7 @@ begin
   ('system_person_next_police_status', null, 'system', null, null, false),
   ('system_person_next_administrative_services_status', null, 'system', null, null, false);
 
-  --Объект класса для персон
+  -- Объект класса для персон
   perform data.create_class(
     'person',
     jsonb '{
@@ -11521,7 +11667,7 @@ begin
       "actions_function": "pallas_project.actgenerator_person",
       "template": {
         "title": "title",
-        "subtitle": "subtitle",
+        "subtitle": "person_occupation",
         "groups": [
           {
             "code": "person_personal",
@@ -11532,6 +11678,10 @@ begin
               "person_coin",
               "person_opa_rating",
               "person_un_rating"
+            ],
+            "actions": [
+              "open_current_statuses",
+              "open_next_statuses"
             ]
           },
           {
@@ -11549,22 +11699,12 @@ begin
             "code": "person_public",
             "attributes": [
               "person_state",
-              "person_occupation",
               "description"
             ]
           }
         ]
       }
     }');
-
-  -- Группы персон
-  perform data.create_object('all_person', jsonb '{"priority": 10}');
-  perform data.create_object('player', jsonb '{"priority": 15}');
-  perform data.create_object('aster', jsonb '{"priority": 20}');
-  perform data.create_object('un', jsonb '{"priority": 30}');
-  perform data.create_object('mcr', jsonb '{"priority": 40}');
-  perform data.create_object('opa', jsonb '{"priority": 50}');
-  perform data.create_object('master', jsonb '{"priority": 190}');
 
   -- Мастера
   perform pallas_project.create_person('m1', jsonb '{"title": "Саша", "person_occupation": "Мастер"}', array['master']);
@@ -11973,33 +12113,42 @@ end;
 $$
 language plpgsql;
 
--- drop function pallas_project.mcard_status_page(integer, integer);
+-- drop function pallas_project.vd_administrative_services_status(integer, jsonb, data.card_type, integer);
 
-create or replace function pallas_project.mcard_status_page(in_object_id integer, in_actor_id integer)
-returns void
-volatile
+create or replace function pallas_project.vd_administrative_services_status(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
 as
 $$
 declare
-  v_code text := data.get_object_code(in_object_id);
-  v_prefix text := substring(v_code for position('_status_page' in v_code) - 1);
-  v_status integer := json.get_integer(data.get_attribute_value(in_actor_id, 'system_person_' || v_prefix || '_status'));
-  v_status_text text := (case when v_status = 1 then 'Бронзовый' when v_status = 2 then 'Серебряный' when v_status = 3 then 'Золотой' else 'Нет' end);
+  v_status integer := json.get_integer(in_value);
 begin
-  assert in_actor_id is not null;
+  assert v_status in (0, 1, 2, 3);
 
-  perform data.change_object_and_notify(
-    in_object_id,
-    jsonb '[]' ||
-    data.attribute_change2jsonb('mini_description', in_actor_id, to_jsonb(v_status_text)),
-    in_actor_id);
+  if in_card_type = 'mini' then
+    if v_status = 0 then
+      return 'Нет';
+    elsif v_status = 1 then
+      return 'Бронзовый';
+    elsif v_status = 2 then
+      return 'Серебряный';
+    else
+      return 'Золотой';
+    end if;
+  else
+    if in_value = jsonb '0' then
+      return '';
+    end if;
+
+    return '![](' || data.get_string_param('images_url') || 'adm_' || (case when v_status = 1 then 'bronze' when v_status = 2 then 'silver' else 'gold' end) || '.svg)';
+  end if;
 end;
 $$
 language plpgsql;
 
--- drop function pallas_project.vd_chat_is_mute(integer, jsonb, integer);
+-- drop function pallas_project.vd_chat_is_mute(integer, jsonb, data.card_type, integer);
 
-create or replace function pallas_project.vd_chat_is_mute(in_attribute_id integer, in_value jsonb, in_actor_id integer)
+create or replace function pallas_project.vd_chat_is_mute(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
 returns text
 immutable
 as
@@ -12016,9 +12165,22 @@ end;
 $$
 language plpgsql;
 
--- drop function pallas_project.vd_debatle_bonuses(integer, jsonb, integer);
+-- drop function pallas_project.vd_cycle(integer, jsonb, data.card_type, integer);
 
-create or replace function pallas_project.vd_debatle_bonuses(in_attribute_id integer, in_value jsonb, in_actor_id integer)
+create or replace function pallas_project.vd_cycle(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+begin
+  return json.get_integer(in_value) || ' цикл';
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.vd_debatle_bonuses(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_debatle_bonuses(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
 returns text
 immutable
 as
@@ -12046,9 +12208,9 @@ end;
 $$
 language plpgsql;
 
--- drop function pallas_project.vd_debatle_status(integer, jsonb, integer);
+-- drop function pallas_project.vd_debatle_status(integer, jsonb, data.card_type, integer);
 
-create or replace function pallas_project.vd_debatle_status(in_attribute_id integer, in_value jsonb, in_actor_id integer)
+create or replace function pallas_project.vd_debatle_status(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
 returns text
 immutable
 as
@@ -12077,9 +12239,9 @@ end;
 $$
 language plpgsql;
 
--- drop function pallas_project.vd_debatle_temp_bonus_list_person(integer, jsonb, integer);
+-- drop function pallas_project.vd_debatle_temp_bonus_list_person(integer, jsonb, data.card_type, integer);
 
-create or replace function pallas_project.vd_debatle_temp_bonus_list_person(in_attribute_id integer, in_value jsonb, in_actor_id integer)
+create or replace function pallas_project.vd_debatle_temp_bonus_list_person(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
 returns text
 immutable
 as
@@ -12098,9 +12260,9 @@ end;
 $$
 language plpgsql;
 
--- drop function pallas_project.vd_debatle_temp_person_list_edited_person(integer, jsonb, integer);
+-- drop function pallas_project.vd_debatle_temp_person_list_edited_person(integer, jsonb, data.card_type, integer);
 
-create or replace function pallas_project.vd_debatle_temp_person_list_edited_person(in_attribute_id integer, in_value jsonb, in_actor_id integer)
+create or replace function pallas_project.vd_debatle_temp_person_list_edited_person(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
 returns text
 immutable
 as
@@ -12121,15 +12283,81 @@ end;
 $$
 language plpgsql;
 
--- drop function pallas_project.vd_not_found_description(integer, jsonb, integer);
+-- drop function pallas_project.vd_health_care_status(integer, jsonb, data.card_type, integer);
 
-create or replace function pallas_project.vd_not_found_description(in_attribute_id integer, in_value jsonb, in_actor_id integer)
+create or replace function pallas_project.vd_health_care_status(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
 returns text
 immutable
 as
 $$
 declare
-  v_random integer := random.random_integer(1, 11);
+  v_status integer := json.get_integer(in_value);
+begin
+  assert v_status in (0, 1, 2, 3);
+
+  if in_card_type = 'mini' then
+    if v_status = 0 then
+      return 'Нет';
+    elsif v_status = 1 then
+      return 'Бронзовый';
+    elsif v_status = 2 then
+      return 'Серебряный';
+    else
+      return 'Золотой';
+    end if;
+  else
+    if in_value = jsonb '0' then
+      return '';
+    end if;
+
+    return '![](' || data.get_string_param('images_url') || 'health_' || (case when v_status = 1 then 'bronze' when v_status = 2 then 'silver' else 'gold' end) || '.svg)';
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.vd_life_support_status(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_life_support_status(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+declare
+  v_status integer := json.get_integer(in_value);
+begin
+  assert v_status in (0, 1, 2, 3);
+
+  if in_card_type = 'mini' then
+    if v_status = 0 then
+      return 'Нет';
+    elsif v_status = 1 then
+      return 'Бронзовый';
+    elsif v_status = 2 then
+      return 'Серебряный';
+    else
+      return 'Золотой';
+    end if;
+  else
+    if in_value = jsonb '0' then
+      return '';
+    end if;
+
+    return '![](' || data.get_string_param('images_url') || 'life_' || (case when v_status = 1 then 'bronze' when v_status = 2 then 'silver' else 'gold' end) || '.svg)';
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.vd_not_found_description(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_not_found_description(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+declare
+  v_random integer := random.random_integer(1, 12);
 begin
   if v_random = 1 then
     return 'Это не те дроиды, которых вы ищете';
@@ -12150,7 +12378,9 @@ begin
   elsif v_random = 9 then
     return 'Принцесса в другом замке!';
   elsif v_random = 10 then
-    return 'Нет никакого торта';
+    return 'Торта нет';
+  elsif v_random = 11 then
+    return 'Ложки не существует';
   end if;
 
   return 'Меньше значит больше';
@@ -12158,21 +12388,21 @@ end;
 $$
 language plpgsql;
 
--- drop function pallas_project.vd_person_economy_type(integer, jsonb, integer);
+-- drop function pallas_project.vd_person_economy_type(integer, jsonb, data.card_type, integer);
 
-create or replace function pallas_project.vd_person_economy_type(in_attribute_id integer, in_value jsonb, in_actor_id integer)
+create or replace function pallas_project.vd_person_economy_type(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
 returns text
 immutable
 as
 $$
 begin
-  if in_value = jsonb 'un' then
+  if in_value = jsonb '"un"' then
     return 'ООН — только токены';
-  elsif in_value = jsonb 'mcr' then
+  elsif in_value = jsonb '"mcr"' then
     return 'МРК — только текущий счёт';
-  elsif in_value = jsonb 'asters' then
+  elsif in_value = jsonb '"asters"' then
     return 'Астеры — накопительный и обнуляемый текущий счета';
-  elsif in_value = jsonb 'fixed' then
+  elsif in_value = jsonb '"fixed"' then
     return 'Фиксированные статусы — нет счетов, нет распределения токенов';
   end if;
 
@@ -12181,9 +12411,9 @@ end;
 $$
 language plpgsql;
 
--- drop function pallas_project.vd_person_state(integer, jsonb, integer);
+-- drop function pallas_project.vd_person_state(integer, jsonb, data.card_type, integer);
 
-create or replace function pallas_project.vd_person_state(in_attribute_id integer, in_value jsonb, in_actor_id integer)
+create or replace function pallas_project.vd_person_state(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
 returns text
 immutable
 as
@@ -12204,25 +12434,68 @@ end;
 $$
 language plpgsql;
 
--- drop function pallas_project.vd_person_status(integer, jsonb, integer);
+-- drop function pallas_project.vd_police_status(integer, jsonb, data.card_type, integer);
 
-create or replace function pallas_project.vd_person_status(in_attribute_id integer, in_value jsonb, in_actor_id integer)
+create or replace function pallas_project.vd_police_status(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
 returns text
 immutable
 as
 $$
+declare
+  v_status integer := json.get_integer(in_value);
 begin
-  if in_value = jsonb '0' then
-    return 'нет';
-  elsif in_value = jsonb '1' then
-    return 'бронзовый';
-  elsif in_value = jsonb '2' then
-    return 'серебряный';
-  elsif in_value = jsonb '3' then
-    return 'золотой';
-  end if;
+  assert v_status in (0, 1, 2, 3);
 
-  assert false;
+  if in_card_type = 'mini' then
+    if v_status = 0 then
+      return 'Нет';
+    elsif v_status = 1 then
+      return 'Бронзовый';
+    elsif v_status = 2 then
+      return 'Серебряный';
+    else
+      return 'Золотой';
+    end if;
+  else
+    if in_value = jsonb '0' then
+      return '';
+    end if;
+
+    return '![](' || data.get_string_param('images_url') || 'police_' || (case when v_status = 1 then 'bronze' when v_status = 2 then 'silver' else 'gold' end) || '.svg)';
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.vd_recreation_status(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_recreation_status(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+declare
+  v_status integer := json.get_integer(in_value);
+begin
+  assert v_status in (0, 1, 2, 3);
+
+  if in_card_type = 'mini' then
+    if v_status = 0 then
+      return 'Нет';
+    elsif v_status = 1 then
+      return 'Бронзовый';
+    elsif v_status = 2 then
+      return 'Серебряный';
+    else
+      return 'Золотой';
+    end if;
+  else
+    if in_value = jsonb '0' then
+      return '';
+    end if;
+
+    return '![](' || data.get_string_param('images_url') || 'recreation_' || (case when v_status = 1 then 'bronze' when v_status = 2 then 'silver' else 'gold' end) || '.svg)';
+  end if;
 end;
 $$
 language plpgsql;
@@ -15552,9 +15825,9 @@ end;
 $$
 language plpgsql;
 
--- drop function test_project.test_value_description_function(integer, jsonb, integer);
+-- drop function test_project.test_value_description_function(integer, jsonb, data.card_type, integer);
 
-create or replace function test_project.test_value_description_function(in_attribute_id integer, in_value jsonb, in_actor_id integer)
+create or replace function test_project.test_value_description_function(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
 returns text
 immutable
 as
@@ -15650,7 +15923,7 @@ create table data.attributes(
 );
 
 comment on column data.attributes.card_type is 'Если null, то применимо ко всем типам карточек';
-comment on column data.attributes.value_description_function is 'Имя функции для получения описания значения атрибута. Функция вызывается с параметрами (attribute_id, value, actor_id).
+comment on column data.attributes.value_description_function is 'Имя функции для получения описания значения атрибута. Функция вызывается с параметрами (attribute_id, value, card_type, actor_id).
 Функция не может изменять объекты базы данных, т.е. должна быть stable или immutable.';
 comment on column data.attributes.can_be_overridden is 'Если false, то значение атрибута не может переопределяться для объектов';
 

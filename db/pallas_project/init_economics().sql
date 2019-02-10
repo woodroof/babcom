@@ -9,66 +9,125 @@ begin
   insert into data.params(code, value) values
   ('economic_cycle_number', jsonb '1');
 
+  insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
+  ('life_support_status', null, 'Описание на странице статуса', 'normal', null, 'pallas_project.vd_life_support_status', false),
+  ('health_care_status', null, 'Описание на странице статуса', 'normal', null, 'pallas_project.vd_health_care_status', false),
+  ('recreation_status', null, 'Описание на странице статуса', 'normal', null, 'pallas_project.vd_recreation_status', false),
+  ('police_status', null, 'Описание на странице статуса', 'normal', null, 'pallas_project.vd_police_status', false),
+  ('administrative_services_status', null, 'Описание на странице статуса', 'normal', null, 'pallas_project.vd_administrative_services_status', false),
+  ('cycle', null, 'Текущий экономический цикл', 'normal', null, 'pallas_project.vd_cycle', false);
+
   perform data.create_class(
-    'status_page',
+    'life_support_status_page',
     jsonb '[
-      {"code": "full_card_function", "value": "pallas_project.fcard_status_page"},
-      {"code": "mini_card_function", "value": "pallas_project.mcard_status_page"},
-      {"code": "is_visible", "value": true, "value_object_code": "all_person"},
+      {"code": "title", "value": "Жизнеобеспечение"},
+      {"code": "is_visible", "value": true, "value_object_code": "master"},
       {
         "code": "mini_card_template",
         "value": {
           "title": "title",
-          "groups": [{"code": "status_group", "attributes": ["mini_description"]}]
+          "groups": [{"code": "status_group", "attributes": ["life_support_status"]}]
         }
       },
       {
         "code": "template",
         "value": {
           "title": "title",
-          "subtitle": "subtitle",
-          "groups": [{"code": "status_group", "attributes": ["description"]}]
+          "subtitle": "cycle",
+          "groups": [{"code": "status_group", "attributes": ["life_support_status"]}]
+        }
+      }
+    ]');
+  perform data.create_class(
+    'health_care_status_page',
+    jsonb '[
+      {"code": "title", "value": "Медицина"},
+      {"code": "is_visible", "value": true, "value_object_code": "master"},
+      {
+        "code": "mini_card_template",
+        "value": {
+          "title": "title",
+          "groups": [{"code": "status_group", "attributes": ["health_care_status"]}]
+        }
+      },
+      {
+        "code": "template",
+        "value": {
+          "title": "title",
+          "subtitle": "cycle",
+          "groups": [{"code": "status_group", "attributes": ["health_care_status"]}]
+        }
+      }
+    ]');
+  perform data.create_class(
+    'recreation_status_page',
+    jsonb '[
+      {"code": "title", "value": "Развлечения"},
+      {"code": "is_visible", "value": true, "value_object_code": "master"},
+      {
+        "code": "mini_card_template",
+        "value": {
+          "title": "title",
+          "groups": [{"code": "status_group", "attributes": ["recreation_status"]}]
+        }
+      },
+      {
+        "code": "template",
+        "value": {
+          "title": "title",
+          "subtitle": "cycle",
+          "groups": [{"code": "status_group", "attributes": ["recreation_status"]}]
+        }
+      }
+    ]');
+  perform data.create_class(
+    'police_status_page',
+    jsonb '[
+      {"code": "title", "value": "Полиция"},
+      {"code": "is_visible", "value": true, "value_object_code": "master"},
+      {
+        "code": "mini_card_template",
+        "value": {
+          "title": "title",
+          "groups": [{"code": "status_group", "attributes": ["police_status"]}]
+        }
+      },
+      {
+        "code": "template",
+        "value": {
+          "title": "title",
+          "subtitle": "cycle",
+          "groups": [{"code": "status_group", "attributes": ["police_status"]}]
+        }
+      }
+    ]');
+  perform data.create_class(
+    'administrative_services_status_page',
+    jsonb '[
+      {"code": "title", "value": "Административное обслуживание"},
+      {"code": "is_visible", "value": true, "value_object_code": "master"},
+      {
+        "code": "mini_card_template",
+        "value": {
+          "title": "title",
+          "groups": [{"code": "status_group", "attributes": ["administrative_services_status"]}]
+        }
+      },
+      {
+        "code": "template",
+        "value": {
+          "title": "title",
+          "subtitle": "cycle",
+          "groups": [{"code": "status_group", "attributes": ["administrative_services_status"]}]
         }
       }
     ]');
 
-  perform data.create_object(
-    'life_support_status_page',
-    jsonb '{"title": "Жизнеобеспечение"}',
-    'status_page');
-  perform data.create_object(
-    'health_care_status_page',
-    jsonb '{"title": "Медицина"}',
-    'status_page');
-  perform data.create_object(
-    'recreation_status_page',
-    jsonb '{"title": "Развлечения"}',
-    'status_page');
-  perform data.create_object(
-    'police_status_page',
-    jsonb '{"title": "Полиция"}',
-    'status_page');
-  perform data.create_object(
-    'administrative_services_status_page',
-    jsonb '{"title": "Административное обслуживание"}',
-    'status_page');
-
-  perform data.create_object(
+  perform data.create_class(
     'statuses',
     jsonb '[
-      {"code": "is_visible", "value": true, "value_object_code": "all_person"},
-      {"code": "title", "value": "Статусы"},
-      {"code": "full_card_function", "value": "pallas_project.fcard_statuses"},
-      {
-        "code": "content",
-        "value": [
-          "life_support_status_page",
-          "health_care_status_page",
-          "recreation_status_page",
-          "police_status_page",
-          "administrative_services_status_page"
-        ]
-      }
+      {"code": "is_visible", "value": true, "value_object_code": "master"},
+      {"code": "title", "value": "Статусы"}
     ]');
 end;
 $$

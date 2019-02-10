@@ -17,27 +17,27 @@ begin
   insert into data.attributes(code, name, type, card_type, value_description_function, can_be_overridden) values
   ('person_occupation', 'Должность', 'normal', null, null, true),
   ('person_state', 'Гражданство', 'normal', 'full', 'pallas_project.vd_person_state', true),
-  ('system_money', 'Остаток средств на счёте', 'system', null, null, false),
+  ('system_money', null, 'system', null, null, false),
   ('money', 'Остаток средств на счёте', 'normal', 'full', null, true),
-  ('system_person_deposit_money', 'Остаток средств на накопительном счёте', 'system', null, null, false),
+  ('system_person_deposit_money', null, 'system', null, null, false),
   ('person_deposit_money', 'Остаток средств на накопительном счёте', 'normal', 'full', null, true),
-  ('system_person_coin', 'Остаток коинов', 'system', null, null, false),
-  ('person_coin', 'Остаток коинов', 'normal', 'full', null, true),
-  ('system_person_opa_rating', 'Рейтинг в СВП', 'system', null, null, false),
+  ('system_person_coin', null, 'system', null, null, false),
+  ('person_coin', 'Нераспределённые коины', 'normal', 'full', null, true),
+  ('system_person_opa_rating', null, 'system', null, null, false),
   ('person_opa_rating', 'Рейтинг в СВП', 'normal', 'full', null, true),
-  ('system_person_un_rating', 'Рейтинг в ООН', 'system', null, null, false),
+  ('system_person_un_rating', null, 'system', null, null, false),
   ('person_un_rating', 'Рейтинг в ООН', 'normal', 'full', null, true),
-  ('system_person_economy_type', 'Тип экономики', 'system', null, null, false),
+  ('system_person_economy_type', null, 'system', null, null, false),
   ('person_economy_type', 'Тип экономики', 'normal', 'full', 'pallas_project.vd_person_economy_type', true),
-  ('system_person_life_support_status', 'Жизнеобеспечение', 'system', null, null, false),
+  ('system_person_life_support_status', null, 'system', null, null, false),
   ('person_life_support_status', 'Жизнеобеспечение', 'normal', 'full', 'pallas_project.vd_person_status', true),
-  ('system_person_health_care_status', 'Медицина', 'system', null, null, false),
+  ('system_person_health_care_status', null, 'system', null, null, false),
   ('person_health_care_status', 'Медицина', 'normal', 'full', 'pallas_project.vd_person_status', true),
-  ('system_person_recreation_status', 'Развлечения', 'system', null, null, false),
+  ('system_person_recreation_status', null, 'system', null, null, false),
   ('person_recreation_status', 'Развлечения', 'normal', 'full', 'pallas_project.vd_person_status', true),
-  ('system_person_police_status', 'Полиция', 'system', null, null, false),
+  ('system_person_police_status', null, 'system', null, null, false),
   ('person_police_status', 'Полиция', 'normal', 'full', 'pallas_project.vd_person_status', true),
-  ('system_person_administrative_services_status', 'Административное обслуживание', 'system', null, null, false),
+  ('system_person_administrative_services_status', null, 'system', null, null, false),
   ('person_administrative_services_status', 'Административное обслуживание', 'normal', 'full', 'pallas_project.vd_person_status', true),
   ('system_person_next_life_support_status', null, 'system', null, null, false),
   ('system_person_next_health_care_status', null, 'system', null, null, false),
@@ -45,7 +45,7 @@ begin
   ('system_person_next_police_status', null, 'system', null, null, false),
   ('system_person_next_administrative_services_status', null, 'system', null, null, false);
 
-  --Объект класса для персон
+  -- Объект класса для персон
   perform data.create_class(
     'person',
     jsonb '{
@@ -55,7 +55,7 @@ begin
       "actions_function": "pallas_project.actgenerator_person",
       "template": {
         "title": "title",
-        "subtitle": "subtitle",
+        "subtitle": "person_occupation",
         "groups": [
           {
             "code": "person_personal",
@@ -66,6 +66,10 @@ begin
               "person_coin",
               "person_opa_rating",
               "person_un_rating"
+            ],
+            "actions": [
+              "open_current_statuses",
+              "open_next_statuses"
             ]
           },
           {
@@ -83,22 +87,12 @@ begin
             "code": "person_public",
             "attributes": [
               "person_state",
-              "person_occupation",
               "description"
             ]
           }
         ]
       }
     }');
-
-  -- Группы персон
-  perform data.create_object('all_person', jsonb '{"priority": 10}');
-  perform data.create_object('player', jsonb '{"priority": 15}');
-  perform data.create_object('aster', jsonb '{"priority": 20}');
-  perform data.create_object('un', jsonb '{"priority": 30}');
-  perform data.create_object('mcr', jsonb '{"priority": 40}');
-  perform data.create_object('opa', jsonb '{"priority": 50}');
-  perform data.create_object('master', jsonb '{"priority": 190}');
 
   -- Мастера
   perform pallas_project.create_person('m1', jsonb '{"title": "Саша", "person_occupation": "Мастер"}', array['master']);
