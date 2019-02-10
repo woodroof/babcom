@@ -9,7 +9,6 @@ declare
   v_result jsonb;
 begin
   assert in_attribute_id is not null;
-  assert in_value_object_id is not null;
 
   v_result := jsonb_build_object('id', in_attribute_id, 'value_object_id', in_value_object_id);
 
