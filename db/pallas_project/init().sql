@@ -46,7 +46,7 @@ begin
       "template": {
         "groups": [
           {"code": "menu_group1", "actions": ["login"]},
-          {"code": "menu_group2", "actions": ["statuses", "debatles", "chats", "all_chats", "master_chats", "persons"]},
+          {"code": "menu_group2", "actions": ["statuses", "debatles", "chats", "all_chats", "master_chats", "persons", "documents"]},
           {"code": "menu_group3", "actions": ["logout"]}
         ]
       }
@@ -96,6 +96,7 @@ begin
   perform pallas_project.init_debatles();
   perform pallas_project.init_messenger();
   perform pallas_project.init_person_list();
+  perform pallas_project.init_documents();
 end;
 $$
 language plpgsql;

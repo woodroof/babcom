@@ -9871,6 +9871,55 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_document_create(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_document_create(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_document_title text := json.get_string_opt(in_user_params, 'title', null);
+  v_document_code text;
+  v_document_id integer;
+
+  v_actor_id integer :=data.get_active_actor_id(in_client_id);
+
+  v_my_documents_id integer := data.get_object_id('my_documents');
+  v_master_group_id integer := data.get_object_id('master');
+begin
+  assert in_request_id is not null;
+
+  -- Создаём документ
+  v_document_id := data.create_object(
+  null,
+    jsonb_build_array(
+      jsonb_build_object('code', 'title', 'value', v_document_title),
+      jsonb_build_object('code', 'is_visible', 'value', true, 'value_object_id', v_actor_id),
+      jsonb_build_object('code', 'system_document_category', 'value', 'private'),
+      jsonb_build_object('code', 'system_document_author', 'value', v_actor_id),
+      jsonb_build_object('code', 'document_author', 'value', json.get_string(data.get_attribute_value(v_actor_id, 'title', v_actor_id)) , 'value_object_id', v_master_group_id),
+      jsonb_build_object('code', 'document_last_edit_time', 'value', to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss'), 'value_object_id', v_master_group_id),
+      jsonb_build_object('code', 'document_last_edit_time', 'value', to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss'), 'value_object_id', v_actor_id)
+    ),
+  'document');
+
+  insert into data.attribute_values(object_id, attribute_id, value_object_id, value)
+  values (v_document_id, data.get_attribute_id('is_visible'), v_document_id, jsonb 'true');
+
+  v_document_code := data.get_object_code(v_document_id);
+
+  if not pp_utils.is_in_group(v_actor_id, 'master') then
+    perform pp_utils.list_prepend_and_notify(v_my_documents_id, v_document_code, v_actor_id);
+  end if;
+  perform pp_utils.list_prepend_and_notify(v_my_documents_id, v_document_code, v_master_group_id);
+
+  -- Заходим в документ
+  perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, v_document_code);
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_go_back(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_go_back(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -10412,6 +10461,28 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.actgenerator_documents(integer, integer);
+
+create or replace function pallas_project.actgenerator_documents(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_actions_list text := '';
+  v_object_code text := data.get_object_code(in_object_id);
+begin
+  assert in_actor_id is not null;
+
+  v_actions_list := v_actions_list || 
+    ', "document_create": {"code": "document_create", "name": "Создать документ", "disabled": false, 
+     "params": {}, "user_params": [{"code": "title", "description": "Введите заголовок документа", "type": "string", "restrictions": {"min_length": 1}}]}';
+
+  return jsonb ('{'||trim(v_actions_list,',')||'}');
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.actgenerator_menu(integer, integer);
 
 create or replace function pallas_project.actgenerator_menu(in_object_id integer, in_actor_id integer)
@@ -10462,7 +10533,7 @@ begin
       v_actions ||
       jsonb '{
         "debatles": {"code": "act_open_object", "name": "Дебатлы", "disabled": false, "params": {"object_code": "debatles"}},
-        "chats": {"code": "act_open_object", "name": "Чаты", "disabled": false, "params": {"object_code": "chats"}},
+        "documents": {"code": "act_open_object", "name": "Документы", "disabled": false, "params": {"object_code": "documents"}},
         "logout": {"code": "logout", "name": "Выход", "disabled": false, "params": {}}
       }';
   end if;
@@ -10995,7 +11066,7 @@ begin
       "template": {
         "groups": [
           {"code": "menu_group1", "actions": ["login"]},
-          {"code": "menu_group2", "actions": ["statuses", "debatles", "chats", "all_chats", "master_chats", "persons"]},
+          {"code": "menu_group2", "actions": ["statuses", "debatles", "chats", "all_chats", "master_chats", "persons", "documents"]},
           {"code": "menu_group3", "actions": ["logout"]}
         ]
       }
@@ -11045,6 +11116,7 @@ begin
   perform pallas_project.init_debatles();
   perform pallas_project.init_messenger();
   perform pallas_project.init_person_list();
+  perform pallas_project.init_documents();
 end;
 $$
 language plpgsql;
@@ -11379,6 +11451,146 @@ begin
   ('debatle_change_bonuses','pallas_project.act_debatle_change_bonuses'),
   ('debatle_change_other_bonus','pallas_project.act_debatle_change_other_bonus'),
   ('debatle_change_subtitle','pallas_project.act_debatle_change_subtitle');
+
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.init_documents();
+
+create or replace function pallas_project.init_documents()
+returns void
+volatile
+as
+$$
+declare
+
+begin
+  -- Атрибуты для документов
+  insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
+  ('system_document_category', null, 'Категория документа', 'system', null, null, false),
+  ('document_text', null, 'Текст документа', 'normal', 'full', null, false),
+  ('system_document_author', null, 'Автор документа', 'system', null, null, false),
+  ('document_author', null, 'Автор документа', 'normal', 'full', null, true),
+  ('document_last_edit_time', null, 'Дата и время последнего редактирования документа', 'normal', 'full', null, true),
+  ('system_document_participants', null, 'Участники, подписывающие документ', 'system', null, null, false),
+  ('document_participants', null, 'Участники, подписывающие документ', 'normal', 'full', null, false),
+  ('document_sent_to_sign', null, 'Признак того, что документ был отправлен на подпись', 'normal', 'full', null, false);
+
+  -- Объекты для категорий документов
+  perform data.create_object(
+  'rules_documents',
+  jsonb '[
+    {"code": "title", "value": "Правила"},
+    {"code": "is_visible", "value": true},
+    {"code": "content", "value": []},
+    {
+      "code": "mini_card_template",
+      "value": {
+        "title": "title",
+        "groups": []
+      }
+    },
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "groups": []
+      }
+    }
+  ]');
+
+  perform data.create_object(
+  'my_documents',
+  jsonb '[
+    {"code": "title", "value": "Мои документы"},
+    {"code": "is_visible", "value": true},
+    {"code": "content", "value": []},
+    {
+      "code": "mini_card_template",
+      "value": {
+        "title": "title",
+        "groups": []
+      }
+    },
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "groups": []
+      }
+    }
+  ]');
+
+  perform data.create_object(
+  'official_documents',
+  jsonb '[
+    {"code": "title", "value": "Официальные документы"},
+    {"code": "is_visible", "value": true},
+    {"code": "content", "value": []},
+    {
+      "code": "mini_card_template",
+      "value": {
+        "title": "title",
+        "groups": []
+      }
+    },
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "groups": []
+      }
+    }
+  ]');
+
+  perform data.create_object(
+  'documents',
+  jsonb '[
+    {"code": "title", "value": "Документы"},
+    {"code": "is_visible", "value": true},
+    {"code": "content", "value": ["rules_documents", "my_documents", "official_documents"]},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_documents"},
+    {
+      "code": "mini_card_template",
+      "value": {
+        "title": "title",
+        "groups": []
+      }
+    },
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "groups": [{"code": "documents_group", "actions": ["document_create"]}]
+      }
+    }
+  ]');
+
+  perform data.create_class(
+  'document',
+  jsonb '[
+    {"code": "type", "value": "document"},
+    {"code": "is_visible", "value": true, "value_object_code": "master"},
+    {
+      "code": "mini_card_template",
+      "value": {
+        "title": "title",
+        "groups": []
+      }
+    },
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "groups": [{"code": "document_group", "attributes": ["document_author", "document_last_edit_time", "document_text", "document_participants", "document_sent_to_sign"]}]
+      }
+    }
+  ]');
+
+
+  insert into data.actions(code, function) values
+  ('document_create', 'pallas_project.act_document_create');
 
 end;
 $$
