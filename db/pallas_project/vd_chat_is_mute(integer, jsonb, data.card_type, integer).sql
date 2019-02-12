@@ -9,7 +9,7 @@ declare
   v_bool_value boolean := json.get_boolean_opt(in_value, false);
 begin
   case when v_bool_value then
-    return 'Да';
+    return 'Уведомления отключены';
   else
     return null;
   end case;

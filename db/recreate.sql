@@ -9920,6 +9920,80 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_document_delete(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_document_delete(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_document_code text := json.get_string(in_params, 'document_code');
+  v_document_id integer := data.get_object_id(v_document_code);
+  v_actor_id integer :=data.get_active_actor_id(in_client_id);
+  v_master_group_id integer := data.get_object_id('master');
+
+  v_document_author integer;
+
+  v_changes jsonb[];
+begin
+  assert in_request_id is not null;
+
+  perform * from data.objects where id = v_document_id for update;
+
+  v_document_author := json.get_integer(data.get_attribute_value(v_document_id, 'system_document_author'));
+  v_changes := array[]::jsonb[];
+
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('document_status', jsonb '"deleted"', v_master_group_id));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', to_jsonb(false), v_document_author));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', to_jsonb(false), v_document_id));
+
+  perform data.change_object_and_notify(v_document_id, 
+                                        to_jsonb(v_changes),
+                                        v_actor_id);
+
+  perform api_utils.create_go_back_action_notification(in_client_id, in_request_id);
+
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_document_edit(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_document_edit(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_document_code text := json.get_string(in_params, 'document_code');
+  v_title text := json.get_string(in_user_params, 'title');
+  v_document_text text := json.get_string(in_user_params, 'document_text');
+  v_document_id integer := data.get_object_id(v_document_code);
+  v_actor_id integer :=data.get_active_actor_id(in_client_id);
+
+  v_changes jsonb[];
+  v_message_sent boolean := false;
+begin
+  assert in_request_id is not null;
+
+  perform * from data.objects where id = v_document_id for update;
+  v_changes := array[]::jsonb[];
+
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('title', to_jsonb(v_title)));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('document_text', to_jsonb(v_document_text)));
+  v_message_sent := data.change_current_object(in_client_id, 
+                                                 in_request_id,
+                                                 v_document_id, 
+                                                 to_jsonb(v_changes));
+
+  if not v_message_sent then
+   perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_go_back(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_go_back(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -10456,6 +10530,48 @@ begin
       ', "create_debatle_step1": {"code": "create_debatle_step1", "name": "Инициировать дебатл", "disabled": false, '||
       '"params": {}, "user_params": [{"code": "title", "description": "Введите тему дебатла", "type": "string" }]}';
   end if;
+  return jsonb ('{'||trim(v_actions_list,',')||'}');
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.actgenerator_document(integer, integer);
+
+create or replace function pallas_project.actgenerator_document(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_actions_list text := '';
+  v_is_master boolean;
+  v_master_group_id integer := data.get_object_id('master');
+  v_document_code text := data.get_object_code(in_object_id);
+  v_document_author integer := json.get_integer(data.get_attribute_value(in_object_id, 'system_document_author'));
+  v_document_category text := json.get_string(data.get_attribute_value(in_object_id, 'system_document_category'));
+  v_document_status text := json.get_string_opt(data.get_attribute_value(in_object_id, 'document_status',v_master_group_id),'');
+begin
+  assert in_actor_id is not null;
+
+  v_is_master := pp_utils.is_in_group(in_actor_id, 'master');
+
+  if v_is_master or (in_actor_id = v_document_author and v_document_category = 'private') then
+    v_actions_list := v_actions_list || 
+        format(', "document_edit": {"code": "document_edit", "name": "Редактировать", "disabled": false, "params": {"document_code": "%s"}, 
+"user_params": [{"code": "title", "description": "Заголовок", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"},
+{"code": "document_text", "description": "Текст документа", "type": "string", "restrictions": {"min_length": 1, "multiline": true}, "default_value": %s}]}',
+                v_document_code,
+                json.get_string_opt(data.get_attribute_value(in_object_id, 'title', in_actor_id), null),
+                coalesce(data.get_attribute_value(in_object_id, 'document_text')::text, '""'));
+
+    if v_document_status <> 'deleted' then
+      v_actions_list := v_actions_list || 
+          format(', "document_delete": {"code": "document_delete", "name": "Удалить", "disabled": false, "warning": "Документ исчезнет безвозвратно. Точно удаляем?", '||
+                  '"params": {"document_code": "%s"}}',
+                  v_document_code);
+    end if;
+  end if;
+
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;
 $$
@@ -11475,7 +11591,8 @@ begin
   ('document_last_edit_time', null, 'Дата и время последнего редактирования документа', 'normal', 'full', null, true),
   ('system_document_participants', null, 'Участники, подписывающие документ', 'system', null, null, false),
   ('document_participants', null, 'Участники, подписывающие документ', 'normal', 'full', null, false),
-  ('document_sent_to_sign', null, 'Признак того, что документ был отправлен на подпись', 'normal', 'full', null, false);
+  ('document_sent_to_sign', null, 'Признак того, что документ был отправлен на подпись', 'normal', 'full', null, false),
+  ('document_status', null, 'Статус документа', 'normal', 'full', null, true);
 
   -- Объекты для категорий документов
   perform data.create_object(
@@ -11572,6 +11689,8 @@ begin
   jsonb '[
     {"code": "type", "value": "document"},
     {"code": "is_visible", "value": true, "value_object_code": "master"},
+    {"code": "priority", "value": 95},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_document"},
     {
       "code": "mini_card_template",
       "value": {
@@ -11583,14 +11702,17 @@ begin
       "code": "template",
       "value": {
         "title": "title",
-        "groups": [{"code": "document_group", "attributes": ["document_author", "document_last_edit_time", "document_text", "document_participants", "document_sent_to_sign"]}]
+        "groups": [{"code": "document_group1", "actions": ["document_edit", "document_delete"]},
+                   {"code": "document_group2", "attributes": ["document_author", "document_last_edit_time", "document_text", "document_participants", "document_sent_to_sign"]}]
       }
     }
   ]');
 
 
   insert into data.actions(code, function) values
-  ('document_create', 'pallas_project.act_document_create');
+  ('document_create', 'pallas_project.act_document_create'),
+  ('document_edit', 'pallas_project.act_document_edit'),
+  ('document_delete', 'pallas_project.act_document_delete');
 
 end;
 $$
@@ -11796,7 +11918,7 @@ begin
   ('system_chat_can_leave', null, 'Возможность покинуть чат', 'system', null, null, true),
   ('system_chat_can_mute', null, 'Возможность Убрать уведомления о новых сообщениях', 'system', null, null, true),
   ('system_chat_can_rename', null, 'Возможность переименовать чат', 'system', null, null, true),
-  ('chat_is_mute', 'Уведомления отключены', 'Признак отлюченного уведомления о новых сообщениях', 'normal', 'full', 'pallas_project.vd_chat_is_mute', true),
+  ('chat_is_mute', null, 'Признак отлюченного уведомления о новых сообщениях', 'normal', 'full', 'pallas_project.vd_chat_is_mute', true),
   ('chat_unread_messages', 'Непрочитанных сообщений', 'Количество непрочитанных сообщений', 'normal', 'mini', null, true),
   ('system_chat_length', null , 'Количество сообщений', 'system', null, null, false),
   ('system_chat_is_renamed', null, 'Признак, что чат был переименован', 'system', null, null, false),
@@ -12699,7 +12821,7 @@ declare
   v_bool_value boolean := json.get_boolean_opt(in_value, false);
 begin
   case when v_bool_value then
-    return 'Да';
+    return 'Уведомления отключены';
   else
     return null;
   end case;

@@ -17,7 +17,8 @@ begin
   ('document_last_edit_time', null, 'Дата и время последнего редактирования документа', 'normal', 'full', null, true),
   ('system_document_participants', null, 'Участники, подписывающие документ', 'system', null, null, false),
   ('document_participants', null, 'Участники, подписывающие документ', 'normal', 'full', null, false),
-  ('document_sent_to_sign', null, 'Признак того, что документ был отправлен на подпись', 'normal', 'full', null, false);
+  ('document_sent_to_sign', null, 'Признак того, что документ был отправлен на подпись', 'normal', 'full', null, false),
+  ('document_status', null, 'Статус документа', 'normal', 'full', null, true);
 
   -- Объекты для категорий документов
   perform data.create_object(
@@ -114,6 +115,8 @@ begin
   jsonb '[
     {"code": "type", "value": "document"},
     {"code": "is_visible", "value": true, "value_object_code": "master"},
+    {"code": "priority", "value": 95},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_document"},
     {
       "code": "mini_card_template",
       "value": {
@@ -125,14 +128,17 @@ begin
       "code": "template",
       "value": {
         "title": "title",
-        "groups": [{"code": "document_group", "attributes": ["document_author", "document_last_edit_time", "document_text", "document_participants", "document_sent_to_sign"]}]
+        "groups": [{"code": "document_group1", "actions": ["document_edit", "document_delete"]},
+                   {"code": "document_group2", "attributes": ["document_author", "document_last_edit_time", "document_text", "document_participants", "document_sent_to_sign"]}]
       }
     }
   ]');
 
 
   insert into data.actions(code, function) values
-  ('document_create', 'pallas_project.act_document_create');
+  ('document_create', 'pallas_project.act_document_create'),
+  ('document_edit', 'pallas_project.act_document_edit'),
+  ('document_delete', 'pallas_project.act_document_delete');
 
 end;
 $$
