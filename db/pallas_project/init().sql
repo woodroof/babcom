@@ -46,7 +46,7 @@ begin
       "template": {
         "groups": [
           {"code": "menu_group1", "actions": ["login"]},
-          {"code": "menu_group2", "actions": ["statuses", "debatles", "chats", "all_chats", "master_chats", "persons", "documents"]},
+          {"code": "menu_group2", "actions": ["statuses", "next_statuses", "debatles", "chats", "all_chats", "master_chats", "persons", "documents"]},
           {"code": "menu_group3", "actions": ["logout"]}
         ]
       }

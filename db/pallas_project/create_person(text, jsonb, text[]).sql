@@ -11,6 +11,7 @@ declare
   v_login_id integer;
   v_master_group_id integer := data.get_object_id('master');
   v_economy_type jsonb := data.get_attribute_value(v_person_id, 'system_person_economy_type');
+  v_attributes jsonb;
 begin
   insert into data.logins(code) values(in_login_code) returning id into v_login_id;
   insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
@@ -20,6 +21,7 @@ begin
       v_cycle integer;
       v_money jsonb;
       v_deposit_money jsonb;
+      v_coin jsonb;
     begin
       perform data.set_attribute_value(v_person_id, 'person_economy_type', v_economy_type, v_master_group_id);
 
@@ -40,6 +42,23 @@ begin
 
         perform data.set_attribute_value(v_person_id, 'person_deposit_money', v_deposit_money, v_person_id);
         perform data.set_attribute_value(v_person_id, 'person_deposit_money', v_deposit_money, v_master_group_id);
+      end if;
+
+      if v_economy_type = jsonb '"un"' then
+        v_coin := data.get_attribute_value(v_person_id, 'system_person_coin');
+        perform json.get_integer(v_coin);
+
+        perform data.set_attribute_value(v_person_id, 'person_coin', v_coin, v_person_id);
+        perform data.set_attribute_value(v_person_id, 'person_coin', v_coin, v_master_group_id);
+      end if;
+
+      -- Заполним будущие статусы
+      if v_economy_type != jsonb '"fixed"' then
+        perform data.set_attribute_value(v_person_id, 'system_person_next_life_support_status', jsonb '1');
+        perform data.set_attribute_value(v_person_id, 'system_person_next_health_care_status', jsonb '0');
+        perform data.set_attribute_value(v_person_id, 'system_person_next_recreation_status', jsonb '0');
+        perform data.set_attribute_value(v_person_id, 'system_person_next_police_status', jsonb '0');
+        perform data.set_attribute_value(v_person_id, 'system_person_next_administrative_services_status', jsonb '0');
       end if;
 
       -- Создадим страницу для статусов
@@ -130,6 +149,34 @@ begin
           v_person_id,
           json.get_integer(data.get_attribute_value(v_person_id, 'system_person_administrative_services_status')))::jsonb,
         'administrative_services_status_page');
+
+      if v_economy_type != jsonb '"fixed"' then
+        -- Создадим страницу для покупки статусов
+        v_attributes :=
+          format(
+            '[
+              {"code": "cycle", "value": %s},
+              {"code": "is_visible", "value": true, "value_object_id": %s},
+              {"code": "life_support_next_status", "value": 1},
+              {"code": "health_care_next_status", "value": 0},
+              {"code": "recreation_next_status", "value": 0},
+              {"code": "police_next_status", "value": 0},
+              {"code": "administrative_services_next_status", "value": 0}
+            ]',
+            v_cycle,
+            v_person_id)::jsonb;
+
+        if v_economy_type = jsonb '"un"' then
+          v_attributes := v_attributes || data.attribute_change2jsonb('person_coin', data.get_attribute_value(v_person_id, 'system_person_coin'));
+        else
+          v_attributes := v_attributes || data.attribute_change2jsonb('money', data.get_attribute_value(v_person_id, 'system_money'));
+        end if;
+
+        perform data.create_object(
+          v_person_code || '_next_statuses',
+          v_attributes,
+          'next_statuses');
+      end if;
     end;
   end if;
 end;

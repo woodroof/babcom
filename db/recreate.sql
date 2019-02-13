@@ -1645,66 +1645,14 @@ $$
 -- Если функция вернула false, то скорее всего внешнему коду нужно сгенерировать событие ok или action
 declare
   v_actor_id integer := data.get_active_actor_id(in_client_id);
-  v_object_code text := data.get_object_code(in_object_id);
-  v_subscription_exists boolean;
-  v_diffs jsonb;
-  v_diff record;
-  v_message_sent boolean := false;
-  v_request_id text;
-  v_notification_data jsonb;
 begin
-  assert in_client_id is not null;
-  assert in_request_id is not null;
   assert in_changes is not null;
 
-  select true
-  into v_subscription_exists
-  from data.client_subscriptions
-  where
-    client_id = in_client_id and
-    object_id = in_object_id;
-
-  -- Если стреляет этот ассерт, то нам нужно вызывать другую функцию
-  assert v_subscription_exists;
-
-  v_diffs := data.change_object(in_object_id, in_changes, v_actor_id, in_reason);
-
-  for v_diff in
-  (
-    select
-      json.get_string(value, 'object_id') as object_id,
-      json.get_integer(value, 'client_id') as client_id,
-      (case when value ? 'object' then value->'object' else null end) as object,
-      (case when value ? 'list_changes' then value->'list_changes' else null end) as list_changes
-    from jsonb_array_elements(v_diffs)
-  )
-  loop
-    assert v_diff.object is not null or v_diff.list_changes is not null;
-
-    if v_diff.client_id = in_client_id and v_diff.object_id = v_object_code then
-      assert not v_message_sent;
-
-      v_message_sent := true;
-
-      v_request_id := in_request_id;
-    else
-      v_request_id := null;
-    end if;
-
-    v_notification_data := jsonb_build_object('object_id', v_diff.object_id);
-
-    if v_diff.object is not null then
-      v_notification_data := v_notification_data || jsonb_build_object('object', v_diff.object);
-    end if;
-
-    if v_diff.list_changes is not null then
-      v_notification_data := v_notification_data || jsonb_build_object('list_changes', v_diff.list_changes);
-    end if;
-
-    perform api_utils.create_notification(v_diff.client_id, v_request_id, 'diff', v_notification_data);
-  end loop;
-
-  return v_message_sent;
+  return data.process_diffs_and_notify_current_object(
+    data.change_object(in_object_id, in_changes, v_actor_id, in_reason),
+    in_client_id,
+    in_request_id,
+    in_object_id);
 end;
 $$
 language plpgsql;
@@ -3384,6 +3332,25 @@ end;
 $$
 language plpgsql;
 
+-- drop function data.get_integer_array_param(text);
+
+create or replace function data.get_integer_array_param(in_code text)
+returns integer[]
+stable
+as
+$$
+begin
+  assert in_code is not null;
+
+  return
+    json.get_integer_array(
+      data.get_param(in_code));
+exception when invalid_parameter_value then
+  raise exception 'Param "%" is not an integer array', in_code;
+end;
+$$
+language plpgsql;
+
 -- drop function data.get_integer_param(text);
 
 create or replace function data.get_integer_param(in_code text)
@@ -4021,6 +3988,36 @@ end;
 $$
 language plpgsql;
 
+-- drop function data.join_diffs(jsonb, jsonb);
+
+create or replace function data.join_diffs(in_diffs1 jsonb, in_diffs2 jsonb)
+returns jsonb
+volatile
+as
+$$
+-- Функция пока не поддерживает объединение diff'ов с изменениями списков
+declare
+  v_diffs1_object jsonb;
+  v_diffs2_object jsonb;
+  v_ret_val jsonb;
+begin
+  select jsonb_object_agg(json.get_string(value, 'object_id') || '#' || json.get_integer(value, 'client_id'), value)
+  into v_diffs1_object
+  from jsonb_array_elements(in_diffs1);
+
+  select jsonb_object_agg(json.get_string(value, 'object_id') || '#' || json.get_integer(value, 'client_id'), value)
+  into v_diffs2_object
+  from jsonb_array_elements(in_diffs2);
+
+  select jsonb_agg(value)
+  into v_ret_val
+  from jsonb_each(v_diffs1_object || v_diffs2_object);
+
+  return v_ret_val;
+end;
+$$
+language plpgsql;
+
 -- drop function data.log(data.severity, text, integer);
 
 create or replace function data.log(in_severity data.severity, in_message text, in_actor_id integer default null::integer)
@@ -4224,6 +4221,75 @@ begin
 
     perform api_utils.create_notification(v_diff.client_id, null, 'diff', v_notification_data);
   end loop;
+end;
+$$
+language plpgsql;
+
+-- drop function data.process_diffs_and_notify_current_object(jsonb, integer, text, integer);
+
+create or replace function data.process_diffs_and_notify_current_object(in_diffs jsonb, in_client_id integer, in_request_id text, in_object_id integer)
+returns boolean
+volatile
+as
+$$
+declare
+  v_subscription_exists boolean;
+  v_diff record;
+  v_object_code text := data.get_object_code(in_object_id);
+  v_message_sent boolean := false;
+  v_request_id text;
+  v_notification_data jsonb;
+begin
+  assert json.is_object_array(in_diffs);
+  assert in_client_id is not null;
+  assert in_request_id is not null;
+
+  select true
+  into v_subscription_exists
+  from data.client_subscriptions
+  where
+    client_id = in_client_id and
+    object_id = in_object_id;
+
+  -- Если стреляет этот ассерт, то нам нужно вызывать другую функцию
+  assert v_subscription_exists;
+
+  for v_diff in
+  (
+    select
+      json.get_string(value, 'object_id') as object_id,
+      json.get_integer(value, 'client_id') as client_id,
+      (case when value ? 'object' then value->'object' else null end) as object,
+      (case when value ? 'list_changes' then value->'list_changes' else null end) as list_changes
+    from jsonb_array_elements(in_diffs)
+  )
+  loop
+    assert v_diff.object is not null or v_diff.list_changes is not null;
+
+    if v_diff.client_id = in_client_id and v_diff.object_id = v_object_code then
+      assert not v_message_sent;
+
+      v_message_sent := true;
+
+      v_request_id := in_request_id;
+    else
+      v_request_id := null;
+    end if;
+
+    v_notification_data := jsonb_build_object('object_id', v_diff.object_id);
+
+    if v_diff.object is not null then
+      v_notification_data := v_notification_data || jsonb_build_object('object', v_diff.object);
+    end if;
+
+    if v_diff.list_changes is not null then
+      v_notification_data := v_notification_data || jsonb_build_object('list_changes', v_diff.list_changes);
+    end if;
+
+    perform api_utils.create_notification(v_diff.client_id, v_request_id, 'diff', v_notification_data);
+  end loop;
+
+  return v_message_sent;
 end;
 $$
 language plpgsql;
@@ -8497,6 +8563,78 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_buy_status(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_buy_status(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_status_name text := json.get_string(in_params, 'status_name');
+  v_status_value integer := json.get_integer(in_params, 'value');
+  v_status_attribute_id integer = data.get_attribute_id('system_person_next_' || v_status_name || '_status');
+  v_coin_attribute_id integer = data.get_attribute_id('system_person_coin');
+  v_status_prices integer[] := data.get_integer_array_param(v_status_name || '_status_prices');
+  v_current_status_value integer;
+  v_current_coins integer;
+  v_price integer;
+  v_diff jsonb;
+  v_notified boolean;
+begin
+  assert in_request_id is not null;
+  assert in_user_params is null;
+  assert in_default_params is null;
+
+  select json.get_integer(av.value)
+  into v_current_status_value
+  from data.attribute_values av
+  where
+    av.object_id = v_actor_id and
+    av.attribute_id = v_status_attribute_id
+  for update;
+
+  assert v_current_status_value is not null;
+
+  -- todo за деньги
+
+  select json.get_integer(av.value)
+  into v_current_coins
+  from data.attribute_values av
+  where
+    av.object_id = v_actor_id and
+    av.attribute_id = v_coin_attribute_id
+  for update;
+
+  assert v_current_coins is not null;
+
+  select sum(v_status_prices[value])
+  into v_price
+  from unnest(array[1, 2, 3]) a(value)
+  where
+    value > v_current_status_value and
+    value <= v_status_value;
+
+  if v_current_status_value >= v_status_value or v_price > v_current_coins then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+    return;
+  end if;
+
+  v_diff := pallas_project.change_coins(v_actor_id, v_current_coins - v_price, v_actor_id, 'Status buy');
+  v_diff := data.join_diffs(v_diff, pallas_project.change_next_status(v_actor_id, v_status_name, v_status_value, v_actor_id, 'Status buy'));
+
+  v_notified :=
+    data.process_diffs_and_notify_current_object(
+      v_diff,
+      in_client_id,
+      in_request_id,
+      data.get_object_id(data.get_object_code(v_actor_id) || '_next_statuses'));
+  assert v_notified;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_chat_add_person(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_chat_add_person(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -10611,6 +10749,7 @@ declare
   v_actor_code text := data.get_object_code(in_actor_id);
   v_actions jsonb := '{}';
   v_is_master boolean := pp_utils.is_in_group(in_actor_id, 'master');
+  v_economy_type text := json.get_string_opt(data.get_attribute_value(in_actor_id, 'system_person_economy_type'), null);
 begin
   assert in_actor_id is not null;
 
@@ -10635,6 +10774,16 @@ begin
           "chats": {"code": "act_open_object", "name": "Чаты", "disabled": false, "params": {"object_code": "chats"}},
           "master_chats": {"code": "act_open_object", "name": "Связь с мастерами", "disabled": false, "params": {"object_code": "master_chats"}}
         }';
+
+      if v_economy_type != 'fixed' then
+        v_actions :=
+          v_actions ||
+          format(
+            '{
+              "next_statuses": {"code": "act_open_object", "name": "Покупка статусов", "disabled": false, "params": {"object_code": "%s_next_statuses"}}
+            }',
+            v_actor_code)::jsonb;
+      end if;
     else
       v_actions :=
         v_actions ||
@@ -10657,6 +10806,114 @@ begin
   v_actions :=
     v_actions ||
     jsonb '{"persons": {"code": "act_open_object", "name": "Люди", "disabled": false, "params": {"object_code": "persons"}}}';
+
+  return v_actions;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.actgenerator_next_statuses(integer, integer);
+
+create or replace function pallas_project.actgenerator_next_statuses(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_master boolean := pp_utils.is_in_group(in_actor_id, 'master');
+  v_economy_type text;
+  v_coins integer;
+  v_money integer;
+  v_status_name text;
+  v_actions jsonb := jsonb '{}';
+begin
+  if not v_master then
+    v_economy_type := json.get_string(data.get_attribute_value(in_actor_id, 'system_person_economy_type'));
+
+    if v_economy_type = 'un' then
+      v_coins := json.get_integer(data.get_attribute_value(in_actor_id, 'system_person_coin'));
+    else
+      v_money := json.get_integer(data.get_attribute_value(in_actor_id, 'system_money'));
+    end if;
+  end if;
+
+  for v_status_name in
+  (
+    select value
+    from unnest(array['life_support', 'health_care', 'recreation', 'police', 'administrative_services']) a(value)
+  )
+  loop
+    declare
+      v_status_prices integer[] := data.get_integer_array_param(v_status_name || '_status_prices');
+      v_status integer := json.get_integer(data.get_attribute_value(in_object_id, v_status_name || '_next_status'));
+      v_price integer;
+      v_action record;
+    begin
+      assert array_length(v_status_prices, 1) = 3;
+      assert v_status in (0, 1, 2, 3);
+
+      if v_master then
+        -- todo установка статусов
+      elsif v_economy_type = 'un' then
+        v_price := 0;
+
+        for v_action in
+        (
+          select
+            value,
+            (case when value = 1 then 'bronze' when value = 2 then 'silver' else 'gold' end) action_suffix,
+            (case when value = 1 then 'бронзовый' when value = 2 then 'серебряный' else 'золотой' end) description
+          from unnest(array[1, 2, 3]) a(value)
+        )
+        loop
+          if v_status < v_action.value then
+            v_price := v_price + v_status_prices[v_action.value];
+
+            if v_coins < v_price then
+              v_actions :=
+                v_actions ||
+                format(
+                  '{
+                    "%s_%s": {
+                      "name": "Купить %s статус (%s)",
+                      "disabled": true
+                    }
+                  }',
+                  v_status_name,
+                  v_action.action_suffix,
+                  v_action.description,
+                  v_price)::jsonb;
+            else
+              v_actions :=
+                v_actions ||
+                format(
+                  '{
+                    "%s_%s": {
+                      "code": "buy_status",
+                      "name": "Купить %s статус (%s)",
+                      "disabled": false,
+                      "warning": "Вы действительно хотите купить %s статус за %s %s?",
+                      "params": {"status_name": "%s", "value": %s}
+                    }
+                  }',
+                  v_status_name,
+                  v_action.action_suffix,
+                  v_action.description,
+                  v_price,
+                  v_action.description,
+                  v_price,
+                  pp_utils.add_word_ending('коин', v_price),
+                  v_status_name,
+                  v_action.value)::jsonb;
+            end if;
+          end if;
+        end loop;
+      else
+        assert v_economy_type in ('asters', 'mcr');
+        -- todo money
+      end if;
+    end;
+  end loop;
 
   return v_actions;
 end;
@@ -10709,6 +10966,74 @@ begin
   end if;
 
   return v_actions;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.change_coins(integer, integer, integer, text);
+
+create or replace function pallas_project.change_coins(in_object_id integer, in_new_value integer, in_actor_id integer, in_reason text)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_object_code text := data.get_object_code(in_object_id);
+  v_diffs jsonb;
+begin
+  -- Изменяемые объекты: сам объект, его страница покупки статусов
+  v_diffs :=
+    data.change_object(
+      in_object_id,
+      jsonb '[]' ||
+      data.attribute_change2jsonb('system_person_coin', to_jsonb(in_new_value)) ||
+      data.attribute_change2jsonb('person_coin', to_jsonb(in_new_value), in_object_id) ||
+      data.attribute_change2jsonb('person_coin', to_jsonb(in_new_value), 'master'),
+      in_actor_id,
+      in_reason);
+  v_diffs :=
+    v_diffs ||
+    data.change_object(
+      data.get_object_id(v_object_code || '_next_statuses'),
+      jsonb '[]' ||
+      data.attribute_change2jsonb('person_coin', to_jsonb(in_new_value)),
+      in_actor_id,
+      in_reason);
+
+  return v_diffs;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.change_next_status(integer, text, integer, integer, text);
+
+create or replace function pallas_project.change_next_status(in_object_id integer, in_status_name text, in_new_value integer, in_actor_id integer, in_reason text)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_object_code text := data.get_object_code(in_object_id);
+  v_diffs jsonb;
+begin
+  -- Изменяемые объекты: сам объект, его страница покупки статусов
+  v_diffs :=
+    data.change_object(
+      in_object_id,
+      jsonb '[]' ||
+      data.attribute_change2jsonb('system_person_' || in_status_name || '_status', to_jsonb(in_new_value)),
+      in_actor_id,
+      in_reason);
+  v_diffs :=
+    v_diffs ||
+    data.change_object(
+      data.get_object_id(v_object_code || '_next_statuses'),
+      jsonb '[]' ||
+      data.attribute_change2jsonb(in_status_name || '_next_status', to_jsonb(in_new_value)),
+      in_actor_id,
+      in_reason);
+
+  return v_diffs;
 end;
 $$
 language plpgsql;
@@ -10793,6 +11118,7 @@ declare
   v_login_id integer;
   v_master_group_id integer := data.get_object_id('master');
   v_economy_type jsonb := data.get_attribute_value(v_person_id, 'system_person_economy_type');
+  v_attributes jsonb;
 begin
   insert into data.logins(code) values(in_login_code) returning id into v_login_id;
   insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
@@ -10802,6 +11128,7 @@ begin
       v_cycle integer;
       v_money jsonb;
       v_deposit_money jsonb;
+      v_coin jsonb;
     begin
       perform data.set_attribute_value(v_person_id, 'person_economy_type', v_economy_type, v_master_group_id);
 
@@ -10822,6 +11149,23 @@ begin
 
         perform data.set_attribute_value(v_person_id, 'person_deposit_money', v_deposit_money, v_person_id);
         perform data.set_attribute_value(v_person_id, 'person_deposit_money', v_deposit_money, v_master_group_id);
+      end if;
+
+      if v_economy_type = jsonb '"un"' then
+        v_coin := data.get_attribute_value(v_person_id, 'system_person_coin');
+        perform json.get_integer(v_coin);
+
+        perform data.set_attribute_value(v_person_id, 'person_coin', v_coin, v_person_id);
+        perform data.set_attribute_value(v_person_id, 'person_coin', v_coin, v_master_group_id);
+      end if;
+
+      -- Заполним будущие статусы
+      if v_economy_type != jsonb '"fixed"' then
+        perform data.set_attribute_value(v_person_id, 'system_person_next_life_support_status', jsonb '1');
+        perform data.set_attribute_value(v_person_id, 'system_person_next_health_care_status', jsonb '0');
+        perform data.set_attribute_value(v_person_id, 'system_person_next_recreation_status', jsonb '0');
+        perform data.set_attribute_value(v_person_id, 'system_person_next_police_status', jsonb '0');
+        perform data.set_attribute_value(v_person_id, 'system_person_next_administrative_services_status', jsonb '0');
       end if;
 
       -- Создадим страницу для статусов
@@ -10912,6 +11256,34 @@ begin
           v_person_id,
           json.get_integer(data.get_attribute_value(v_person_id, 'system_person_administrative_services_status')))::jsonb,
         'administrative_services_status_page');
+
+      if v_economy_type != jsonb '"fixed"' then
+        -- Создадим страницу для покупки статусов
+        v_attributes :=
+          format(
+            '[
+              {"code": "cycle", "value": %s},
+              {"code": "is_visible", "value": true, "value_object_id": %s},
+              {"code": "life_support_next_status", "value": 1},
+              {"code": "health_care_next_status", "value": 0},
+              {"code": "recreation_next_status", "value": 0},
+              {"code": "police_next_status", "value": 0},
+              {"code": "administrative_services_next_status", "value": 0}
+            ]',
+            v_cycle,
+            v_person_id)::jsonb;
+
+        if v_economy_type = jsonb '"un"' then
+          v_attributes := v_attributes || data.attribute_change2jsonb('person_coin', data.get_attribute_value(v_person_id, 'system_person_coin'));
+        else
+          v_attributes := v_attributes || data.attribute_change2jsonb('money', data.get_attribute_value(v_person_id, 'system_money'));
+        end if;
+
+        perform data.create_object(
+          v_person_code || '_next_statuses',
+          v_attributes,
+          'next_statuses');
+      end if;
     end;
   end if;
 end;
@@ -11182,7 +11554,7 @@ begin
       "template": {
         "groups": [
           {"code": "menu_group1", "actions": ["login"]},
-          {"code": "menu_group2", "actions": ["statuses", "debatles", "chats", "all_chats", "master_chats", "persons", "documents"]},
+          {"code": "menu_group2", "actions": ["statuses", "next_statuses", "debatles", "chats", "all_chats", "master_chats", "persons", "documents"]},
           {"code": "menu_group3", "actions": ["logout"]}
         ]
       }
@@ -11727,7 +12099,13 @@ as
 $$
 begin
   insert into data.params(code, value) values
-  ('economic_cycle_number', jsonb '1');
+  ('economic_cycle_number', jsonb '1'),
+  ('token_price', jsonb '1000'),
+  ('life_support_status_prices', jsonb '[1, 2, 4]'),
+  ('health_care_status_prices', jsonb '[1, 2, 4]'),
+  ('recreation_status_prices', jsonb '[1, 2, 4]'),
+  ('police_status_prices', jsonb '[1, 2, 4]'),
+  ('administrative_services_status_prices', jsonb '[1, 2, 4]');
 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
   ('life_support_status', null, 'Описание на странице статуса', 'normal', null, 'pallas_project.vd_life_support_status', false),
@@ -11735,7 +12113,15 @@ begin
   ('recreation_status', null, 'Описание на странице статуса', 'normal', null, 'pallas_project.vd_recreation_status', false),
   ('police_status', null, 'Описание на странице статуса', 'normal', null, 'pallas_project.vd_police_status', false),
   ('administrative_services_status', null, 'Описание на странице статуса', 'normal', null, 'pallas_project.vd_administrative_services_status', false),
+  ('life_support_next_status', null, 'Статус на странице покупки', 'normal', null, 'pallas_project.vd_status', false),
+  ('health_care_next_status', null, 'Статус на странице покупки', 'normal', null, 'pallas_project.vd_status', false),
+  ('recreation_next_status', null, 'Статус на странице покупки', 'normal', null, 'pallas_project.vd_status', false),
+  ('police_next_status', null, 'Статус на странице покупки', 'normal', null, 'pallas_project.vd_status', false),
+  ('administrative_services_next_status', null, 'Статус на странице покупки', 'normal', null, 'pallas_project.vd_status', false),
   ('cycle', null, 'Текущий экономический цикл', 'normal', null, 'pallas_project.vd_cycle', false);
+
+  insert into data.actions(code, function) values
+  ('buy_status', 'pallas_project.act_buy_status');
 
   perform data.create_class(
     'life_support_status_page',
@@ -11847,7 +12233,32 @@ begin
     'statuses',
     jsonb '[
       {"code": "is_visible", "value": true, "value_object_code": "master"},
+      {"code": "type", "value": "statuses"},
       {"code": "title", "value": "Статусы"}
+    ]');
+
+  perform data.create_class(
+    'next_statuses',
+    jsonb '[
+      {"code": "is_visible", "value": true, "value_object_code": "master"},
+      {"code": "title", "value": "Покупка статусов"},
+      {"code": "type", "value": "status_shop"},
+      {"code": "actions_function", "value": "pallas_project.actgenerator_next_statuses"},
+      {
+        "code": "template",
+        "value": {
+          "title": "title",
+          "subtitle": "cycle",
+          "groups": [
+            {"code": "left", "attributes": ["money", "person_coin"]},
+            {"name": "Жизнеобеспечение", "code": "life_support", "attributes": ["life_support_next_status"], "actions": ["life_support_silver", "life_support_gold"]},
+            {"name": "Медицина", "code": "health_care", "attributes": ["health_care_next_status"], "actions": ["health_care_bronze", "health_care_silver", "health_care_gold"]},
+            {"name": "Развлечения", "code": "recreation", "attributes": ["recreation_next_status"], "actions": ["recreation_bronze", "recreation_silver", "recreation_gold"]},
+            {"name": "Полиция", "code": "police", "attributes": ["police_next_status"], "actions": ["police_bronze", "police_silver", "police_gold"]},
+            {"name": "Административное обслуживание", "code": "administrative_services", "attributes": ["administrative_services_next_status"], "actions": ["administrative_services_bronze", "administrative_services_silver", "administrative_services_gold"]}
+          ]
+        }
+      }
     ]');
 end;
 $$
@@ -13195,6 +13606,31 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.vd_status(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_status(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+declare
+  v_status integer := json.get_integer(in_value);
+begin
+  assert v_status in (0, 1, 2, 3);
+
+  if v_status = 0 then
+    return 'Нет';
+  elsif v_status = 1 then
+    return 'Бронзовый';
+  elsif v_status = 2 then
+    return 'Серебряный';
+  else
+    return 'Золотой';
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pp_utils.add_notification(integer, text, integer);
 
 create or replace function pp_utils.add_notification(in_actor_id integer, in_text text, in_redirect_object integer default null::integer)
@@ -13253,11 +13689,30 @@ end;
 $$
 language plpgsql;
 
+-- drop function pp_utils.add_word_ending(text, integer);
+
+create or replace function pp_utils.add_word_ending(in_word text, in_count integer)
+returns text
+immutable
+as
+$$
+begin
+  if in_count % 10 = 0 or in_count % 10 >= 5 or in_count > 10 and in_count < 20 then
+    return in_word || 'ов';
+  elsif in_count % 10 = 1 then
+    return in_word;
+  end if;
+
+  return in_word || 'а';
+end;
+$$
+language plpgsql;
+
 -- drop function pp_utils.is_actor_subscribed(integer, integer);
 
 create or replace function pp_utils.is_actor_subscribed(in_actor_id integer, in_object integer)
 returns boolean
-volatile
+stable
 as
 $$
 declare
@@ -13282,7 +13737,7 @@ language plpgsql;
 
 create or replace function pp_utils.is_in_group(in_object_id integer, in_group_code text)
 returns boolean
-volatile
+stable
 as
 $$
 declare

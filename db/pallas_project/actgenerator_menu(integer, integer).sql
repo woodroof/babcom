@@ -10,6 +10,7 @@ declare
   v_actor_code text := data.get_object_code(in_actor_id);
   v_actions jsonb := '{}';
   v_is_master boolean := pp_utils.is_in_group(in_actor_id, 'master');
+  v_economy_type text := json.get_string_opt(data.get_attribute_value(in_actor_id, 'system_person_economy_type'), null);
 begin
   assert in_actor_id is not null;
 
@@ -34,6 +35,16 @@ begin
           "chats": {"code": "act_open_object", "name": "Чаты", "disabled": false, "params": {"object_code": "chats"}},
           "master_chats": {"code": "act_open_object", "name": "Связь с мастерами", "disabled": false, "params": {"object_code": "master_chats"}}
         }';
+
+      if v_economy_type != 'fixed' then
+        v_actions :=
+          v_actions ||
+          format(
+            '{
+              "next_statuses": {"code": "act_open_object", "name": "Покупка статусов", "disabled": false, "params": {"object_code": "%s_next_statuses"}}
+            }',
+            v_actor_code)::jsonb;
+      end if;
     else
       v_actions :=
         v_actions ||

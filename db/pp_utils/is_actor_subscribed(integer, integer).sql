@@ -2,7 +2,7 @@
 
 create or replace function pp_utils.is_actor_subscribed(in_actor_id integer, in_object integer)
 returns boolean
-volatile
+stable
 as
 $$
 declare

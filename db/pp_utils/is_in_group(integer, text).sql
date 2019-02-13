@@ -2,7 +2,7 @@
 
 create or replace function pp_utils.is_in_group(in_object_id integer, in_group_code text)
 returns boolean
-volatile
+stable
 as
 $$
 declare
