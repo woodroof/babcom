@@ -39,6 +39,20 @@ begin
               }
             }
           }', v_object_code)::jsonb;
+        if v_economy_type != jsonb '"un"' then
+          v_actions :=
+            v_actions ||
+            format('{
+              "open_transactions": {
+                "code": "act_open_object",
+                "name": "Посмотреть историю транзакций",
+                "disabled": false,
+                "params": {
+                  "object_code": "%s_transactions"
+                }
+              }
+            }', v_object_code)::jsonb;
+        end if;
       end if;
     end if;
   end if;

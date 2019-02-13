@@ -44,6 +44,15 @@ begin
               "next_statuses": {"code": "act_open_object", "name": "Покупка статусов", "disabled": false, "params": {"object_code": "%s_next_statuses"}}
             }',
             v_actor_code)::jsonb;
+        if v_economy_type != 'un' then
+          v_actions :=
+            v_actions ||
+            format(
+              '{
+                "transactions": {"code": "act_open_object", "name": "История транзакций", "disabled": false, "params": {"object_code": "%s_transactions"}}
+              }',
+              v_actor_code)::jsonb;
+        end if;
       end if;
     else
       v_actions :=

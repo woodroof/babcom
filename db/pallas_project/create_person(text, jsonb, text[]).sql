@@ -176,6 +176,19 @@ begin
           v_person_code || '_next_statuses',
           v_attributes,
           'next_statuses');
+
+        if v_economy_type != jsonb '"un"' and v_economy_type != jsonb '"fixed"' then
+          -- Создадим страницу с историей транзакций
+          perform data.create_object(
+            v_person_code || '_transactions',
+            format(
+              '[
+                {"code": "is_visible", "value": true, "value_object_id": %s},
+                {"code": "content", "value": []}
+              ]',
+              v_person_id)::jsonb,
+            'transactions');
+        end if;
       end if;
     end;
   end if;

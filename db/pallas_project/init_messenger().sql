@@ -127,7 +127,6 @@ begin
     null
   );
 
-
   -- Объект-класс для чата
   insert into data.objects(code, type) values('chat', 'class') returning id into v_chat_class_id;
 
@@ -135,7 +134,7 @@ begin
   (v_chat_class_id, v_type_attribute_id, jsonb '"chat"', null),
   (v_chat_class_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
   (v_chat_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chat"', null),
-  (v_chat_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chat"', null),
+  (v_chat_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_do_nothing"', null),
   (v_chat_class_id, v_system_chat_can_invite_attribute_id, jsonb 'true', null),
   (v_chat_class_id, v_system_chat_can_leave_attribute_id, jsonb 'true', null),
   (v_chat_class_id, v_system_chat_can_mute_attribute_id, jsonb 'true', null),

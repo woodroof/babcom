@@ -67,7 +67,8 @@ begin
             ],
             "actions": [
               "open_current_statuses",
-              "open_next_statuses"
+              "open_next_statuses",
+              "open_transactions"
             ]
           },
           {
@@ -107,7 +108,7 @@ begin
       "title": "Джерри Адамс",
       "person_occupation": "Секретарь администрации",
       "person_state": "un",
-      "system_person_coin": 50,
+      "system_person_coin": 25,
       "person_opa_rating": 1,
       "person_un_rating": 150,
       "system_person_economy_type": "un",
@@ -122,7 +123,7 @@ begin
     jsonb '{
       "title": "Сьюзан Сидорова",
       "person_occupation": "Шахтёр",
-      "system_money": 65000,
+      "system_money": 25000,
       "system_person_deposit_money": 100000,
       "person_opa_rating": 5,
       "system_person_economy_type": "asters",
@@ -138,7 +139,7 @@ begin
       "title": "Чарли Чандрасекар",
       "person_occupation": "Главный экономист",
       "person_state": "un",
-      "system_person_coin": 50,
+      "system_person_coin": 25,
       "person_opa_rating": 1,
       "person_un_rating": 200,
       "system_person_economy_type": "un",

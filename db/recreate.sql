@@ -8609,7 +8609,7 @@ begin
   for update;
 
   assert v_current_sum is not null;
-perform data.log('info', format('%s %s', v_current_status_value, v_status_value));
+
   select sum(v_status_prices[value])
   into v_price
   from unnest(array[1, 2, 3]) a(value)
@@ -8627,11 +8627,22 @@ perform data.log('info', format('%s %s', v_current_status_value, v_status_value)
   end if;
 
   if v_economy_type = 'un' then
-    v_diff := pallas_project.change_coins(v_actor_id, (v_current_sum - v_price)::integer, v_actor_id, 'Status buy');
+    v_diff := pallas_project.change_coins(v_actor_id, (v_current_sum - v_price)::integer, v_actor_id, 'Status purchase');
   else
-    v_diff := pallas_project.change_person_money(v_actor_id, v_current_sum - v_price, v_actor_id, 'Status buy');
+    v_diff := pallas_project.change_person_money(v_actor_id, v_current_sum - v_price, v_actor_id, 'Status purchase');
+    perform pallas_project.create_transaction(
+      v_actor_id,
+      format(
+        'Покупка %s статуса "%s"',
+        (case when v_status_value = 1 then 'бронзового' when v_status_value = 2 then 'серебряного' else 'золотого' end),
+        json.get_string(data.get_raw_attribute_value(data.get_class_id(v_status_name || '_status_page'), 'title', null))),
+      -v_price,
+      v_current_sum - v_price,
+      null,
+      null,
+      v_actor_id);
   end if;
-  v_diff := data.join_diffs(v_diff, pallas_project.change_next_status(v_actor_id, v_status_name, v_status_value, v_actor_id, 'Status buy'));
+  v_diff := data.join_diffs(v_diff, pallas_project.change_next_status(v_actor_id, v_status_name, v_status_value, v_actor_id, 'Status purchase'));
 
   v_notified :=
     data.process_diffs_and_notify_current_object(
@@ -10792,6 +10803,15 @@ begin
               "next_statuses": {"code": "act_open_object", "name": "Покупка статусов", "disabled": false, "params": {"object_code": "%s_next_statuses"}}
             }',
             v_actor_code)::jsonb;
+        if v_economy_type != 'un' then
+          v_actions :=
+            v_actions ||
+            format(
+              '{
+                "transactions": {"code": "act_open_object", "name": "История транзакций", "disabled": false, "params": {"object_code": "%s_transactions"}}
+              }',
+              v_actor_code)::jsonb;
+        end if;
       end if;
     else
       v_actions :=
@@ -10970,6 +10990,20 @@ begin
               }
             }
           }', v_object_code)::jsonb;
+        if v_economy_type != jsonb '"un"' then
+          v_actions :=
+            v_actions ||
+            format('{
+              "open_transactions": {
+                "code": "act_open_object",
+                "name": "Посмотреть историю транзакций",
+                "disabled": false,
+                "params": {
+                  "object_code": "%s_transactions"
+                }
+              }
+            }', v_object_code)::jsonb;
+        end if;
       end if;
     end if;
   end if;
@@ -11327,9 +11361,91 @@ begin
           v_person_code || '_next_statuses',
           v_attributes,
           'next_statuses');
+
+        if v_economy_type != jsonb '"un"' and v_economy_type != jsonb '"fixed"' then
+          -- Создадим страницу с историей транзакций
+          perform data.create_object(
+            v_person_code || '_transactions',
+            format(
+              '[
+                {"code": "is_visible", "value": true, "value_object_id": %s},
+                {"code": "content", "value": []}
+              ]',
+              v_person_id)::jsonb,
+            'transactions');
+        end if;
       end if;
     end;
   end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.create_transaction(integer, text, bigint, bigint, bigint, integer, integer);
+
+create or replace function pallas_project.create_transaction(in_object_id integer, in_comment text, in_value bigint, in_balance bigint, in_tax bigint, in_second_object_id integer, in_actor_id integer)
+returns void
+volatile
+as
+$$
+declare
+  v_object_code text := data.get_object_code(in_object_id);
+  v_description text;
+  v_transaction_id integer;
+  v_second_object_title text;
+  v_second_object_code text;
+begin
+  assert in_comment is not null;
+  assert in_value is not null and in_value != 0;
+  assert in_balance is not null;
+  assert in_tax is null or in_tax >= 0 and in_tax < abs(in_value);
+
+  if in_second_object_id is not null then
+    v_second_object_title := json.get_string_opt(data.get_attribute_value(v_second_object_title, 'title', in_object_id), null);
+    if v_second_object_title is not null then
+      v_second_object_code := data.get_object_code(in_second_object_id);
+    end if;
+  end if;
+
+  if in_value < 0 then
+    v_description :=
+      format(
+        E'%s\n%s\n%s%s%s\nБаланс: %s',
+        pp_utils.format_date(clock_timestamp()),
+        '−UN$' || abs(in_value),
+        in_comment,
+        (case when v_second_object_title is not null then format(E'\nПолучатель: [%s](babcom:%s)', v_second_object_title, v_second_object_code) else '' end),
+        (case when in_tax is not null then format(E'\nНалог: UN$%s\nСумма после налога: UN$%s', in_tax, abs(in_value) - in_tax) else '' end),
+        (case when in_balance < 0 then '−UN$' || abs(in_balance) else 'UN$' || in_balance end));
+  else
+    v_description :=
+      format(
+        E'%s\n%s\n%s%s%s\nБаланс: %s',
+        pp_utils.format_date(clock_timestamp()),
+        '+UN$' || (in_value - coalesce(in_tax, 0)),
+        in_comment,
+        (case when v_second_object_title is not null then format(E'\Отправитель: [%s](babcom:%s)', v_second_object_title, v_second_object_code) else '' end),
+        (case when in_tax is not null then format(E'\nНалог: UN$%s\Сумма до налога: UN$%s', in_tax, in_value) else '' end),
+        (case when in_balance < 0 then '−UN$' || abs(in_balance) else 'UN$' || in_balance end));
+  end if;
+
+  v_transaction_id :=
+    data.create_object(
+      null,
+      format(
+        '[
+          {"code": "is_visible", "value": true, "value_object_id": %s},
+          {"code": "mini_description", "value": %s}
+        ]',
+        in_object_id,
+        to_jsonb(v_description)::text)::jsonb,
+      'transaction');
+
+  perform pp_utils.list_prepend_and_notify(
+    data.get_object_id(v_object_code || '_transactions'),
+    data.get_object_code(v_transaction_id),
+    null,
+    in_actor_id);
 end;
 $$
 language plpgsql;
@@ -11584,6 +11700,7 @@ begin
   insert into data.params(code, value, description) values
   ('default_login_id', to_jsonb(v_default_login_id), 'Идентификатор логина по умолчанию'),
   ('images_url', jsonb '"http://localhost:8000/images/"', 'Абсолютный или относительный URL к папке с изображениями, загружаемыми на сервер'),
+  ('year', jsonb '2340', 'Год событий игры'),
   ('first_names', to_jsonb(string_to_array('Джон Джек Пол Джордж Билл Кевин Уильям Кристофер Энтони Алекс Джош Томас Фред Филипп Джеймс Брюс Питер Рональд Люк Энди Антонио Итан Сэм Марк Карл Роберт'||
   ' Эльза Лидия Лия Роза Кейт Тесса Рэйчел Амали Шарлотта Эшли София Саманта Элоиз Талия Молли Анна Виктория Мария Натали Келли Ванесса Мишель Элизабет Кимберли Кортни Лоис Сьюзен Эмма', ' ')), 'Список имён'),
   ('last_names', to_jsonb(string_to_array('Янг Коннери Питерс Паркер Уэйн Ли Максуэлл Калвер Кэмерон Альба Сэндерсон Бэйли Блэкшоу Браун Клеменс Хаузер Кендалл Патридж Рой Сойер Стоун Фостер Хэнкс Грегг'||
@@ -11598,7 +11715,7 @@ begin
       "template": {
         "groups": [
           {"code": "menu_group1", "actions": ["login"]},
-          {"code": "menu_group2", "actions": ["statuses", "next_statuses", "debatles", "chats", "all_chats", "master_chats", "persons", "documents"]},
+          {"code": "menu_group2", "actions": ["statuses", "next_statuses", "debatles", "chats", "all_chats", "master_chats", "persons", "documents", "transactions"]},
           {"code": "menu_group3", "actions": ["logout"]}
         ]
       }
@@ -11644,6 +11761,7 @@ begin
 
   perform pallas_project.init_groups();
   perform pallas_project.init_economics();
+  perform pallas_project.init_finances();
   perform pallas_project.init_persons();
   perform pallas_project.init_debatles();
   perform pallas_project.init_messenger();
@@ -12308,6 +12426,44 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.init_finances();
+
+create or replace function pallas_project.init_finances()
+returns void
+volatile
+as
+$$
+begin
+  perform data.create_class(
+    'transaction',
+    jsonb '[
+      {"code": "is_visible", "value": true, "value_object_code": "master"},
+      {
+        "code": "mini_card_template",
+        "value": {
+          "title": "title",
+          "groups": [{"code": "group", "attributes": ["mini_description"]}]
+        }
+      }
+    ]');
+  perform data.create_class(
+    'transactions',
+    jsonb '[
+      {"code": "title", "value": "История транзакций"},
+      {"code": "is_visible", "value": true, "value_object_code": "master"},
+      {
+        "code": "template",
+        "value": {
+          "title": "title",
+          "groups": []
+        }
+      },
+      {"code": "list_element_function", "value": "pallas_project.lef_do_nothing"}
+    ]');
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.init_groups();
 
 create or replace function pallas_project.init_groups()
@@ -12457,7 +12613,6 @@ begin
     null
   );
 
-
   -- Объект-класс для чата
   insert into data.objects(code, type) values('chat', 'class') returning id into v_chat_class_id;
 
@@ -12465,7 +12620,7 @@ begin
   (v_chat_class_id, v_type_attribute_id, jsonb '"chat"', null),
   (v_chat_class_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
   (v_chat_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chat"', null),
-  (v_chat_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chat"', null),
+  (v_chat_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_do_nothing"', null),
   (v_chat_class_id, v_system_chat_can_invite_attribute_id, jsonb 'true', null),
   (v_chat_class_id, v_system_chat_can_leave_attribute_id, jsonb 'true', null),
   (v_chat_class_id, v_system_chat_can_mute_attribute_id, jsonb 'true', null),
@@ -12727,7 +12882,8 @@ begin
             ],
             "actions": [
               "open_current_statuses",
-              "open_next_statuses"
+              "open_next_statuses",
+              "open_transactions"
             ]
           },
           {
@@ -12767,7 +12923,7 @@ begin
       "title": "Джерри Адамс",
       "person_occupation": "Секретарь администрации",
       "person_state": "un",
-      "system_person_coin": 50,
+      "system_person_coin": 25,
       "person_opa_rating": 1,
       "person_un_rating": 150,
       "system_person_economy_type": "un",
@@ -12782,7 +12938,7 @@ begin
     jsonb '{
       "title": "Сьюзан Сидорова",
       "person_occupation": "Шахтёр",
-      "system_money": 65000,
+      "system_money": 25000,
       "system_person_deposit_money": 100000,
       "person_opa_rating": 5,
       "system_person_economy_type": "asters",
@@ -12798,7 +12954,7 @@ begin
       "title": "Чарли Чандрасекар",
       "person_occupation": "Главный экономист",
       "person_state": "un",
-      "system_person_coin": 50,
+      "system_person_coin": 25,
       "person_opa_rating": 1,
       "person_un_rating": 200,
       "system_person_economy_type": "un",
@@ -12816,22 +12972,6 @@ begin
       "title": "АСС",
       "person_occupation": "Автоматическая система судопроизводства"}',
     array['all_person']);
-end;
-$$
-language plpgsql;
-
--- drop function pallas_project.lef_chat(integer, text, integer, integer);
-
-create or replace function pallas_project.lef_chat(in_client_id integer, in_request_id text, in_object_id integer, in_list_object_id integer)
-returns void
-volatile
-as
-$$
-begin
-  assert in_request_id is not null;
-  assert in_list_object_id is not null;
-
-  perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
 language plpgsql;
@@ -13139,6 +13279,22 @@ begin
     in_request_id,
     'action',
     '{"action": "go_back", "action_data": {}}'::jsonb);
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.lef_do_nothing(integer, text, integer, integer);
+
+create or replace function pallas_project.lef_do_nothing(in_client_id integer, in_request_id text, in_object_id integer, in_list_object_id integer)
+returns void
+volatile
+as
+$$
+begin
+  assert in_request_id is not null;
+  assert in_list_object_id is not null;
+
+  perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
 language plpgsql;
@@ -13748,6 +13904,19 @@ begin
   end if;
 
   return in_word || 'а';
+end;
+$$
+language plpgsql;
+
+-- drop function pp_utils.format_date(timestamp with time zone);
+
+create or replace function pp_utils.format_date(in_time timestamp with time zone)
+returns text
+stable
+as
+$$
+begin
+  return format(to_char(in_time, 'DD.MM.%s HH24:MI:SS'), data.get_integer_param('year'));
 end;
 $$
 language plpgsql;

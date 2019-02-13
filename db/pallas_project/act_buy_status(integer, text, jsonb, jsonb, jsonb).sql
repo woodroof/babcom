@@ -44,7 +44,7 @@ begin
   for update;
 
   assert v_current_sum is not null;
-perform data.log('info', format('%s %s', v_current_status_value, v_status_value));
+
   select sum(v_status_prices[value])
   into v_price
   from unnest(array[1, 2, 3]) a(value)
@@ -62,11 +62,22 @@ perform data.log('info', format('%s %s', v_current_status_value, v_status_value)
   end if;
 
   if v_economy_type = 'un' then
-    v_diff := pallas_project.change_coins(v_actor_id, (v_current_sum - v_price)::integer, v_actor_id, 'Status buy');
+    v_diff := pallas_project.change_coins(v_actor_id, (v_current_sum - v_price)::integer, v_actor_id, 'Status purchase');
   else
-    v_diff := pallas_project.change_person_money(v_actor_id, v_current_sum - v_price, v_actor_id, 'Status buy');
+    v_diff := pallas_project.change_person_money(v_actor_id, v_current_sum - v_price, v_actor_id, 'Status purchase');
+    perform pallas_project.create_transaction(
+      v_actor_id,
+      format(
+        'Покупка %s статуса "%s"',
+        (case when v_status_value = 1 then 'бронзового' when v_status_value = 2 then 'серебряного' else 'золотого' end),
+        json.get_string(data.get_raw_attribute_value(data.get_class_id(v_status_name || '_status_page'), 'title', null))),
+      -v_price,
+      v_current_sum - v_price,
+      null,
+      null,
+      v_actor_id);
   end if;
-  v_diff := data.join_diffs(v_diff, pallas_project.change_next_status(v_actor_id, v_status_name, v_status_value, v_actor_id, 'Status buy'));
+  v_diff := data.join_diffs(v_diff, pallas_project.change_next_status(v_actor_id, v_status_name, v_status_value, v_actor_id, 'Status purchase'));
 
   v_notified :=
     data.process_diffs_and_notify_current_object(
