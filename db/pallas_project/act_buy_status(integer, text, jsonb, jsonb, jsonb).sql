@@ -10,11 +10,12 @@ declare
   v_status_name text := json.get_string(in_params, 'status_name');
   v_status_value integer := json.get_integer(in_params, 'value');
   v_status_attribute_id integer = data.get_attribute_id('system_person_next_' || v_status_name || '_status');
-  v_coin_attribute_id integer = data.get_attribute_id('system_person_coin');
+  v_economy_type text := json.get_string(data.get_attribute_value(v_actor_id, 'system_person_economy_type'));
+  v_currency_attribute_id integer = data.get_attribute_id(case when v_economy_type = 'un' then 'system_person_coin' else 'system_money' end);
   v_status_prices integer[] := data.get_integer_array_param(v_status_name || '_status_prices');
   v_current_status_value integer;
-  v_current_coins integer;
-  v_price integer;
+  v_current_sum bigint;
+  v_price bigint;
   v_diff jsonb;
   v_notified boolean;
 begin
@@ -27,23 +28,23 @@ begin
   from data.attribute_values av
   where
     av.object_id = v_actor_id and
-    av.attribute_id = v_status_attribute_id
+    av.attribute_id = v_status_attribute_id and
+    av.value_object_id is null
   for update;
 
   assert v_current_status_value is not null;
 
-  -- todo за деньги
-
-  select json.get_integer(av.value)
-  into v_current_coins
+  select json.get_bigint(av.value)
+  into v_current_sum
   from data.attribute_values av
   where
     av.object_id = v_actor_id and
-    av.attribute_id = v_coin_attribute_id
+    av.attribute_id = v_currency_attribute_id and
+    av.value_object_id is null
   for update;
 
-  assert v_current_coins is not null;
-
+  assert v_current_sum is not null;
+perform data.log('info', format('%s %s', v_current_status_value, v_status_value));
   select sum(v_status_prices[value])
   into v_price
   from unnest(array[1, 2, 3]) a(value)
@@ -51,12 +52,20 @@ begin
     value > v_current_status_value and
     value <= v_status_value;
 
-  if v_current_status_value >= v_status_value or v_price > v_current_coins then
+  if v_economy_type != 'un' then
+    v_price := v_price * data.get_integer_param('coin_price');
+  end if;
+
+  if v_current_status_value >= v_status_value or v_price > v_current_sum then
     perform api_utils.create_ok_notification(in_client_id, in_request_id);
     return;
   end if;
 
-  v_diff := pallas_project.change_coins(v_actor_id, v_current_coins - v_price, v_actor_id, 'Status buy');
+  if v_economy_type = 'un' then
+    v_diff := pallas_project.change_coins(v_actor_id, (v_current_sum - v_price)::integer, v_actor_id, 'Status buy');
+  else
+    v_diff := pallas_project.change_person_money(v_actor_id, v_current_sum - v_price, v_actor_id, 'Status buy');
+  end if;
   v_diff := data.join_diffs(v_diff, pallas_project.change_next_status(v_actor_id, v_status_name, v_status_value, v_actor_id, 'Status buy'));
 
   v_notified :=

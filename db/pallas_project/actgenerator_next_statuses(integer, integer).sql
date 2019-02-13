@@ -10,6 +10,7 @@ declare
   v_economy_type text;
   v_coins integer;
   v_money integer;
+  v_coin_price integer;
   v_status_name text;
   v_actions jsonb := jsonb '{}';
 begin
@@ -20,6 +21,7 @@ begin
       v_coins := json.get_integer(data.get_attribute_value(in_actor_id, 'system_person_coin'));
     else
       v_money := json.get_integer(data.get_attribute_value(in_actor_id, 'system_money'));
+      v_coin_price := data.get_integer_param('coin_price');
     end if;
   end if;
 
@@ -32,7 +34,8 @@ begin
     declare
       v_status_prices integer[] := data.get_integer_array_param(v_status_name || '_status_prices');
       v_status integer := json.get_integer(data.get_attribute_value(in_object_id, v_status_name || '_next_status'));
-      v_price integer;
+      v_price bigint;
+      v_too_expensive boolean;
       v_action record;
     begin
       assert array_length(v_status_prices, 1) = 3;
@@ -40,7 +43,7 @@ begin
 
       if v_master then
         -- todo установка статусов
-      elsif v_economy_type = 'un' then
+      else
         v_price := 0;
 
         for v_action in
@@ -53,9 +56,10 @@ begin
         )
         loop
           if v_status < v_action.value then
-            v_price := v_price + v_status_prices[v_action.value];
+            v_price := v_price + v_status_prices[v_action.value] * (case when v_economy_type = 'un' then 1 else v_coin_price end);
+            v_too_expensive := (case when v_economy_type = 'un' then v_coins < v_price else v_money < v_price end);
 
-            if v_coins < v_price then
+            if v_too_expensive then
               v_actions :=
                 v_actions ||
                 format(
@@ -78,7 +82,7 @@ begin
                       "code": "buy_status",
                       "name": "Купить %s статус (%s)",
                       "disabled": false,
-                      "warning": "Вы действительно хотите купить %s статус за %s %s?",
+                      "warning": "Вы действительно хотите купить %s статус за %s?",
                       "params": {"status_name": "%s", "value": %s}
                     }
                   }',
@@ -87,16 +91,12 @@ begin
                   v_action.description,
                   v_price,
                   v_action.description,
-                  v_price,
-                  pp_utils.add_word_ending('коин', v_price),
+                  (case when v_economy_type = 'un' then v_price || ' ' || pp_utils.add_word_ending('коин', v_price) else 'UN$' || v_price end),
                   v_status_name,
                   v_action.value)::jsonb;
             end if;
           end if;
         end loop;
-      else
-        assert v_economy_type in ('asters', 'mcr');
-        -- todo money
       end if;
     end;
   end loop;

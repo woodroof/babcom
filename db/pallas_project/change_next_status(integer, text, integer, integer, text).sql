@@ -14,7 +14,7 @@ begin
     data.change_object(
       in_object_id,
       jsonb '[]' ||
-      data.attribute_change2jsonb('system_person_' || in_status_name || '_status', to_jsonb(in_new_value)),
+      data.attribute_change2jsonb('system_person_next_' || in_status_name || '_status', to_jsonb(in_new_value)),
       in_actor_id,
       in_reason);
   v_diffs :=

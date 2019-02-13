@@ -8,7 +8,7 @@ $$
 begin
   insert into data.params(code, value) values
   ('economic_cycle_number', jsonb '1'),
-  ('token_price', jsonb '1000'),
+  ('coin_price', jsonb '1000'),
   ('life_support_status_prices', jsonb '[1, 2, 4]'),
   ('health_care_status_prices', jsonb '[1, 2, 4]'),
   ('recreation_status_prices', jsonb '[1, 2, 4]'),

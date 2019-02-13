@@ -8575,11 +8575,12 @@ declare
   v_status_name text := json.get_string(in_params, 'status_name');
   v_status_value integer := json.get_integer(in_params, 'value');
   v_status_attribute_id integer = data.get_attribute_id('system_person_next_' || v_status_name || '_status');
-  v_coin_attribute_id integer = data.get_attribute_id('system_person_coin');
+  v_economy_type text := json.get_string(data.get_attribute_value(v_actor_id, 'system_person_economy_type'));
+  v_currency_attribute_id integer = data.get_attribute_id(case when v_economy_type = 'un' then 'system_person_coin' else 'system_money' end);
   v_status_prices integer[] := data.get_integer_array_param(v_status_name || '_status_prices');
   v_current_status_value integer;
-  v_current_coins integer;
-  v_price integer;
+  v_current_sum bigint;
+  v_price bigint;
   v_diff jsonb;
   v_notified boolean;
 begin
@@ -8592,23 +8593,23 @@ begin
   from data.attribute_values av
   where
     av.object_id = v_actor_id and
-    av.attribute_id = v_status_attribute_id
+    av.attribute_id = v_status_attribute_id and
+    av.value_object_id is null
   for update;
 
   assert v_current_status_value is not null;
 
-  -- todo за деньги
-
-  select json.get_integer(av.value)
-  into v_current_coins
+  select json.get_bigint(av.value)
+  into v_current_sum
   from data.attribute_values av
   where
     av.object_id = v_actor_id and
-    av.attribute_id = v_coin_attribute_id
+    av.attribute_id = v_currency_attribute_id and
+    av.value_object_id is null
   for update;
 
-  assert v_current_coins is not null;
-
+  assert v_current_sum is not null;
+perform data.log('info', format('%s %s', v_current_status_value, v_status_value));
   select sum(v_status_prices[value])
   into v_price
   from unnest(array[1, 2, 3]) a(value)
@@ -8616,12 +8617,20 @@ begin
     value > v_current_status_value and
     value <= v_status_value;
 
-  if v_current_status_value >= v_status_value or v_price > v_current_coins then
+  if v_economy_type != 'un' then
+    v_price := v_price * data.get_integer_param('coin_price');
+  end if;
+
+  if v_current_status_value >= v_status_value or v_price > v_current_sum then
     perform api_utils.create_ok_notification(in_client_id, in_request_id);
     return;
   end if;
 
-  v_diff := pallas_project.change_coins(v_actor_id, v_current_coins - v_price, v_actor_id, 'Status buy');
+  if v_economy_type = 'un' then
+    v_diff := pallas_project.change_coins(v_actor_id, (v_current_sum - v_price)::integer, v_actor_id, 'Status buy');
+  else
+    v_diff := pallas_project.change_person_money(v_actor_id, v_current_sum - v_price, v_actor_id, 'Status buy');
+  end if;
   v_diff := data.join_diffs(v_diff, pallas_project.change_next_status(v_actor_id, v_status_name, v_status_value, v_actor_id, 'Status buy'));
 
   v_notified :=
@@ -10824,6 +10833,7 @@ declare
   v_economy_type text;
   v_coins integer;
   v_money integer;
+  v_coin_price integer;
   v_status_name text;
   v_actions jsonb := jsonb '{}';
 begin
@@ -10834,6 +10844,7 @@ begin
       v_coins := json.get_integer(data.get_attribute_value(in_actor_id, 'system_person_coin'));
     else
       v_money := json.get_integer(data.get_attribute_value(in_actor_id, 'system_money'));
+      v_coin_price := data.get_integer_param('coin_price');
     end if;
   end if;
 
@@ -10846,7 +10857,8 @@ begin
     declare
       v_status_prices integer[] := data.get_integer_array_param(v_status_name || '_status_prices');
       v_status integer := json.get_integer(data.get_attribute_value(in_object_id, v_status_name || '_next_status'));
-      v_price integer;
+      v_price bigint;
+      v_too_expensive boolean;
       v_action record;
     begin
       assert array_length(v_status_prices, 1) = 3;
@@ -10854,7 +10866,7 @@ begin
 
       if v_master then
         -- todo установка статусов
-      elsif v_economy_type = 'un' then
+      else
         v_price := 0;
 
         for v_action in
@@ -10867,9 +10879,10 @@ begin
         )
         loop
           if v_status < v_action.value then
-            v_price := v_price + v_status_prices[v_action.value];
+            v_price := v_price + v_status_prices[v_action.value] * (case when v_economy_type = 'un' then 1 else v_coin_price end);
+            v_too_expensive := (case when v_economy_type = 'un' then v_coins < v_price else v_money < v_price end);
 
-            if v_coins < v_price then
+            if v_too_expensive then
               v_actions :=
                 v_actions ||
                 format(
@@ -10892,7 +10905,7 @@ begin
                       "code": "buy_status",
                       "name": "Купить %s статус (%s)",
                       "disabled": false,
-                      "warning": "Вы действительно хотите купить %s статус за %s %s?",
+                      "warning": "Вы действительно хотите купить %s статус за %s?",
                       "params": {"status_name": "%s", "value": %s}
                     }
                   }',
@@ -10901,16 +10914,12 @@ begin
                   v_action.description,
                   v_price,
                   v_action.description,
-                  v_price,
-                  pp_utils.add_word_ending('коин', v_price),
+                  (case when v_economy_type = 'un' then v_price || ' ' || pp_utils.add_word_ending('коин', v_price) else 'UN$' || v_price end),
                   v_status_name,
                   v_action.value)::jsonb;
             end if;
           end if;
         end loop;
-      else
-        assert v_economy_type in ('asters', 'mcr');
-        -- todo money
       end if;
     end;
   end loop;
@@ -11021,7 +11030,7 @@ begin
     data.change_object(
       in_object_id,
       jsonb '[]' ||
-      data.attribute_change2jsonb('system_person_' || in_status_name || '_status', to_jsonb(in_new_value)),
+      data.attribute_change2jsonb('system_person_next_' || in_status_name || '_status', to_jsonb(in_new_value)),
       in_actor_id,
       in_reason);
   v_diffs :=
@@ -11030,6 +11039,41 @@ begin
       data.get_object_id(v_object_code || '_next_statuses'),
       jsonb '[]' ||
       data.attribute_change2jsonb(in_status_name || '_next_status', to_jsonb(in_new_value)),
+      in_actor_id,
+      in_reason);
+
+  return v_diffs;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.change_person_money(integer, bigint, integer, text);
+
+create or replace function pallas_project.change_person_money(in_object_id integer, in_new_value bigint, in_actor_id integer, in_reason text)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_object_code text := data.get_object_code(in_object_id);
+  v_diffs jsonb;
+begin
+  -- Изменяемые объекты: сам объект, его страница покупки статусов
+  v_diffs :=
+    data.change_object(
+      in_object_id,
+      jsonb '[]' ||
+      data.attribute_change2jsonb('system_money', to_jsonb(in_new_value)) ||
+      data.attribute_change2jsonb('money', to_jsonb(in_new_value), in_object_id) ||
+      data.attribute_change2jsonb('money', to_jsonb(in_new_value), 'master'),
+      in_actor_id,
+      in_reason);
+  v_diffs :=
+    v_diffs ||
+    data.change_object(
+      data.get_object_id(v_object_code || '_next_statuses'),
+      jsonb '[]' ||
+      data.attribute_change2jsonb('money', to_jsonb(in_new_value)),
       in_actor_id,
       in_reason);
 
@@ -12100,7 +12144,7 @@ $$
 begin
   insert into data.params(code, value) values
   ('economic_cycle_number', jsonb '1'),
-  ('token_price', jsonb '1000'),
+  ('coin_price', jsonb '1000'),
   ('life_support_status_prices', jsonb '[1, 2, 4]'),
   ('health_care_status_prices', jsonb '[1, 2, 4]'),
   ('recreation_status_prices', jsonb '[1, 2, 4]'),
@@ -13689,9 +13733,9 @@ end;
 $$
 language plpgsql;
 
--- drop function pp_utils.add_word_ending(text, integer);
+-- drop function pp_utils.add_word_ending(text, bigint);
 
-create or replace function pp_utils.add_word_ending(in_word text, in_count integer)
+create or replace function pp_utils.add_word_ending(in_word text, in_count bigint)
 returns text
 immutable
 as
