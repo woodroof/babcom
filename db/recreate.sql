@@ -10890,7 +10890,8 @@ begin
         jsonb '{
           "chats": {"code": "act_open_object", "name": " Отслеживаемые игровые чаты", "disabled": false, "params": {"object_code": "chats"}},
           "all_chats": {"code": "act_open_object", "name": "Все игровые чаты", "disabled": false, "params": {"object_code": "all_chats"}},
-          "master_chats": {"code": "act_open_object", "name": "Мастерские чаты", "disabled": false, "params": {"object_code": "master_chats"}}
+          "master_chats": {"code": "act_open_object", "name": "Мастерские чаты", "disabled": false, "params": {"object_code": "master_chats"}},
+          "districts": {"code": "act_open_object", "name": "Районы", "disabled": false, "params": {"object_code": "districts"}}
         }';
     end if;
 
@@ -11786,7 +11787,7 @@ begin
       "template": {
         "groups": [
           {"code": "menu_group1", "actions": ["login"]},
-          {"code": "menu_group2", "actions": ["statuses", "next_statuses", "debatles", "chats", "all_chats", "persons", "documents", "transactions", "important_notifications", "master_chats"]},
+          {"code": "menu_group2", "actions": ["statuses", "next_statuses", "debatles", "chats", "all_chats", "persons", "districts", "documents", "transactions", "important_notifications", "master_chats"]},
           {"code": "menu_group3", "actions": ["logout"]}
         ]
       }
@@ -11833,7 +11834,9 @@ begin
   perform pallas_project.init_groups();
   perform pallas_project.init_economics();
   perform pallas_project.init_finances();
+  perform pallas_project.init_districts();
   perform pallas_project.init_persons();
+  perform pallas_project.init_organizations();
   perform pallas_project.init_debatles();
   perform pallas_project.init_messenger();
   perform pallas_project.init_person_list();
@@ -12173,6 +12176,84 @@ begin
   ('debatle_change_other_bonus','pallas_project.act_debatle_change_other_bonus'),
   ('debatle_change_subtitle','pallas_project.act_debatle_change_subtitle');
 
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.init_districts();
+
+create or replace function pallas_project.init_districts()
+returns void
+volatile
+as
+$$
+declare
+  v_districts jsonb := '[]';
+  v_district text;
+begin
+  insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
+  ('district_control', 'Контроль', 'Организация, контролирующая район', 'normal', null, 'pallas_project.vd_link', false);
+
+  -- Класс района
+  perform data.create_class(
+    'district',
+    jsonb '[
+      {"code": "is_visible", "value": true, "value_object_code": "master"},
+      {"code": "type", "value": "district"},
+      {
+        "code": "template",
+        "value": {
+          "title": "title",
+          "groups": [
+            {"code": "group", "attributes": ["district_control"]}
+          ]
+        }
+      }
+    ]');
+
+  -- Районы
+  for v_district in
+  (
+    select value
+    from unnest(array['A1', 'A2', 'B', 'C', 'D']) a(value)
+  )
+  loop
+    declare
+      v_district_id integer :=
+        data.create_object(
+          'district_' || v_district,
+          format(
+            '{
+              "title": "%s"
+            }',
+            'Сектор ' || v_district)::jsonb,
+          'district');
+    begin
+      v_districts := v_districts || to_jsonb(data.get_object_code(v_district_id));
+    end;
+  end loop;
+
+  -- Список районов
+  perform data.create_object(
+    'districts',
+    format(
+      '[
+        {"code": "type", "value": "districts"},
+        {"code": "is_visible", "value": true, "value_object_code": "master"},
+        {"code": "title", "value": "Районы"},
+        {
+          "code": "template",
+          "value": {
+            "title": "title",
+            "groups": []
+          }
+        },
+        {
+          "code": "content",
+          "value": %s
+        }
+      ]',
+      v_districts::text)::jsonb);
 end;
 $$
 language plpgsql;
@@ -12896,6 +12977,18 @@ begin
   ('chat_rename','pallas_project.act_chat_rename'),
   ('chat_enter','pallas_project.act_chat_enter'),
   ('chat_change_settings','pallas_project.act_chat_change_settings');
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.init_organizations();
+
+create or replace function pallas_project.init_organizations()
+returns void
+volatile
+as
+$$
+begin
 end;
 $$
 language plpgsql;
@@ -13837,6 +13930,24 @@ begin
 
     return '![](' || data.get_string_param('images_url') || 'life_' || (case when v_status = 1 then 'bronze' when v_status = 2 then 'silver' else 'gold' end) || '.svg)';
   end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.vd_link(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_link(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+declare
+  v_code text := json.get_string(in_value);
+  v_title text := data.get_string_opt(data.get_attribute_value(v_code, 'title', in_actor_id), '???');
+begin
+  assert in_actor_id is not null;
+
+  return format('[%s](babcom:%s)', v_title, v_code);
 end;
 $$
 language plpgsql;
