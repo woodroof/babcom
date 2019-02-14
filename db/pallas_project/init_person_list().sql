@@ -35,6 +35,7 @@ begin
     jsonb '[
       {"code": "is_visible", "value": true},
       {"code": "type", "value": "persons"},
+      {"code": "template", "value": {"title": "title", "groups": []}},
       {"code": "title", "value": "Люди \"Паллады\""},
       {"code": "title", "value": "Все персонажи", "value_object_code": "master"}
     ]' ||
