@@ -3232,7 +3232,7 @@ begin
       av.value_object_id is null or
       oo.id is not null
     )
-  order by greatest(json.get_integer_opt(pr.value, 0), json.get_integer_opt(pr2.value, 0)) desc
+  order by greatest(json.get_integer_opt(pr.value, 0), json.get_integer_opt(pr2.value, 0)) desc, data.is_instance(av.object_id) desc
   limit 1;
 
   return v_attribute_value;
@@ -3594,7 +3594,8 @@ begin
         case
           when
             lag(av.attribute_id) over(
-              partition by av.attribute_id order by greatest(json.get_integer_opt(pr2.value, 0), json.get_integer_opt(pr.value, 0)) desc
+              partition by av.attribute_id
+              order by greatest(json.get_integer_opt(pr2.value, 0), json.get_integer_opt(pr.value, 0)) desc, data.is_instance(av.object_id) desc
             ) is null
           then true
           else false
