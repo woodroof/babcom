@@ -29,21 +29,21 @@ begin
       format(
         E'%s\n%s\n%s%s%s\nБаланс: %s',
         pp_utils.format_date(clock_timestamp()),
-        '−UN$' || abs(in_value),
+        pp_utils.format_money(in_value),
         in_comment,
         (case when v_second_object_title is not null then format(E'\nПолучатель: [%s](babcom:%s)', v_second_object_title, v_second_object_code) else '' end),
-        (case when in_tax is not null then format(E'\nНалог: UN$%s\nСумма после налога: UN$%s', in_tax, abs(in_value) - in_tax) else '' end),
-        (case when in_balance < 0 then '−UN$' || abs(in_balance) else 'UN$' || in_balance end));
+        (case when in_tax is not null then format(E'\nНалог: %s\nСумма перевода после налога: %s', pp_utils.format_money(in_tax), pp_utils.format_money(abs(in_value) - in_tax)) else '' end),
+        pp_utils.format_money(in_balance));
   else
     v_description :=
       format(
         E'%s\n%s\n%s%s%s\nБаланс: %s',
         pp_utils.format_date(clock_timestamp()),
-        '+UN$' || (in_value - coalesce(in_tax, 0)),
+        '+' || pp_utils.format_money(in_value - coalesce(in_tax, 0)),
         in_comment,
         (case when v_second_object_title is not null then format(E'\Отправитель: [%s](babcom:%s)', v_second_object_title, v_second_object_code) else '' end),
-        (case when in_tax is not null then format(E'\nНалог: UN$%s\Сумма до налога: UN$%s', in_tax, in_value) else '' end),
-        (case when in_balance < 0 then '−UN$' || abs(in_balance) else 'UN$' || in_balance end));
+        (case when in_tax is not null then format(E'\nНалог: %s\Сумма перевода до налога: %s', pp_utils.format_money(in_tax), pp_utils.format_money(in_value)) else '' end),
+        pp_utils.format_money(in_balance));
   end if;
 
   v_transaction_id :=

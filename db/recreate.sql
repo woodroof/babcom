@@ -11003,9 +11003,9 @@ begin
                   v_status_name,
                   v_action.action_suffix,
                   v_action.description,
-                  v_price,
+                  (case when v_economy_type = 'un' then v_price::text else pp_utils.format_money(v_price) end),
                   v_action.description,
-                  (case when v_economy_type = 'un' then v_price || ' ' || pp_utils.add_word_ending('коин', v_price) else 'UN$' || v_price end),
+                  (case when v_economy_type = 'un' then v_price || ' ' || pp_utils.add_word_ending('коин', v_price) else pp_utils.format_money(v_price) end),
                   v_status_name,
                   v_action.value)::jsonb;
             end if;
@@ -11483,21 +11483,21 @@ begin
       format(
         E'%s\n%s\n%s%s%s\nБаланс: %s',
         pp_utils.format_date(clock_timestamp()),
-        '−UN$' || abs(in_value),
+        pp_utils.format_money(in_value),
         in_comment,
         (case when v_second_object_title is not null then format(E'\nПолучатель: [%s](babcom:%s)', v_second_object_title, v_second_object_code) else '' end),
-        (case when in_tax is not null then format(E'\nНалог: UN$%s\nСумма после налога: UN$%s', in_tax, abs(in_value) - in_tax) else '' end),
-        (case when in_balance < 0 then '−UN$' || abs(in_balance) else 'UN$' || in_balance end));
+        (case when in_tax is not null then format(E'\nНалог: %s\nСумма перевода после налога: %s', pp_utils.format_money(in_tax), pp_utils.format_money(abs(in_value) - in_tax)) else '' end),
+        pp_utils.format_money(in_balance));
   else
     v_description :=
       format(
         E'%s\n%s\n%s%s%s\nБаланс: %s',
         pp_utils.format_date(clock_timestamp()),
-        '+UN$' || (in_value - coalesce(in_tax, 0)),
+        '+' || pp_utils.format_money(in_value - coalesce(in_tax, 0)),
         in_comment,
         (case when v_second_object_title is not null then format(E'\Отправитель: [%s](babcom:%s)', v_second_object_title, v_second_object_code) else '' end),
-        (case when in_tax is not null then format(E'\nНалог: UN$%s\Сумма до налога: UN$%s', in_tax, in_value) else '' end),
-        (case when in_balance < 0 then '−UN$' || abs(in_balance) else 'UN$' || in_balance end));
+        (case when in_tax is not null then format(E'\nНалог: %s\Сумма перевода до налога: %s', pp_utils.format_money(in_tax), pp_utils.format_money(in_value)) else '' end),
+        pp_utils.format_money(in_balance));
   end if;
 
   v_transaction_id :=
@@ -12968,9 +12968,9 @@ begin
   ('person_occupation', 'Должность', 'normal', null, null, true),
   ('person_state', 'Гражданство', 'normal', 'full', 'pallas_project.vd_person_state', true),
   ('system_money', null, 'system', null, null, false),
-  ('money', 'Остаток средств на счёте', 'normal', 'full', null, true),
+  ('money', 'Остаток средств на счёте', 'normal', 'full', 'pallas_project.vd_money', true),
   ('system_person_deposit_money', null, 'system', null, null, false),
-  ('person_deposit_money', 'Остаток средств на накопительном счёте', 'normal', 'full', null, true),
+  ('person_deposit_money', 'Остаток средств на накопительном счёте', 'normal', 'full', 'pallas_project.vd_money', true),
   ('system_person_coin', null, 'system', null, null, false),
   ('person_coin', 'Нераспределённые коины', 'normal', 'full', null, true),
   ('person_opa_rating', 'Популярность среди астеров', 'normal', 'full', 'pallas_project.vd_person_opa_rating', true),
@@ -13842,6 +13842,19 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.vd_money(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_money(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+begin
+  return pp_utils.format_money(json.get_bigint(in_value));
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.vd_not_found_description(integer, jsonb, data.card_type, integer);
 
 create or replace function pallas_project.vd_not_found_description(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
@@ -14139,6 +14152,23 @@ as
 $$
 begin
   return format(to_char(in_time, 'DD.MM.%s HH24:MI:SS'), data.get_integer_param('year'));
+end;
+$$
+language plpgsql;
+
+-- drop function pp_utils.format_money(bigint);
+
+create or replace function pp_utils.format_money(in_value bigint)
+returns text
+immutable
+as
+$$
+begin
+  if in_value < 0 then
+    return '−UN$' || abs(in_value);
+  end if;
+
+  return 'UN$' || in_value;
 end;
 $$
 language plpgsql;

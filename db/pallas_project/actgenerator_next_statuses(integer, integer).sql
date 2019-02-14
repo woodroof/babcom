@@ -89,9 +89,9 @@ begin
                   v_status_name,
                   v_action.action_suffix,
                   v_action.description,
-                  v_price,
+                  (case when v_economy_type = 'un' then v_price::text else pp_utils.format_money(v_price) end),
                   v_action.description,
-                  (case when v_economy_type = 'un' then v_price || ' ' || pp_utils.add_word_ending('коин', v_price) else 'UN$' || v_price end),
+                  (case when v_economy_type = 'un' then v_price || ' ' || pp_utils.add_word_ending('коин', v_price) else pp_utils.format_money(v_price) end),
                   v_status_name,
                   v_action.value)::jsonb;
             end if;
