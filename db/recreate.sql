@@ -12396,7 +12396,8 @@ begin
     jsonb '[
       {"code": "is_visible", "value": true, "value_object_code": "master"},
       {"code": "type", "value": "statuses"},
-      {"code": "title", "value": "Статусы"}
+      {"code": "title", "value": "Статусы"},
+      {"code": "template", "value": {"title": "title", "subtitle": "cycle", "groups": []}}
     ]');
 
   perform data.create_class(
