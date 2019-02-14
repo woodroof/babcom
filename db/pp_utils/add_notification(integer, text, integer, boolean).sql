@@ -1,6 +1,6 @@
--- drop function pp_utils.add_notification(integer, text, integer);
+-- drop function pp_utils.add_notification(integer, text, integer, boolean);
 
-create or replace function pp_utils.add_notification(in_actor_id integer, in_text text, in_redirect_object integer default null::integer)
+create or replace function pp_utils.add_notification(in_actor_id integer, in_text text, in_redirect_object integer default null::integer, in_is_important boolean default false)
 returns void
 volatile
 as
@@ -27,6 +27,10 @@ begin
 
   -- Вставляем в начало списка и рассылаем уведомления
   perform pp_utils.list_prepend_and_notify(v_notifications_id, v_notification_code, in_actor_id);
+
+  if in_is_important then
+    perform pallas_project.send_to_important_notifications(in_actor_id, in_actor_id, in_redirect_object);
+  end if;
 
 end;
 $$

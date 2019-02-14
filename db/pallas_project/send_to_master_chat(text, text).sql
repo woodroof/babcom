@@ -29,6 +29,12 @@ declare
   v_chat_title text := json.get_string_opt(data.get_attribute_value(v_master_chat_id, v_title_attribute_id, v_master_group_id), null);
 
   v_person_id integer;
+
+  v_content text[];
+  v_new_content text[];
+
+  v_system_chat_length_attribute_id integer := data.get_attribute_id('system_chat_length');
+  v_chat_length integer;
 begin
   if in_object_code is not null then
     v_text := in_text || '. [Перейти](babcom:'||in_object_code||')';
@@ -45,7 +51,18 @@ begin
   (v_message_id, v_system_message_time_attribute_id, to_jsonb(to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss') ), null);
 
   -- Добавляем сообщение в чат
-  perform pp_utils.list_prepend_and_notify(v_master_chat_id, v_message_code, null, v_master_chat_id);
+  perform * from data.objects where id = v_master_chat_id for update;
+
+  -- Достаём, меняем, кладём назад
+  v_content := json.get_string_array_opt(data.get_attribute_value(v_master_chat_id, 'content', v_master_chat_id), array[]::text[]);
+  v_new_content := array_prepend(v_message_code, v_content);
+  if v_new_content <> v_content then
+    v_chat_length := json.get_integer_opt(data.get_attribute_value(v_master_chat_id, v_system_chat_length_attribute_id), 0);
+    perform data.change_object_and_notify(v_master_chat_id, 
+                                          jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, to_jsonb(v_new_content)),
+                                                            data.attribute_change2jsonb(v_system_chat_length_attribute_id, to_jsonb(v_chat_length + 1))),
+                                          v_master_chat_id);
+  end if;
 
   -- Перекладываем этот чат в начало в мастерском списке чатов
   perform pp_utils.list_replace_to_head_and_notify(v_master_chats_id, 'master_chat', v_master_group_id);

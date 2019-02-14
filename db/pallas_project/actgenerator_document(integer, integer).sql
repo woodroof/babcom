@@ -34,6 +34,10 @@ begin
                   v_document_code);
     end if;
   end if;
+  v_actions_list := v_actions_list || 
+          format(', "document_share_list": {"code": "document_share_list", "name": "Поделиться", "disabled": false, '||
+                  '"params": {"document_code": "%s"}}',
+                  v_document_code);
 
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;

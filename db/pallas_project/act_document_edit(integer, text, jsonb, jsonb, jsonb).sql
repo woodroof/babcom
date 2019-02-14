@@ -22,6 +22,8 @@ begin
 
   v_changes := array_append(v_changes, data.attribute_change2jsonb('title', to_jsonb(v_title)));
   v_changes := array_append(v_changes, data.attribute_change2jsonb('document_text', to_jsonb(v_document_text)));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('document_last_edit_time', to_jsonb(to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss')), v_actor_id));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('document_last_edit_time', to_jsonb(to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss')), 'master'));
   v_message_sent := data.change_current_object(in_client_id, 
                                                  in_request_id,
                                                  v_document_id, 

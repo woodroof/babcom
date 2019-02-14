@@ -47,7 +47,8 @@ begin
   ('chat_unread_messages', 'Непрочитанных сообщений', 'Количество непрочитанных сообщений', 'normal', 'mini', null, true),
   ('system_chat_length', null , 'Количество сообщений', 'system', null, null, false),
   ('system_chat_is_renamed', null, 'Признак, что чат был переименован', 'system', null, null, false),
-  ('system_chat_is_master', null, 'Признак, что чат был мастерский', 'system', null, null, false),
+  ('system_chat_is_master', null, 'Признак, что чат мастерский', 'system', null, null, false),
+  ('system_chat_not_in_list', null, 'Признак, что чат не должен появляться ни в каком списке', 'system', null, null, false),
     -- для временных объектов для изменения участников
   ('chat_temp_person_list_persons', 'Сейчас участвуют', 'Список участников чата', 'normal', 'full', null, false),
   ('system_chat_temp_person_list_chat_id', null, 'Идентификатор изменяемого чата', 'system', null, null, false);
@@ -214,6 +215,9 @@ begin
     v_person_id integer;
     v_master_person_id integer;
     v_masters integer[] := pallas_project.get_group_members('master');
+    v_important integer;
+    v_important_chat_id integer;
+    v_redirect_attribute_id integer := data.get_attribute_id('redirect');
   begin
     -- Чат для мастеров и уведомлений
     v_chat_id := data.create_object(
@@ -238,9 +242,17 @@ begin
 
     perform pp_utils.list_prepend_and_notify(v_master_chats_id, data.get_object_code(v_chat_id), v_master_group_id, v_master_group_id);
 
-    -- Чат для каждого игрового персонажа
+    -- Чаты для каждого игрового персонажа
+    -- Объект для меню "Важные уведомления"
+    v_important := data.create_object(
+      'important_notifications',
+      jsonb_build_object(
+        'title', 'Важные уведомления',
+        'is_visible', true
+      ));
     for v_person_id in (select * from unnest(pallas_project.get_group_members('player')))
     loop
+    -- чат с мастерами
       v_chat_id := data.create_object(
       null,
       jsonb_build_object(
@@ -265,6 +277,28 @@ begin
 
       perform pp_utils.list_prepend_and_notify(v_master_chats_id, data.get_object_code(v_chat_id), v_master_group_id, v_master_group_id);
       perform pp_utils.list_prepend_and_notify(v_master_chats_id, data.get_object_code(v_chat_id), v_person_id, v_person_id);
+
+      -- чат для важных уведомлений
+      v_important_chat_id := data.create_object(
+      null,
+      jsonb_build_object(
+        'content', jsonb '[]',
+        'title', 'Важные уведомления',
+        'system_chat_is_renamed', true,
+        'system_chat_can_invite', false,
+        'system_chat_can_leave', false,
+        'system_chat_can_mute', false,
+        'system_chat_can_rename', false,
+        'system_chat_not_in_list', true
+      ),
+      'chat');
+      insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
+      (v_important_chat_id, v_is_visible_attribute_id, jsonb 'true', v_important_chat_id);
+
+      insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
+      (v_important, v_redirect_attribute_id, to_jsonb(v_important_chat_id), v_person_id);
+
+      perform data.add_object_to_object(v_person_id, v_important_chat_id);
     end loop;
   end;
 

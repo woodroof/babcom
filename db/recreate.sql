@@ -9176,6 +9176,7 @@ declare
   v_is_actor_subscribed boolean;
   v_chat_length integer;
   v_is_master_chat boolean := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_master'), false);
+  v_chat_not_in_list boolean := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_not_in_list'), false);
   v_chat_title text;
 begin
   assert in_request_id is not null;
@@ -9209,12 +9210,14 @@ begin
                                                                    data.attribute_change2jsonb(v_system_chat_length_attribute_id, to_jsonb(v_chat_length + 1))));
   end if;
 
-  if v_is_master_chat then
-  -- Перекладываем этот чат в начало в списке мастерских чатов
-    perform pp_utils.list_replace_to_head_and_notify(v_master_chats_id, v_chat_code, v_master_group_id);
-  else
-  -- Перекладываем этот чат в начало в списке всех игровых чатов
-    perform pp_utils.list_replace_to_head_and_notify(v_all_chats_id, v_chat_code, v_master_group_id);
+  if not v_chat_not_in_list then
+    if v_is_master_chat then
+    -- Перекладываем этот чат в начало в списке мастерских чатов
+      perform pp_utils.list_replace_to_head_and_notify(v_master_chats_id, v_chat_code, v_master_group_id);
+    else
+    -- Перекладываем этот чат в начало в списке всех игровых чатов
+      perform pp_utils.list_replace_to_head_and_notify(v_all_chats_id, v_chat_code, v_master_group_id);
+    end if;
   end if;
   -- Отправляем нотификацию о новом сообщении всем неподписанным на этот чат
   -- и перекладываем у всех участников этот чат вверх списка
@@ -9223,12 +9226,14 @@ begin
       where oo.parent_object_id = v_chat_id
         and oo.parent_object_id <> oo.object_id)
   loop
-    if v_is_master_chat then
-      if pp_utils.is_in_group(v_person_id, 'master') then
-        perform pp_utils.list_replace_to_head_and_notify(v_master_chats_id, v_chat_code, v_person_id);
+    if not v_chat_not_in_list then
+      if v_is_master_chat then
+        if pp_utils.is_in_group(v_person_id, 'master') then
+          perform pp_utils.list_replace_to_head_and_notify(v_master_chats_id, v_chat_code, v_person_id);
+        end if;
+      else
+        perform pp_utils.list_replace_to_head_and_notify(v_chats_id, v_chat_code, v_person_id);
       end if;
-    else
-      perform pp_utils.list_replace_to_head_and_notify(v_chats_id, v_chat_code, v_person_id);
     end if;
     v_is_actor_subscribed := pp_utils.is_actor_subscribed(v_person_id, v_chat_id);
     if v_person_id <> v_actor_id
@@ -9241,7 +9246,7 @@ begin
     if v_person_id <> v_actor_id 
       and not v_is_actor_subscribed
       and not json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'chat_is_mute', v_person_id), false) then
-      perform pp_utils.add_notification(v_person_id, 'Новое сообщение ' || (case when v_chat_title is not null then ' в чате '|| v_chat_title  || ' ' else '' end) || 'от '|| v_actor_title , v_chat_id);
+      perform pp_utils.add_notification(v_person_id, 'Новое сообщение ' || (case when v_chat_title is not null then ' в '|| v_chat_title  || ' ' else '' end) || 'от '|| v_actor_title , v_chat_id);
     end if;
   end loop;
 
@@ -10054,7 +10059,6 @@ begin
   null,
     jsonb_build_array(
       jsonb_build_object('code', 'title', 'value', v_document_title),
-      jsonb_build_object('code', 'is_visible', 'value', true, 'value_object_id', v_actor_id),
       jsonb_build_object('code', 'system_document_category', 'value', 'private'),
       jsonb_build_object('code', 'system_document_author', 'value', v_actor_id),
       jsonb_build_object('code', 'document_author', 'value', json.get_string(data.get_attribute_value(v_actor_id, 'title', v_actor_id)) , 'value_object_id', v_master_group_id),
@@ -10062,9 +10066,6 @@ begin
       jsonb_build_object('code', 'document_last_edit_time', 'value', to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss'), 'value_object_id', v_actor_id)
     ),
   'document');
-
-  insert into data.attribute_values(object_id, attribute_id, value_object_id, value)
-  values (v_document_id, data.get_attribute_id('is_visible'), v_document_id, jsonb 'true');
 
   v_document_code := data.get_object_code(v_document_id);
 
@@ -10104,8 +10105,7 @@ begin
   v_changes := array[]::jsonb[];
 
   v_changes := array_append(v_changes, data.attribute_change2jsonb('document_status', jsonb '"deleted"', v_master_group_id));
-  v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', to_jsonb(false), v_document_author));
-  v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', to_jsonb(false), v_document_id));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', to_jsonb(false), null));
 
   perform data.change_object_and_notify(v_document_id, 
                                         to_jsonb(v_changes),
@@ -10141,6 +10141,8 @@ begin
 
   v_changes := array_append(v_changes, data.attribute_change2jsonb('title', to_jsonb(v_title)));
   v_changes := array_append(v_changes, data.attribute_change2jsonb('document_text', to_jsonb(v_document_text)));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('document_last_edit_time', to_jsonb(to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss')), v_actor_id));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('document_last_edit_time', to_jsonb(to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss')), 'master'));
   v_message_sent := data.change_current_object(in_client_id, 
                                                  in_request_id,
                                                  v_document_id, 
@@ -10149,6 +10151,69 @@ begin
   if not v_message_sent then
    perform api_utils.create_ok_notification(in_client_id, in_request_id);
   end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_document_share_list(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_document_share_list(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_document_code text := json.get_string(in_params, 'document_code');
+  v_document_id integer := data.get_object_id(v_document_code);
+  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+
+  v_content_attribute_id integer := data.get_attribute_id('content');
+  v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
+  v_title_attribute_id integer := data.get_attribute_id('title');
+  v_system_document_temp_list_document_id_attribute_id integer := data.get_attribute_id('system_document_temp_list_document_id');
+
+  v_document_title text := json.get_string_opt(data.get_attribute_value(v_document_id, v_title_attribute_id, v_actor_id), '');
+  v_is_master boolean := pp_utils.is_in_group(in_client_id, 'master');
+  v_persons text := '';
+  v_name record;
+
+  v_content text[];
+
+  v_temp_object_code text;
+  v_temp_object_id integer;
+
+  v_all_person_id integer:= data.get_object_id('all_person');
+begin
+  assert in_request_id is not null;
+
+  -- Собираем список всех персонажей кроме себя
+  select array_agg(o.code order by av.value) into v_content
+  from data.object_objects oo
+    left join data.objects o on o.id = oo.object_id
+    left join data.attribute_values av on av.object_id = o.id and av.attribute_id = v_title_attribute_id and av.value_object_id is null
+  where oo.parent_object_id = v_all_person_id
+    and oo.object_id not in (oo.parent_object_id, v_actor_id);
+
+  if v_content is null then
+     v_content := array[]::integer[];
+  end if;
+
+-- создаём темповый список персон
+  v_temp_object_id := data.create_object(
+  null,
+    jsonb_build_array(
+      jsonb_build_object('code', 'title', 'value', format('Поделиться документом %s', v_document_title)),
+      jsonb_build_object('code', 'is_visible', 'value', true, 'value_object_id', v_actor_id),
+      jsonb_build_object('code', 'system_document_temp_list_document_id', 'value', v_document_id),
+      jsonb_build_object('code', 'system_document_temp_share_list', 'value', array[]::text[]),
+      jsonb_build_object('code', 'document_temp_share_list', 'value', ''),
+      jsonb_build_object('code', 'content', 'value', v_content)
+    ),
+  'document_temp_share_list');
+
+  v_temp_object_code := data.get_object_code(v_temp_object_id);
+
+  perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, v_temp_object_code);
 end;
 $$
 language plpgsql;
@@ -10730,6 +10795,10 @@ begin
                   v_document_code);
     end if;
   end if;
+  v_actions_list := v_actions_list || 
+          format(', "document_share_list": {"code": "document_share_list", "name": "Поделиться", "disabled": false, '||
+                  '"params": {"document_code": "%s"}}',
+                  v_document_code);
 
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;
@@ -10793,7 +10862,8 @@ begin
         v_actions ||
         jsonb '{
           "chats": {"code": "act_open_object", "name": "Чаты", "disabled": false, "params": {"object_code": "chats"}},
-          "master_chats": {"code": "act_open_object", "name": "Связь с мастерами", "disabled": false, "params": {"object_code": "master_chats"}}
+          "master_chats": {"code": "act_open_object", "name": "Связь с мастерами", "disabled": false, "params": {"object_code": "master_chats"}},
+          "important_notifications": {"code": "act_open_object", "name": "Важные уведомления", "disabled": false, "params": {"object_code": "important_notifications"}}
         }';
 
       if v_economy_type != 'fixed' then
@@ -11716,7 +11786,7 @@ begin
       "template": {
         "groups": [
           {"code": "menu_group1", "actions": ["login"]},
-          {"code": "menu_group2", "actions": ["statuses", "next_statuses", "debatles", "chats", "all_chats", "master_chats", "persons", "documents", "transactions"]},
+          {"code": "menu_group2", "actions": ["statuses", "next_statuses", "debatles", "chats", "all_chats", "persons", "documents", "transactions", "important_notifications", "master_chats"]},
           {"code": "menu_group3", "actions": ["logout"]}
         ]
       }
@@ -12123,11 +12193,15 @@ begin
   ('document_text', null, 'Текст документа', 'normal', 'full', null, false),
   ('system_document_author', null, 'Автор документа', 'system', null, null, false),
   ('document_author', null, 'Автор документа', 'normal', 'full', null, true),
-  ('document_last_edit_time', null, 'Дата и время последнего редактирования документа', 'normal', 'full', null, true),
+  ('document_last_edit_time', 'Последнее обновление', 'Дата и время последнего редактирования документа', 'normal', 'full', null, true),
   ('system_document_participants', null, 'Участники, подписывающие документ', 'system', null, null, false),
   ('document_participants', null, 'Участники, подписывающие документ', 'normal', 'full', null, false),
   ('document_sent_to_sign', null, 'Признак того, что документ был отправлен на подпись', 'normal', 'full', null, false),
-  ('document_status', null, 'Статус документа', 'normal', 'full', null, true);
+  ('document_status', null, 'Статус документа', 'normal', 'full', null, true),
+  -- для темповых
+  ('system_document_temp_share_list', null, 'Список кодов тех, с кем поделиться', 'system', null, null, false),
+  ('document_temp_share_list', 'Поделиться с', 'Список персонажей, с которыми хотим поделиться документом', 'normal', 'full', null, false),
+  ('system_document_temp_list_document_id', null, 'Идентификатор документа', 'system', null, null, false);
 
   -- Объекты для категорий документов
   perform data.create_object(
@@ -12224,6 +12298,7 @@ begin
   jsonb '[
     {"code": "type", "value": "document"},
     {"code": "is_visible", "value": true, "value_object_code": "master"},
+    {"code": "is_visible", "value": true},
     {"code": "priority", "value": 95},
     {"code": "actions_function", "value": "pallas_project.actgenerator_document"},
     {
@@ -12237,17 +12312,41 @@ begin
       "code": "template",
       "value": {
         "title": "title",
-        "groups": [{"code": "document_group1", "actions": ["document_edit", "document_delete"]},
-                   {"code": "document_group2", "attributes": ["document_author", "document_last_edit_time", "document_text", "document_participants", "document_sent_to_sign"]}]
+        "groups": [{"code": "document_group1", "actions": ["document_edit", "document_delete", "document_share_list"]},
+                   {"code": "document_group2", "attributes": ["document_text", "document_participants", "document_sent_to_sign"]},
+                   {"code": "document_group3", "attributes": ["document_author", "document_last_edit_time"]}]
       }
     }
   ]');
 
+  perform data.create_class(
+  'document_temp_share_list',
+  jsonb '[
+    {"code": "type", "value": "document_temp_share_list"},
+    {
+      "code": "mini_card_template",
+      "value": {
+        "title": "title",
+        "groups": []
+      }
+    },
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "groups": [{"code": "document_temp_share_list_group1", "actions": ["go_back"]},
+                   {"code": "document_temp_share_list_group2", "attributes": ["document_temp_share_list"]},
+                   {"code": "document_temp_share_list_group3", "attributes": ["document_share"]}]
+      }
+    }
+  ]');
 
   insert into data.actions(code, function) values
   ('document_create', 'pallas_project.act_document_create'),
   ('document_edit', 'pallas_project.act_document_edit'),
-  ('document_delete', 'pallas_project.act_document_delete');
+  ('document_delete', 'pallas_project.act_document_delete'),
+  ('document_share', 'pallas_project.act_document_share'),
+  ('document_share_list', 'pallas_project.act_document_share_list');
 
 end;
 $$
@@ -12535,7 +12634,8 @@ begin
   ('chat_unread_messages', 'Непрочитанных сообщений', 'Количество непрочитанных сообщений', 'normal', 'mini', null, true),
   ('system_chat_length', null , 'Количество сообщений', 'system', null, null, false),
   ('system_chat_is_renamed', null, 'Признак, что чат был переименован', 'system', null, null, false),
-  ('system_chat_is_master', null, 'Признак, что чат был мастерский', 'system', null, null, false),
+  ('system_chat_is_master', null, 'Признак, что чат мастерский', 'system', null, null, false),
+  ('system_chat_not_in_list', null, 'Признак, что чат не должен появляться ни в каком списке', 'system', null, null, false),
     -- для временных объектов для изменения участников
   ('chat_temp_person_list_persons', 'Сейчас участвуют', 'Список участников чата', 'normal', 'full', null, false),
   ('system_chat_temp_person_list_chat_id', null, 'Идентификатор изменяемого чата', 'system', null, null, false);
@@ -12702,6 +12802,9 @@ begin
     v_person_id integer;
     v_master_person_id integer;
     v_masters integer[] := pallas_project.get_group_members('master');
+    v_important integer;
+    v_important_chat_id integer;
+    v_redirect_attribute_id integer := data.get_attribute_id('redirect');
   begin
     -- Чат для мастеров и уведомлений
     v_chat_id := data.create_object(
@@ -12726,9 +12829,17 @@ begin
 
     perform pp_utils.list_prepend_and_notify(v_master_chats_id, data.get_object_code(v_chat_id), v_master_group_id, v_master_group_id);
 
-    -- Чат для каждого игрового персонажа
+    -- Чаты для каждого игрового персонажа
+    -- Объект для меню "Важные уведомления"
+    v_important := data.create_object(
+      'important_notifications',
+      jsonb_build_object(
+        'title', 'Важные уведомления',
+        'is_visible', true
+      ));
     for v_person_id in (select * from unnest(pallas_project.get_group_members('player')))
     loop
+    -- чат с мастерами
       v_chat_id := data.create_object(
       null,
       jsonb_build_object(
@@ -12753,6 +12864,28 @@ begin
 
       perform pp_utils.list_prepend_and_notify(v_master_chats_id, data.get_object_code(v_chat_id), v_master_group_id, v_master_group_id);
       perform pp_utils.list_prepend_and_notify(v_master_chats_id, data.get_object_code(v_chat_id), v_person_id, v_person_id);
+
+      -- чат для важных уведомлений
+      v_important_chat_id := data.create_object(
+      null,
+      jsonb_build_object(
+        'content', jsonb '[]',
+        'title', 'Важные уведомления',
+        'system_chat_is_renamed', true,
+        'system_chat_can_invite', false,
+        'system_chat_can_leave', false,
+        'system_chat_can_mute', false,
+        'system_chat_can_rename', false,
+        'system_chat_not_in_list', true
+      ),
+      'chat');
+      insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
+      (v_important_chat_id, v_is_visible_attribute_id, jsonb 'true', v_important_chat_id);
+
+      insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
+      (v_important, v_redirect_attribute_id, to_jsonb(v_important_chat_id), v_person_id);
+
+      perform data.add_object_to_object(v_person_id, v_important_chat_id);
     end loop;
   end;
 
@@ -13326,6 +13459,72 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.send_to_important_notifications(integer, text, text);
+
+create or replace function pallas_project.send_to_important_notifications(in_actor_id integer, in_text text, in_object_code text default null::text)
+returns void
+volatile
+as
+$$
+declare
+  v_message_id integer;
+  v_message_code text;
+  v_message_class_id integer := data.get_class_id('message');
+
+  v_text text;
+
+  v_title_attribute_id integer := data.get_attribute_id('title');
+  v_message_text_attribute_id integer := data.get_attribute_id('message_text');
+  v_system_message_sender_attribute_id integer := data.get_attribute_id('system_message_sender');
+  v_system_message_time_attribute_id integer := data.get_attribute_id('system_message_time');
+
+  v_important_notifications_id integer := data.get_object_id('important_notifications');
+  v_chat_id integer := data.get_integer_opt(get_attribute_value(v_important_notifications_id, 'redirect', in_actor_id), null);
+
+  v_chat_bot_id integer := data.get_object_id('chat_bot');
+  v_chat_bot_title text := json.get_string(data.get_attribute_value(v_chat_bot_id, v_title_attribute_id, in_actor_id));
+
+  v_title text := to_char(clock_timestamp(),'DD.MM hh24:mi:ss ') || v_chat_bot_title;
+
+  v_content text[];
+  v_new_content text[];
+
+  v_system_chat_length_attribute_id integer := data.get_attribute_id('system_chat_length');
+  v_chat_length integer;
+begin
+  assert v_chat_id is not null;
+
+  if in_object_code is not null then
+    v_text := in_text || '. [Перейти](babcom:'||in_object_code||')';
+  else
+   v_text := in_text;
+  end if;
+  -- Создаём новое сообщение
+  insert into data.objects(class_id) values (v_message_class_id) returning id, code into v_message_id, v_message_code;
+
+  insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
+  (v_message_id, v_title_attribute_id, to_jsonb(v_title), null),
+  (v_message_id, v_message_text_attribute_id, to_jsonb(v_text), null),
+  (v_message_id, v_system_message_sender_attribute_id, to_jsonb(v_chat_bot_id), null),
+  (v_message_id, v_system_message_time_attribute_id, to_jsonb(to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss') ), null);
+
+  -- Добавляем сообщение в чат
+  perform * from data.objects where id = v_chat_id for update;
+  -- Достаём, меняем, кладём назад
+  v_content := json.get_string_array_opt(data.get_attribute_value(v_chat_id, 'content', v_chat_id), array[]::text[]);
+  v_new_content := array_prepend(v_message_code, v_content);
+  if v_new_content <> v_content then
+    v_chat_length := json.get_integer_opt(data.get_attribute_value(v_chat_id, v_system_chat_length_attribute_id), 0);
+    perform data.change_current_object(v_chat_id, 
+                                       jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, to_jsonb(v_new_content)),
+                                                         data.attribute_change2jsonb(v_system_chat_length_attribute_id, to_jsonb(v_chat_length + 1))),
+                                       v_chat_id);
+  end if;
+
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.send_to_master_chat(text, text);
 
 create or replace function pallas_project.send_to_master_chat(in_text text, in_object_code text default null::text)
@@ -13357,6 +13556,12 @@ declare
   v_chat_title text := json.get_string_opt(data.get_attribute_value(v_master_chat_id, v_title_attribute_id, v_master_group_id), null);
 
   v_person_id integer;
+
+  v_content text[];
+  v_new_content text[];
+
+  v_system_chat_length_attribute_id integer := data.get_attribute_id('system_chat_length');
+  v_chat_length integer;
 begin
   if in_object_code is not null then
     v_text := in_text || '. [Перейти](babcom:'||in_object_code||')';
@@ -13373,7 +13578,18 @@ begin
   (v_message_id, v_system_message_time_attribute_id, to_jsonb(to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss') ), null);
 
   -- Добавляем сообщение в чат
-  perform pp_utils.list_prepend_and_notify(v_master_chat_id, v_message_code, null, v_master_chat_id);
+  perform * from data.objects where id = v_master_chat_id for update;
+
+  -- Достаём, меняем, кладём назад
+  v_content := json.get_string_array_opt(data.get_attribute_value(v_master_chat_id, 'content', v_master_chat_id), array[]::text[]);
+  v_new_content := array_prepend(v_message_code, v_content);
+  if v_new_content <> v_content then
+    v_chat_length := json.get_integer_opt(data.get_attribute_value(v_master_chat_id, v_system_chat_length_attribute_id), 0);
+    perform data.change_object_and_notify(v_master_chat_id, 
+                                          jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, to_jsonb(v_new_content)),
+                                                            data.attribute_change2jsonb(v_system_chat_length_attribute_id, to_jsonb(v_chat_length + 1))),
+                                          v_master_chat_id);
+  end if;
 
   -- Перекладываем этот чат в начало в мастерском списке чатов
   perform pp_utils.list_replace_to_head_and_notify(v_master_chats_id, 'master_chat', v_master_group_id);
@@ -13833,9 +14049,9 @@ end;
 $$
 language plpgsql;
 
--- drop function pp_utils.add_notification(integer, text, integer);
+-- drop function pp_utils.add_notification(integer, text, integer, boolean);
 
-create or replace function pp_utils.add_notification(in_actor_id integer, in_text text, in_redirect_object integer default null::integer)
+create or replace function pp_utils.add_notification(in_actor_id integer, in_text text, in_redirect_object integer default null::integer, in_is_important boolean default false)
 returns void
 volatile
 as
@@ -13863,13 +14079,17 @@ begin
   -- Вставляем в начало списка и рассылаем уведомления
   perform pp_utils.list_prepend_and_notify(v_notifications_id, v_notification_code, in_actor_id);
 
+  if in_is_important then
+    perform pallas_project.send_to_important_notifications(in_actor_id, in_actor_id, in_redirect_object);
+  end if;
+
 end;
 $$
 language plpgsql;
 
--- drop function pp_utils.add_notification_if_not_subscribed(integer, text, integer);
+-- drop function pp_utils.add_notification_if_not_subscribed(integer, text, integer, boolean);
 
-create or replace function pp_utils.add_notification_if_not_subscribed(in_actor_id integer, in_text text, in_redirect_object integer)
+create or replace function pp_utils.add_notification_if_not_subscribed(in_actor_id integer, in_text text, in_redirect_object integer, in_is_important boolean default false)
 returns void
 volatile
 as
@@ -13884,7 +14104,7 @@ begin
   where c.actor_id = in_actor_id;
 
   if v_exists = 0 then
-    perform pp_utils.add_notification(in_actor_id, in_text, in_redirect_object);
+    perform pp_utils.add_notification(in_actor_id, in_text, in_redirect_object, in_is_important);
   end if;
 
 end;
