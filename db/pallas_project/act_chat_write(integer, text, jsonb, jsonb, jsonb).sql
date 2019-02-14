@@ -37,7 +37,7 @@ declare
   v_message_sent boolean := false;
 
   v_actor_title text := json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id, v_actor_id));
-  v_title text := to_char(clock_timestamp(),'DD.MM hh24:mi:ss ') || v_actor_title;
+  v_title text := pp_utils.format_date(clock_timestamp()) || E'\n' || v_actor_title;
 
   v_chat_unread_messages integer;
   v_chat_unread_messages_attribute_id integer := data.get_attribute_id('chat_unread_messages');

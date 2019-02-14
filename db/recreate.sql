@@ -9168,7 +9168,7 @@ declare
   v_message_sent boolean := false;
 
   v_actor_title text := json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id, v_actor_id));
-  v_title text := to_char(clock_timestamp(),'DD.MM hh24:mi:ss ') || v_actor_title;
+  v_title text := pp_utils.format_date(clock_timestamp()) || E'\n' || v_actor_title;
 
   v_chat_unread_messages integer;
   v_chat_unread_messages_attribute_id integer := data.get_attribute_id('chat_unread_messages');
@@ -12628,7 +12628,7 @@ begin
   -- для чатов
   ('system_chat_can_invite', null, 'Возможность пригласить кого-то в чат', 'system', null, null, true),
   ('system_chat_can_leave', null, 'Возможность покинуть чат', 'system', null, null, true),
-  ('system_chat_can_mute', null, 'Возможность Убрать уведомления о новых сообщениях', 'system', null, null, true),
+  ('system_chat_can_mute', null, 'Возможность yбрать уведомления о новых сообщениях', 'system', null, null, true),
   ('system_chat_can_rename', null, 'Возможность переименовать чат', 'system', null, null, true),
   ('chat_is_mute', null, 'Признак отлюченного уведомления о новых сообщениях', 'normal', 'full', 'pallas_project.vd_chat_is_mute', true),
   ('chat_unread_messages', 'Непрочитанных сообщений', 'Количество непрочитанных сообщений', 'normal', 'mini', null, true),
@@ -12763,10 +12763,8 @@ begin
     v_message_class_id,
     v_template_attribute_id,
     jsonb '{
-      "title": "title",
-      "subtitle": "subtitle",
       "groups": [
-        {"code": "message_group1", "attributes": ["message_text"]}
+        {"code": "message_group1", "attributes": ["title", "message_text"]}
       ]
     }',
   null);

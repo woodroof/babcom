@@ -41,7 +41,7 @@ begin
   -- для чатов
   ('system_chat_can_invite', null, 'Возможность пригласить кого-то в чат', 'system', null, null, true),
   ('system_chat_can_leave', null, 'Возможность покинуть чат', 'system', null, null, true),
-  ('system_chat_can_mute', null, 'Возможность Убрать уведомления о новых сообщениях', 'system', null, null, true),
+  ('system_chat_can_mute', null, 'Возможность yбрать уведомления о новых сообщениях', 'system', null, null, true),
   ('system_chat_can_rename', null, 'Возможность переименовать чат', 'system', null, null, true),
   ('chat_is_mute', null, 'Признак отлюченного уведомления о новых сообщениях', 'normal', 'full', 'pallas_project.vd_chat_is_mute', true),
   ('chat_unread_messages', 'Непрочитанных сообщений', 'Количество непрочитанных сообщений', 'normal', 'mini', null, true),
@@ -176,10 +176,8 @@ begin
     v_message_class_id,
     v_template_attribute_id,
     jsonb '{
-      "title": "title",
-      "subtitle": "subtitle",
       "groups": [
-        {"code": "message_group1", "attributes": ["message_text"]}
+        {"code": "message_group1", "attributes": ["title", "message_text"]}
       ]
     }',
   null);
