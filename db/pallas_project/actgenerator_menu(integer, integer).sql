@@ -26,8 +26,10 @@ begin
         v_actions ||
         format(
           '{
+            "profile": {"code": "act_open_object", "name": "Профиль", "disabled": false, "params": {"object_code": "%s"}},
             "statuses": {"code": "act_open_object", "name": "Статусы", "disabled": false, "params": {"object_code": "%s_statuses"}}
           }',
+          v_actor_code,
           v_actor_code)::jsonb;
       v_actions :=
         v_actions ||
@@ -80,6 +82,20 @@ begin
       "persons": {"code": "act_open_object", "name": "Люди", "disabled": false, "params": {"object_code": "persons"}},
       "districts": {"code": "act_open_object", "name": "Районы", "disabled": false, "params": {"object_code": "districts"}}
     }';
+
+  if v_is_master or v_economy_type = 'asters' then
+    declare
+      v_lottery_status text := json.get_string(data.get_attribute_value(data.get_object_id('lottery'), 'lottery_status'));
+    begin
+      if v_lottery_status = 'active' then
+        v_actions :=
+          v_actions ||
+          jsonb '{
+              "lottery": {"code": "act_open_object", "name": "Лотерея гражданства ООН", "disabled": false, "params": {"object_code": "lottery"}}
+          }';
+      end if;
+    end;
+  end if;
 
   return v_actions;
 end;

@@ -8564,6 +8564,88 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_buy_lottery_ticket(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_buy_lottery_ticket(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_economy_type text := json.get_string(data.get_attribute_value(v_actor_id, 'system_person_economy_type'));
+  v_price integer := data.get_integer_param('lottery_ticket_price');
+  v_object_id integer := data.get_object_id('lottery');
+  v_lottery_ticket_count integer := json.get_integer_opt(data.get_attribute_value(v_object_id, 'lottery_ticket_count', v_actor_id), 0);
+  v_current_sum bigint;
+  v_lottery_status text;
+  v_diff jsonb;
+  v_notified boolean;
+begin
+  assert in_request_id is not null;
+
+  if v_economy_type != 'asters' then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+    return;
+  end if;
+
+  select json.get_string(value)
+  into v_lottery_status
+  from data.attribute_values
+  where
+    object_id = v_object_id and
+    attribute_id = data.get_attribute_id('lottery_status') and
+    value_object_id is null
+  for share;
+
+  if v_lottery_status != 'active' then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+    return;
+  end if;
+
+  select json.get_bigint(av.value)
+  into v_current_sum
+  from data.attribute_values av
+  where
+    av.object_id = v_actor_id and
+    av.attribute_id = data.get_attribute_id('system_money') and
+    av.value_object_id is null
+  for update;
+
+  assert v_current_sum is not null;
+
+  if v_current_sum < v_price then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+    return;
+  end if;
+
+  v_diff := pallas_project.change_person_money(v_actor_id, v_current_sum - v_price, v_actor_id, 'Status purchase');
+  perform pallas_project.create_transaction(
+    v_actor_id,
+    'Покупка лотерейного билета',
+    -v_price,
+    v_current_sum - v_price,
+    null,
+    null,
+    v_actor_id);
+  v_diff :=
+    v_diff ||
+    data.change_object(
+      v_object_id,
+      jsonb '[]' || data.attribute_change2jsonb('lottery_ticket_count', to_jsonb(v_lottery_ticket_count + 1), v_actor_id),
+      v_actor_id);
+
+  v_notified :=
+    data.process_diffs_and_notify_current_object(
+      v_diff,
+      in_client_id,
+      in_request_id,
+      v_object_id);
+  assert v_notified;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_buy_status(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_buy_status(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -8652,6 +8734,25 @@ begin
       in_request_id,
       data.get_object_id(data.get_object_code(v_actor_id) || '_next_statuses'));
   assert v_notified;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_cancel_lottery(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_cancel_lottery(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+begin
+  assert in_request_id is not null;
+
+  -- todo
+
+  perform api_utils.create_ok_notification(
+    in_client_id,
+    in_request_id);
 end;
 $$
 language plpgsql;
@@ -10305,6 +10406,25 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_finish_lottery(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_finish_lottery(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+begin
+  assert in_request_id is not null;
+
+  -- todo
+
+  perform api_utils.create_ok_notification(
+    in_client_id,
+    in_request_id);
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_go_back(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_go_back(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -10969,6 +11089,87 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.actgenerator_lottery(integer, integer);
+
+create or replace function pallas_project.actgenerator_lottery(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_status text := json.get_string(data.get_attribute_value(in_object_id, 'lottery_status'));
+  v_master boolean;
+  v_economy_type text;
+  v_ticket_price integer;
+  v_money bigint;
+  v_actions jsonb := '{}';
+begin
+  if v_status = 'active' then
+    v_master := pp_utils.is_in_group(in_actor_id, 'master');
+
+    if v_master then
+      v_actions :=
+        v_actions ||
+        jsonb '{
+          "finish_lottery": {
+            "code": "finish_lottery",
+            "name": "Завершить лотерею",
+            "disabled": false,
+            "warning": "Завершить?",
+            "params": null
+          },
+          "cancel_lottery": {
+            "code": "cancel_lottery",
+            "name": "Отменить лотерею",
+            "disabled": false,
+            "warning": "Отменить?",
+            "params": null
+          }
+        }';
+    else
+      v_economy_type := json.get_string_opt(data.get_attribute_value(in_actor_id, 'system_person_economy_type'), null);
+
+      if v_economy_type = 'asters' then
+        v_ticket_price := data.get_integer_param('lottery_ticket_price');
+        v_money := json.get_bigint(data.get_attribute_value(in_actor_id, 'system_money'));
+
+        if v_money < v_ticket_price then
+          v_actions :=
+            v_actions ||
+            format(
+              '{
+                "buy_lottery_ticket": {
+                  "name": "Купить лотерейный билет (%s)",
+                  "disabled": true
+                }
+              }',
+              pp_utils.format_money(v_ticket_price::bigint)
+              )::jsonb;
+        else
+          v_actions :=
+            v_actions ||
+            format(
+              '{
+                "buy_lottery_ticket": {
+                  "code": "buy_lottery_ticket",
+                  "name": "Купить лотерейный билет (%s)",
+                  "disabled": false,
+                  "warning": "Увеличить шанс выиграть гражданство ООН всего за %s?",
+                  "params": null
+                }
+              }',
+              pp_utils.format_money(v_ticket_price::bigint),
+              pp_utils.format_money(v_ticket_price::bigint))::jsonb;
+        end if;
+      end if;
+    end if;
+  end if;
+
+  return v_actions;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.actgenerator_menu(integer, integer);
 
 create or replace function pallas_project.actgenerator_menu(in_object_id integer, in_actor_id integer)
@@ -10997,8 +11198,10 @@ begin
         v_actions ||
         format(
           '{
+            "profile": {"code": "act_open_object", "name": "Профиль", "disabled": false, "params": {"object_code": "%s"}},
             "statuses": {"code": "act_open_object", "name": "Статусы", "disabled": false, "params": {"object_code": "%s_statuses"}}
           }',
+          v_actor_code,
           v_actor_code)::jsonb;
       v_actions :=
         v_actions ||
@@ -11051,6 +11254,20 @@ begin
       "persons": {"code": "act_open_object", "name": "Люди", "disabled": false, "params": {"object_code": "persons"}},
       "districts": {"code": "act_open_object", "name": "Районы", "disabled": false, "params": {"object_code": "districts"}}
     }';
+
+  if v_is_master or v_economy_type = 'asters' then
+    declare
+      v_lottery_status text := json.get_string(data.get_attribute_value(data.get_object_id('lottery'), 'lottery_status'));
+    begin
+      if v_lottery_status = 'active' then
+        v_actions :=
+          v_actions ||
+          jsonb '{
+              "lottery": {"code": "act_open_object", "name": "Лотерея гражданства ООН", "disabled": false, "params": {"object_code": "lottery"}}
+          }';
+      end if;
+    end;
+  end if;
 
   return v_actions;
 end;
@@ -12054,7 +12271,8 @@ begin
       "actions_function": "pallas_project.actgenerator_menu",
       "template": {
         "groups": [
-          {"code": "menu_group1", "actions": ["login"]},
+          {"code": "menu_group1", "actions": ["login", "profile"]},
+          {"code": "menu_lottery", "actions": ["lottery"]},
           {"code": "menu_group2", "actions": ["statuses", "next_statuses", "debatles", "chats", "all_chats", "persons", "districts", "documents", "transactions", "important_notifications", "master_chats"]},
           {"code": "menu_group3", "actions": ["logout"]}
         ]
@@ -12109,6 +12327,7 @@ begin
   perform pallas_project.init_messenger();
   perform pallas_project.init_person_list();
   perform pallas_project.init_documents();
+  perform pallas_project.init_lottery();
 end;
 $$
 language plpgsql;
@@ -12952,6 +13171,72 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.init_lottery();
+
+create or replace function pallas_project.init_lottery()
+returns void
+volatile
+as
+$$
+declare
+  v_object_id integer;
+begin
+  insert into data.params(code, value) values
+  ('lottery_ticket_price', jsonb '10');
+
+  insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
+  ('lottery_ticket_count', 'Количество билетов', 'Количество купленных лотерейных билетов', 'normal', 'full', null, true),
+  ('lottery_status', 'Статус', null, 'normal', 'full', 'pallas_project.vd_lottery_status', false);
+
+  insert into data.actions(code, function) values
+  ('buy_lottery_ticket', 'pallas_project.act_buy_lottery_ticket'),
+  ('finish_lottery', 'pallas_project.act_finish_lottery'),
+  ('cancel_lottery', 'pallas_project.act_cancel_lottery');
+
+  v_object_id :=
+    data.create_object(
+      'lottery',
+      jsonb '[
+        {"code": "is_visible", "value": true},
+        {"code": "title", "value": "Лотерея гражданства ООН"},
+        {"code": "type", "value": "lottery"},
+        {"code": "lottery_status", "value": "active"},
+        {"code": "actions_function", "value": "pallas_project.actgenerator_lottery"},
+        {"code": "description", "value": "Все неграждане, присутствующие на астероиде Паллада на момент старта лотереи, официально зарегистрированные и имеющие комм на момент начала лотереи, получают ОДИН билет ЛОТЕРЕИ ГРАЖДАНСТВА совершенно бесплатно.\n\nКаждый негражданин может ДОПОЛНИТЕЛЬНО приобрести ЛЮБОЕ количество билетов лотереи. Стоимость дополнительного билета — UN$10.\n\nПерепродажа и передача билетов ЛОТЕРЕИ ГРАЖДАНСТВА запрещены.\n\nОтказаться от участия в ЛОТЕРЕЕ ГРАЖДАНСТВА нельзя.\n\nОДИН победитель определяется методом случайного выбора между ВСЕМИ (гарантированными и дополнительно приобретенными) билетами ЛОТЕРЕИ ГРАЖДАНСТВА.\n\nЛОТЕРЕЯ ГРАЖДАНСТВА проводится Амандой Ганди, заместителем отдела внутренней ревизии Управления по вопросам космического пространства ООН. Контролёрами ЛОТЕРЕИ ГРАЖДАНСТВА со стороны астероида Паллада назначаются Александр Корсак, главный экономист, и Кара Трейс, военный наблюдатель.\n\nПОБЕДИТЕЛЬ получит официальное уведомление на свой комм сразу же после завершения лотереи, также он будет объявлен в местных и земных новостях.\n\nГражданство может быть отозвано, если выяснится, что награжденный скрывался от правосудия или совершил уголовно наказуемое деяние до победы в лотерее.\n\nФинальный этап состоится на празднике, посвященном юбилею станции, после торжественной речи Аманды Ганди."},
+        {
+          "code": "template",
+          "value": {
+            "title": "title",
+            "groups": [
+              {"code": "tickets", "attributes": ["lottery_status", "lottery_ticket_count"], "actions": ["buy_lottery_ticket", "finish_lottery", "cancel_lottery"]},
+              {"name": "Правила проведения ЛОТЕРЕИ ГРАЖДАНСТВА", "code": "rules", "attributes": ["description"]}
+            ]
+          }
+        }
+      ]');
+
+  -- Всем добавляем по одному билету
+  declare
+    v_person_id integer;
+  begin
+    for v_person_id in
+    (
+      select oo.object_id
+      from data.object_objects oo
+      where
+        oo.parent_object_id = data.get_object_id('player') and
+        oo.parent_object_id != oo.object_id
+    )
+    loop
+      if json.get_string(data.get_attribute_value(v_person_id, 'system_person_economy_type')) = 'asters' then
+        perform data.set_attribute_value(v_object_id, data.get_attribute_id('lottery_ticket_count'), jsonb '1', v_person_id);
+      end if;
+    end loop;
+  end;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.init_messenger();
 
 create or replace function pallas_project.init_messenger()
@@ -13271,6 +13556,50 @@ volatile
 as
 $$
 begin
+  -- Организации на игре:
+  --  Администрация, 55000 на цикл, 
+  --  Де Бирс, 1380 на цикл, Мишон Грей и Абрахам Грей
+  --  Теко Марс, 1940 за цикл, Рашид Файзи
+  --  Akira SC, 2000 на цикл, Марк Попов и Роберт Ли
+  --  Клиника, 250 на цикл, Лина Ковач
+  --  Star Helix, 1300 на цикл, Кайла Ангас
+  --  СВП
+  --  Starbucks (картель)
+
+  -- Поставщики, не видны в общем списке:
+  -- Лёд
+  --  Аква Галактика (в никуда)
+  --  Джонни Квик (мормон)
+  --  Midnight Diggers (картель)
+  -- Продукты
+  --  Alfa Prime
+  --  Совхоз им. Ленина (СВП)
+  --  Гидропонические системы Ганимеда (картель)
+  -- Медикаменты
+  --  Merck
+  --  Флора Фармасьютикалс
+  --  Вектор
+  -- Уран
+  --  Westinghouse
+  --  TransUranium
+  --  Heavy Industries Co. (мормон)
+  -- Метан
+  --  Comet Petroleum
+  --  Stardust Industries
+  --  PDVSA
+  -- Товары
+  --  Toom
+  --  Amazon.com, Inc.
+  --  Большой Склад
+
+  -- Личные организации:
+  --  Свободное небо - мормон
+  --  Вишнёвый сад - экономист
+  --  Тариэль - Валентин Штерн, 1000 на счету
+
+  -- Синонимы:
+  --  Салон "Третий глаз" -> (картель)
+  --  Тату-салон -> (СВП)
 end;
 $$
 language plpgsql;
@@ -14269,6 +14598,25 @@ begin
   assert in_actor_id is not null;
 
   return format('[%s](babcom:%s)', v_title, v_code);
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.vd_lottery_status(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_lottery_status(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+begin
+  if in_value = jsonb '"active"' then
+    return 'активна';
+  elsif in_value = jsonb '"cancelled"' then
+    return 'отменена';
+  else
+    return 'завершена';
+  end if;
 end;
 $$
 language plpgsql;

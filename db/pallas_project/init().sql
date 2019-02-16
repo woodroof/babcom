@@ -45,7 +45,8 @@ begin
       "actions_function": "pallas_project.actgenerator_menu",
       "template": {
         "groups": [
-          {"code": "menu_group1", "actions": ["login"]},
+          {"code": "menu_group1", "actions": ["login", "profile"]},
+          {"code": "menu_lottery", "actions": ["lottery"]},
           {"code": "menu_group2", "actions": ["statuses", "next_statuses", "debatles", "chats", "all_chats", "persons", "districts", "documents", "transactions", "important_notifications", "master_chats"]},
           {"code": "menu_group3", "actions": ["logout"]}
         ]
@@ -100,6 +101,7 @@ begin
   perform pallas_project.init_messenger();
   perform pallas_project.init_person_list();
   perform pallas_project.init_documents();
+  perform pallas_project.init_lottery();
 end;
 $$
 language plpgsql;
