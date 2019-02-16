@@ -28,7 +28,7 @@ begin
   assert v_object_code is not null or v_chat_code is not null;
 
   if v_object_code is not null then
-    v_chat_id  := json.get_integer(data.get_attribute_value(data.get_object_id(v_object_code), 'system_chat_id', v_actor_id));
+    v_chat_id  := data.get_object_id(v_object_code || '_chat') ;
     v_chat_code := data.get_object_code(v_chat_id);
   elsif v_chat_code is not null then
     v_chat_id := data.get_object_id(v_chat_code);

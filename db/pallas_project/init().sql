@@ -11,8 +11,7 @@ declare
 begin
   insert into data.attributes(code, description, type, card_type, can_be_overridden) values
   ('description', 'Текстовый блок с развёрнутым описанием объекта, string', 'normal', 'full', true),
-  ('mini_description', 'Текстовый блок с коротким описанием объекта, string', 'normal', 'mini', true),
-  ('system_chat_id', 'Идентификатор чата для обсуждения объекта', 'system', null, true);
+  ('mini_description', 'Текстовый блок с коротким описанием объекта, string', 'normal', 'mini', true);
 
   -- Создадим актора по умолчанию
   v_default_actor_id :=

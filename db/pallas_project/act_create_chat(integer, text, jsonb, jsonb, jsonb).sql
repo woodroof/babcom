@@ -28,7 +28,7 @@ begin
                   );
 
   -- Создаём чат
-  v_chat_id := pallas_project.create_chat(v_attributes);
+  v_chat_id := pallas_project.create_chat(null, v_attributes);
 
   v_chat_code := data.get_object_code(v_chat_id);
 

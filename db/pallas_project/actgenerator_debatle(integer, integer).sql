@@ -142,7 +142,7 @@ begin
   end if;
 
   if v_debatle_status in ('future', 'vote', 'vote_over', 'closed') then
-    v_chat_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_chat_id', in_actor_id), null);
+    v_chat_id := data.get_object_id(v_debatle_code || '_chat');
     if v_chat_id is not null then
       v_chat_length := json.get_integer_opt(data.get_attribute_value(v_chat_id, 'system_chat_length'), 0);
       v_chat_unread := json.get_integer_opt(data.get_attribute_value(v_chat_id, 'chat_unread_messages', in_actor_id), null);

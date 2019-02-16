@@ -1,6 +1,6 @@
--- drop function pallas_project.create_chat(jsonb);
+-- drop function pallas_project.create_chat(text, jsonb);
 
-create or replace function pallas_project.create_chat(in_attributes jsonb)
+create or replace function pallas_project.create_chat(in_code text, in_attributes jsonb)
 returns integer
 volatile
 as
@@ -18,7 +18,7 @@ declare
   v_list_attributes jsonb;
 begin
   -- создаём новый чат
-  v_chat_id := data.create_object(null, in_attributes, 'chat');
+  v_chat_id := data.create_object(in_code, in_attributes, 'chat');
   v_chat_code := data.get_object_code(v_chat_id);
 
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values

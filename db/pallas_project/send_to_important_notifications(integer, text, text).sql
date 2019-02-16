@@ -23,7 +23,7 @@ declare
   v_chat_bot_id integer := data.get_object_id('chat_bot');
   v_chat_bot_title text := json.get_string(data.get_attribute_value(v_chat_bot_id, v_title_attribute_id, in_actor_id));
 
-  v_title text := to_char(clock_timestamp(),'DD.MM hh24:mi:ss ');
+  v_title text := pp_utils.format_date(clock_timestamp());
 
   v_content text[];
   v_new_content text[];
@@ -51,7 +51,7 @@ begin
   (v_message_id, v_system_message_time_attribute_id, to_jsonb(to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss') ), null);
 
   -- Добавляем сообщение в чат
-  perform pp_utils.list_prepend_and_notify(v_chat_id, v_message_code, v_chat_id);
+  perform pp_utils.list_prepend_and_notify(v_chat_id, v_message_code, null, in_actor_id);
 
 end;
 $$

@@ -219,7 +219,7 @@ begin
     v_redirect_attribute_id integer := data.get_attribute_id('redirect');
   begin
     -- Чат для мастеров и уведомлений
-    v_chat_id := data.create_object(
+    v_chat_id := pallas_project.create_chat(
     'master_chat',
     jsonb '{
       "content": [],
@@ -229,10 +229,7 @@ begin
       "system_chat_can_leave": false,
       "system_chat_can_mute": false,
       "system_chat_parent_list": "master_chats"
-    }',
-    'chat');
-    insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
-    (v_chat_id, v_is_visible_attribute_id, jsonb 'true', v_chat_id);
+    }');
 
     for v_master_person_id in (select * from unnest(v_masters))
     loop
@@ -252,7 +249,7 @@ begin
     for v_person_id in (select * from unnest(pallas_project.get_group_members('player')))
     loop
     -- чат с мастерами
-      v_chat_id := data.create_object(
+      v_chat_id := pallas_project.create_chat(
       null,
       jsonb_build_object(
         'content', jsonb '[]',
@@ -263,10 +260,7 @@ begin
         'system_chat_can_mute', false,
         'system_chat_can_rename', false,
         'system_chat_parent_list', 'master_chats'
-      ),
-      'chat');
-      insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
-      (v_chat_id, v_is_visible_attribute_id, jsonb 'true', v_chat_id);
+      ));
 
       perform data.add_object_to_object(v_person_id, v_chat_id);
       for v_master_person_id in (select * from unnest(v_masters))
@@ -278,7 +272,7 @@ begin
       perform pp_utils.list_prepend_and_notify(v_master_chats_id, data.get_object_code(v_chat_id), v_person_id, v_person_id);
 
       -- чат для важных уведомлений
-      v_important_chat_id := data.create_object(
+      v_important_chat_id := pallas_project.create_chat(
       null,
       jsonb_build_object(
         'content', jsonb '[]',
@@ -290,10 +284,7 @@ begin
         'system_chat_can_rename', false,
         'system_chat_cant_write', true,
         'system_chat_cant_see_members', true
-      ),
-      'chat');
-      insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
-      (v_important_chat_id, v_is_visible_attribute_id, jsonb 'true', v_important_chat_id);
+      ));
 
       insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
       (v_important, v_redirect_attribute_id, to_jsonb(v_important_chat_id), v_person_id);
