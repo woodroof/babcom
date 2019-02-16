@@ -12683,12 +12683,12 @@ $$
 begin
   insert into data.params(code, value) values
   ('economic_cycle_number', jsonb '1'),
-  ('coin_price', jsonb '1000'),
-  ('life_support_status_prices', jsonb '[1, 2, 4]'),
-  ('health_care_status_prices', jsonb '[1, 2, 4]'),
-  ('recreation_status_prices', jsonb '[1, 2, 4]'),
-  ('police_status_prices', jsonb '[1, 2, 4]'),
-  ('administrative_services_status_prices', jsonb '[1, 2, 4]');
+  ('coin_price', jsonb '10'),
+  ('life_support_status_prices', jsonb '[6, 1, 1]'),
+  ('health_care_status_prices', jsonb '[1, 6, 8]'),
+  ('recreation_status_prices', jsonb '[2, 4, 4]'),
+  ('police_status_prices', jsonb '[1, 5, 6]'),
+  ('administrative_services_status_prices', jsonb '[2, 6, 7]');
 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
   ('life_support_status', null, 'Описание на странице статуса', 'normal', null, 'pallas_project.vd_life_support_status', false),
