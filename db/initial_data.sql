@@ -5,6 +5,6 @@ grant execute on all functions in schema api to http;
 
 select data.init();
 
-select test_project.init();
+select pallas_project.init();
 
 analyze;
