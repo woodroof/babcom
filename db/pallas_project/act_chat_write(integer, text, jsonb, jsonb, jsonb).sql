@@ -46,6 +46,7 @@ declare
   v_chat_length integer;
   v_chat_parent_list text := json.get_string_opt(data.get_attribute_value(v_chat_id, 'system_chat_parent_list'), '~');
   v_chat_title text;
+  v_changes jsonb[];
 begin
   assert in_request_id is not null;
 
@@ -65,54 +66,58 @@ begin
 
   -- Добавляем сообщение в чат
   perform * from data.objects where id = v_chat_id for update;
+  v_changes := array[]::jsonb[];
 
   -- Достаём, меняем, кладём назад
   v_content := json.get_string_array_opt(data.get_attribute_value(v_chat_id, 'content', v_chat_id), array[]::text[]);
   v_new_content := array_prepend(v_message_code, v_content);
   if v_new_content <> v_content then
-    v_chat_length := json.get_integer_opt(data.get_attribute_value(v_chat_id, v_system_chat_length_attribute_id), 0);
+    v_chat_length := json.get_integer_opt(data.get_attribute_value(v_chat_id, v_system_chat_length_attribute_id), null);
+    if v_chat_length is not null then
+      v_changes := array_append(v_changes, data.attribute_change2jsonb(v_system_chat_length_attribute_id, to_jsonb(v_chat_length + 1)));
+    end if;
+    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_content_attribute_id, to_jsonb(v_new_content)));
     v_message_sent := data.change_current_object(in_client_id, 
                                                  in_request_id,
                                                  v_chat_id, 
-                                                 jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, to_jsonb(v_new_content)),
-                                                                   data.attribute_change2jsonb(v_system_chat_length_attribute_id, to_jsonb(v_chat_length + 1))));
-  end if;
+                                                 to_jsonb(v_changes));
 
-  if v_chat_parent_list = 'master_chats' then
-  -- Перекладываем этот чат в начало в списке мастерских чатов
-    perform pp_utils.list_replace_to_head_and_notify(v_master_chats_id, v_chat_code, v_master_group_id);
-  elsif v_chat_parent_list = 'chats' then
-  -- Перекладываем этот чат в начало в списке всех игровых чатов
-    perform pp_utils.list_replace_to_head_and_notify(v_all_chats_id, v_chat_code, v_master_group_id);
-  end if;
-  -- Отправляем нотификацию о новом сообщении всем неподписанным на этот чат
-  -- и перекладываем у всех участников этот чат вверх списка
-  for v_person_id in 
-    (select oo.object_id from data.object_objects oo 
-      where oo.parent_object_id = v_chat_id
-        and oo.parent_object_id <> oo.object_id)
-  loop
     if v_chat_parent_list = 'master_chats' then
-      if pp_utils.is_in_group(v_person_id, 'master') then
-        perform pp_utils.list_replace_to_head_and_notify(v_master_chats_id, v_chat_code, v_person_id);
-      end if;
+    -- Перекладываем этот чат в начало в списке мастерских чатов
+      perform pp_utils.list_replace_to_head_and_notify(v_master_chats_id, v_chat_code, v_master_group_id);
     elsif v_chat_parent_list = 'chats' then
-      perform pp_utils.list_replace_to_head_and_notify(v_chats_id, v_chat_code, v_person_id);
+    -- Перекладываем этот чат в начало в списке всех игровых чатов
+      perform pp_utils.list_replace_to_head_and_notify(v_all_chats_id, v_chat_code, v_master_group_id);
     end if;
-    v_is_actor_subscribed := pp_utils.is_actor_subscribed(v_person_id, v_chat_id);
-    if v_person_id <> v_actor_id
-      and not v_is_actor_subscribed then
-      v_chat_unread_messages := json.get_integer_opt(data.get_attribute_value(v_chat_id, v_chat_unread_messages_attribute_id, v_person_id), 0);
-      perform data.change_object_and_notify(v_chat_id, 
-                                            jsonb_build_array(data.attribute_change2jsonb(v_chat_unread_messages_attribute_id, to_jsonb(v_chat_unread_messages + 1), v_person_id)),
-                                            v_actor_id);
-    end if;
-    if v_person_id <> v_actor_id 
-      and not v_is_actor_subscribed
-      and not json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'chat_is_mute', v_person_id), false) then
-      perform pp_utils.add_notification(v_person_id, 'Новое сообщение ' || (case when v_chat_title is not null then ' в '|| v_chat_title  || ' ' else '' end) || 'от '|| v_actor_title , v_chat_id);
-    end if;
-  end loop;
+    -- Отправляем нотификацию о новом сообщении всем неподписанным на этот чат
+    -- и перекладываем у всех участников этот чат вверх списка
+    for v_person_id in 
+      (select oo.object_id from data.object_objects oo 
+        where oo.parent_object_id = v_chat_id
+          and oo.parent_object_id <> oo.object_id)
+    loop
+      if v_chat_parent_list = 'master_chats' then
+        if pp_utils.is_in_group(v_person_id, 'master') then
+          perform pp_utils.list_replace_to_head_and_notify(v_master_chats_id, v_chat_code, v_person_id);
+        end if;
+      elsif v_chat_parent_list = 'chats' then
+        perform pp_utils.list_replace_to_head_and_notify(v_chats_id, v_chat_code, v_person_id);
+      end if;
+      v_is_actor_subscribed := pp_utils.is_actor_subscribed(v_person_id, v_chat_id);
+      if v_person_id <> v_actor_id
+        and not v_is_actor_subscribed then
+        v_chat_unread_messages := json.get_integer_opt(data.get_attribute_value(v_chat_id, v_chat_unread_messages_attribute_id, v_person_id), 0);
+        perform data.change_object_and_notify(v_chat_id, 
+                                              jsonb_build_array(data.attribute_change2jsonb(v_chat_unread_messages_attribute_id, to_jsonb(v_chat_unread_messages + 1), v_person_id)),
+                                              v_actor_id);
+      end if;
+      if v_person_id <> v_actor_id 
+        and not v_is_actor_subscribed
+        and not json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'chat_is_mute', v_person_id), false) then
+        perform pp_utils.add_notification(v_person_id, 'Новое сообщение ' || (case when v_chat_title is not null then ' в '|| v_chat_title  || ' ' else '' end) || 'от '|| v_actor_title , v_chat_id);
+      end if;
+    end loop;
+  end if;
 
   if not v_message_sent then
    perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');

@@ -235,6 +235,7 @@ begin
     loop
       perform data.add_object_to_object(v_master_person_id, v_chat_id);
     end loop;
+    perform pallas_project.change_chat_person_list_on_person(v_chat_id, null, true);
 
     perform pp_utils.list_prepend_and_notify(v_master_chats_id, data.get_object_code(v_chat_id), v_master_group_id, v_master_group_id);
 
@@ -267,6 +268,7 @@ begin
       loop
         perform data.add_object_to_object(v_master_person_id, v_chat_id);
       end loop;
+      perform pallas_project.change_chat_person_list_on_person(v_chat_id, null, true);
 
       perform pp_utils.list_prepend_and_notify(v_master_chats_id, data.get_object_code(v_chat_id), v_master_group_id, v_master_group_id);
       perform pp_utils.list_prepend_and_notify(v_master_chats_id, data.get_object_code(v_chat_id), v_person_id, v_person_id);
@@ -290,6 +292,7 @@ begin
       (v_important, v_redirect_attribute_id, to_jsonb(v_important_chat_id), v_person_id);
 
       perform data.add_object_to_object(v_person_id, v_important_chat_id);
+      perform pallas_project.change_chat_person_list_on_person(v_important_chat_id, null, false);
     end loop;
   end;
 

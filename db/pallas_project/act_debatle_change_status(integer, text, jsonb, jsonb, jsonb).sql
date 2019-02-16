@@ -220,7 +220,8 @@ begin
                    'system_chat_is_renamed', true,
                    'system_chat_parent_list', 'chats',
                    'system_chat_can_invite', false,
-                   'system_chat_can_rename', false
+                   'system_chat_can_rename', false,
+                   'system_chat_length', 0
                  ));
   elsif v_new_status = 'vote' then
     v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', jsonb 'true'));
