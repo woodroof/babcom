@@ -11,7 +11,7 @@ begin
   elsif in_value = jsonb '"mcr"' then
     return 'МРК — только текущий счёт';
   elsif in_value = jsonb '"asters"' then
-    return 'Астеры — накопительный и обнуляемый текущий счета';
+    return 'Астеры — инвестиционный и обнуляемый текущий счета';
   elsif in_value = jsonb '"fixed"' then
     return 'Фиксированные статусы — нет счетов, нет распределения токенов';
   end if;

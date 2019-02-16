@@ -13151,7 +13151,7 @@ begin
   ('system_money', null, 'system', null, null, false),
   ('money', 'Остаток средств на счёте', 'normal', 'full', 'pallas_project.vd_money', true),
   ('system_person_deposit_money', null, 'system', null, null, false),
-  ('person_deposit_money', 'Остаток средств на накопительном счёте', 'normal', 'full', 'pallas_project.vd_money', true),
+  ('person_deposit_money', 'Остаток средств на инвестиционном счёте', 'normal', 'full', 'pallas_project.vd_money', true),
   ('system_person_coin', null, 'system', null, null, false),
   ('person_coin', 'Нераспределённые коины', 'normal', 'full', null, true),
   ('person_opa_rating', 'Популярность среди астеров', 'normal', 'full', 'pallas_project.vd_person_opa_rating', true),
@@ -14073,7 +14073,7 @@ begin
   elsif in_value = jsonb '"mcr"' then
     return 'МРК — только текущий счёт';
   elsif in_value = jsonb '"asters"' then
-    return 'Астеры — накопительный и обнуляемый текущий счета';
+    return 'Астеры — инвестиционный и обнуляемый текущий счета';
   elsif in_value = jsonb '"fixed"' then
     return 'Фиксированные статусы — нет счетов, нет распределения токенов';
   end if;
