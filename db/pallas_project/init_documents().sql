@@ -133,7 +133,7 @@ begin
       "code": "template",
       "value": {
         "title": "title",
-        "groups": [{"code": "document_group1", "actions": ["document_edit", "document_delete", "document_share_list", "document_add_to_my"]},
+        "groups": [{"code": "document_group1", "actions": ["document_edit", "document_delete", "document_share_list", "document_add_to_my", "document_make_official"]},
                    {"code": "document_group2", "attributes": ["document_text", "document_participants", "document_sent_to_sign"]},
                    {"code": "document_group3", "attributes": ["document_author", "document_last_edit_time"]}]
       }
@@ -170,7 +170,8 @@ begin
   ('document_delete', 'pallas_project.act_document_delete'),
   ('document_share', 'pallas_project.act_document_share'),
   ('document_share_list', 'pallas_project.act_document_share_list'),
-  ('document_add_to_my', 'pallas_project.act_document_add_to_my');
+  ('document_add_to_my', 'pallas_project.act_document_add_to_my'),
+  ('document_make_official', 'pallas_project.act_document_make_official');
 
 
 end;

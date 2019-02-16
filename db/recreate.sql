@@ -10176,6 +10176,43 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_document_make_official(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_document_make_official(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_document_code text := json.get_string(in_params, 'document_code');
+  v_document_id integer := data.get_object_id(v_document_code);
+  v_actor_id integer :=data.get_active_actor_id(in_client_id);
+  v_system_document_category text := json.get_string_opt(data.get_attribute_value(v_document_id, 'system_document_category'),'~');
+  v_my_documents_id integer := data.get_object_id('my_documents');
+  v_official_documents_id integer := data.get_object_id('official_documents');
+  v_person_id integer;
+  v_message_sent boolean;
+begin
+  assert in_request_id is not null;
+  assert v_system_document_category = 'private';
+
+  v_message_sent := data.change_current_object(in_client_id, 
+                                               in_request_id,
+                                               v_document_id, 
+                                               jsonb_build_array(data.attribute_change2jsonb('system_document_category', jsonb '"official"')));
+
+  for v_person_id in select * from unnest(pallas_project.get_group_members('all_person')) loop
+    perform pp_utils.list_remove_and_notify(v_my_documents_id, v_document_code, v_person_id);
+    perform pp_utils.list_prepend_and_notify(v_official_documents_id, v_document_code, v_person_id);
+  end loop;
+
+  if not v_message_sent then
+   perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_document_share(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_document_share(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -10837,38 +10874,46 @@ begin
   assert in_actor_id is not null;
 
   v_is_master := pp_utils.is_in_group(in_actor_id, 'master');
+  if v_document_status <> 'deleted' then
+    if v_is_master or (in_actor_id = v_document_author and v_document_category = 'private') then
+      v_actions_list := v_actions_list || 
+          format(', "document_edit": {"code": "document_edit", "name": "Редактировать", "disabled": false, "params": {"document_code": "%s"}, 
+  "user_params": [{"code": "title", "description": "Заголовок", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"},
+  {"code": "document_text", "description": "Текст документа", "type": "string", "restrictions": {"min_length": 1, "multiline": true}, "default_value": %s}]}',
+                  v_document_code,
+                  json.get_string_opt(data.get_attribute_value(in_object_id, 'title', in_actor_id), null),
+                  coalesce(data.get_attribute_value(in_object_id, 'document_text')::text, '""'));
 
-  if v_is_master or (in_actor_id = v_document_author and v_document_category = 'private') then
-    v_actions_list := v_actions_list || 
-        format(', "document_edit": {"code": "document_edit", "name": "Редактировать", "disabled": false, "params": {"document_code": "%s"}, 
-"user_params": [{"code": "title", "description": "Заголовок", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"},
-{"code": "document_text", "description": "Текст документа", "type": "string", "restrictions": {"min_length": 1, "multiline": true}, "default_value": %s}]}',
-                v_document_code,
-                json.get_string_opt(data.get_attribute_value(in_object_id, 'title', in_actor_id), null),
-                coalesce(data.get_attribute_value(in_object_id, 'document_text')::text, '""'));
-
-    if v_document_status <> 'deleted' then
       v_actions_list := v_actions_list || 
           format(', "document_delete": {"code": "document_delete", "name": "Удалить", "disabled": false, "warning": "Документ исчезнет безвозвратно. Точно удаляем?", '||
                   '"params": {"document_code": "%s"}}',
                   v_document_code);
-    end if;
-  end if;
-  v_actions_list := v_actions_list || 
-          format(', "document_share_list": {"code": "document_share_list", "name": "Поделиться", "disabled": false, '||
+
+      if v_document_category = 'private' then
+        v_actions_list := v_actions_list || 
+          format(', "document_make_official": {"code": "document_make_official", "name": "Перевести в официальные", "disabled": false, '||
                   '"params": {"document_code": "%s"}}',
                   v_document_code);
-  if not v_is_master and v_document_category in ('private', 'official') then
-    if v_document_category = 'private' then
-      v_document_list_content := json.get_string_array_opt(data.get_attribute_value(v_my_documents_id, 'content', in_actor_id), array[]::text[]);
-    elseif v_document_category = 'official' then
-      v_document_list_content := json.get_string_array_opt(data.get_attribute_value(v_official_documents_id, 'content', in_actor_id), array[]::text[]);
+      end if;
     end if;
-    if array_position(v_document_list_content, v_document_code) is null then
-      v_actions_list := v_actions_list || 
-              format(', "document_add_to_my": {"code": "document_add_to_my", "name": "Добавить себе", "disabled": false, '||
+
+    v_actions_list := v_actions_list || 
+            format(', "document_share_list": {"code": "document_share_list", "name": "Поделиться", "disabled": false, '||
                     '"params": {"document_code": "%s"}}',
                     v_document_code);
+
+    if not v_is_master and v_document_category in ('private', 'official') then
+      if v_document_category = 'private' then
+        v_document_list_content := json.get_string_array_opt(data.get_attribute_value(v_my_documents_id, 'content', in_actor_id), array[]::text[]);
+      elseif v_document_category = 'official' then
+        v_document_list_content := json.get_string_array_opt(data.get_attribute_value(v_official_documents_id, 'content', in_actor_id), array[]::text[]);
+      end if;
+      if array_position(v_document_list_content, v_document_code) is null then
+        v_actions_list := v_actions_list || 
+                format(', "document_add_to_my": {"code": "document_add_to_my", "name": "Добавить себе", "disabled": false, '||
+                      '"params": {"document_code": "%s"}}',
+                      v_document_code);
+      end if;
     end if;
   end if;
   return jsonb ('{'||trim(v_actions_list,',')||'}');
@@ -12629,7 +12674,7 @@ begin
       "code": "template",
       "value": {
         "title": "title",
-        "groups": [{"code": "document_group1", "actions": ["document_edit", "document_delete", "document_share_list", "document_add_to_my"]},
+        "groups": [{"code": "document_group1", "actions": ["document_edit", "document_delete", "document_share_list", "document_add_to_my", "document_make_official"]},
                    {"code": "document_group2", "attributes": ["document_text", "document_participants", "document_sent_to_sign"]},
                    {"code": "document_group3", "attributes": ["document_author", "document_last_edit_time"]}]
       }
@@ -12666,7 +12711,8 @@ begin
   ('document_delete', 'pallas_project.act_document_delete'),
   ('document_share', 'pallas_project.act_document_share'),
   ('document_share_list', 'pallas_project.act_document_share_list'),
-  ('document_add_to_my', 'pallas_project.act_document_add_to_my');
+  ('document_add_to_my', 'pallas_project.act_document_add_to_my'),
+  ('document_make_official', 'pallas_project.act_document_make_official');
 
 
 end;
