@@ -16,14 +16,15 @@ declare
   v_message_text_attribute_id integer := data.get_attribute_id('message_text');
   v_system_message_sender_attribute_id integer := data.get_attribute_id('system_message_sender');
   v_system_message_time_attribute_id integer := data.get_attribute_id('system_message_time');
-
+  v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
   v_important_notifications_id integer := data.get_object_id('important_notifications');
-  v_chat_id integer := data.get_integer_opt(get_attribute_value(v_important_notifications_id, 'redirect', in_actor_id), null);
+  v_chat_id integer := json.get_integer_opt(data.get_attribute_value(v_important_notifications_id, 'redirect', in_actor_id), null);
 
   v_chat_bot_id integer := data.get_object_id('chat_bot');
   v_chat_bot_title text := json.get_string(data.get_attribute_value(v_chat_bot_id, v_title_attribute_id, in_actor_id));
 
   v_title text := pp_utils.format_date(clock_timestamp());
+  v_object_title text;
 
   v_content text[];
   v_new_content text[];
@@ -37,7 +38,8 @@ begin
   assert v_chat_id is not null;
 
   if in_object_code is not null then
-    v_text := in_text || '. [Перейти](babcom:'||in_object_code||')';
+   v_object_title := json.get_string_opt(data.get_attribute_value(data.get_object_id(in_object_code), 'title', in_actor_id), '???');
+    v_text := in_text || ' ' || format('[%s](babcom:%s)', v_object_title, in_object_code);
   else
    v_text := in_text;
   end if;
@@ -47,6 +49,7 @@ begin
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_message_id, v_title_attribute_id, to_jsonb(v_title), null),
   (v_message_id, v_message_text_attribute_id, to_jsonb(v_text), null),
+  (v_message_id, v_is_visible_attribute_id, jsonb 'true', v_chat_id),
   (v_message_id, v_system_message_sender_attribute_id, to_jsonb(v_chat_bot_id), null),
   (v_message_id, v_system_message_time_attribute_id, to_jsonb(to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss') ), null);
 

@@ -29,7 +29,7 @@ begin
   perform pp_utils.list_prepend_and_notify(v_notifications_id, v_notification_code, in_actor_id);
 
   if in_is_important then
-    perform pallas_project.send_to_important_notifications(in_actor_id, in_actor_id, in_redirect_object);
+    perform pallas_project.send_to_important_notifications(in_actor_id, in_text, data.get_object_code(in_redirect_object));
   end if;
 
 end;

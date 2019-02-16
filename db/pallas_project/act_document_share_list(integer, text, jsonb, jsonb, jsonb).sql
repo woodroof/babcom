@@ -25,7 +25,7 @@ declare
   v_temp_object_code text;
   v_temp_object_id integer;
 
-  v_all_person_id integer:= data.get_object_id('all_person');
+  v_player_id integer:= data.get_object_id('player');
 begin
   assert in_request_id is not null;
 
@@ -34,7 +34,7 @@ begin
   from data.object_objects oo
     left join data.objects o on o.id = oo.object_id
     left join data.attribute_values av on av.object_id = o.id and av.attribute_id = v_title_attribute_id and av.value_object_id is null
-  where oo.parent_object_id = v_all_person_id
+  where oo.parent_object_id = v_player_id
     and oo.object_id not in (oo.parent_object_id, v_actor_id);
 
   if v_content is null then

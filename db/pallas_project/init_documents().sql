@@ -96,7 +96,7 @@ begin
   jsonb '[
     {"code": "title", "value": "Документы"},
     {"code": "is_visible", "value": true},
-    {"code": "content", "value": ["rules_documents", "my_documents", "official_documents"]},
+    {"code": "content", "value": ["my_documents", "official_documents", "rules_documents"]},
     {"code": "actions_function", "value": "pallas_project.actgenerator_documents"},
     {
       "code": "mini_card_template",
@@ -144,6 +144,9 @@ begin
   'document_temp_share_list',
   jsonb '[
     {"code": "type", "value": "document_temp_share_list"},
+    {"code": "temporary_object", "value": true},
+    {"code": "list_element_function", "value": "pallas_project.lef_document_temp_share_list"},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_document_temp_share_list"},
     {
       "code": "mini_card_template",
       "value": {
@@ -157,7 +160,7 @@ begin
         "title": "title",
         "groups": [{"code": "document_temp_share_list_group1", "actions": ["go_back"]},
                    {"code": "document_temp_share_list_group2", "attributes": ["document_temp_share_list"]},
-                   {"code": "document_temp_share_list_group3", "attributes": ["document_share"]}]
+                   {"code": "document_temp_share_list_group3", "actions": ["document_share"]}]
       }
     }
   ]');

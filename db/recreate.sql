@@ -10145,6 +10145,35 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_document_share(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_document_share(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_share_list_code text := json.get_string(in_params, 'share_list_code');
+  v_share_list_id integer := data.get_object_id(v_share_list_code);
+  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+  v_document_id integer := json.get_integer(data.get_attribute_value(v_share_list_id, 'system_document_temp_list_document_id'));
+
+  v_system_document_temp_share_list integer[] := json.get_integer_array_opt(data.get_attribute_value(v_share_list_id, 'system_document_temp_share_list'), array[]::integer[]);
+
+  v_person_id integer;
+  v_message text := json.get_string_opt(data.get_attribute_value(v_actor_id, 'title', v_actor_id), 'Неизвестный') || ' поделился с вами документом';
+begin
+  assert in_request_id is not null;
+
+  for v_person_id in (select * from unnest(v_system_document_temp_share_list)) loop
+    perform pp_utils.add_notification(v_person_id, v_message, v_document_id, true);
+  end loop;
+
+  perform api_utils.create_go_back_action_notification(in_client_id, in_request_id);
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_document_share_list(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_document_share_list(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -10172,7 +10201,7 @@ declare
   v_temp_object_code text;
   v_temp_object_id integer;
 
-  v_all_person_id integer:= data.get_object_id('all_person');
+  v_player_id integer:= data.get_object_id('player');
 begin
   assert in_request_id is not null;
 
@@ -10181,7 +10210,7 @@ begin
   from data.object_objects oo
     left join data.objects o on o.id = oo.object_id
     left join data.attribute_values av on av.object_id = o.id and av.attribute_id = v_title_attribute_id and av.value_object_id is null
-  where oo.parent_object_id = v_all_person_id
+  where oo.parent_object_id = v_player_id
     and oo.object_id not in (oo.parent_object_id, v_actor_id);
 
   if v_content is null then
@@ -10796,6 +10825,32 @@ begin
                   '"params": {"document_code": "%s"}}',
                   v_document_code);
 
+  return jsonb ('{'||trim(v_actions_list,',')||'}');
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.actgenerator_document_temp_share_list(integer, integer);
+
+create or replace function pallas_project.actgenerator_document_temp_share_list(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_actions_list text := '';
+  v_share_list_code text := data.get_object_code(in_object_id);
+begin
+  assert in_actor_id is not null;
+
+  v_actions_list := v_actions_list || 
+                ', "go_back": {"code": "go_back", "name": "Передумал делиться", "disabled": false, '||
+                '"params": {}}';
+
+  v_actions_list := v_actions_list || 
+          format(', "document_share": {"code": "document_share", "name": "Поделиться", "disabled": false, "warning": "Ссылка на документ будет отправлена выбранным лицам, и забрать её назад вы не сможете. Продолжаем?",'||
+                  '"params": {"share_list_code": "%s"}}',
+                  v_share_list_code);
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;
 $$
@@ -12491,7 +12546,7 @@ begin
   jsonb '[
     {"code": "title", "value": "Документы"},
     {"code": "is_visible", "value": true},
-    {"code": "content", "value": ["rules_documents", "my_documents", "official_documents"]},
+    {"code": "content", "value": ["my_documents", "official_documents", "rules_documents"]},
     {"code": "actions_function", "value": "pallas_project.actgenerator_documents"},
     {
       "code": "mini_card_template",
@@ -12539,6 +12594,9 @@ begin
   'document_temp_share_list',
   jsonb '[
     {"code": "type", "value": "document_temp_share_list"},
+    {"code": "temporary_object", "value": true},
+    {"code": "list_element_function", "value": "pallas_project.lef_document_temp_share_list"},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_document_temp_share_list"},
     {
       "code": "mini_card_template",
       "value": {
@@ -12552,7 +12610,7 @@ begin
         "title": "title",
         "groups": [{"code": "document_temp_share_list_group1", "actions": ["go_back"]},
                    {"code": "document_temp_share_list_group2", "attributes": ["document_temp_share_list"]},
-                   {"code": "document_temp_share_list_group3", "attributes": ["document_share"]}]
+                   {"code": "document_temp_share_list_group3", "actions": ["document_share"]}]
       }
     }
   ]');
@@ -13657,6 +13715,57 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.lef_document_temp_share_list(integer, text, integer, integer);
+
+create or replace function pallas_project.lef_document_temp_share_list(in_client_id integer, in_request_id text, in_object_id integer, in_list_object_id integer)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+
+  v_system_document_temp_share_list_attribute_id integer := data.get_attribute_id('system_document_temp_share_list');
+  v_system_document_temp_share_list integer[];
+  v_document_temp_share_list_attribute_id integer := data.get_attribute_id('document_temp_share_list');
+  v_document_temp_share_list text;
+
+  v_content_attribute_id integer := data.get_attribute_id('content');
+  v_content text[];
+
+  v_changes jsonb[] := array[]::jsonb[];
+  v_message_sent boolean;
+begin
+  assert in_request_id is not null;
+  assert in_list_object_id is not null;
+
+  perform * from data.objects where id = in_object_id for update;
+
+  v_system_document_temp_share_list := json.get_integer_array_opt(data.get_attribute_value(in_object_id, v_system_document_temp_share_list_attribute_id), array[]::integer[]);
+  v_document_temp_share_list := json.get_string_opt(data.get_attribute_value(in_object_id, v_document_temp_share_list_attribute_id), '');
+  v_content := json.get_string_array_opt(data.get_attribute_value(in_object_id, v_content_attribute_id, v_actor_id), array[]::text[]);
+
+  v_system_document_temp_share_list := array_append(v_system_document_temp_share_list, in_list_object_id);
+  v_changes := array_append(v_changes, data.attribute_change2jsonb(v_system_document_temp_share_list_attribute_id, to_jsonb(v_system_document_temp_share_list)));
+
+  v_document_temp_share_list := v_document_temp_share_list || E'\n' || json.get_string_opt(data.get_attribute_value(in_list_object_id, 'title', v_actor_id), '');
+  v_changes := array_append(v_changes, data.attribute_change2jsonb(v_document_temp_share_list_attribute_id, to_jsonb(v_document_temp_share_list)));
+
+  v_content := array_remove(v_content, data.get_object_code(in_list_object_id));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb(v_content_attribute_id, to_jsonb(v_content)));
+
+  -- рассылаем обновление списка себе
+  v_message_sent := data.change_current_object(in_client_id,
+                                               in_request_id,
+                                               in_object_id, 
+                                               to_jsonb(v_changes));
+  if not v_message_sent then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.mcard_debatle(integer, integer);
 
 create or replace function pallas_project.mcard_debatle(in_object_id integer, in_actor_id integer)
@@ -13700,14 +13809,15 @@ declare
   v_message_text_attribute_id integer := data.get_attribute_id('message_text');
   v_system_message_sender_attribute_id integer := data.get_attribute_id('system_message_sender');
   v_system_message_time_attribute_id integer := data.get_attribute_id('system_message_time');
-
+  v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
   v_important_notifications_id integer := data.get_object_id('important_notifications');
-  v_chat_id integer := data.get_integer_opt(get_attribute_value(v_important_notifications_id, 'redirect', in_actor_id), null);
+  v_chat_id integer := json.get_integer_opt(data.get_attribute_value(v_important_notifications_id, 'redirect', in_actor_id), null);
 
   v_chat_bot_id integer := data.get_object_id('chat_bot');
   v_chat_bot_title text := json.get_string(data.get_attribute_value(v_chat_bot_id, v_title_attribute_id, in_actor_id));
 
   v_title text := pp_utils.format_date(clock_timestamp());
+  v_object_title text;
 
   v_content text[];
   v_new_content text[];
@@ -13721,7 +13831,8 @@ begin
   assert v_chat_id is not null;
 
   if in_object_code is not null then
-    v_text := in_text || '. [Перейти](babcom:'||in_object_code||')';
+   v_object_title := json.get_string_opt(data.get_attribute_value(data.get_object_id(in_object_code), 'title', in_actor_id), '???');
+    v_text := in_text || ' ' || format('[%s](babcom:%s)', v_object_title, in_object_code);
   else
    v_text := in_text;
   end if;
@@ -13731,6 +13842,7 @@ begin
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_message_id, v_title_attribute_id, to_jsonb(v_title), null),
   (v_message_id, v_message_text_attribute_id, to_jsonb(v_text), null),
+  (v_message_id, v_is_visible_attribute_id, jsonb 'true', v_chat_id),
   (v_message_id, v_system_message_sender_attribute_id, to_jsonb(v_chat_bot_id), null),
   (v_message_id, v_system_message_time_attribute_id, to_jsonb(to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss') ), null);
 
@@ -14319,7 +14431,7 @@ begin
   perform pp_utils.list_prepend_and_notify(v_notifications_id, v_notification_code, in_actor_id);
 
   if in_is_important then
-    perform pallas_project.send_to_important_notifications(in_actor_id, in_actor_id, in_redirect_object);
+    perform pallas_project.send_to_important_notifications(in_actor_id, in_text, data.get_object_code(in_redirect_object));
   end if;
 
 end;
