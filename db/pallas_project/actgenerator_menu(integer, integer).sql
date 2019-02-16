@@ -61,8 +61,7 @@ begin
         jsonb '{
           "chats": {"code": "act_open_object", "name": " Отслеживаемые игровые чаты", "disabled": false, "params": {"object_code": "chats"}},
           "all_chats": {"code": "act_open_object", "name": "Все игровые чаты", "disabled": false, "params": {"object_code": "all_chats"}},
-          "master_chats": {"code": "act_open_object", "name": "Мастерские чаты", "disabled": false, "params": {"object_code": "master_chats"}},
-          "districts": {"code": "act_open_object", "name": "Районы", "disabled": false, "params": {"object_code": "districts"}}
+          "master_chats": {"code": "act_open_object", "name": "Мастерские чаты", "disabled": false, "params": {"object_code": "master_chats"}}
         }';
     end if;
 
@@ -77,7 +76,10 @@ begin
 
   v_actions :=
     v_actions ||
-    jsonb '{"persons": {"code": "act_open_object", "name": "Люди", "disabled": false, "params": {"object_code": "persons"}}}';
+    jsonb '{
+      "persons": {"code": "act_open_object", "name": "Люди", "disabled": false, "params": {"object_code": "persons"}},
+      "districts": {"code": "act_open_object", "name": "Районы", "disabled": false, "params": {"object_code": "districts"}}
+    }';
 
   return v_actions;
 end;

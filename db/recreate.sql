@@ -10884,8 +10884,7 @@ begin
         jsonb '{
           "chats": {"code": "act_open_object", "name": " Отслеживаемые игровые чаты", "disabled": false, "params": {"object_code": "chats"}},
           "all_chats": {"code": "act_open_object", "name": "Все игровые чаты", "disabled": false, "params": {"object_code": "all_chats"}},
-          "master_chats": {"code": "act_open_object", "name": "Мастерские чаты", "disabled": false, "params": {"object_code": "master_chats"}},
-          "districts": {"code": "act_open_object", "name": "Районы", "disabled": false, "params": {"object_code": "districts"}}
+          "master_chats": {"code": "act_open_object", "name": "Мастерские чаты", "disabled": false, "params": {"object_code": "master_chats"}}
         }';
     end if;
 
@@ -10900,7 +10899,10 @@ begin
 
   v_actions :=
     v_actions ||
-    jsonb '{"persons": {"code": "act_open_object", "name": "Люди", "disabled": false, "params": {"object_code": "persons"}}}';
+    jsonb '{
+      "persons": {"code": "act_open_object", "name": "Люди", "disabled": false, "params": {"object_code": "persons"}},
+      "districts": {"code": "act_open_object", "name": "Районы", "disabled": false, "params": {"object_code": "districts"}}
+    }';
 
   return v_actions;
 end;
@@ -12276,23 +12278,24 @@ as
 $$
 declare
   v_districts jsonb := '[]';
-  v_district text;
+  v_district record;
 begin
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
-  ('district_control', 'Контроль', 'Организация, контролирующая район', 'normal', null, 'pallas_project.vd_link', false);
+  ('district_control', 'Контроль', 'Организация, контролирующая район', 'normal', null, 'pallas_project.vd_link', false),
+  ('district_population', 'Население', 'Население района', 'normal', null, null, false);
 
   -- Класс района
   perform data.create_class(
     'district',
     jsonb '[
-      {"code": "is_visible", "value": true, "value_object_code": "master"},
+      {"code": "is_visible", "value": true},
       {"code": "type", "value": "district"},
       {
         "code": "template",
         "value": {
           "title": "title",
           "groups": [
-            {"code": "group", "attributes": ["district_control"]}
+            {"code": "group", "attributes": ["district_population", "district_control"]}
           ]
         }
       }
@@ -12301,23 +12304,33 @@ begin
   -- Районы
   for v_district in
   (
-    select value
-    from unnest(array['A1', 'A2', 'B', 'C', 'D']) a(value)
+    select
+      json.get_string(value, 'sector') sector,
+      json.get_integer(value, 'population') population
+    from jsonb_array_elements(
+      jsonb '[
+        {"sector": "A", "population": 22500},
+        {"sector": "B", "population": 45000},
+        {"sector": "C", "population": 67500},
+        {"sector": "D", "population": 112500},
+        {"sector": "E", "population": 225000},
+        {"sector": "F", "population": 112500},
+        {"sector": "G", "population": 225000}
+      ]')
   )
   loop
-    declare
-      v_district_id integer :=
-        data.create_object(
-          'district_' || v_district,
-          format(
-            '{
-              "title": "%s"
-            }',
-            'Сектор ' || v_district)::jsonb,
-          'district');
-    begin
-      v_districts := v_districts || to_jsonb(data.get_object_code(v_district_id));
-    end;
+    perform data.create_object(
+      'sector_' || v_district.sector,
+      format(
+        '{
+          "title": "%s",
+          "district_population": %s
+        }',
+        'Сектор ' || v_district.sector,
+        v_district.population)::jsonb,
+      'district');
+
+    v_districts := v_districts || to_jsonb('sector_' || v_district.sector);
   end loop;
 
   -- Список районов
@@ -12326,7 +12339,7 @@ begin
     format(
       '[
         {"code": "type", "value": "districts"},
-        {"code": "is_visible", "value": true, "value_object_code": "master"},
+        {"code": "is_visible", "value": true},
         {"code": "title", "value": "Районы"},
         {
           "code": "template",
