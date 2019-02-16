@@ -11481,6 +11481,38 @@ begin
       end if;
     end;
   end if;
+
+  -- Обновим район, если есть
+  declare
+    v_district text := json.get_string_opt(data.get_attribute_value(v_person_id, 'person_district'), null);
+    v_district_id integer;
+    v_is_person boolean;
+    v_content jsonb;
+  begin
+    if v_district is not null then
+      v_district_id := data.get_object_id(v_district);
+      v_is_person := pp_utils.is_in_group(v_person_id, 'player');
+
+      if v_is_person then
+        select jsonb_agg(o.code order by data.get_attribute_value(o.id, data.get_attribute_id('title'), o.id))
+        into v_content
+        from jsonb_array_elements(data.get_raw_attribute_value(v_district_id, 'content', null) || to_jsonb(v_person_code)) arr
+        join data.objects o on
+          o.code = json.get_string(arr.value);
+
+        perform data.set_attribute_value(v_district_id, 'content', v_content, null);
+      end if;
+
+      -- Для мастера видны все персонажи
+      select jsonb_agg(o.code order by data.get_attribute_value(o.id, data.get_attribute_id('title'), o.id))
+      into v_content
+      from jsonb_array_elements(data.get_raw_attribute_value(v_district_id, 'content', v_master_group_id) || to_jsonb(v_person_code)) arr
+      join data.objects o on
+        o.code = json.get_string(arr.value);
+
+      perform data.set_attribute_value(v_district_id, 'content', v_content, v_master_group_id);
+    end if;
+  end;
 end;
 $$
 language plpgsql;
@@ -12322,10 +12354,12 @@ begin
     perform data.create_object(
       'sector_' || v_district.sector,
       format(
-        '{
-          "title": "%s",
-          "district_population": %s
-        }',
+        '[
+          {"code": "title", "value": "%s"},
+          {"code": "district_population", "value": %s},
+          {"code": "content", "value": []},
+          {"code": "content", "value": [], "value_object_code": "master"}
+        ]',
         'Сектор ' || v_district.sector,
         v_district.population)::jsonb,
       'district');
@@ -13185,7 +13219,8 @@ begin
   ('system_person_next_health_care_status', null, 'system', null, null, false),
   ('system_person_next_recreation_status', null, 'system', null, null, false),
   ('system_person_next_police_status', null, 'system', null, null, false),
-  ('system_person_next_administrative_services_status', null, 'system', null, null, false);
+  ('system_person_next_administrative_services_status', null, 'system', null, null, false),
+  ('person_district', 'Район проживания', 'normal', 'full', 'pallas_project.vd_link', false);
 
   -- Объект класса для персон
   perform data.create_class(
@@ -13207,7 +13242,8 @@ begin
               "person_deposit_money",
               "person_coin",
               "person_opa_rating",
-              "person_un_rating"
+              "person_un_rating",
+              "person_district"
             ],
             "actions": [
               "open_current_statuses",
@@ -13260,7 +13296,8 @@ begin
       "system_person_health_care_status": 3,
       "system_person_recreation_status": 2,
       "system_person_police_status": 3,
-      "system_person_administrative_services_status": 3}',
+      "system_person_administrative_services_status": 3,
+      "person_district": "sector_A"}',
     array['all_person', 'un', 'player']);
   perform pallas_project.create_person(
     'p2',
@@ -13275,7 +13312,8 @@ begin
       "system_person_health_care_status": 1,
       "system_person_recreation_status": 2,
       "system_person_police_status": 1,
-      "system_person_administrative_services_status": 1}',
+      "system_person_administrative_services_status": 1,
+      "person_district": "sector_E"}',
     array['all_person', 'opa', 'player', 'aster']);
   perform pallas_project.create_person(
     'p3',
@@ -13291,15 +13329,30 @@ begin
       "system_person_health_care_status": 3,
       "system_person_recreation_status": 2,
       "system_person_police_status": 3,
-      "system_person_administrative_services_status": 3}',
+      "system_person_administrative_services_status": 3,
+      "person_district": "sector_B"}',
     array['all_person', 'un', 'player']);
 
-  -- Игротехнический персонаж
+  -- Игротехнические персонажи и тайные личности
   perform pallas_project.create_person(
     'p10',
     jsonb '{
       "title": "АСС",
       "person_occupation": "Автоматическая система судопроизводства"}',
+    array['all_person']);
+
+  perform pallas_project.create_person(
+    'p11',
+    jsonb '{
+      "title": "Шенг",
+      "person_occupation": "Репортёр",
+      "system_person_economy_type": "fixed",
+      "system_person_life_support_status": 2,
+      "system_person_health_care_status": 2,
+      "system_person_recreation_status": 2,
+      "system_person_police_status": 2,
+      "system_person_administrative_services_status": 2,
+      "person_district": "sector_D"}',
     array['all_person']);
 end;
 $$
@@ -14012,7 +14065,7 @@ as
 $$
 declare
   v_code text := json.get_string(in_value);
-  v_title text := data.get_string_opt(data.get_attribute_value(v_code, 'title', in_actor_id), '???');
+  v_title text := json.get_string_opt(data.get_attribute_value(data.get_object_id(v_code), 'title', in_actor_id), '???');
 begin
   assert in_actor_id is not null;
 

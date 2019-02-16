@@ -192,6 +192,38 @@ begin
       end if;
     end;
   end if;
+
+  -- Обновим район, если есть
+  declare
+    v_district text := json.get_string_opt(data.get_attribute_value(v_person_id, 'person_district'), null);
+    v_district_id integer;
+    v_is_person boolean;
+    v_content jsonb;
+  begin
+    if v_district is not null then
+      v_district_id := data.get_object_id(v_district);
+      v_is_person := pp_utils.is_in_group(v_person_id, 'player');
+
+      if v_is_person then
+        select jsonb_agg(o.code order by data.get_attribute_value(o.id, data.get_attribute_id('title'), o.id))
+        into v_content
+        from jsonb_array_elements(data.get_raw_attribute_value(v_district_id, 'content', null) || to_jsonb(v_person_code)) arr
+        join data.objects o on
+          o.code = json.get_string(arr.value);
+
+        perform data.set_attribute_value(v_district_id, 'content', v_content, null);
+      end if;
+
+      -- Для мастера видны все персонажи
+      select jsonb_agg(o.code order by data.get_attribute_value(o.id, data.get_attribute_id('title'), o.id))
+      into v_content
+      from jsonb_array_elements(data.get_raw_attribute_value(v_district_id, 'content', v_master_group_id) || to_jsonb(v_person_code)) arr
+      join data.objects o on
+        o.code = json.get_string(arr.value);
+
+      perform data.set_attribute_value(v_district_id, 'content', v_content, v_master_group_id);
+    end if;
+  end;
 end;
 $$
 language plpgsql;

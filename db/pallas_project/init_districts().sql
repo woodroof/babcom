@@ -51,10 +51,12 @@ begin
     perform data.create_object(
       'sector_' || v_district.sector,
       format(
-        '{
-          "title": "%s",
-          "district_population": %s
-        }',
+        '[
+          {"code": "title", "value": "%s"},
+          {"code": "district_population", "value": %s},
+          {"code": "content", "value": []},
+          {"code": "content", "value": [], "value_object_code": "master"}
+        ]',
         'Сектор ' || v_district.sector,
         v_district.population)::jsonb,
       'district');

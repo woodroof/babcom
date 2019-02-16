@@ -7,7 +7,7 @@ as
 $$
 declare
   v_code text := json.get_string(in_value);
-  v_title text := data.get_string_opt(data.get_attribute_value(v_code, 'title', in_actor_id), '???');
+  v_title text := json.get_string_opt(data.get_attribute_value(data.get_object_id(v_code), 'title', in_actor_id), '???');
 begin
   assert in_actor_id is not null;
 
