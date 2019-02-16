@@ -215,7 +215,14 @@ begin
     if v_system_debatle_judge <> -1 then 
      v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', jsonb 'true', v_system_debatle_judge));
     end if;
-    v_chat_id := pallas_project.create_chat('Обсуждение дебатла ' || json.get_string_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_theme'), ''), false, null, null, false);
+    v_chat_id := pallas_project.create_chat(jsonb_build_object(
+                  'content', jsonb '[]',
+                  'title', 'Обсуждение дебатла ' || json.get_string_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_theme'), ''),
+                  'system_chat_is_renamed', true,
+                  'system_chat_parent_list', 'chats',
+                  'system_chat_can_invite', false,
+                  'system_chat_can_rename', false
+                  ));
     if v_chat_id is not null then 
      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_chat_id', to_jsonb(v_chat_id)));
     end if;

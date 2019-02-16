@@ -9,9 +9,9 @@ declare
   v_object_code text := json.get_string_opt(in_params, 'object_code', null);
   v_chat_code text := json.get_string_opt(in_params, 'chat_code', null);
   v_goto_chat boolean := json.get_boolean_opt(in_params, 'goto_chat', false);
-  v_actor_id integer :=data.get_active_actor_id(in_client_id);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_chat_id integer;
-  v_is_master_chat boolean;
+  v_chat_parent_list text;
 
   v_name jsonb;
   v_chat_title text := '';
@@ -22,7 +22,6 @@ declare
   v_master_chats_id integer := data.get_object_id('master_chats');
 
   v_is_master boolean := pp_utils.is_in_group(v_actor_id, 'master');
-
   v_changes jsonb[];
 begin
   assert in_request_id is not null;
@@ -35,7 +34,7 @@ begin
     v_chat_id := data.get_object_id(v_chat_code);
   end if;
 
-  v_is_master_chat := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_master'), false);
+  v_chat_parent_list := json.get_string_opt(data.get_attribute_value(v_chat_id, 'system_chat_parent_list'), '~');
 
   --Проверяем, может мы уже в этом чате, тогда ничего делать не надо, только перейти
   if not pp_utils.is_in_group(v_actor_id, v_chat_code) then
@@ -43,9 +42,9 @@ begin
     perform data.process_diffs_and_notify(data.change_object_groups(v_actor_id, array[v_chat_id], array[]::integer[], v_actor_id));
 
     -- Меняем заголовок чата, если зашёл не мастер
-    if not v_is_master or v_is_master_chat then
+    if not v_is_master or v_chat_parent_list = 'master_chats' then
       for v_name in 
-        (select x.name from jsonb_to_recordset(pallas_project.get_chat_persons(v_chat_id, not v_is_master_chat))as x(code text, name jsonb) limit 3) loop 
+        (select x.name from jsonb_to_recordset(pallas_project.get_chat_persons(v_chat_id, v_chat_parent_list <> 'master_chats'))as x(code text, name jsonb) limit 3) loop 
         v_chat_title := v_chat_title || ', '|| json.get_string(v_name);
       end loop;
 
@@ -71,13 +70,15 @@ begin
                                            v_chat_id, 
                                            to_jsonb(v_changes));
       end if;
+      -- Меняем привязанный к чату список для участников
+      perform pallas_project.change_chat_person_list_on_person(v_chat_id, case when not v_chat_is_renamed then v_chat_title else null end, (v_chat_parent_list = 'master_chats'));
     end if;
 
-    if v_is_master_chat then
+    if v_chat_parent_list = 'master_chats' then
       if not v_is_master then
         perform pp_utils.list_prepend_and_notify(v_master_chats_id, v_chat_code, v_actor_id);
       end if;
-    else
+    elsif v_chat_parent_list = 'chats' then
       perform pp_utils.list_prepend_and_notify(v_chats_id, v_chat_code, v_actor_id);
     end if;
   end if;

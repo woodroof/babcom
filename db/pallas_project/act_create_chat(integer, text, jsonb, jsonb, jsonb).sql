@@ -15,11 +15,21 @@ declare
   v_all_chats_id integer := data.get_object_id('all_chats');
   v_master_chats_id integer := data.get_object_id('master_chats');
   v_master_group_id integer := data.get_object_id('master');
+
+  v_attributes jsonb;
 begin
   assert in_request_id is not null;
 
+  v_attributes := jsonb_build_object(
+                  'content', jsonb '[]',
+                  'title', v_chat_title,
+                  'system_chat_is_renamed', case when v_chat_title is not null then true else false end,
+                  'system_chat_parent_list', case when v_chat_is_master then 'master_chats' else 'chats' end
+                  );
+
   -- Создаём чат
-  v_chat_id := pallas_project.create_chat(v_chat_title, null, null, null, null, v_chat_is_master);
+  v_chat_id := pallas_project.create_chat(v_attributes);
+
   v_chat_code := data.get_object_code(v_chat_id);
 
   if v_chat_is_master then

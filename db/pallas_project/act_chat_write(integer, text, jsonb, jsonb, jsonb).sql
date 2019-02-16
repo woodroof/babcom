@@ -44,8 +44,7 @@ declare
 
   v_is_actor_subscribed boolean;
   v_chat_length integer;
-  v_is_master_chat boolean := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_master'), false);
-  v_chat_not_in_list boolean := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_not_in_list'), false);
+  v_chat_parent_list text := json.get_string_opt(data.get_attribute_value(v_chat_id, 'system_chat_parent_list'), '~');
   v_chat_title text;
 begin
   assert in_request_id is not null;
@@ -79,14 +78,12 @@ begin
                                                                    data.attribute_change2jsonb(v_system_chat_length_attribute_id, to_jsonb(v_chat_length + 1))));
   end if;
 
-  if not v_chat_not_in_list then
-    if v_is_master_chat then
-    -- Перекладываем этот чат в начало в списке мастерских чатов
-      perform pp_utils.list_replace_to_head_and_notify(v_master_chats_id, v_chat_code, v_master_group_id);
-    else
-    -- Перекладываем этот чат в начало в списке всех игровых чатов
-      perform pp_utils.list_replace_to_head_and_notify(v_all_chats_id, v_chat_code, v_master_group_id);
-    end if;
+  if v_chat_parent_list = 'master_chats' then
+  -- Перекладываем этот чат в начало в списке мастерских чатов
+    perform pp_utils.list_replace_to_head_and_notify(v_master_chats_id, v_chat_code, v_master_group_id);
+  elsif v_chat_parent_list = 'chats' then
+  -- Перекладываем этот чат в начало в списке всех игровых чатов
+    perform pp_utils.list_replace_to_head_and_notify(v_all_chats_id, v_chat_code, v_master_group_id);
   end if;
   -- Отправляем нотификацию о новом сообщении всем неподписанным на этот чат
   -- и перекладываем у всех участников этот чат вверх списка
@@ -95,14 +92,12 @@ begin
       where oo.parent_object_id = v_chat_id
         and oo.parent_object_id <> oo.object_id)
   loop
-    if not v_chat_not_in_list then
-      if v_is_master_chat then
-        if pp_utils.is_in_group(v_person_id, 'master') then
-          perform pp_utils.list_replace_to_head_and_notify(v_master_chats_id, v_chat_code, v_person_id);
-        end if;
-      else
-        perform pp_utils.list_replace_to_head_and_notify(v_chats_id, v_chat_code, v_person_id);
+    if v_chat_parent_list = 'master_chats' then
+      if pp_utils.is_in_group(v_person_id, 'master') then
+        perform pp_utils.list_replace_to_head_and_notify(v_master_chats_id, v_chat_code, v_person_id);
       end if;
+    elsif v_chat_parent_list = 'chats' then
+      perform pp_utils.list_replace_to_head_and_notify(v_chats_id, v_chat_code, v_person_id);
     end if;
     v_is_actor_subscribed := pp_utils.is_actor_subscribed(v_person_id, v_chat_id);
     if v_person_id <> v_actor_id

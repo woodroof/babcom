@@ -11,10 +11,13 @@ declare
   v_value text := json.get_string(in_params, 'value');
   v_chat_id integer := data.get_object_id(v_chat_code);
   v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+  v_master_group_id integer := data.get_object_id('master');
+  v_chat_person_list_id integer := data.get_object_id(v_chat_code || '_person_list');
 
   v_changes jsonb[] := array[]::jsonb[];
   v_person_id integer;
-
+  v_content text[];
+  v_chat_parent_list text := json.get_string_opt(data.get_attribute_value(v_chat_id, 'system_chat_parent_list'), '~');
   v_message_sent boolean := false;
 begin
   assert in_request_id is not null;
@@ -50,6 +53,34 @@ begin
                                                  in_request_id,
                                                  v_chat_id, 
                                                  to_jsonb(v_changes));
+  end if;
+
+  if v_parameter = 'can_invite' then 
+    perform * from data.objects where id = v_chat_person_list_id for update;
+    v_content := pallas_project.get_chat_possible_persons(v_chat_id, (v_chat_parent_list = 'master_chats'));
+    v_changes := array[]::jsonb[];
+    if v_value = 'on' then
+        v_changes := array_append(v_changes, data.attribute_change2jsonb('content', to_jsonb(v_content), v_master_group_id));
+        v_changes := array_append(v_changes, data.attribute_change2jsonb('content', to_jsonb(v_content), v_chat_id));
+        v_changes := array_append(v_changes, data.attribute_change2jsonb('chat_person_list_content_label', to_jsonb('-------------------------------
+Кого добавляем?'::text), v_master_group_id));
+        v_changes := array_append(v_changes, data.attribute_change2jsonb('chat_person_list_content_label', to_jsonb('-------------------------------
+Кого добавляем?'::text), v_chat_id));
+      elsif v_chat_parent_list <> 'master_chats' then
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('content', to_jsonb(v_content), v_master_group_id));
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('content', null, v_chat_id));
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('chat_person_list_content_label', to_jsonb('-------------------------------
+Кого добавляем?'::text), v_master_group_id));
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('chat_person_list_content_label', null, v_chat_id));
+    else
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('content', null, v_master_group_id));
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('content', null, v_chat_id));
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('chat_person_list_content_label', null, v_master_group_id));
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('chat_person_list_content_label', null, v_chat_id));
+    end if;
+    perform data.change_object_and_notify(v_chat_person_list_id, 
+                                          to_jsonb(v_changes),
+                                          v_actor_id);
   end if;
 
   if not v_message_sent then

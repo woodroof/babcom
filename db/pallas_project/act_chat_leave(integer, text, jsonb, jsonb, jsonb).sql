@@ -34,14 +34,13 @@ declare
   v_message_sent boolean := false;
 
   v_chat_bot_id integer := data.get_object_id('chat_bot');
-  v_chat_bot_title text := json.get_string(data.get_attribute_value(v_chat_bot_id, v_title_attribute_id, v_actor_id));
 
   v_is_master boolean := pp_utils.is_in_group(v_actor_id, 'master');
   v_actor_title text := json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id, v_actor_id));
-  v_title text := to_char(clock_timestamp(),'DD.MM hh24:mi:ss ') || v_chat_bot_title;
+  v_title text := to_char(clock_timestamp(),'DD.MM hh24:mi:ss');
   v_chat_title text := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), null);
   v_chat_is_renamed boolean := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_renamed'), false);
-  v_is_master_chat boolean := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_master'), false);
+  v_chat_parent_list text := json.get_string_opt(data.get_attribute_value(v_chat_id, 'system_chat_parent_list'), '~');
 
   v_name jsonb;
   v_persons text:= '';
@@ -50,13 +49,13 @@ begin
   assert in_request_id is not null;
 
   -- проверяем, что выходить можно
-  assert v_is_master or json.get_boolean_opt(data.get_attribute_value(v_actor_id, 'system_chat_can_leave', v_actor_id), true);
+  assert v_is_master or json.get_boolean_opt(data.get_attribute_value(v_actor_id, 'system_chat_can_leave'), true);
 
   -- Удаляемся из группы чата
   perform data.process_diffs_and_notify(data.change_object_groups(v_actor_id, array[]::integer[], array[v_chat_id], v_actor_id));
 
   -- Удаляем чат из своего списка чатов
-  if v_is_master_chat then
+  if v_chat_parent_list = 'master_chats' then
     if not v_is_master then
       perform pp_utils.list_remove_and_notify(v_master_chats_id, v_chat_code, v_actor_id);
     end if;
@@ -65,9 +64,9 @@ begin
   end if;
 
   -- Мастера в чате не видно, поэтому светить его выход не надо
-  if not v_is_master or v_is_master_chat then
+  if not v_is_master or v_chat_parent_list = 'master_chats' then
     -- Меняем список участников чата в заголовке
-    for v_name in (select x.name from jsonb_to_recordset(pallas_project.get_chat_persons(v_chat_id, not v_is_master_chat)) as x(code text, name jsonb) limit 3) loop 
+    for v_name in (select x.name from jsonb_to_recordset(pallas_project.get_chat_persons(v_chat_id, (v_chat_parent_list <> 'master_chats'))) as x(code text, name jsonb) limit 3) loop 
       v_persons := v_persons || ','|| json.get_string(v_name);
     end loop;
     v_persons := trim(v_persons, ',');
@@ -81,6 +80,12 @@ begin
     perform data.change_object_and_notify(v_chat_id, 
                                           to_jsonb(v_changes),
                                           v_actor_id);
+
+    -- Меняем привязанный к чату список для участников
+    perform pallas_project.change_chat_person_list_on_person(
+      v_chat_id,
+      case when not v_chat_is_renamed then v_persons else null end,
+      (v_chat_parent_list = 'master_chats'));
 
     -- Создаём новое сообщение о том, что персонаж вышел из чата
     insert into data.objects(class_id) values (v_message_class_id) returning id, code into v_message_id, v_message_code;
@@ -96,9 +101,9 @@ begin
     perform pp_utils.list_prepend_and_notify(v_chat_id, v_message_code, null, v_chat_id);
 
     -- Перекладываем этот чат в начало в мастерском списке чатов
-    if v_is_master_chat then
+    if v_chat_parent_list = 'master_chats' then
       perform pp_utils.list_replace_to_head_and_notify(v_master_chats_id, v_chat_code, v_master_group_id);
-    else
+    elsif v_chat_parent_list = 'chats' then
       perform pp_utils.list_replace_to_head_and_notify(v_all_chats_id, v_chat_code, v_master_group_id);
     end if;
 
@@ -109,11 +114,11 @@ begin
        where oo.parent_object_id = v_chat_id
          and oo.parent_object_id <> oo.object_id)
     loop
-      if v_is_master_chat then
+      if v_chat_parent_list = 'master_chats' then
         if not v_is_master then
           perform pp_utils.list_replace_to_head_and_notify(v_master_chats_id, v_chat_code, v_person_id);
         end if;
-      else
+      elsif v_chat_parent_list = 'chats' then
         perform pp_utils.list_replace_to_head_and_notify(v_chats_id, v_chat_code, v_person_id);
       end if;
       if v_person_id <> v_actor_id 

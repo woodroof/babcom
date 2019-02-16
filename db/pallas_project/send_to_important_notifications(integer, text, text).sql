@@ -23,13 +23,16 @@ declare
   v_chat_bot_id integer := data.get_object_id('chat_bot');
   v_chat_bot_title text := json.get_string(data.get_attribute_value(v_chat_bot_id, v_title_attribute_id, in_actor_id));
 
-  v_title text := to_char(clock_timestamp(),'DD.MM hh24:mi:ss ') || v_chat_bot_title;
+  v_title text := to_char(clock_timestamp(),'DD.MM hh24:mi:ss ');
 
   v_content text[];
   v_new_content text[];
+  v_changes jsonb[];
 
   v_system_chat_length_attribute_id integer := data.get_attribute_id('system_chat_length');
   v_chat_length integer;
+  v_chat_unread_messages integer;
+  v_chat_unread_messages_attribute_id integer := data.get_attribute_id('chat_unread_messages');
 begin
   assert v_chat_id is not null;
 
@@ -48,17 +51,7 @@ begin
   (v_message_id, v_system_message_time_attribute_id, to_jsonb(to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss') ), null);
 
   -- Добавляем сообщение в чат
-  perform * from data.objects where id = v_chat_id for update;
-  -- Достаём, меняем, кладём назад
-  v_content := json.get_string_array_opt(data.get_attribute_value(v_chat_id, 'content', v_chat_id), array[]::text[]);
-  v_new_content := array_prepend(v_message_code, v_content);
-  if v_new_content <> v_content then
-    v_chat_length := json.get_integer_opt(data.get_attribute_value(v_chat_id, v_system_chat_length_attribute_id), 0);
-    perform data.change_current_object(v_chat_id, 
-                                       jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, to_jsonb(v_new_content)),
-                                                         data.attribute_change2jsonb(v_system_chat_length_attribute_id, to_jsonb(v_chat_length + 1))),
-                                       v_chat_id);
-  end if;
+  perform pp_utils.list_prepend_and_notify(v_chat_id, v_message_code, v_chat_id);
 
 end;
 $$

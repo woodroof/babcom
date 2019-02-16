@@ -29,7 +29,7 @@ begin
 
   if not v_chat_is_mute and v_mute_on_off = 'on' then
   -- проверяем, что отключать можно
-    assert v_is_master or json.get_boolean_opt(data.get_attribute_value(v_actor_id, 'system_chat_can_mute', v_actor_id), true);
+    assert v_is_master or json.get_boolean_opt(data.get_attribute_value(v_actor_id, 'system_chat_can_mute'), true);
   end if;
 
   if v_mute_on_off = 'on' then

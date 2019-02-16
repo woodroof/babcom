@@ -11,6 +11,7 @@ declare
   v_chat_id integer := data.get_object_id(v_chat_code);
   v_actor_id  integer :=data.get_active_actor_id(in_client_id);
 
+  v_chat_person_list_id integer := data.get_object_id(v_chat_code || '_person_list');
   v_old_title text;
   v_chat_is_renamed boolean;
   v_changes jsonb[];
@@ -38,6 +39,10 @@ begin
                                                  in_request_id,
                                                  v_chat_id, 
                                                  to_jsonb(v_changes));
+
+    v_changes := array[]::jsonb[];
+    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, to_jsonb('Участники чата ' || v_title)));
+    perform data.change_object_and_notify(v_chat_person_list_id, to_jsonb(v_changes), v_actor_id);
   end if;
 
   if not v_message_sent then
