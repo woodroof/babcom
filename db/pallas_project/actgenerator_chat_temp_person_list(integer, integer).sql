@@ -7,10 +7,6 @@ as
 $$
 declare
   v_actions_list text := '';
-  v_person1_id integer;
-  v_is_master boolean;
-  v_debatle_code text;
-  v_debatle_status text;
 begin
   assert in_actor_id is not null;
 

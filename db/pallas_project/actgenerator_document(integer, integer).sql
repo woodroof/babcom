@@ -21,7 +21,7 @@ begin
 
   v_is_master := pp_utils.is_in_group(in_actor_id, 'master');
   if v_document_status <> 'deleted' then
-    if v_is_master or (in_actor_id = v_document_author and v_document_category = 'private') then
+    if v_is_master or (in_actor_id = v_document_author and (v_document_category = 'private' or v_document_status = 'draft')) then
       v_actions_list := v_actions_list || 
           format(', "document_edit": {"code": "document_edit", "name": "Редактировать", "disabled": false, "params": {"document_code": "%s"}, 
   "user_params": [{"code": "title", "description": "Заголовок", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"},
@@ -60,6 +60,13 @@ begin
                       '"params": {"document_code": "%s"}}',
                       v_document_code);
       end if;
+    end if;
+
+    if v_document_category = 'official' and v_document_status = 'draft' and (v_is_master or in_actor_id = v_document_author) then
+      v_actions_list := v_actions_list || 
+          format(', "document_add_signers": {"code": "document_add_signers", "name": "Добавить участников", "disabled": false, '||
+                  '"params": {"document_code": "%s"}}',
+                  v_document_code);
     end if;
   end if;
   return jsonb ('{'||trim(v_actions_list,',')||'}');
