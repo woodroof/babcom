@@ -23,7 +23,7 @@ begin
   into v_login_id
   from data.clients
   where id = in_client_id
-  for update;
+  for share;
 
   if v_login_id is null then
     v_login_id := data.get_integer_param('default_login_id');
@@ -34,11 +34,15 @@ begin
     where id = in_client_id;
   end if;
 
+  perform
+  from data.logins
+  where id = v_login_id
+  for share;
+
   for v_actor_function in
     select actor_id, json.get_string_opt(data.get_attribute_value(actor_id, 'actor_function'), null) as actor_function
     from data.login_actors
     where login_id = v_login_id
-    for share
   loop
     if v_actor_function is not null then
       execute format('select %s($1)', v_actor_function.actor_function)

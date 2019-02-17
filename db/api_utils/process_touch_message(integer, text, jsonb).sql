@@ -7,7 +7,7 @@ as
 $$
 declare
   v_object_code text := json.get_string(in_message, 'object_id');
-  v_object_id integer;
+  v_object_id integer := data.get_object_id(v_object_code);
   v_actor_id integer;
   v_touch_function text;
 begin
@@ -17,20 +17,10 @@ begin
   into v_actor_id
   from data.clients
   where id = in_client_id
-  for update;
+  for share;
 
   if v_actor_id is null then
     raise exception 'Client % has no active actor', in_client_id;
-  end if;
-
-  select id
-  into v_object_id
-  from data.objects
-  where code = v_object_code
-  for update;
-
-  if v_object_id is null then
-    raise exception 'Attempt to touch non-existing object %', v_object_code;
   end if;
 
   -- Вызываем функцию смахивания уведомления, если есть

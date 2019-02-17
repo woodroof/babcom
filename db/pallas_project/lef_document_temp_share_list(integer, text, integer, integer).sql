@@ -6,7 +6,7 @@ volatile
 as
 $$
 declare
-  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
 
   v_system_document_temp_share_list_attribute_id integer := data.get_attribute_id('system_document_temp_share_list');
   v_system_document_temp_share_list integer[];
@@ -22,11 +22,9 @@ begin
   assert in_request_id is not null;
   assert in_list_object_id is not null;
 
-  perform * from data.objects where id = in_object_id for update;
-
-  v_system_document_temp_share_list := json.get_integer_array_opt(data.get_attribute_value(in_object_id, v_system_document_temp_share_list_attribute_id), array[]::integer[]);
-  v_document_temp_share_list := json.get_string_opt(data.get_attribute_value(in_object_id, v_document_temp_share_list_attribute_id), '');
-  v_content := json.get_string_array_opt(data.get_attribute_value(in_object_id, v_content_attribute_id, v_actor_id), array[]::text[]);
+  v_system_document_temp_share_list := json.get_integer_array_opt(data.get_attribute_value_for_update(in_object_id, v_system_document_temp_share_list_attribute_id), array[]::integer[]);
+  v_document_temp_share_list := json.get_string_opt(data.get_attribute_value_for_update(in_object_id, v_document_temp_share_list_attribute_id), '');
+  v_content := json.get_string_array_opt(data.get_raw_attribute_value_for_update(in_object_id, v_content_attribute_id), array[]::text[]);
 
   v_system_document_temp_share_list := array_append(v_system_document_temp_share_list, in_list_object_id);
   v_changes := array_append(v_changes, data.attribute_change2jsonb(v_system_document_temp_share_list_attribute_id, to_jsonb(v_system_document_temp_share_list)));

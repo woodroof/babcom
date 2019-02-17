@@ -8,13 +8,13 @@ $$
 declare
   v_share_list_code text := json.get_string(in_params, 'share_list_code');
   v_share_list_id integer := data.get_object_id(v_share_list_code);
-  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_document_id integer := json.get_integer(data.get_attribute_value(v_share_list_id, 'system_document_temp_list_document_id'));
 
   v_system_document_temp_share_list integer[] := json.get_integer_array_opt(data.get_attribute_value(v_share_list_id, 'system_document_temp_share_list'), array[]::integer[]);
 
   v_person_id integer;
-  v_message text := json.get_string_opt(data.get_attribute_value(v_actor_id, 'title', v_actor_id), 'Неизвестный') || ' поделился с вами документом';
+  v_message text := 'Пользователь "' || json.get_string_opt(data.get_attribute_value(v_actor_id, 'title', v_actor_id), 'Неизвестный') || '" поделился с вами документом';
 begin
   assert in_request_id is not null;
 

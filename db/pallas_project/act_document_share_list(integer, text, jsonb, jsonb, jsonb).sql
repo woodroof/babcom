@@ -8,14 +8,14 @@ $$
 declare
   v_document_code text := json.get_string(in_params, 'document_code');
   v_document_id integer := data.get_object_id(v_document_code);
-  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
 
   v_content_attribute_id integer := data.get_attribute_id('content');
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
   v_title_attribute_id integer := data.get_attribute_id('title');
   v_system_document_temp_list_document_id_attribute_id integer := data.get_attribute_id('system_document_temp_list_document_id');
 
-  v_document_title text := json.get_string_opt(data.get_attribute_value(v_document_id, v_title_attribute_id, v_actor_id), '');
+  v_document_title text := json.get_string_opt(data.get_raw_attribute_value_for_share(v_document_id, v_title_attribute_id), '');
   v_is_master boolean := pp_utils.is_in_group(in_client_id, 'master');
   v_persons text := '';
   v_name record;

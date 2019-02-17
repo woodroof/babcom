@@ -9,13 +9,13 @@ declare
   v_debatle_code text := json.get_string(in_params, 'debatle_code');
   v_edited_person text := json.get_string_opt(in_params, 'edited_person', '~~~');
   v_debatle_id integer := data.get_object_id(v_debatle_code);
-  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
 
   v_debatle_status text;
-  v_system_debatle_person1 integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person1'), -1);
-  v_system_debatle_person2 integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person2'), -1);
-  v_system_debatle_judje integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_judge'), -1);
-  v_debatle_title text := json.get_string_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_theme'), '');
+  v_system_debatle_person1 integer := json.get_integer_opt(data.get_attribute_value_for_update(v_debatle_id, 'system_debatle_person1'), -1);
+  v_system_debatle_person2 integer := json.get_integer_opt(data.get_attribute_value_for_update(v_debatle_id, 'system_debatle_person2'), -1);
+  v_system_debatle_judje integer := json.get_integer_opt(data.get_attribute_value_for_update(v_debatle_id, 'system_debatle_judge'), -1);
+  v_debatle_title text := json.get_string_opt(data.get_attribute_value_for_update(v_debatle_id, 'system_debatle_theme'), '');
 
   v_content_attribute_id integer := data.get_attribute_id('content');
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');

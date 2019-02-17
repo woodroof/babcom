@@ -7,49 +7,30 @@ as
 $$
 declare
   v_actor_id integer := data.get_active_actor_id(in_client_id);
-  v_economy_type text := json.get_string(data.get_attribute_value(v_actor_id, 'system_person_economy_type'));
+  v_economy_type text := json.get_string(data.get_attribute_value_for_share(v_actor_id, 'system_person_economy_type'));
   v_price integer := data.get_integer_param('lottery_ticket_price');
   v_object_id integer := data.get_object_id('lottery');
-  v_lottery_ticket_count integer := json.get_integer_opt(data.get_attribute_value(v_object_id, 'lottery_ticket_count', v_actor_id), 0);
-  v_current_sum bigint;
-  v_lottery_status text;
+  v_lottery_ticket_count integer := json.get_integer_opt(data.get_raw_attribute_value_for_update(v_object_id, 'lottery_ticket_count', v_actor_id), 0);
+  v_current_sum bigint := json.get_bigint(data.get_attribute_value_for_update(v_actor_id, 'system_money'));
+  v_lottery_status text := json.get_string(data.get_attribute_value_for_share(v_object_id, 'lottery_status'));
   v_diff jsonb;
   v_notified boolean;
 begin
   assert in_request_id is not null;
 
   if v_economy_type != 'asters' then
+    -- Потенциальный выигравший
     perform api_utils.create_ok_notification(in_client_id, in_request_id);
     return;
   end if;
-
-  select json.get_string(value)
-  into v_lottery_status
-  from data.attribute_values
-  where
-    object_id = v_object_id and
-    attribute_id = data.get_attribute_id('lottery_status') and
-    value_object_id is null
-  for share;
 
   if v_lottery_status != 'active' then
-    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Лотерея заночилась', 'К сожалению, вы не успели, билеты более не продаются.');
     return;
   end if;
 
-  select json.get_bigint(av.value)
-  into v_current_sum
-  from data.attribute_values av
-  where
-    av.object_id = v_actor_id and
-    av.attribute_id = data.get_attribute_id('system_money') and
-    av.value_object_id is null
-  for update;
-
-  assert v_current_sum is not null;
-
   if v_current_sum < v_price then
-    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Не хватает денег', 'На вашем счету недостаточно средств для покупки лотерейных билетов.');
     return;
   end if;
 

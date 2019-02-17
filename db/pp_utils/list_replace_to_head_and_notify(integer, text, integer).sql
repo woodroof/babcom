@@ -13,15 +13,12 @@ declare
   v_new_content text[];
 
 begin
-  -- Блокируем список
-  perform * from data.objects where id = in_list_id for update;
-
   -- Достаём, меняем, кладём назад
-  v_content := json.get_string_array_opt(data.get_attribute_value(in_list_id, 'content', in_actor_id), array[]::text[]);
+  v_content := json.get_string_array_opt(data.get_raw_attribute_value_for_update(in_list_id, 'content', in_actor_id), array[]::text[]);
   v_new_content := array_remove(v_content, in_object_code);
   v_new_content := array_prepend(in_object_code, v_new_content);
   if v_new_content <> v_content then
-    perform data.change_object_and_notify(in_list_id, 
+    perform data.change_object_and_notify(in_list_id,
                                           jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, to_jsonb(v_new_content), in_actor_id)),
                                           in_actor_id);
   end if;

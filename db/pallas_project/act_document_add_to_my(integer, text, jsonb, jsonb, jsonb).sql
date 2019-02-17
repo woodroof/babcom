@@ -8,8 +8,8 @@ $$
 declare
   v_document_code text := json.get_string(in_params, 'document_code');
   v_document_id integer := data.get_object_id(v_document_code);
-  v_actor_id integer :=data.get_active_actor_id(in_client_id);
-  v_system_document_category text := json.get_string_opt(data.get_attribute_value(v_document_id, 'system_document_category'),'~');
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_system_document_category text := json.get_string_opt(data.get_attribute_value_for_share(v_document_id, 'system_document_category'),'~');
   v_my_documents_id integer := data.get_object_id('my_documents');
   v_official_documents_id integer := data.get_object_id('official_documents');
 begin

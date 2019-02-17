@@ -10,7 +10,7 @@ declare
   v_document_code text;
   v_document_id integer;
 
-  v_actor_id integer :=data.get_active_actor_id(in_client_id);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
 
   v_my_documents_id integer := data.get_object_id('my_documents');
   v_master_group_id integer := data.get_object_id('master');

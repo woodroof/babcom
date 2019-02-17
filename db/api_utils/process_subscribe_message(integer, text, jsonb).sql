@@ -7,7 +7,7 @@ as
 $$
 declare
   v_object_code text := json.get_string(in_message, 'object_id');
-  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_actor_id integer;
   v_object_id integer;
   v_full_card_function text;
   v_redirect_object_id integer;
@@ -17,6 +17,18 @@ declare
   v_object jsonb;
   v_list jsonb;
 begin
+  assert in_client_id is not null;
+
+  select actor_id
+  into v_actor_id
+  from data.clients
+  where id = in_client_id
+  for share;
+
+  if v_actor_id is null then
+    raise exception 'Client % has no active actor', in_client_id;
+  end if;
+
   select id
   into v_object_id
   from data.objects

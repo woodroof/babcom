@@ -49,10 +49,9 @@ begin
       end loop;
 
       v_chat_title := trim(v_chat_title, ', ');
-      perform * from data.objects where id = v_chat_id for update;
 
       v_changes := array[]::jsonb[];
-      v_chat_is_renamed := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_renamed'), false);
+      v_chat_is_renamed := json.get_boolean_opt(data.get_attribute_value_for_share(v_chat_id, 'system_chat_is_renamed'), false);
       if not v_chat_is_renamed then 
         v_changes := array_append(v_changes, data.attribute_change2jsonb('title', to_jsonb(v_chat_title)));
       else

@@ -8,7 +8,7 @@ $$
 declare
   v_page_size integer := data.get_integer_param('page_size');
   v_object_code text := data.get_object_code(in_object_id);
-  v_actor_id integer;
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_last_object_id integer;
   v_content text[];
   v_content_length integer;
@@ -21,12 +21,6 @@ declare
   v_objects jsonb[] := array[]::jsonb[];
 begin
   assert v_page_size > 0;
-
-  select actor_id
-  into v_actor_id
-  from data.clients
-  where id = in_client_id
-  for update;
 
   assert v_actor_id is not null;
 

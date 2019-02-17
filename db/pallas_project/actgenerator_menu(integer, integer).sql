@@ -10,7 +10,7 @@ declare
   v_actor_code text := data.get_object_code(in_actor_id);
   v_actions jsonb := '{}';
   v_is_master boolean := pp_utils.is_in_group(in_actor_id, 'master');
-  v_economy_type text := json.get_string_opt(data.get_attribute_value(in_actor_id, 'system_person_economy_type'), null);
+  v_economy_type text := json.get_string_opt(data.get_attribute_value_for_share(in_actor_id, 'system_person_economy_type'), null);
 begin
   assert in_actor_id is not null;
 
@@ -83,19 +83,31 @@ begin
       "districts": {"code": "act_open_object", "name": "Районы", "disabled": false, "params": {"object_code": "districts"}}
     }';
 
-  if v_is_master or v_economy_type = 'asters' then
-    declare
-      v_lottery_status text := json.get_string(data.get_attribute_value(data.get_object_id('lottery'), 'lottery_status'));
-    begin
-      if v_lottery_status = 'active' then
+  declare
+    v_lottery_id integer := data.get_object_id('lottery');
+    v_lottery_status text := json.get_string(data.get_attribute_value_for_share(v_lottery_id, 'lottery_status'));
+    v_generate boolean := false;
+    v_lottery_owner text;
+  begin
+    if v_lottery_status = 'active' then
+      if v_is_master or v_economy_type = 'asters' then
+        v_generate := true;
+      else
+        v_lottery_owner := json.get_string(data.get_attribute_value_for_share(v_lottery_id, 'system_lottery_owner'));
+        if v_lottery_owner = v_actor_code then
+          v_generate := true;
+        end if;
+      end if;
+
+      if v_generate then
         v_actions :=
           v_actions ||
           jsonb '{
               "lottery": {"code": "act_open_object", "name": "Лотерея гражданства ООН", "disabled": false, "params": {"object_code": "lottery"}}
           }';
       end if;
-    end;
-  end if;
+    end if;
+  end;
 
   return v_actions;
 end;

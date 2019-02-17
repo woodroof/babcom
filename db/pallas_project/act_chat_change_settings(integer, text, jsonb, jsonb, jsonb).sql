@@ -24,8 +24,6 @@ begin
   assert v_parameter in ('can_leave', 'can_invite', 'can_mute', 'can_rename');
   assert v_value in ('on', 'off');
 
-  perform * from data.objects where id = v_chat_id for update;
-
   if v_parameter = 'can_leave' then
     v_changes := array_append(v_changes, data.attribute_change2jsonb('system_chat_can_leave', case v_value when 'on' then null else to_jsonb(false) end));
   end if;
@@ -56,7 +54,6 @@ begin
   end if;
 
   if v_parameter = 'can_invite' then 
-    perform * from data.objects where id = v_chat_person_list_id for update;
     v_content := pallas_project.get_chat_possible_persons(v_chat_id, (v_chat_parent_list = 'master_chats'));
     v_changes := array[]::jsonb[];
     if v_value = 'on' then

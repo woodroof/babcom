@@ -9,7 +9,7 @@ declare
   v_content text[];
   v_title_attribute_id integer := data.get_attribute_id('title');
   v_player_id integer := data.get_object_id('player');
-  v_system_document_participants jsonb := data.get_attribute_value(in_document_id, 'system_document_participants');
+  v_system_document_participants jsonb := data.get_attribute_value_for_share(in_document_id, 'system_document_participants');
 begin
   -- Собираем список всех персонажей, кроме тех, кто уже в списке участников
   select array_agg(o.code order by av.value) into v_content

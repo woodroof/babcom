@@ -9,7 +9,7 @@ declare
   v_chat_code text := json.get_string(in_params, 'chat_code');
   v_title text := json.get_string(in_user_params, 'title');
   v_chat_id integer := data.get_object_id(v_chat_code);
-  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
 
   v_chat_person_list_id integer := data.get_object_id(v_chat_code || '_person_list');
   v_old_title text;
@@ -23,10 +23,8 @@ declare
 begin
   assert in_request_id is not null;
 
-  perform * from data.objects where id = v_chat_id for update;
-
-  v_old_title := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), '');
-  v_chat_is_renamed := json.get_boolean_opt(data.get_attribute_value(v_chat_id, v_system_chat_is_renamed_attribute_id), false);
+  v_old_title := json.get_string_opt(data.get_raw_attribute_value_for_update(v_chat_id, v_title_attribute_id), '');
+  v_chat_is_renamed := json.get_boolean_opt(data.get_attribute_value_for_update(v_chat_id, v_system_chat_is_renamed_attribute_id), false);
 
   if v_old_title <> v_title then
     v_changes := array[]::jsonb[];

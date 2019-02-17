@@ -5,6 +5,7 @@ returns void
 volatile
 as
 $$
+-- Не для использования на игре, т.к. обновляет атрибуты напрямую, без уведомлений и блокировок!
 declare
   v_person_id integer := data.create_object(null, in_attributes, 'person', in_groups);
   v_person_code text := data.get_object_code(v_person_id);
@@ -207,7 +208,7 @@ begin
       if v_is_person then
         select jsonb_agg(o.code order by data.get_attribute_value(o.id, data.get_attribute_id('title'), o.id))
         into v_content
-        from jsonb_array_elements(data.get_raw_attribute_value(v_district_id, 'content', null) || to_jsonb(v_person_code)) arr
+        from jsonb_array_elements(data.get_raw_attribute_value(v_district_id, 'content') || to_jsonb(v_person_code)) arr
         join data.objects o on
           o.code = json.get_string(arr.value);
 

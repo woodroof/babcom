@@ -40,7 +40,7 @@ begin
   if in_object_code is not null then
     v_text := in_text || ' ' || pp_utils.link(in_object_code, in_actor_id);
   else
-   v_text := in_text;
+    v_text := in_text;
   end if;
   -- Создаём новое сообщение
   insert into data.objects(class_id) values (v_message_class_id) returning id, code into v_message_id, v_message_code;
@@ -54,7 +54,6 @@ begin
 
   -- Добавляем сообщение в чат
   perform pp_utils.list_prepend_and_notify(v_chat_id, v_message_code, null, in_actor_id);
-
 end;
 $$
 language plpgsql;

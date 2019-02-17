@@ -56,21 +56,21 @@ begin
   if v_person1_id is not null then
     v_new_person1 := data.get_attribute_value(v_person1_id, v_title_attribute_id, in_actor_id);
   end if;
-  if coalesce(data.get_raw_attribute_value(in_object_id, v_debatle_person1_attribute_id, null), jsonb '"~~~"') <> coalesce(v_new_person1, jsonb '"~~~"') then
+  if coalesce(data.get_raw_attribute_value(in_object_id, v_debatle_person1_attribute_id), jsonb '"~~~"') <> coalesce(v_new_person1, jsonb '"~~~"') then
     perform data.set_attribute_value(in_object_id, v_debatle_person1_attribute_id, v_new_person1, null, in_actor_id);
   end if;
 
   if v_person2_id is not null then
     v_new_person2 := data.get_attribute_value(v_person2_id, v_title_attribute_id, in_actor_id);
   end if;
-  if coalesce(data.get_raw_attribute_value(in_object_id, v_debatle_person2_attribute_id, null), jsonb '"~~~"') <> coalesce(v_new_person2, jsonb '"~~~"') then
+  if coalesce(data.get_raw_attribute_value(in_object_id, v_debatle_person2_attribute_id), jsonb '"~~~"') <> coalesce(v_new_person2, jsonb '"~~~"') then
     perform data.set_attribute_value(in_object_id, v_debatle_person2_attribute_id, v_new_person2, null, in_actor_id);
   end if;
 
   if v_judge_id is not null then
     v_new_judge := data.get_attribute_value(v_judge_id, v_title_attribute_id, in_actor_id);
   end if;
-  if coalesce(data.get_raw_attribute_value(in_object_id, v_debatle_judge_attribute_id, null), jsonb '"~~~"') <> coalesce(v_new_judge, jsonb '"~~~"') then
+  if coalesce(data.get_raw_attribute_value(in_object_id, v_debatle_judge_attribute_id), jsonb '"~~~"') <> coalesce(v_new_judge, jsonb '"~~~"') then
     perform data.set_attribute_value(in_object_id, v_debatle_judge_attribute_id, v_new_judge, null, in_actor_id);
   end if;
 
@@ -107,7 +107,6 @@ begin
 
     select coalesce(sum(x.votes), 0) into v_debatle_person1_bonuses from jsonb_to_recordset(v_debatle_person1_bonuses_json) as x(code text, name text, votes int);
     select coalesce(sum(x.votes), 0) into v_debatle_person2_bonuses from jsonb_to_recordset(v_debatle_person2_bonuses_json) as x(code text, name text, votes int);
-
 
     v_new_debatle_person1_votes := to_jsonb(format('Количество голосов за %s: %s + %s (от судьи) = %s',
                                                     json.get_string_opt(v_new_person1, 'зачинщика'), 

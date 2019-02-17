@@ -15,12 +15,12 @@ declare
   v_actions jsonb := jsonb '{}';
 begin
   if not v_master then
-    v_economy_type := json.get_string(data.get_attribute_value(in_actor_id, 'system_person_economy_type'));
+    v_economy_type := json.get_string(data.get_attribute_value_for_share(in_actor_id, 'system_person_economy_type'));
 
     if v_economy_type = 'un' then
-      v_coins := json.get_integer(data.get_attribute_value(in_actor_id, 'system_person_coin'));
+      v_coins := json.get_integer(data.get_attribute_value_for_share(in_actor_id, 'system_person_coin'));
     else
-      v_money := json.get_integer(data.get_attribute_value(in_actor_id, 'system_money'));
+      v_money := json.get_integer(data.get_attribute_value_for_share(in_actor_id, 'system_money'));
       v_coin_price := data.get_integer_param('coin_price');
     end if;
   end if;
@@ -33,7 +33,7 @@ begin
   loop
     declare
       v_status_prices integer[] := data.get_integer_array_param(v_status_name || '_status_prices');
-      v_status integer := json.get_integer(data.get_attribute_value(in_object_id, v_status_name || '_next_status'));
+      v_status integer := json.get_integer(data.get_attribute_value_for_share(in_object_id, v_status_name || '_next_status'));
       v_price bigint;
       v_too_expensive boolean;
       v_action record;

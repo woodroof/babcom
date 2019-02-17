@@ -21,7 +21,7 @@ begin
   into v_actor_id
   from data.clients
   where id = in_client_id
-  for update;
+  for share;
 
   if v_actor_id is null then
     raise exception 'Client % has no active actor', in_client_id;

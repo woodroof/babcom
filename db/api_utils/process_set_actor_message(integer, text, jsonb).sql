@@ -27,6 +27,11 @@ begin
     where id = in_client_id;
   end if;
 
+  perform
+  from data.logins
+  where id = v_login_id
+  for share;
+
   select true
   into v_actor_exists
   from data.login_actors

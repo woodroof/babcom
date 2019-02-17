@@ -8,7 +8,7 @@ $$
 declare
   v_chat_code text := json.get_string(in_params, 'chat_code');
   v_chat_id integer := data.get_object_id(v_chat_code);
-  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
 
   v_person_id integer;
 
@@ -39,7 +39,7 @@ declare
   v_actor_title text := json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id, v_actor_id));
   v_title text := to_char(clock_timestamp(),'DD.MM hh24:mi:ss');
   v_chat_title text := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), null);
-  v_chat_is_renamed boolean := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_renamed'), false);
+  v_chat_is_renamed boolean := json.get_boolean_opt(data.get_attribute_value_for_share(v_chat_id, 'system_chat_is_renamed'), false);
   v_chat_parent_list text := json.get_string_opt(data.get_attribute_value(v_chat_id, 'system_chat_parent_list'), '~');
 
   v_name jsonb;

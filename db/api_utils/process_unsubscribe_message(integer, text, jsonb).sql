@@ -17,23 +17,19 @@ begin
   into v_actor_id
   from data.clients
   where id = in_client_id
-  for update;
+  for share;
 
   if v_actor_id is null then
     raise exception 'Client % has no active actor', in_client_id;
   end if;
-
-  perform 1
-  from data.objects
-  where id = v_object_id
-  for update;
 
   select id
   into v_subscription_id
   from data.client_subscriptions
   where
     object_id = v_object_id and
-    client_id = in_client_id;
+    client_id = in_client_id
+  for update;
 
   if v_subscription_id is null then
     raise exception 'Client % has no subscription to object %', in_client_id, v_object_id;

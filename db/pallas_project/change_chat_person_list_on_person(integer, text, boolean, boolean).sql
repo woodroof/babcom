@@ -10,12 +10,10 @@ declare
   v_changes jsonb[];
   v_content text[];
   v_persons text := '';
-  v_chat_can_invite boolean := json.get_boolean_opt(data.get_attribute_value(in_chat_id, 'system_chat_can_invite'), false);
+  v_chat_can_invite boolean := json.get_boolean_opt(data.get_attribute_value_for_share(in_chat_id, 'system_chat_can_invite'), false);
   v_master_group_id integer := data.get_object_id('master');
 begin
   -- Меняем привязанный к чату список для участников
-  perform * from data.objects where id = v_chat_person_list_id for update;
-
   v_changes := array[]::jsonb[];
   if in_chat_title is not null then 
     v_changes := array_append(v_changes, data.attribute_change2jsonb('title', to_jsonb('Участники чата ' || in_chat_title)));

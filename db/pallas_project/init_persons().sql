@@ -156,6 +156,8 @@ begin
     array['all_person', 'un', 'player']);
 
   -- Игротехнические персонажи и тайные личности
+  -- Сантьяго де ла Крус - большой картель
+
   perform pallas_project.create_person(
     'p10',
     jsonb '{

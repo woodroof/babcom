@@ -23,13 +23,11 @@ begin
   assert in_request_id is not null;
   assert v_mute_on_off in ('on', 'off');
 
-  perform * from data.objects where id = v_chat_id for update;
-
-  v_chat_is_mute := json.get_boolean_opt(data.get_attribute_value(v_chat_id, v_chat_is_mute_attribute_id, v_actor_id), false);
+  v_chat_is_mute := json.get_boolean_opt(data.get_raw_attribute_value_for_update(v_chat_id, v_chat_is_mute_attribute_id, v_actor_id), false);
 
   if not v_chat_is_mute and v_mute_on_off = 'on' then
   -- проверяем, что отключать можно
-    assert v_is_master or json.get_boolean_opt(data.get_attribute_value(v_actor_id, 'system_chat_can_mute'), true);
+    assert v_is_master or json.get_boolean_opt(data.get_attribute_value_for_share(v_actor_id, 'system_chat_can_mute'), true);
   end if;
 
   if v_mute_on_off = 'on' then

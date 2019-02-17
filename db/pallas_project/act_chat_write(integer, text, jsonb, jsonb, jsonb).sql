@@ -51,8 +51,8 @@ begin
   assert in_request_id is not null;
 
   -- Берём имя чата только если оно осознанное
-  if json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_renamed'), false) then
-    v_chat_title := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), null);
+  if json.get_boolean_opt(data.get_attribute_value_for_share(v_chat_id, 'system_chat_is_renamed'), false) then
+    v_chat_title := json.get_string_opt(data.get_raw_attribute_value_for_share(v_chat_id, v_title_attribute_id), null);
   end if;
   -- создаём новое сообщение
   insert into data.objects(class_id) values (v_message_class_id) returning id, code into v_message_id, v_message_code;
@@ -65,14 +65,13 @@ begin
   (v_message_id, v_system_message_time_attribute_id, to_jsonb(to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss') ), null);
 
   -- Добавляем сообщение в чат
-  perform * from data.objects where id = v_chat_id for update;
   v_changes := array[]::jsonb[];
 
   -- Достаём, меняем, кладём назад
-  v_content := json.get_string_array_opt(data.get_attribute_value(v_chat_id, 'content', v_chat_id), array[]::text[]);
+  v_content := json.get_string_array_opt(data.get_raw_attribute_value_for_update(v_chat_id, v_content_attribute_id), array[]::text[]);
   v_new_content := array_prepend(v_message_code, v_content);
   if v_new_content <> v_content then
-    v_chat_length := json.get_integer_opt(data.get_attribute_value(v_chat_id, v_system_chat_length_attribute_id), null);
+    v_chat_length := json.get_integer_opt(data.get_attribute_value_for_update(v_chat_id, v_system_chat_length_attribute_id), null);
     if v_chat_length is not null then
       v_changes := array_append(v_changes, data.attribute_change2jsonb(v_system_chat_length_attribute_id, to_jsonb(v_chat_length + 1)));
     end if;
@@ -106,14 +105,14 @@ begin
       v_is_actor_subscribed := pp_utils.is_actor_subscribed(v_person_id, v_chat_id);
       if v_person_id <> v_actor_id
         and not v_is_actor_subscribed then
-        v_chat_unread_messages := json.get_integer_opt(data.get_attribute_value(v_chat_id, v_chat_unread_messages_attribute_id, v_person_id), 0);
+        v_chat_unread_messages := json.get_integer_opt(data.get_raw_attribute_value_for_update(v_chat_id, v_chat_unread_messages_attribute_id, v_person_id), 0);
         perform data.change_object_and_notify(v_chat_id, 
                                               jsonb_build_array(data.attribute_change2jsonb(v_chat_unread_messages_attribute_id, to_jsonb(v_chat_unread_messages + 1), v_person_id)),
                                               v_actor_id);
       end if;
       if v_person_id <> v_actor_id 
         and not v_is_actor_subscribed
-        and not json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'chat_is_mute', v_person_id), false) then
+        and not json.get_boolean_opt(data.get_raw_attribute_value_for_share(v_chat_id, 'chat_is_mute', v_person_id), false) then
         perform pp_utils.add_notification(v_person_id, 'Новое сообщение ' || (case when v_chat_title is not null then ' в '|| v_chat_title  || ' ' else '' end) || 'от '|| v_actor_title , v_chat_id);
       end if;
     end loop;

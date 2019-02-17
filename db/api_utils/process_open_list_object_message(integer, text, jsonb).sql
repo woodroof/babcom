@@ -8,45 +8,25 @@ $$
 declare
   v_object_code text := json.get_string(in_message, 'object_id');
   v_list_object_code text := json.get_string(in_message, 'list_object_id');
-  v_object_id integer;
-  v_list_object_id integer;
+  v_object_id integer := data.get_object_id(v_object_code);
+  v_list_object_id integer := data.get_object_id(v_list_object_code);
   v_content text[];
   v_is_visible boolean;
   v_actor_id integer;
   v_list_element_function text;
 begin
   assert in_client_id is not null;
+  assert data.is_instance(v_object_id);
+  assert data.is_instance(v_list_object_id);
 
   select actor_id
   into v_actor_id
   from data.clients
   where id = in_client_id
-  for update;
+  for share;
 
   if v_actor_id is null then
     raise exception 'Client % has no active actor', in_client_id;
-  end if;
-
-  select id
-  into v_object_id
-  from data.objects
-  where
-    code = v_object_code and
-    type = 'instance';
-
-  if v_object_id is null then
-    raise exception 'Attempt to open list object in non-existing object %', v_object_code;
-  end if;
-
-  select id
-  into v_list_object_id
-  from data.objects
-  where
-    code = v_list_object_code and
-    type = 'instance';
-
-  if v_object_id is null then
-    raise exception 'Attempt to open non-existing list object %', v_list_object_code;
   end if;
 
   v_content := json.get_string_array(data.get_attribute_value(v_object_id, 'content', v_actor_id));

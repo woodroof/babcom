@@ -685,7 +685,7 @@ begin
   into v_login_id
   from data.clients
   where id = in_client_id
-  for update;
+  for share;
 
   if v_login_id is null then
     v_login_id := data.get_integer_param('default_login_id');
@@ -696,11 +696,15 @@ begin
     where id = in_client_id;
   end if;
 
+  perform
+  from data.logins
+  where id = v_login_id
+  for share;
+
   for v_actor_function in
     select actor_id, json.get_string_opt(data.get_attribute_value(actor_id, 'actor_function'), null) as actor_function
     from data.login_actors
     where login_id = v_login_id
-    for share
   loop
     if v_actor_function is not null then
       execute format('select %s($1)', v_actor_function.actor_function)
@@ -791,16 +795,11 @@ begin
   into v_actor_id
   from data.clients
   where id = in_client_id
-  for update;
+  for share;
 
   if v_actor_id is null then
     raise exception 'Client % has no active actor', in_client_id;
   end if;
-
-  perform 1
-  from data.objects
-  where id = v_object_id
-  for update;
 
   v_list := data.get_next_list(in_client_id, v_object_id);
 
@@ -832,7 +831,7 @@ begin
   into v_actor_id
   from data.clients
   where id = in_client_id
-  for update;
+  for share;
 
   if v_actor_id is null then
     raise exception 'Client % has no active actor', in_client_id;
@@ -863,45 +862,25 @@ $$
 declare
   v_object_code text := json.get_string(in_message, 'object_id');
   v_list_object_code text := json.get_string(in_message, 'list_object_id');
-  v_object_id integer;
-  v_list_object_id integer;
+  v_object_id integer := data.get_object_id(v_object_code);
+  v_list_object_id integer := data.get_object_id(v_list_object_code);
   v_content text[];
   v_is_visible boolean;
   v_actor_id integer;
   v_list_element_function text;
 begin
   assert in_client_id is not null;
+  assert data.is_instance(v_object_id);
+  assert data.is_instance(v_list_object_id);
 
   select actor_id
   into v_actor_id
   from data.clients
   where id = in_client_id
-  for update;
+  for share;
 
   if v_actor_id is null then
     raise exception 'Client % has no active actor', in_client_id;
-  end if;
-
-  select id
-  into v_object_id
-  from data.objects
-  where
-    code = v_object_code and
-    type = 'instance';
-
-  if v_object_id is null then
-    raise exception 'Attempt to open list object in non-existing object %', v_object_code;
-  end if;
-
-  select id
-  into v_list_object_id
-  from data.objects
-  where
-    code = v_list_object_code and
-    type = 'instance';
-
-  if v_object_id is null then
-    raise exception 'Attempt to open non-existing list object %', v_list_object_code;
   end if;
 
   v_content := json.get_string_array(data.get_attribute_value(v_object_id, 'content', v_actor_id));
@@ -961,6 +940,11 @@ begin
     where id = in_client_id;
   end if;
 
+  perform
+  from data.logins
+  where id = v_login_id
+  for share;
+
   select true
   into v_actor_exists
   from data.login_actors
@@ -999,7 +983,7 @@ as
 $$
 declare
   v_object_code text := json.get_string(in_message, 'object_id');
-  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_actor_id integer;
   v_object_id integer;
   v_full_card_function text;
   v_redirect_object_id integer;
@@ -1009,6 +993,18 @@ declare
   v_object jsonb;
   v_list jsonb;
 begin
+  assert in_client_id is not null;
+
+  select actor_id
+  into v_actor_id
+  from data.clients
+  where id = in_client_id
+  for share;
+
+  if v_actor_id is null then
+    raise exception 'Client % has no active actor', in_client_id;
+  end if;
+
   select id
   into v_object_id
   from data.objects
@@ -1080,7 +1076,7 @@ as
 $$
 declare
   v_object_code text := json.get_string(in_message, 'object_id');
-  v_object_id integer;
+  v_object_id integer := data.get_object_id(v_object_code);
   v_actor_id integer;
   v_touch_function text;
 begin
@@ -1090,20 +1086,10 @@ begin
   into v_actor_id
   from data.clients
   where id = in_client_id
-  for update;
+  for share;
 
   if v_actor_id is null then
     raise exception 'Client % has no active actor', in_client_id;
-  end if;
-
-  select id
-  into v_object_id
-  from data.objects
-  where code = v_object_code
-  for update;
-
-  if v_object_id is null then
-    raise exception 'Attempt to touch non-existing object %', v_object_code;
   end if;
 
   -- Вызываем функцию смахивания уведомления, если есть
@@ -1138,23 +1124,19 @@ begin
   into v_actor_id
   from data.clients
   where id = in_client_id
-  for update;
+  for share;
 
   if v_actor_id is null then
     raise exception 'Client % has no active actor', in_client_id;
   end if;
-
-  perform 1
-  from data.objects
-  where id = v_object_id
-  for update;
 
   select id
   into v_subscription_id
   from data.client_subscriptions
   where
     object_id = v_object_id and
-    client_id = in_client_id;
+    client_id = in_client_id
+  for update;
 
   if v_subscription_id is null then
     raise exception 'Client % has no subscription to object %', in_client_id, v_object_id;
@@ -1254,6 +1236,7 @@ begin
     )
   for update;
 
+  -- Блокируем эти записи, чтобы никто параллельно с нами не добавлял в ту же группу
   select true
   into v_exists
   from data.object_objects
@@ -1277,6 +1260,7 @@ begin
     raise exception 'Cycle detected while adding object % to object %!', in_object_id, in_parent_object_id;
   end if;
 
+  -- Блокируем parent'ы и child'ы на чтение, чтобы никто за это время не поменял нужные нам группы
   perform *
   from data.object_objects
   where
@@ -1313,7 +1297,6 @@ begin
             oo.object_id = any(po.value)
           )
         ) and
-        oo.parent_object_id != oo.object_id and
         oo.intermediate_object_ids is null
     )
   for share;
@@ -1693,11 +1676,6 @@ begin
   end if;
 
   v_object_code := data.get_object_code(in_object_id);
-
-  perform *
-  from data.objects
-  where id = in_object_id
-  for update;
 
   -- Сохраним атрибуты и действия для всех клиентов, подписанных на получение изменений данного объекта
   declare
@@ -2855,6 +2833,7 @@ volatile
 as
 $$
 -- Как правило вместо этой функции следует вызывать data.change_object
+-- Эта функция не проставляет правильно блокировки и не рассылает уведомлений
 declare
   v_attribute_value_id integer;
 begin
@@ -2903,6 +2882,7 @@ $$
 declare
   v_change record;
   v_filtered_changes jsonb := jsonb '[]';
+  v_id integer;
   v_value jsonb;
   v_next_change jsonb;
 begin
@@ -2918,15 +2898,38 @@ begin
     from jsonb_array_elements(in_changes)
   )
   loop
-    v_value := data.get_raw_attribute_value(in_object_id, v_change.id, v_change.value_object_id);
+    if v_change.value is null then
+      if v_change.value_object_id is null then
+        select id
+        into v_id
+        from data.attribute_values
+        where
+          object_id = in_object_id and
+          attribute_id = v_change.id and
+          value_object_id is null
+        for update;
+      else
+        select id
+        into v_id
+        from data.attribute_values
+        where
+          object_id = in_object_id and
+          attribute_id = v_change.id and
+          value_object_id = v_change.value_object_id
+        for update;
+      end if;
 
-    if
       -- Удалять нечего
-      v_change.value is null and v_value is null or
+      if v_id is null then
+        continue;
+      end if;
+    else
+      v_value := data.get_raw_attribute_value_for_update(in_object_id, v_change.id, v_change.value_object_id);
+
       -- Уже то же значение
-      v_change.value = v_value
-    then
-      continue;
+      if v_change.value = v_value then
+        continue;
+      end if;
     end if;
 
     v_next_change := jsonb_build_object('id', v_change.id);
@@ -3266,6 +3269,236 @@ end;
 $$
 language plpgsql;
 
+-- drop function data.get_attribute_value(text, integer);
+
+create or replace function data.get_attribute_value(in_object_code text, in_attribute_id integer)
+returns jsonb
+stable
+as
+$$
+begin
+  return data.get_attribute_value(data.get_object_id(in_object_code), in_attribute_id);
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_attribute_value(text, integer, integer);
+
+create or replace function data.get_attribute_value(in_object_code text, in_attribute_id integer, in_actor_id integer)
+returns jsonb
+stable
+as
+$$
+begin
+  return data.get_attribute_value(data.get_object_id(in_object_code), in_attribute_id, in_actor_id);
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_attribute_value(text, text);
+
+create or replace function data.get_attribute_value(in_object_code text, in_attribute_code text)
+returns jsonb
+stable
+as
+$$
+begin
+  return data.get_attribute_value(data.get_object_id(in_object_code), data.get_attribute_id(in_attribute_code));
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_attribute_value(text, text, integer);
+
+create or replace function data.get_attribute_value(in_object_code text, in_attribute_code text, in_actor_id integer)
+returns jsonb
+stable
+as
+$$
+begin
+  return data.get_attribute_value(data.get_object_id(in_object_code), data.get_attribute_id(in_attribute_code), in_actor_id);
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_attribute_value_for_share(integer, integer);
+
+create or replace function data.get_attribute_value_for_share(in_object_id integer, in_attribute_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_id integer;
+  v_attribute_value jsonb;
+  v_class_id integer;
+begin
+  assert data.is_instance(in_object_id);
+  assert not data.can_attribute_be_overridden(in_attribute_id);
+
+  select id, value
+  into v_id, v_attribute_value
+  from data.attribute_values
+  where
+    object_id = in_object_id and
+    attribute_id = in_attribute_id and
+    value_object_id is null
+  for share;
+
+  if v_id is null then
+    v_class_id := data.get_object_class_id(in_object_id);
+
+    if v_class_id is not null then
+      select value
+      into v_attribute_value
+      from data.attribute_values
+      where
+        object_id = v_class_id and
+        attribute_id = in_attribute_id and
+        value_object_id is null;
+    end if;
+  end if;
+
+  if v_id is null then
+    perform
+    from data.objects
+    where id = in_object_id
+    for share;
+  end if;
+
+  return v_attribute_value;
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_attribute_value_for_share(integer, text);
+
+create or replace function data.get_attribute_value_for_share(in_object_id integer, in_attribute_code text)
+returns jsonb
+volatile
+as
+$$
+begin
+  return data.get_attribute_value_for_share(in_object_id, data.get_attribute_id(in_attribute_code));
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_attribute_value_for_share(text, integer);
+
+create or replace function data.get_attribute_value_for_share(in_object_code text, in_attribute_id integer)
+returns jsonb
+volatile
+as
+$$
+begin
+  return data.get_attribute_value_for_share(data.get_object_id(in_object_code), in_attribute_id);
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_attribute_value_for_share(text, text);
+
+create or replace function data.get_attribute_value_for_share(in_object_code text, in_attribute_code text)
+returns jsonb
+volatile
+as
+$$
+begin
+  return data.get_attribute_value_for_share(data.get_object_id(in_object_code), data.get_attribute_id(in_attribute_code));
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_attribute_value_for_update(integer, integer);
+
+create or replace function data.get_attribute_value_for_update(in_object_id integer, in_attribute_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_id integer;
+  v_attribute_value jsonb;
+  v_class_id integer;
+begin
+  assert data.is_instance(in_object_id);
+  assert not data.can_attribute_be_overridden(in_attribute_id);
+
+  select id, value
+  into v_id, v_attribute_value
+  from data.attribute_values
+  where
+    object_id = in_object_id and
+    attribute_id = in_attribute_id and
+    value_object_id is null
+  for update;
+
+  if v_id is null then
+    v_class_id := data.get_object_class_id(in_object_id);
+
+    if v_class_id is not null then
+      select value
+      into v_attribute_value
+      from data.attribute_values
+      where
+        object_id = v_class_id and
+        attribute_id = in_attribute_id and
+        value_object_id is null;
+    end if;
+  end if;
+
+  if v_id is null then
+    perform
+    from data.objects
+    where id = in_object_id
+    for update;
+  end if;
+
+  return v_attribute_value;
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_attribute_value_for_update(integer, text);
+
+create or replace function data.get_attribute_value_for_update(in_object_id integer, in_attribute_code text)
+returns jsonb
+volatile
+as
+$$
+begin
+  return data.get_attribute_value_for_update(in_object_id, data.get_attribute_id(in_attribute_code));
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_attribute_value_for_update(text, integer);
+
+create or replace function data.get_attribute_value_for_update(in_object_code text, in_attribute_id integer)
+returns jsonb
+volatile
+as
+$$
+begin
+  return data.get_attribute_value_for_update(data.get_object_id(in_object_code), in_attribute_id);
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_attribute_value_for_update(text, text);
+
+create or replace function data.get_attribute_value_for_update(in_object_code text, in_attribute_code text)
+returns jsonb
+volatile
+as
+$$
+begin
+  return data.get_attribute_value_for_update(data.get_object_id(in_object_code), data.get_attribute_id(in_attribute_code));
+end;
+$$
+language plpgsql;
+
 -- drop function data.get_bigint_param(text);
 
 create or replace function data.get_bigint_param(in_code text)
@@ -3380,7 +3613,7 @@ $$
 declare
   v_page_size integer := data.get_integer_param('page_size');
   v_object_code text := data.get_object_code(in_object_id);
-  v_actor_id integer;
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_last_object_id integer;
   v_content text[];
   v_content_length integer;
@@ -3393,12 +3626,6 @@ declare
   v_objects jsonb[] := array[]::jsonb[];
 begin
   assert v_page_size > 0;
-
-  select actor_id
-  into v_actor_id
-  from data.clients
-  where id = in_client_id
-  for update;
 
   assert v_actor_id is not null;
 
@@ -3739,6 +3966,32 @@ end;
 $$
 language plpgsql;
 
+-- drop function data.get_raw_attribute_value(integer, integer);
+
+create or replace function data.get_raw_attribute_value(in_object_id integer, in_attribute_id integer)
+returns jsonb
+stable
+as
+$$
+declare
+  v_attribute_value jsonb;
+begin
+  assert data.is_class_or_object_exists(in_object_id);
+  perform data.get_attribute_code(in_attribute_id);
+
+  select value
+  into v_attribute_value
+  from data.attribute_values
+  where
+    object_id = in_object_id and
+    attribute_id = in_attribute_id and
+    value_object_id is null;
+
+  return v_attribute_value;
+end;
+$$
+language plpgsql;
+
 -- drop function data.get_raw_attribute_value(integer, integer, integer);
 
 create or replace function data.get_raw_attribute_value(in_object_id integer, in_attribute_id integer, in_value_object_id integer)
@@ -3751,34 +4004,48 @@ declare
   v_attribute_value jsonb;
 begin
   if in_value_object_id is null then
-    select true
-    into v_object_exists
-    from data.objects
-    where id = in_object_id;
-
-    assert v_object_exists;
-    perform data.get_attribute_code(in_attribute_id);
-
-    select value
-    into v_attribute_value
-    from data.attribute_values
-    where
-      object_id = in_object_id and
-      attribute_id = in_attribute_id and
-      value_object_id is null;
-  else
-    assert data.can_attribute_be_overridden(in_attribute_id);
-
-    select value
-    into v_attribute_value
-    from data.attribute_values
-    where
-      object_id = in_object_id and
-      attribute_id = in_attribute_id and
-      value_object_id = in_value_object_id;
+    return data.get_raw_attribute_value(in_object_id, in_attribute_id);
   end if;
 
+  assert data.is_class_or_object_exists(in_object_id);
+  assert data.is_instance(in_value_object_id);
+  assert data.can_attribute_be_overridden(in_attribute_id);
+
+  select value
+  into v_attribute_value
+  from data.attribute_values
+  where
+    object_id = in_object_id and
+    attribute_id = in_attribute_id and
+    value_object_id = in_value_object_id;
+
   return v_attribute_value;
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_raw_attribute_value(integer, integer, text);
+
+create or replace function data.get_raw_attribute_value(in_object_id integer, in_attribute_id integer, in_value_object_code text)
+returns jsonb
+stable
+as
+$$
+begin
+  return data.get_raw_attribute_value(in_object_id, in_attribute_id, data.get_object_id(in_value_object_code));
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_raw_attribute_value(integer, text);
+
+create or replace function data.get_raw_attribute_value(in_object_id integer, in_attribute_code text)
+returns jsonb
+stable
+as
+$$
+begin
+  return data.get_raw_attribute_value(in_object_id, data.get_attribute_id(in_attribute_code));
 end;
 $$
 language plpgsql;
@@ -3792,6 +4059,305 @@ as
 $$
 begin
   return data.get_raw_attribute_value(in_object_id, data.get_attribute_id(in_attribute_code), in_value_object_id);
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_raw_attribute_value(integer, text, text);
+
+create or replace function data.get_raw_attribute_value(in_object_id integer, in_attribute_code text, in_value_object_code text)
+returns jsonb
+stable
+as
+$$
+begin
+  return data.get_raw_attribute_value(in_object_id, data.get_attribute_id(in_attribute_code), data.get_object_id(in_value_object_code));
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_raw_attribute_value(text, integer);
+
+create or replace function data.get_raw_attribute_value(in_object_code text, in_attribute_id integer)
+returns jsonb
+stable
+as
+$$
+begin
+  return data.get_raw_attribute_value(data.get_object_id(in_object_code), in_attribute_id);
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_raw_attribute_value(text, integer, integer);
+
+create or replace function data.get_raw_attribute_value(in_object_code text, in_attribute_id integer, in_value_object_id integer)
+returns jsonb
+stable
+as
+$$
+begin
+  return data.get_raw_attribute_value(data.get_object_id(in_object_code), in_attribute_id, in_value_object_id);
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_raw_attribute_value(text, integer, text);
+
+create or replace function data.get_raw_attribute_value(in_object_code text, in_attribute_id integer, in_value_object_code text)
+returns jsonb
+stable
+as
+$$
+begin
+  return data.get_raw_attribute_value(data.get_object_id(in_object_code), in_attribute_id, data.get_object_id(in_value_object_code));
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_raw_attribute_value(text, text);
+
+create or replace function data.get_raw_attribute_value(in_object_code text, in_attribute_code text)
+returns jsonb
+stable
+as
+$$
+begin
+  return data.get_raw_attribute_value(data.get_object_id(in_object_code), data.get_attribute_id(in_attribute_code));
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_raw_attribute_value(text, text, integer);
+
+create or replace function data.get_raw_attribute_value(in_object_code text, in_attribute_code text, in_value_object_id integer)
+returns jsonb
+stable
+as
+$$
+begin
+  return data.get_raw_attribute_value(data.get_object_id(in_object_code), data.get_attribute_id(in_attribute_code), in_value_object_id);
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_raw_attribute_value(text, text, text);
+
+create or replace function data.get_raw_attribute_value(in_object_code text, in_attribute_code text, in_value_object_code text)
+returns jsonb
+stable
+as
+$$
+begin
+  return data.get_raw_attribute_value(data.get_object_id(in_object_code), data.get_attribute_id(in_attribute_code), data.get_object_id(in_value_object_code));
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_raw_attribute_value_for_share(integer, integer);
+
+create or replace function data.get_raw_attribute_value_for_share(in_object_id integer, in_attribute_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_id integer;
+  v_attribute_value jsonb;
+begin
+  -- Блокировать класс неправильно, слишком большая видимость
+  assert data.is_instance(in_object_id);
+  perform data.get_attribute_code(in_attribute_id);
+
+  select id, value
+  into v_id, v_attribute_value
+  from data.attribute_values
+  where
+    object_id = in_object_id and
+    attribute_id = in_attribute_id and
+    value_object_id is null
+  for share;
+
+  if v_id is null then
+    perform
+    from data.objects
+    where id = in_object_id
+    for share;
+  end if;
+
+  return v_attribute_value;
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_raw_attribute_value_for_share(integer, integer, integer);
+
+create or replace function data.get_raw_attribute_value_for_share(in_object_id integer, in_attribute_id integer, in_value_object_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_object_exists boolean;
+  v_id integer;
+  v_attribute_value jsonb;
+begin
+  if in_value_object_id is null then
+    return data.get_raw_attribute_value_for_share(in_object_id, in_attribute_id);
+  end if;
+
+  -- Блокировать класс неправильно, слишком большая видимость
+  assert data.is_instance(in_object_id);
+  assert data.is_instance(in_value_object_id);
+  assert data.can_attribute_be_overridden(in_attribute_id);
+
+  select id, value
+  into v_id, v_attribute_value
+  from data.attribute_values
+  where
+    object_id = in_object_id and
+    attribute_id = in_attribute_id and
+    value_object_id = in_value_object_id
+  for share;
+
+  if v_id is null then
+    perform
+    from data.objects
+    where id = in_object_id
+    for share;
+  end if;
+
+  return v_attribute_value;
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_raw_attribute_value_for_share(integer, text);
+
+create or replace function data.get_raw_attribute_value_for_share(in_object_id integer, in_attribute_code text)
+returns jsonb
+volatile
+as
+$$
+begin
+  return data.get_raw_attribute_value_for_share(in_object_id, data.get_attribute_id(in_attribute_code));
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_raw_attribute_value_for_share(integer, text, integer);
+
+create or replace function data.get_raw_attribute_value_for_share(in_object_id integer, in_attribute_code text, in_value_object_id integer)
+returns jsonb
+volatile
+as
+$$
+begin
+  return data.get_raw_attribute_value_for_share(in_object_id, data.get_attribute_id(in_attribute_code), in_value_object_id);
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_raw_attribute_value_for_update(integer, integer);
+
+create or replace function data.get_raw_attribute_value_for_update(in_object_id integer, in_attribute_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_id integer;
+  v_attribute_value jsonb;
+begin
+  -- Блокировать класс неправильно, слишком большая видимость
+  assert data.is_instance(in_object_id);
+  perform data.get_attribute_code(in_attribute_id);
+
+  select id, value
+  into v_id, v_attribute_value
+  from data.attribute_values
+  where
+    object_id = in_object_id and
+    attribute_id = in_attribute_id and
+    value_object_id is null
+  for update;
+
+  if v_id is null then
+    perform
+    from data.objects
+    where id = in_object_id
+    for update;
+  end if;
+
+  return v_attribute_value;
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_raw_attribute_value_for_update(integer, integer, integer);
+
+create or replace function data.get_raw_attribute_value_for_update(in_object_id integer, in_attribute_id integer, in_value_object_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_object_exists boolean;
+  v_id integer;
+  v_attribute_value jsonb;
+begin
+  if in_value_object_id is null then
+    return data.get_raw_attribute_value_for_update(in_object_id, in_attribute_id);
+  end if;
+
+  -- Блокировать класс неправильно, слишком большая видимость
+  assert data.is_instance(in_object_id);
+  assert data.is_instance(in_value_object_id);
+  assert data.can_attribute_be_overridden(in_attribute_id);
+
+  select id, value
+  into v_id, v_attribute_value
+  from data.attribute_values
+  where
+    object_id = in_object_id and
+    attribute_id = in_attribute_id and
+    value_object_id = in_value_object_id
+  for update;
+
+  if v_id is null then
+    perform
+    from data.objects
+    where id = in_object_id
+    for update;
+  end if;
+
+  return v_attribute_value;
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_raw_attribute_value_for_update(integer, text);
+
+create or replace function data.get_raw_attribute_value_for_update(in_object_id integer, in_attribute_code text)
+returns jsonb
+volatile
+as
+$$
+begin
+  return data.get_raw_attribute_value_for_update(in_object_id, data.get_attribute_id(in_attribute_code));
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_raw_attribute_value_for_update(integer, text, integer);
+
+create or replace function data.get_raw_attribute_value_for_update(in_object_id integer, in_attribute_code text, in_value_object_id integer)
+returns jsonb
+volatile
+as
+$$
+begin
+  return data.get_raw_attribute_value_for_update(in_object_id, data.get_attribute_id(in_attribute_code), in_value_object_id);
 end;
 $$
 language plpgsql;
@@ -3917,6 +4483,28 @@ end;
 $$
 language plpgsql;
 
+-- drop function data.is_class_or_object_exists(integer);
+
+create or replace function data.is_class_or_object_exists(in_object_id integer)
+returns boolean
+stable
+as
+$$
+declare
+  v_exists boolean;
+begin
+  assert in_object_id is not null;
+
+  select true
+  into v_exists
+  from data.objects
+  where id = in_object_id;
+
+  return coalesce(v_exists, false);
+end;
+$$
+language plpgsql;
+
 -- drop function data.is_hidden_attribute(integer);
 
 create or replace function data.is_hidden_attribute(in_attribute_id integer)
@@ -3965,24 +4553,26 @@ end;
 $$
 language plpgsql;
 
--- drop function data.is_object(text);
+-- drop function data.is_object_exists(integer);
 
-create or replace function data.is_object(in_object_code text)
+create or replace function data.is_object_exists(in_object_id integer)
 returns boolean
 stable
 as
 $$
 declare
-  v_id integer;
+  v_exists boolean;
 begin
-  assert in_object_code is not null;
+  assert in_object_id is not null;
 
-  select id
-  into v_id
+  select true
+  into v_exists
   from data.objects
-  where code = in_object_code;
+  where
+    id = in_object_id and
+    type = 'instance';
 
-  return (v_id is not null);
+  return coalesce(v_exists, false);
 end;
 $$
 language plpgsql;
@@ -4337,6 +4927,7 @@ begin
     raise exception 'Attempt to remove object % from itself', in_object_id;
   end if;
 
+  -- Блокируем запись, чтобы параллельно с нами никто не удалил из той же группы
   select id
   into v_connection_id
   from data.object_objects
@@ -4349,6 +4940,47 @@ begin
   if v_connection_id is null then
     raise exception 'Attempt to remove non-existing connection from object % to object %', in_object_id, in_parent_object_id;
   end if;
+
+  -- Блокируем parent'ы и child'ы на чтение, чтобы никто за это время не поменял нужные нам группы
+  perform *
+  from data.object_objects
+  where
+    id in (
+      select oo.id
+      from (
+        select array_agg(os.value) as value
+        from
+        (
+          select distinct(object_id) as value
+          from data.object_objects
+          where parent_object_id = in_object_id
+        ) os
+      ) o
+      join (
+        select array_agg(ps.value) as value
+        from
+        (
+          select distinct(parent_object_id) as value
+          from data.object_objects
+          where object_id = in_parent_object_id
+        ) ps
+      ) po
+      on true
+      join data.object_objects oo
+      on
+        (
+          (
+            oo.parent_object_id = any(o.value) and
+            oo.object_id = any(o.value)
+          ) or
+          (
+            oo.parent_object_id = any(po.value) and
+            oo.object_id = any(po.value)
+          )
+        ) and
+        oo.intermediate_object_ids is null
+    )
+  for share;
 
   select array_agg(i.id)
   into v_ids
@@ -4413,6 +5045,7 @@ volatile
 as
 $$
 -- Как правило вместо этой функции следует вызывать data.change_object
+-- Эта функция не проставляет правильно блокировки и не рассылает уведомлений
 declare
   v_attribute_value record;
   v_end_time timestamp with time zone;
@@ -4490,6 +5123,7 @@ volatile
 as
 $$
 -- Как правило вместо этой функции следует вызывать data.change_object
+-- Эта функция не проставляет правильно блокировки и не рассылает уведомлений
 begin
   perform data.set_attribute_value(in_object_id, data.get_attribute_id(in_attribute_code), in_value, in_value_object_id, in_actor_id, in_reason);
 end;
@@ -8595,49 +9229,30 @@ as
 $$
 declare
   v_actor_id integer := data.get_active_actor_id(in_client_id);
-  v_economy_type text := json.get_string(data.get_attribute_value(v_actor_id, 'system_person_economy_type'));
+  v_economy_type text := json.get_string(data.get_attribute_value_for_share(v_actor_id, 'system_person_economy_type'));
   v_price integer := data.get_integer_param('lottery_ticket_price');
   v_object_id integer := data.get_object_id('lottery');
-  v_lottery_ticket_count integer := json.get_integer_opt(data.get_attribute_value(v_object_id, 'lottery_ticket_count', v_actor_id), 0);
-  v_current_sum bigint;
-  v_lottery_status text;
+  v_lottery_ticket_count integer := json.get_integer_opt(data.get_raw_attribute_value_for_update(v_object_id, 'lottery_ticket_count', v_actor_id), 0);
+  v_current_sum bigint := json.get_bigint(data.get_attribute_value_for_update(v_actor_id, 'system_money'));
+  v_lottery_status text := json.get_string(data.get_attribute_value_for_share(v_object_id, 'lottery_status'));
   v_diff jsonb;
   v_notified boolean;
 begin
   assert in_request_id is not null;
 
   if v_economy_type != 'asters' then
+    -- Потенциальный выигравший
     perform api_utils.create_ok_notification(in_client_id, in_request_id);
     return;
   end if;
-
-  select json.get_string(value)
-  into v_lottery_status
-  from data.attribute_values
-  where
-    object_id = v_object_id and
-    attribute_id = data.get_attribute_id('lottery_status') and
-    value_object_id is null
-  for share;
 
   if v_lottery_status != 'active' then
-    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Лотерея заночилась', 'К сожалению, вы не успели, билеты более не продаются.');
     return;
   end if;
 
-  select json.get_bigint(av.value)
-  into v_current_sum
-  from data.attribute_values av
-  where
-    av.object_id = v_actor_id and
-    av.attribute_id = data.get_attribute_id('system_money') and
-    av.value_object_id is null
-  for update;
-
-  assert v_current_sum is not null;
-
   if v_current_sum < v_price then
-    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Не хватает денег', 'На вашем счету недостаточно средств для покупки лотерейных билетов.');
     return;
   end if;
 
@@ -8680,11 +9295,11 @@ declare
   v_status_name text := json.get_string(in_params, 'status_name');
   v_status_value integer := json.get_integer(in_params, 'value');
   v_status_attribute_id integer = data.get_attribute_id('system_person_next_' || v_status_name || '_status');
-  v_economy_type text := json.get_string(data.get_attribute_value(v_actor_id, 'system_person_economy_type'));
+  v_economy_type text := json.get_string(data.get_attribute_value_for_share(v_actor_id, 'system_person_economy_type'));
   v_currency_attribute_id integer = data.get_attribute_id(case when v_economy_type = 'un' then 'system_person_coin' else 'system_money' end);
   v_status_prices integer[] := data.get_integer_array_param(v_status_name || '_status_prices');
-  v_current_status_value integer;
-  v_current_sum bigint;
+  v_current_status_value integer := json.get_integer(data.get_attribute_value_for_update(v_actor_id, v_status_attribute_id));
+  v_current_sum bigint := json.get_bigint(data.get_attribute_value_for_update(v_actor_id, v_currency_attribute_id));
   v_price bigint;
   v_diff jsonb;
   v_notified boolean;
@@ -8692,28 +9307,6 @@ begin
   assert in_request_id is not null;
   assert in_user_params is null;
   assert in_default_params is null;
-
-  select json.get_integer(av.value)
-  into v_current_status_value
-  from data.attribute_values av
-  where
-    av.object_id = v_actor_id and
-    av.attribute_id = v_status_attribute_id and
-    av.value_object_id is null
-  for update;
-
-  assert v_current_status_value is not null;
-
-  select json.get_bigint(av.value)
-  into v_current_sum
-  from data.attribute_values av
-  where
-    av.object_id = v_actor_id and
-    av.attribute_id = v_currency_attribute_id and
-    av.value_object_id is null
-  for update;
-
-  assert v_current_sum is not null;
 
   select sum(v_status_prices[value])
   into v_price
@@ -8740,7 +9333,7 @@ begin
       format(
         'Покупка %s статуса "%s"',
         (case when v_status_value = 1 then 'бронзового' when v_status_value = 2 then 'серебряного' else 'золотого' end),
-        json.get_string(data.get_raw_attribute_value(data.get_class_id(v_status_name || '_status_page'), 'title', null))),
+        json.get_string(data.get_raw_attribute_value(v_status_name || '_status_page', 'title'))),
       -v_price,
       v_current_sum - v_price,
       null,
@@ -8822,8 +9415,6 @@ begin
   assert v_parameter in ('can_leave', 'can_invite', 'can_mute', 'can_rename');
   assert v_value in ('on', 'off');
 
-  perform * from data.objects where id = v_chat_id for update;
-
   if v_parameter = 'can_leave' then
     v_changes := array_append(v_changes, data.attribute_change2jsonb('system_chat_can_leave', case v_value when 'on' then null else to_jsonb(false) end));
   end if;
@@ -8854,7 +9445,6 @@ begin
   end if;
 
   if v_parameter = 'can_invite' then 
-    perform * from data.objects where id = v_chat_person_list_id for update;
     v_content := pallas_project.get_chat_possible_persons(v_chat_id, (v_chat_parent_list = 'master_chats'));
     v_changes := array[]::jsonb[];
     if v_value = 'on' then
@@ -8939,10 +9529,9 @@ begin
       end loop;
 
       v_chat_title := trim(v_chat_title, ', ');
-      perform * from data.objects where id = v_chat_id for update;
 
       v_changes := array[]::jsonb[];
-      v_chat_is_renamed := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_renamed'), false);
+      v_chat_is_renamed := json.get_boolean_opt(data.get_attribute_value_for_share(v_chat_id, 'system_chat_is_renamed'), false);
       if not v_chat_is_renamed then 
         v_changes := array_append(v_changes, data.attribute_change2jsonb('title', to_jsonb(v_chat_title)));
       else
@@ -8997,7 +9586,7 @@ $$
 declare
   v_chat_code text := json.get_string(in_params, 'chat_code');
   v_chat_id integer := data.get_object_id(v_chat_code);
-  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
 
   v_person_id integer;
 
@@ -9028,7 +9617,7 @@ declare
   v_actor_title text := json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id, v_actor_id));
   v_title text := to_char(clock_timestamp(),'DD.MM hh24:mi:ss');
   v_chat_title text := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), null);
-  v_chat_is_renamed boolean := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_renamed'), false);
+  v_chat_is_renamed boolean := json.get_boolean_opt(data.get_attribute_value_for_share(v_chat_id, 'system_chat_is_renamed'), false);
   v_chat_parent_list text := json.get_string_opt(data.get_attribute_value(v_chat_id, 'system_chat_parent_list'), '~');
 
   v_name jsonb;
@@ -9148,13 +9737,11 @@ begin
   assert in_request_id is not null;
   assert v_mute_on_off in ('on', 'off');
 
-  perform * from data.objects where id = v_chat_id for update;
-
-  v_chat_is_mute := json.get_boolean_opt(data.get_attribute_value(v_chat_id, v_chat_is_mute_attribute_id, v_actor_id), false);
+  v_chat_is_mute := json.get_boolean_opt(data.get_raw_attribute_value_for_update(v_chat_id, v_chat_is_mute_attribute_id, v_actor_id), false);
 
   if not v_chat_is_mute and v_mute_on_off = 'on' then
   -- проверяем, что отключать можно
-    assert v_is_master or json.get_boolean_opt(data.get_attribute_value(v_actor_id, 'system_chat_can_mute'), true);
+    assert v_is_master or json.get_boolean_opt(data.get_attribute_value_for_share(v_actor_id, 'system_chat_can_mute'), true);
   end if;
 
   if v_mute_on_off = 'on' then
@@ -9185,7 +9772,7 @@ declare
   v_chat_code text := json.get_string(in_params, 'chat_code');
   v_title text := json.get_string(in_user_params, 'title');
   v_chat_id integer := data.get_object_id(v_chat_code);
-  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
 
   v_chat_person_list_id integer := data.get_object_id(v_chat_code || '_person_list');
   v_old_title text;
@@ -9199,10 +9786,8 @@ declare
 begin
   assert in_request_id is not null;
 
-  perform * from data.objects where id = v_chat_id for update;
-
-  v_old_title := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), '');
-  v_chat_is_renamed := json.get_boolean_opt(data.get_attribute_value(v_chat_id, v_system_chat_is_renamed_attribute_id), false);
+  v_old_title := json.get_string_opt(data.get_raw_attribute_value_for_update(v_chat_id, v_title_attribute_id), '');
+  v_chat_is_renamed := json.get_boolean_opt(data.get_attribute_value_for_update(v_chat_id, v_system_chat_is_renamed_attribute_id), false);
 
   if v_old_title <> v_title then
     v_changes := array[]::jsonb[];
@@ -9281,8 +9866,8 @@ begin
   assert in_request_id is not null;
 
   -- Берём имя чата только если оно осознанное
-  if json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_renamed'), false) then
-    v_chat_title := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), null);
+  if json.get_boolean_opt(data.get_attribute_value_for_share(v_chat_id, 'system_chat_is_renamed'), false) then
+    v_chat_title := json.get_string_opt(data.get_raw_attribute_value_for_share(v_chat_id, v_title_attribute_id), null);
   end if;
   -- создаём новое сообщение
   insert into data.objects(class_id) values (v_message_class_id) returning id, code into v_message_id, v_message_code;
@@ -9295,14 +9880,13 @@ begin
   (v_message_id, v_system_message_time_attribute_id, to_jsonb(to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss') ), null);
 
   -- Добавляем сообщение в чат
-  perform * from data.objects where id = v_chat_id for update;
   v_changes := array[]::jsonb[];
 
   -- Достаём, меняем, кладём назад
-  v_content := json.get_string_array_opt(data.get_attribute_value(v_chat_id, 'content', v_chat_id), array[]::text[]);
+  v_content := json.get_string_array_opt(data.get_raw_attribute_value_for_update(v_chat_id, v_content_attribute_id), array[]::text[]);
   v_new_content := array_prepend(v_message_code, v_content);
   if v_new_content <> v_content then
-    v_chat_length := json.get_integer_opt(data.get_attribute_value(v_chat_id, v_system_chat_length_attribute_id), null);
+    v_chat_length := json.get_integer_opt(data.get_attribute_value_for_update(v_chat_id, v_system_chat_length_attribute_id), null);
     if v_chat_length is not null then
       v_changes := array_append(v_changes, data.attribute_change2jsonb(v_system_chat_length_attribute_id, to_jsonb(v_chat_length + 1)));
     end if;
@@ -9336,14 +9920,14 @@ begin
       v_is_actor_subscribed := pp_utils.is_actor_subscribed(v_person_id, v_chat_id);
       if v_person_id <> v_actor_id
         and not v_is_actor_subscribed then
-        v_chat_unread_messages := json.get_integer_opt(data.get_attribute_value(v_chat_id, v_chat_unread_messages_attribute_id, v_person_id), 0);
+        v_chat_unread_messages := json.get_integer_opt(data.get_raw_attribute_value_for_update(v_chat_id, v_chat_unread_messages_attribute_id, v_person_id), 0);
         perform data.change_object_and_notify(v_chat_id, 
                                               jsonb_build_array(data.attribute_change2jsonb(v_chat_unread_messages_attribute_id, to_jsonb(v_chat_unread_messages + 1), v_person_id)),
                                               v_actor_id);
       end if;
       if v_person_id <> v_actor_id 
         and not v_is_actor_subscribed
-        and not json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'chat_is_mute', v_person_id), false) then
+        and not json.get_boolean_opt(data.get_raw_attribute_value_for_share(v_chat_id, 'chat_is_mute', v_person_id), false) then
         perform pp_utils.add_notification(v_person_id, 'Новое сообщение ' || (case when v_chat_title is not null then ' в '|| v_chat_title  || ' ' else '' end) || 'от '|| v_actor_title , v_chat_id);
       end if;
     end loop;
@@ -9507,9 +10091,6 @@ declare
   v_actor_id  integer :=data.get_active_actor_id(in_client_id);
 
   v_debatle_status text;
-  v_system_debatle_person1 integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person1'), -1);
-  v_system_debatle_person2 integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person2'), -1);
-  v_system_debatle_judje integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_judge'), -1);
   v_debatle_title text := json.get_string_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_theme'), '');
 
   v_debatle_person_bonuses jsonb;
@@ -9657,13 +10238,13 @@ declare
   v_debatle_code text := json.get_string(in_params, 'debatle_code');
   v_edited_person text := json.get_string_opt(in_params, 'edited_person', '~~~');
   v_debatle_id integer := data.get_object_id(v_debatle_code);
-  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
 
   v_debatle_status text;
-  v_system_debatle_person1 integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person1'), -1);
-  v_system_debatle_person2 integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person2'), -1);
-  v_system_debatle_judje integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_judge'), -1);
-  v_debatle_title text := json.get_string_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_theme'), '');
+  v_system_debatle_person1 integer := json.get_integer_opt(data.get_attribute_value_for_update(v_debatle_id, 'system_debatle_person1'), -1);
+  v_system_debatle_person2 integer := json.get_integer_opt(data.get_attribute_value_for_update(v_debatle_id, 'system_debatle_person2'), -1);
+  v_system_debatle_judje integer := json.get_integer_opt(data.get_attribute_value_for_update(v_debatle_id, 'system_debatle_judge'), -1);
+  v_debatle_title text := json.get_string_opt(data.get_attribute_value_for_update(v_debatle_id, 'system_debatle_theme'), '');
 
   v_content_attribute_id integer := data.get_attribute_id('content');
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
@@ -9982,7 +10563,7 @@ begin
   assert in_request_id is not null;
 
   perform * from data.objects o where o.id = v_debatle_id for update;
-  if coalesce(data.get_raw_attribute_value(v_debatle_id, v_subtitle_attribute_id, null), jsonb '"~~~"') <> to_jsonb(v_subtitle) then
+  if coalesce(data.get_raw_attribute_value(v_debatle_id, v_subtitle_attribute_id), jsonb '"~~~"') <> to_jsonb(v_subtitle) then
     v_message_sent := data.change_current_object(in_client_id, 
                                                in_request_id,
                                                v_debatle_id, 
@@ -10035,7 +10616,7 @@ begin
   end if;
 
   perform * from data.objects o where o.id = v_debatle_id for update;
-  if coalesce(data.get_raw_attribute_value(v_debatle_id, v_system_debatle_theme_attribute_id, null), jsonb '"~~~"') <> to_jsonb(v_title) then
+  if coalesce(data.get_raw_attribute_value(v_debatle_id, v_system_debatle_theme_attribute_id), jsonb '"~~~"') <> to_jsonb(v_title) then
     v_message_sent := data.change_current_object(in_client_id, 
                                                in_request_id,
                                                v_debatle_id, 
@@ -10175,8 +10756,8 @@ $$
 declare
   v_document_code text := json.get_string(in_params, 'document_code');
   v_document_id integer := data.get_object_id(v_document_code);
-  v_actor_id integer :=data.get_active_actor_id(in_client_id);
-  v_system_document_category text := json.get_string_opt(data.get_attribute_value(v_document_id, 'system_document_category'),'~');
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_system_document_category text := json.get_string_opt(data.get_attribute_value_for_share(v_document_id, 'system_document_category'),'~');
   v_my_documents_id integer := data.get_object_id('my_documents');
   v_official_documents_id integer := data.get_object_id('official_documents');
 begin
@@ -10206,7 +10787,7 @@ $$
 declare
   v_document_code text := json.get_string(in_params, 'document_code');
   v_document_id integer := data.get_object_id(v_document_code);
-  v_actor_id integer :=data.get_active_actor_id(in_client_id);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
 
   v_system_document_participants jsonb;
   v_document_participants text;
@@ -10221,12 +10802,10 @@ declare
 begin
   assert in_request_id is not null;
 
-  perform * from data.objects where id = v_document_id for update;
-
-  v_document_status := json.get_string_opt(data.get_attribute_value(v_document_id, 'document_status'),'');
+  v_document_status := json.get_string_opt(data.get_attribute_value_for_update(v_document_id, 'document_status'),'');
   assert v_document_status = 'signing';
 
-  v_system_document_participants := data.get_attribute_value(v_document_id, 'system_document_participants');
+  v_system_document_participants := data.get_attribute_value_for_update(v_document_id, 'system_document_participants');
   -- Отзываем все подписи
   for v_person_code in (select x.key
                           from jsonb_each_text(v_system_document_participants) x
@@ -10275,7 +10854,7 @@ declare
   v_document_code text;
   v_document_id integer;
 
-  v_actor_id integer :=data.get_active_actor_id(in_client_id);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
 
   v_my_documents_id integer := data.get_object_id('my_documents');
   v_master_group_id integer := data.get_object_id('master');
@@ -10318,7 +10897,7 @@ $$
 declare
   v_document_code text := json.get_string(in_params, 'document_code');
   v_document_id integer := data.get_object_id(v_document_code);
-  v_actor_id integer :=data.get_active_actor_id(in_client_id);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_master_group_id integer := data.get_object_id('master');
 
   v_document_author integer;
@@ -10326,8 +10905,6 @@ declare
   v_changes jsonb[];
 begin
   assert in_request_id is not null;
-
-  perform * from data.objects where id = v_document_id for update;
 
   v_document_author := json.get_integer(data.get_attribute_value(v_document_id, 'system_document_author'));
   v_changes := array[]::jsonb[];
@@ -10340,7 +10917,6 @@ begin
                                         v_actor_id);
 
   perform api_utils.create_go_back_action_notification(in_client_id, in_request_id);
-
 end;
 $$
 language plpgsql;
@@ -10357,14 +10933,13 @@ declare
   v_title text := json.get_string(in_user_params, 'title');
   v_document_text text := json.get_string(in_user_params, 'document_text');
   v_document_id integer := data.get_object_id(v_document_code);
-  v_actor_id integer :=data.get_active_actor_id(in_client_id);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
 
   v_changes jsonb[];
   v_message_sent boolean := false;
 begin
   assert in_request_id is not null;
 
-  perform * from data.objects where id = v_document_id for update;
   v_changes := array[]::jsonb[];
 
   v_changes := array_append(v_changes, data.attribute_change2jsonb('title', to_jsonb(v_title)));
@@ -10377,7 +10952,7 @@ begin
                                                  to_jsonb(v_changes));
 
   if not v_message_sent then
-   perform api_utils.create_ok_notification(in_client_id, in_request_id);
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
   end if;
 end;
 $$
@@ -10393,8 +10968,8 @@ $$
 declare
   v_document_code text := json.get_string(in_params, 'document_code');
   v_document_id integer := data.get_object_id(v_document_code);
-  v_actor_id integer :=data.get_active_actor_id(in_client_id);
-  v_system_document_category text := json.get_string_opt(data.get_attribute_value(v_document_id, 'system_document_category'),'~');
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_system_document_category text := json.get_string_opt(data.get_attribute_value_for_update(v_document_id, 'system_document_category'),'~');
   v_system_document_author integer := json.get_integer(data.get_attribute_value(v_document_id, 'system_document_author'));
   v_my_documents_id integer := data.get_object_id('my_documents');
   v_official_documents_id integer := data.get_object_id('official_documents');
@@ -10402,7 +10977,7 @@ declare
   v_message_sent boolean;
 
   v_list_attributes jsonb;
-  v_document_title text := json.get_string_opt(data.get_attribute_value(v_document_id, 'title', v_actor_id),'');
+  v_document_title text := json.get_string_opt(data.get_attribute_value_for_share(v_document_id, 'title'),'');
   v_content text[];
   v_signer_list_id integer;
 begin
@@ -10419,10 +10994,8 @@ begin
                                                jsonb_build_array(data.attribute_change2jsonb('system_document_category', jsonb '"official"'),
                                                                  data.attribute_change2jsonb('document_status', jsonb '"draft"')));
 
-
-
   -- Создаём объект для изменения списка участников документа
-  if not data.is_object(v_document_code || '_signers_list') then
+  if not data.is_object_exists(v_document_code || '_signers_list') then
     v_content:= pallas_project.get_document_possible_signers(v_document_id);
     v_list_attributes := jsonb_build_array(
       jsonb_build_object('code', 'title', 'value', 'Добавление участников документа ' || v_document_title),
@@ -10464,9 +11037,7 @@ declare
 begin
   assert in_request_id is not null;
 
-  perform * from data.objects where id = v_document_id for update;
-
-  v_system_document_participants := data.get_attribute_value(v_document_id, 'system_document_participants');
+  v_system_document_participants := data.get_attribute_value_for_share(v_document_id, 'system_document_participants');
 
   v_changes := array[]::jsonb[];
 
@@ -10500,13 +11071,13 @@ $$
 declare
   v_share_list_code text := json.get_string(in_params, 'share_list_code');
   v_share_list_id integer := data.get_object_id(v_share_list_code);
-  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_document_id integer := json.get_integer(data.get_attribute_value(v_share_list_id, 'system_document_temp_list_document_id'));
 
   v_system_document_temp_share_list integer[] := json.get_integer_array_opt(data.get_attribute_value(v_share_list_id, 'system_document_temp_share_list'), array[]::integer[]);
 
   v_person_id integer;
-  v_message text := json.get_string_opt(data.get_attribute_value(v_actor_id, 'title', v_actor_id), 'Неизвестный') || ' поделился с вами документом';
+  v_message text := 'Пользователь "' || json.get_string_opt(data.get_attribute_value(v_actor_id, 'title', v_actor_id), 'Неизвестный') || '" поделился с вами документом';
 begin
   assert in_request_id is not null;
 
@@ -10529,14 +11100,14 @@ $$
 declare
   v_document_code text := json.get_string(in_params, 'document_code');
   v_document_id integer := data.get_object_id(v_document_code);
-  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
 
   v_content_attribute_id integer := data.get_attribute_id('content');
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
   v_title_attribute_id integer := data.get_attribute_id('title');
   v_system_document_temp_list_document_id_attribute_id integer := data.get_attribute_id('system_document_temp_list_document_id');
 
-  v_document_title text := json.get_string_opt(data.get_attribute_value(v_document_id, v_title_attribute_id, v_actor_id), '');
+  v_document_title text := json.get_string_opt(data.get_raw_attribute_value_for_share(v_document_id, v_title_attribute_id), '');
   v_is_master boolean := pp_utils.is_in_group(in_client_id, 'master');
   v_persons text := '';
   v_name record;
@@ -10607,9 +11178,7 @@ declare
 begin
   assert in_request_id is not null;
 
-  perform * from data.objects where id = v_document_id for update;
-
-  v_system_document_participants := data.get_attribute_value(v_document_id, 'system_document_participants');
+  v_system_document_participants := data.get_attribute_value_for_update(v_document_id, 'system_document_participants');
 
   v_changes := array[]::jsonb[];
 
@@ -10817,12 +11386,12 @@ begin
   v_chat_code := data.get_object_code(in_object_id);
 
   v_chat_parent_list := json.get_string_opt(data.get_attribute_value(in_object_id, 'system_chat_parent_list'), '~');
-  v_chat_can_invite := json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_invite'), false);
-  v_chat_can_leave := json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_leave'), false);
-  v_chat_can_mute := json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_mute'), false);
-  v_chat_can_rename := json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_can_rename'), false);
-  v_chat_cant_write := json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_cant_write'), false);
-  v_chat_cant_see_members := json.get_boolean_opt(data.get_attribute_value(in_object_id, 'system_chat_cant_see_members'), false);
+  v_chat_can_invite := json.get_boolean_opt(data.get_attribute_value_for_share(in_object_id, 'system_chat_can_invite'), false);
+  v_chat_can_leave := json.get_boolean_opt(data.get_attribute_value_for_share(in_object_id, 'system_chat_can_leave'), false);
+  v_chat_can_mute := json.get_boolean_opt(data.get_attribute_value_for_share(in_object_id, 'system_chat_can_mute'), false);
+  v_chat_can_rename := json.get_boolean_opt(data.get_attribute_value_for_share(in_object_id, 'system_chat_can_rename'), false);
+  v_chat_cant_write := json.get_boolean_opt(data.get_attribute_value_for_share(in_object_id, 'system_chat_cant_write'), false);
+  v_chat_cant_see_members := json.get_boolean_opt(data.get_attribute_value_for_share(in_object_id, 'system_chat_cant_see_members'), false);
 
   if not v_chat_cant_see_members then
     v_actions_list := v_actions_list || 
@@ -10841,7 +11410,7 @@ begin
   end if;
 
   if pp_utils.is_in_group(in_actor_id, v_chat_code) and (v_is_master and v_chat_parent_list <> 'master_chats' or v_chat_can_mute) then
-    v_chat_is_mute := json.get_boolean_opt(data.get_attribute_value(in_object_id, 'chat_is_mute', in_actor_id), false);
+    v_chat_is_mute := json.get_boolean_opt(data.get_raw_attribute_value_for_share(in_object_id, 'chat_is_mute', in_actor_id), false);
     v_actions_list := v_actions_list || 
         format(', "chat_mute": {"code": "chat_mute", "name": "%s", "disabled": false,'||
                 '"params": {"chat_code": "%s", "mute_on_off": "%s"}}',
@@ -10859,7 +11428,7 @@ begin
         format(', "chat_rename": {"code": "chat_rename", "name": "Переименовать чат", "disabled": false, "warning": "Чат поменяет имя для всех его участников.",'||
                 '"params": {"chat_code": "%s"}, "user_params": [{"code": "title", "description": "Введите имя чата", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"}]}',
                 v_chat_code,
-                json.get_string_opt(data.get_attribute_value(in_object_id, 'title', in_actor_id), null));
+                json.get_string_opt(data.get_raw_attribute_value_for_share(in_object_id, 'title'), null));
   end if;
 
   if not v_chat_cant_write and (not v_is_master or v_chat_parent_list = 'master_chats') then
@@ -10906,7 +11475,6 @@ begin
                 v_chat_code,
                 case when v_chat_can_rename then 'off' else 'on' end);
   end if;
-
 
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;
@@ -11015,7 +11583,7 @@ begin
         format(', "debatle_change_theme": {"code": "debatle_change_theme", "name": "Изменить тему", "disabled": false, '||
                 '"params": {"debatle_code": "%s"}, "user_params": [{"code": "title", "description": "Введите тему дебатла", "type": "string", "default_value": "%s" }]}',
                 v_debatle_code,
-                json.get_string_opt(data.get_raw_attribute_value(in_object_id, v_system_debatle_theme_attribute_id, null),''));
+                json.get_string_opt(data.get_raw_attribute_value(in_object_id, v_system_debatle_theme_attribute_id),''));
   end if;
 
   if v_is_master then
@@ -11023,7 +11591,7 @@ begin
         format(', "debatle_change_subtitle": {"code": "debatle_change_subtitle", "name": "Изменить место и время", "disabled": false, '||
                 '"params": {"debatle_code": "%s"}, "user_params": [{"code": "subtitle", "description": "Введите место и время текстом", "type": "string", "default_value": "%s" }]}',
                 v_debatle_code,
-                json.get_string_opt(data.get_raw_attribute_value(in_object_id, v_subtitle_attribute_id, null),''));
+                json.get_string_opt(data.get_raw_attribute_value(in_object_id, v_subtitle_attribute_id),''));
   end if;
 
   if (v_is_master or in_actor_id = v_person1_id) and v_debatle_status in ('draft') then
@@ -11220,9 +11788,9 @@ declare
   v_master_group_id integer := data.get_object_id('master');
   v_document_code text := data.get_object_code(in_object_id);
   v_document_author integer := json.get_integer(data.get_attribute_value(in_object_id, 'system_document_author'));
-  v_document_category text := json.get_string(data.get_attribute_value(in_object_id, 'system_document_category'));
-  v_document_status text := json.get_string_opt(data.get_attribute_value(in_object_id, 'document_status'),'');
-  v_system_document_participants jsonb := data.get_attribute_value(in_object_id, 'system_document_participants');
+  v_document_category text := json.get_string(data.get_attribute_value_for_share(in_object_id, 'system_document_category'));
+  v_document_status text := json.get_string_opt(data.get_attribute_value_for_share(in_object_id, 'document_status'),'');
+  v_system_document_participants jsonb := data.get_attribute_value_for_share(in_object_id, 'system_document_participants');
   v_document_list_content text[];
   v_my_documents_id integer := data.get_object_id('my_documents');
   v_official_documents_id integer := data.get_object_id('official_documents');
@@ -11237,8 +11805,8 @@ begin
   "user_params": [{"code": "title", "description": "Заголовок", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"},
   {"code": "document_text", "description": "Текст документа", "type": "string", "restrictions": {"min_length": 1, "multiline": true}, "default_value": %s}]}',
                   v_document_code,
-                  json.get_string_opt(data.get_attribute_value(in_object_id, 'title', in_actor_id), null),
-                  coalesce(data.get_attribute_value(in_object_id, 'document_text')::text, '""'));
+                  json.get_string_opt(data.get_raw_attribute_value_for_share(in_object_id, 'title'), null),
+                  coalesce(data.get_attribute_value_for_share(in_object_id, 'document_text')::text, '""'));
 
       v_actions_list := v_actions_list || 
           format(', "document_delete": {"code": "document_delete", "name": "Удалить", "disabled": false, "warning": "Документ исчезнет безвозвратно. Точно удаляем?", '||
@@ -11260,9 +11828,9 @@ begin
 
     if not v_is_master and v_document_category in ('private', 'official') then
       if v_document_category = 'private' then
-        v_document_list_content := json.get_string_array_opt(data.get_attribute_value(v_my_documents_id, 'content', in_actor_id), array[]::text[]);
+        v_document_list_content := json.get_string_array_opt(data.get_raw_attribute_value_for_share(v_my_documents_id, 'content', in_actor_id), array[]::text[]);
       elseif v_document_category = 'official' then
-        v_document_list_content := json.get_string_array_opt(data.get_attribute_value(v_official_documents_id, 'content', in_actor_id), array[]::text[]);
+        v_document_list_content := json.get_string_array_opt(data.get_raw_attribute_value_for_share(v_official_documents_id, 'content', in_actor_id), array[]::text[]);
       end if;
       if array_position(v_document_list_content, v_document_code) is null then
         v_actions_list := v_actions_list || 
@@ -11382,9 +11950,10 @@ volatile
 as
 $$
 declare
-  v_status text := json.get_string(data.get_attribute_value(in_object_id, 'lottery_status'));
+  v_status text := json.get_string(data.get_attribute_value_for_share(in_object_id, 'lottery_status'));
   v_master boolean;
   v_economy_type text;
+  v_lottery_owner text;
   v_ticket_price integer;
   v_money bigint;
   v_actions jsonb := '{}';
@@ -11400,23 +11969,38 @@ begin
             "code": "finish_lottery",
             "name": "Завершить лотерею",
             "disabled": false,
-            "warning": "Завершить?",
+            "warning": "Уверены, что хотите завершить лотерею?",
             "params": null
           },
           "cancel_lottery": {
             "code": "cancel_lottery",
             "name": "Отменить лотерею",
             "disabled": false,
-            "warning": "Отменить?",
+            "warning": "Точно отменить?",
             "params": null
           }
         }';
     else
-      v_economy_type := json.get_string_opt(data.get_attribute_value(in_actor_id, 'system_person_economy_type'), null);
+      v_economy_type := json.get_string_opt(data.get_attribute_value_for_share(in_actor_id, 'system_person_economy_type'), null);
+      v_lottery_owner := json.get_string(data.get_attribute_value_for_share(in_object_id, 'system_lottery_owner'));
+
+      if data.get_object_id(v_lottery_owner) = in_actor_id then
+        v_actions :=
+          v_actions ||
+          jsonb '{
+            "finish_lottery": {
+              "code": "finish_lottery",
+              "name": "Завершить лотерею",
+              "disabled": false,
+              "warning": "Уверены, что хотите завершить лотерею?",
+              "params": null
+            }
+          }';
+      end if;
 
       if v_economy_type = 'asters' then
         v_ticket_price := data.get_integer_param('lottery_ticket_price');
-        v_money := json.get_bigint(data.get_attribute_value(in_actor_id, 'system_money'));
+        v_money := json.get_bigint(data.get_attribute_value_for_share(in_actor_id, 'system_money'));
 
         if v_money < v_ticket_price then
           v_actions :=
@@ -11467,7 +12051,7 @@ declare
   v_actor_code text := data.get_object_code(in_actor_id);
   v_actions jsonb := '{}';
   v_is_master boolean := pp_utils.is_in_group(in_actor_id, 'master');
-  v_economy_type text := json.get_string_opt(data.get_attribute_value(in_actor_id, 'system_person_economy_type'), null);
+  v_economy_type text := json.get_string_opt(data.get_attribute_value_for_share(in_actor_id, 'system_person_economy_type'), null);
 begin
   assert in_actor_id is not null;
 
@@ -11540,19 +12124,31 @@ begin
       "districts": {"code": "act_open_object", "name": "Районы", "disabled": false, "params": {"object_code": "districts"}}
     }';
 
-  if v_is_master or v_economy_type = 'asters' then
-    declare
-      v_lottery_status text := json.get_string(data.get_attribute_value(data.get_object_id('lottery'), 'lottery_status'));
-    begin
-      if v_lottery_status = 'active' then
+  declare
+    v_lottery_id integer := data.get_object_id('lottery');
+    v_lottery_status text := json.get_string(data.get_attribute_value_for_share(v_lottery_id, 'lottery_status'));
+    v_generate boolean := false;
+    v_lottery_owner text;
+  begin
+    if v_lottery_status = 'active' then
+      if v_is_master or v_economy_type = 'asters' then
+        v_generate := true;
+      else
+        v_lottery_owner := json.get_string(data.get_attribute_value_for_share(v_lottery_id, 'system_lottery_owner'));
+        if v_lottery_owner = v_actor_code then
+          v_generate := true;
+        end if;
+      end if;
+
+      if v_generate then
         v_actions :=
           v_actions ||
           jsonb '{
               "lottery": {"code": "act_open_object", "name": "Лотерея гражданства ООН", "disabled": false, "params": {"object_code": "lottery"}}
           }';
       end if;
-    end;
-  end if;
+    end if;
+  end;
 
   return v_actions;
 end;
@@ -11576,12 +12172,12 @@ declare
   v_actions jsonb := jsonb '{}';
 begin
   if not v_master then
-    v_economy_type := json.get_string(data.get_attribute_value(in_actor_id, 'system_person_economy_type'));
+    v_economy_type := json.get_string(data.get_attribute_value_for_share(in_actor_id, 'system_person_economy_type'));
 
     if v_economy_type = 'un' then
-      v_coins := json.get_integer(data.get_attribute_value(in_actor_id, 'system_person_coin'));
+      v_coins := json.get_integer(data.get_attribute_value_for_share(in_actor_id, 'system_person_coin'));
     else
-      v_money := json.get_integer(data.get_attribute_value(in_actor_id, 'system_money'));
+      v_money := json.get_integer(data.get_attribute_value_for_share(in_actor_id, 'system_money'));
       v_coin_price := data.get_integer_param('coin_price');
     end if;
   end if;
@@ -11594,7 +12190,7 @@ begin
   loop
     declare
       v_status_prices integer[] := data.get_integer_array_param(v_status_name || '_status_prices');
-      v_status integer := json.get_integer(data.get_attribute_value(in_object_id, v_status_name || '_next_status'));
+      v_status integer := json.get_integer(data.get_attribute_value_for_share(in_object_id, v_status_name || '_next_status'));
       v_price bigint;
       v_too_expensive boolean;
       v_action record;
@@ -11681,7 +12277,7 @@ declare
   v_actions jsonb := jsonb '{}';
 begin
   if v_master then
-    v_economy_type := data.get_attribute_value(in_object_id, 'system_person_economy_type');
+    v_economy_type := data.get_attribute_value_for_share(in_object_id, 'system_person_economy_type');
     if v_economy_type is not null then
       v_actions :=
         v_actions ||
@@ -11743,12 +12339,10 @@ declare
   v_changes jsonb[];
   v_content text[];
   v_persons text := '';
-  v_chat_can_invite boolean := json.get_boolean_opt(data.get_attribute_value(in_chat_id, 'system_chat_can_invite'), false);
+  v_chat_can_invite boolean := json.get_boolean_opt(data.get_attribute_value_for_share(in_chat_id, 'system_chat_can_invite'), false);
   v_master_group_id integer := data.get_object_id('master');
 begin
   -- Меняем привязанный к чату список для участников
-  perform * from data.objects where id = v_chat_person_list_id for update;
-
   v_changes := array[]::jsonb[];
   if in_chat_title is not null then 
     v_changes := array_append(v_changes, data.attribute_change2jsonb('title', to_jsonb('Участники чата ' || in_chat_title)));
@@ -11944,6 +12538,7 @@ returns void
 volatile
 as
 $$
+-- Не для использования на игре, т.к. обновляет атрибуты напрямую, без уведомлений и блокировок!
 declare
   v_person_id integer := data.create_object(null, in_attributes, 'person', in_groups);
   v_person_code text := data.get_object_code(v_person_id);
@@ -12146,7 +12741,7 @@ begin
       if v_is_person then
         select jsonb_agg(o.code order by data.get_attribute_value(o.id, data.get_attribute_id('title'), o.id))
         into v_content
-        from jsonb_array_elements(data.get_raw_attribute_value(v_district_id, 'content', null) || to_jsonb(v_person_code)) arr
+        from jsonb_array_elements(data.get_raw_attribute_value(v_district_id, 'content') || to_jsonb(v_person_code)) arr
         join data.objects o on
           o.code = json.get_string(arr.value);
 
@@ -12294,21 +12889,21 @@ begin
   if v_person1_id is not null then
     v_new_person1 := data.get_attribute_value(v_person1_id, v_title_attribute_id, in_actor_id);
   end if;
-  if coalesce(data.get_raw_attribute_value(in_object_id, v_debatle_person1_attribute_id, null), jsonb '"~~~"') <> coalesce(v_new_person1, jsonb '"~~~"') then
+  if coalesce(data.get_raw_attribute_value(in_object_id, v_debatle_person1_attribute_id), jsonb '"~~~"') <> coalesce(v_new_person1, jsonb '"~~~"') then
     perform data.set_attribute_value(in_object_id, v_debatle_person1_attribute_id, v_new_person1, null, in_actor_id);
   end if;
 
   if v_person2_id is not null then
     v_new_person2 := data.get_attribute_value(v_person2_id, v_title_attribute_id, in_actor_id);
   end if;
-  if coalesce(data.get_raw_attribute_value(in_object_id, v_debatle_person2_attribute_id, null), jsonb '"~~~"') <> coalesce(v_new_person2, jsonb '"~~~"') then
+  if coalesce(data.get_raw_attribute_value(in_object_id, v_debatle_person2_attribute_id), jsonb '"~~~"') <> coalesce(v_new_person2, jsonb '"~~~"') then
     perform data.set_attribute_value(in_object_id, v_debatle_person2_attribute_id, v_new_person2, null, in_actor_id);
   end if;
 
   if v_judge_id is not null then
     v_new_judge := data.get_attribute_value(v_judge_id, v_title_attribute_id, in_actor_id);
   end if;
-  if coalesce(data.get_raw_attribute_value(in_object_id, v_debatle_judge_attribute_id, null), jsonb '"~~~"') <> coalesce(v_new_judge, jsonb '"~~~"') then
+  if coalesce(data.get_raw_attribute_value(in_object_id, v_debatle_judge_attribute_id), jsonb '"~~~"') <> coalesce(v_new_judge, jsonb '"~~~"') then
     perform data.set_attribute_value(in_object_id, v_debatle_judge_attribute_id, v_new_judge, null, in_actor_id);
   end if;
 
@@ -12345,7 +12940,6 @@ begin
 
     select coalesce(sum(x.votes), 0) into v_debatle_person1_bonuses from jsonb_to_recordset(v_debatle_person1_bonuses_json) as x(code text, name text, votes int);
     select coalesce(sum(x.votes), 0) into v_debatle_person2_bonuses from jsonb_to_recordset(v_debatle_person2_bonuses_json) as x(code text, name text, votes int);
-
 
     v_new_debatle_person1_votes := to_jsonb(format('Количество голосов за %s: %s + %s (от судьи) = %s',
                                                     json.get_string_opt(v_new_person1, 'зачинщика'), 
@@ -12416,16 +13010,19 @@ declare
 begin
 -- Список участников чата
 -- in_but_masters = true - кроме мастеров
-  select jsonb_agg(jsonb_build_object('code', o.code, 'name', av.value) order by av.value) into v_persons
-      from data.object_objects oo
-      left join data.attribute_values av on av.object_id = oo.object_id and av.attribute_id = v_title_attribute_id and av.value_object_id is null
-      left join data.objects o on oo.object_id = o.id
-      where oo.parent_object_id = in_chat_id
-        and oo.parent_object_id <> oo.object_id
-        and (not coalesce(in_but_masters, false) 
-             or oo.object_id not in (select oom.object_id from data.object_objects oom
-                                     join data.objects om on om.id = oom.parent_object_id and om.code = 'master'
-                                     where oom.parent_object_id <> oom.object_id));
+  select jsonb_agg(jsonb_build_object('code', code, 'name', value) order by value) into v_persons
+  from (
+    select o.code, av.value
+    from data.object_objects oo
+    left join data.attribute_values av on av.object_id = oo.object_id and av.attribute_id = v_title_attribute_id and av.value_object_id is null
+    join data.objects o on oo.object_id = o.id
+    where oo.parent_object_id = in_chat_id
+      and oo.parent_object_id <> oo.object_id
+      and (not coalesce(in_but_masters, false) 
+           or oo.object_id not in (select oom.object_id from data.object_objects oom
+                                   join data.objects om on om.id = oom.parent_object_id and om.code = 'master'
+                                   where oom.parent_object_id <> oom.object_id))
+    for share of oo) a;
   return v_persons;
 end;
 $$
@@ -12471,13 +13068,17 @@ begin
   assert in_is_master_chat is not null;
   -- Собираем список всех персонажей, кроме тех, кто уже в чате
   -- in_but_masters = true - без мастеров
-  select array_agg(o.code order by av.value) into v_content
-  from data.object_objects oo
-    left join data.objects o on o.id = oo.object_id
+  select array_agg(code) into v_content
+  from (
+    select o.code
+    from data.object_objects oo
+    join data.objects o on o.id = oo.object_id
     left join data.attribute_values av on av.object_id = o.id and av.attribute_id = v_title_attribute_id and av.value_object_id is null
-  where (oo.parent_object_id = v_player_id or in_is_master_chat and oo.parent_object_id in (v_master_id, v_all_person_id))
-    and oo.object_id not in (oo.parent_object_id)
-    and oo.object_id not in (select chat.object_id from data.object_objects chat where chat.parent_object_id = in_chat_id);
+    where (oo.parent_object_id = v_player_id or in_is_master_chat and oo.parent_object_id in (v_master_id, v_all_person_id))
+      and oo.object_id not in (oo.parent_object_id)
+      and oo.object_id not in (select chat.object_id from data.object_objects chat where chat.parent_object_id = in_chat_id)
+    order by av.value
+    for share of o) a;
 
   if v_content is null then
     v_content := array[]::text[];
@@ -12523,7 +13124,7 @@ declare
   v_content text[];
   v_title_attribute_id integer := data.get_attribute_id('title');
   v_player_id integer := data.get_object_id('player');
-  v_system_document_participants jsonb := data.get_attribute_value(in_document_id, 'system_document_participants');
+  v_system_document_participants jsonb := data.get_attribute_value_for_share(in_document_id, 'system_document_participants');
 begin
   -- Собираем список всех персонажей, кроме тех, кто уже в списке участников
   select array_agg(o.code order by av.value) into v_content
@@ -13552,42 +14153,55 @@ as
 $$
 declare
   v_object_id integer;
+  v_lottery_owner_code text;
 begin
   insert into data.params(code, value) values
   ('lottery_ticket_price', jsonb '10');
 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
   ('lottery_ticket_count', 'Количество билетов', 'Количество купленных лотерейных билетов', 'normal', 'full', null, true),
-  ('lottery_status', 'Статус', null, 'normal', 'full', 'pallas_project.vd_lottery_status', false);
+  ('lottery_status', 'Статус', null, 'normal', 'full', 'pallas_project.vd_lottery_status', false),
+  ('system_lottery_owner', null, 'Человек, завершающий лотерею', 'system', null, null, false);
 
   insert into data.actions(code, function) values
   ('buy_lottery_ticket', 'pallas_project.act_buy_lottery_ticket'),
   ('finish_lottery', 'pallas_project.act_finish_lottery'),
   ('cancel_lottery', 'pallas_project.act_cancel_lottery');
 
+  select data.get_object_code(object_id)
+  into v_lottery_owner_code
+  from data.attribute_values
+  where
+    attribute_id = data.get_attribute_id('title') and
+    value = jsonb '"Джерри Адамс"' and
+    value_object_id is null;
+
   v_object_id :=
     data.create_object(
       'lottery',
-      jsonb '[
-        {"code": "is_visible", "value": true},
-        {"code": "title", "value": "Лотерея гражданства ООН"},
-        {"code": "type", "value": "lottery"},
-        {"code": "lottery_status", "value": "active"},
-        {"code": "actions_function", "value": "pallas_project.actgenerator_lottery"},
-        {"code": "description", "value": "Все неграждане, присутствующие на астероиде Паллада на момент старта лотереи, официально зарегистрированные и имеющие комм на момент начала лотереи, получают ОДИН билет ЛОТЕРЕИ ГРАЖДАНСТВА совершенно бесплатно.\n\nКаждый негражданин может ДОПОЛНИТЕЛЬНО приобрести ЛЮБОЕ количество билетов лотереи. Стоимость дополнительного билета — UN$10.\n\nПерепродажа и передача билетов ЛОТЕРЕИ ГРАЖДАНСТВА запрещены.\n\nОтказаться от участия в ЛОТЕРЕЕ ГРАЖДАНСТВА нельзя.\n\nОДИН победитель определяется методом случайного выбора между ВСЕМИ (гарантированными и дополнительно приобретенными) билетами ЛОТЕРЕИ ГРАЖДАНСТВА.\n\nЛОТЕРЕЯ ГРАЖДАНСТВА проводится Амандой Ганди, заместителем отдела внутренней ревизии Управления по вопросам космического пространства ООН. Контролёрами ЛОТЕРЕИ ГРАЖДАНСТВА со стороны астероида Паллада назначаются Александр Корсак, главный экономист, и Кара Трейс, военный наблюдатель.\n\nПОБЕДИТЕЛЬ получит официальное уведомление на свой комм сразу же после завершения лотереи, также он будет объявлен в местных и земных новостях.\n\nГражданство может быть отозвано, если выяснится, что награжденный скрывался от правосудия или совершил уголовно наказуемое деяние до победы в лотерее.\n\nФинальный этап состоится на празднике, посвященном юбилею станции, после торжественной речи Аманды Ганди."},
-        {
-          "code": "template",
-          "value": {
-            "title": "title",
-            "groups": [
-              {"code": "tickets", "attributes": ["lottery_status", "lottery_ticket_count"], "actions": ["buy_lottery_ticket", "finish_lottery", "cancel_lottery"]},
-              {"name": "Правила проведения ЛОТЕРЕИ ГРАЖДАНСТВА", "code": "rules", "attributes": ["description"]}
-            ]
+      format(
+        '[
+          {"code": "is_visible", "value": true},
+          {"code": "title", "value": "Лотерея гражданства ООН"},
+          {"code": "type", "value": "lottery"},
+          {"code": "lottery_status", "value": "active"},
+          {"code": "system_lottery_owner", "value": "%s"},
+          {"code": "actions_function", "value": "pallas_project.actgenerator_lottery"},
+          {"code": "description", "value": "Все неграждане, присутствующие на астероиде Паллада на момент старта лотереи, официально зарегистрированные и имеющие комм на момент начала лотереи, получают ОДИН билет ЛОТЕРЕИ ГРАЖДАНСТВА совершенно бесплатно.\n\nКаждый негражданин может ДОПОЛНИТЕЛЬНО приобрести ЛЮБОЕ количество билетов лотереи. Стоимость дополнительного билета — UN$10.\n\nПерепродажа и передача билетов ЛОТЕРЕИ ГРАЖДАНСТВА запрещены.\n\nОтказаться от участия в ЛОТЕРЕЕ ГРАЖДАНСТВА нельзя.\n\nОДИН победитель определяется методом случайного выбора между ВСЕМИ (гарантированными и дополнительно приобретенными) билетами ЛОТЕРЕИ ГРАЖДАНСТВА.\n\nЛОТЕРЕЯ ГРАЖДАНСТВА проводится Амандой Ганди, заместителем отдела внутренней ревизии Управления по вопросам космического пространства ООН. Контролёрами ЛОТЕРЕИ ГРАЖДАНСТВА со стороны астероида Паллада назначаются Александр Корсак, главный экономист, и Кара Трейс, военный наблюдатель.\n\nПОБЕДИТЕЛЬ получит официальное уведомление на свой комм сразу же после завершения лотереи, также он будет объявлен в местных и земных новостях.\n\nГражданство может быть отозвано, если выяснится, что награжденный скрывался от правосудия или совершил уголовно наказуемое деяние до победы в лотерее.\n\nФинальный этап состоится на празднике, посвященном юбилею станции, после торжественной речи Аманды Ганди."},
+          {
+            "code": "template",
+            "value": {
+              "title": "title",
+              "groups": [
+                {"code": "tickets", "attributes": ["lottery_status", "lottery_ticket_count"], "actions": ["buy_lottery_ticket", "finish_lottery", "cancel_lottery"]},
+                {"name": "Правила проведения ЛОТЕРЕИ ГРАЖДАНСТВА", "code": "rules", "attributes": ["description"]}
+              ]
+            }
           }
-        }
-      ]');
+        ]',
+        v_lottery_owner_code)::jsonb);
 
-  -- Всем добавляем по одному билету
+  -- Всем астерам добавляем по одному билету
   declare
     v_person_id integer;
   begin
@@ -13935,8 +14549,9 @@ begin
   --  Akira SC, 2000 на цикл, Марк Попов и Роберт Ли
   --  Клиника, 250 на цикл, Лина Ковач
   --  Star Helix, 1300 на цикл, Кайла Ангас
-  --  СВП
-  --  Starbucks (картель)
+
+  --  СВП, 4000, Роберт Ли, Лаура Джаррет и Люк Ламбер
+  --  Starbucks (картель), 2000, Марк Попов
 
   -- Поставщики, не видны в общем списке:
   -- Лёд
@@ -13965,9 +14580,12 @@ begin
   --  Большой Склад
 
   -- Личные организации:
-  --  Свободное небо - мормон
+  --  Свободное небо - мормон, 3500 на счету
   --  Вишнёвый сад - экономист
   --  Тариэль - Валентин Штерн, 1000 на счету
+
+  -- Прочие организации:
+  --  Сантьяго Де ла Круз (головной картель)
 
   -- Синонимы:
   --  Салон "Третий глаз" -> (картель)
@@ -14181,6 +14799,8 @@ begin
     array['all_person', 'un', 'player']);
 
   -- Игротехнические персонажи и тайные личности
+  -- Сантьяго де ла Крус - большой картель
+
   perform pallas_project.create_person(
     'p10',
     jsonb '{
@@ -14213,7 +14833,7 @@ volatile
 as
 $$
 declare
-  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_chat_code text := replace(data.get_object_code(in_object_id), '_person_list', '');
   v_chat_id integer := data.get_object_id(v_chat_code);
 
@@ -14222,10 +14842,10 @@ declare
 
   v_title_attribute_id integer := data.get_attribute_id('title');
 
-  v_chat_is_renamed boolean := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_renamed'), false);
+  v_chat_is_renamed boolean := json.get_boolean_opt(data.get_attribute_value_for_share(v_chat_id, 'system_chat_is_renamed'), false);
   v_chat_parent_list text := json.get_string_opt(data.get_attribute_value(v_chat_id, 'system_chat_parent_list'), '~');
   v_new_chat_subtitle text := '';
-  v_chat_title text := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), '');
+  v_chat_title text;
 
   v_changes jsonb[];
   v_message_sent boolean;
@@ -14249,12 +14869,12 @@ begin
   v_new_chat_subtitle := trim(v_new_chat_subtitle, ', ');
 
   -- Меняем заголовок чата
-  perform * from data.objects where id = v_chat_id for update;
   v_changes := array[]::jsonb[];
   if not v_chat_is_renamed then 
     v_chat_title := v_new_chat_subtitle;
     v_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, to_jsonb(v_chat_title)));
   else
+    v_chat_title := json.get_string_opt(data.get_raw_attribute_value_for_update(v_chat_id, v_title_attribute_id, v_actor_id), '');
     v_changes := array_append(v_changes, data.attribute_change2jsonb('subtitle', to_jsonb(v_new_chat_subtitle)));
   end if;
   perform data.change_object_and_notify(v_chat_id, 
@@ -14517,7 +15137,7 @@ volatile
 as
 $$
 declare
-  v_actor_id integer :=data.get_active_actor_id(in_client_id);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_document_code text := replace(data.get_object_code(in_object_id), '_signers_list', '');
   v_document_id integer := data.get_object_id(v_document_code);
   v_system_document_participants jsonb;
@@ -14539,10 +15159,7 @@ begin
   assert in_request_id is not null;
   assert in_list_object_id is not null;
 
-  perform * from data.objects where id = v_document_id for update;
-  perform * from data.objects where id = in_object_id for update;
-
-  v_system_document_participants := data.get_attribute_value(v_document_id, 'system_document_participants');
+  v_system_document_participants := data.get_attribute_value_for_update(v_document_id, 'system_document_participants');
   v_system_document_participants := v_system_document_participants || jsonb_build_object(v_list_object_code, false);
 
   v_document_participants := pallas_project.get_document_participants(v_system_document_participants, v_actor_id, true);
@@ -14584,7 +15201,7 @@ volatile
 as
 $$
 declare
-  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
 
   v_system_document_temp_share_list_attribute_id integer := data.get_attribute_id('system_document_temp_share_list');
   v_system_document_temp_share_list integer[];
@@ -14600,11 +15217,9 @@ begin
   assert in_request_id is not null;
   assert in_list_object_id is not null;
 
-  perform * from data.objects where id = in_object_id for update;
-
-  v_system_document_temp_share_list := json.get_integer_array_opt(data.get_attribute_value(in_object_id, v_system_document_temp_share_list_attribute_id), array[]::integer[]);
-  v_document_temp_share_list := json.get_string_opt(data.get_attribute_value(in_object_id, v_document_temp_share_list_attribute_id), '');
-  v_content := json.get_string_array_opt(data.get_attribute_value(in_object_id, v_content_attribute_id, v_actor_id), array[]::text[]);
+  v_system_document_temp_share_list := json.get_integer_array_opt(data.get_attribute_value_for_update(in_object_id, v_system_document_temp_share_list_attribute_id), array[]::integer[]);
+  v_document_temp_share_list := json.get_string_opt(data.get_attribute_value_for_update(in_object_id, v_document_temp_share_list_attribute_id), '');
+  v_content := json.get_string_array_opt(data.get_raw_attribute_value_for_update(in_object_id, v_content_attribute_id), array[]::text[]);
 
   v_system_document_temp_share_list := array_append(v_system_document_temp_share_list, in_list_object_id);
   v_changes := array_append(v_changes, data.attribute_change2jsonb(v_system_document_temp_share_list_attribute_id, to_jsonb(v_system_document_temp_share_list)));
@@ -14694,7 +15309,7 @@ begin
   if in_object_code is not null then
     v_text := in_text || ' ' || pp_utils.link(in_object_code, in_actor_id);
   else
-   v_text := in_text;
+    v_text := in_text;
   end if;
   -- Создаём новое сообщение
   insert into data.objects(class_id) values (v_message_class_id) returning id, code into v_message_id, v_message_code;
@@ -14708,7 +15323,6 @@ begin
 
   -- Добавляем сообщение в чат
   perform pp_utils.list_prepend_and_notify(v_chat_id, v_message_code, null, in_actor_id);
-
 end;
 $$
 language plpgsql;
@@ -14741,7 +15355,6 @@ declare
   v_chat_bot_title text := json.get_string(data.get_attribute_value(v_chat_bot_id, v_title_attribute_id, v_master_group_id));
 
   v_title text := pp_utils.format_date(clock_timestamp()) || E'\n' || v_chat_bot_title;
-  v_chat_title text := json.get_string_opt(data.get_attribute_value(v_master_chat_id, v_title_attribute_id, v_master_group_id), null);
 
   v_person_id integer;
 
@@ -14775,7 +15388,7 @@ begin
        and oo.parent_object_id <> oo.object_id)
   loop
     if not pp_utils.is_actor_subscribed(v_person_id, v_master_chat_id) then
-      v_chat_unread_messages := json.get_integer_opt(data.get_attribute_value(v_master_chat_id, v_chat_unread_messages_attribute_id, v_person_id), 0);
+      v_chat_unread_messages := json.get_integer_opt(data.get_raw_attribute_value_for_update(v_master_chat_id, v_chat_unread_messages_attribute_id, v_person_id), 0);
       perform data.change_object_and_notify(v_master_chat_id, 
                                             jsonb_build_array(data.attribute_change2jsonb(v_chat_unread_messages_attribute_id, to_jsonb(v_chat_unread_messages + 1), v_person_id)),
                                             v_person_id);
@@ -15054,13 +15667,8 @@ returns text
 immutable
 as
 $$
-declare
-  v_code text := json.get_string(in_value);
-  v_title text := json.get_string_opt(data.get_attribute_value(data.get_object_id(v_code), 'title', in_actor_id), '???');
 begin
-  assert in_actor_id is not null;
-
-  return format('[%s](babcom:%s)', v_title, v_code);
+  return pp_utils.link(json.get_string(in_value), in_actor_id);
 end;
 $$
 language plpgsql;
@@ -15495,11 +16103,8 @@ declare
   v_new_content text[];
   v_actor_id integer := coalesce(in_actor_id, in_value_object_id);
 begin
-  -- Блокируем список
-  perform * from data.objects where id = in_list_id for update;
-
   -- Достаём, меняем, кладём назад
-  v_content := json.get_string_array_opt(data.get_attribute_value(in_list_id, 'content', v_actor_id), array[]::text[]);
+  v_content := json.get_string_array_opt(data.get_raw_attribute_value_for_update(in_list_id, 'content', in_value_object_id), array[]::text[]);
   v_new_content := array_prepend(in_new_object_code, v_content);
   if v_new_content <> v_content then
     perform data.change_object_and_notify(in_list_id, 
@@ -15525,11 +16130,8 @@ declare
   v_new_content text[];
 
 begin
-  -- Блокируем список
-  perform * from data.objects where id = in_list_id for update;
-
   -- Достаём, меняем, кладём назад
-  v_content := json.get_string_array_opt(data.get_attribute_value(in_list_id, 'content', in_actor_id), array[]::text[]);
+  v_content := json.get_string_array_opt(data.get_raw_attribute_value_for_update(in_list_id, 'content', in_actor_id), array[]::text[]);
   v_new_content := array_remove(v_content, in_object_code);
   if v_new_content <> v_content then
     perform data.change_object_and_notify(in_list_id, 
@@ -15555,15 +16157,12 @@ declare
   v_new_content text[];
 
 begin
-  -- Блокируем список
-  perform * from data.objects where id = in_list_id for update;
-
   -- Достаём, меняем, кладём назад
-  v_content := json.get_string_array_opt(data.get_attribute_value(in_list_id, 'content', in_actor_id), array[]::text[]);
+  v_content := json.get_string_array_opt(data.get_raw_attribute_value_for_update(in_list_id, 'content', in_actor_id), array[]::text[]);
   v_new_content := array_remove(v_content, in_object_code);
   v_new_content := array_prepend(in_object_code, v_new_content);
   if v_new_content <> v_content then
-    perform data.change_object_and_notify(in_list_id, 
+    perform data.change_object_and_notify(in_list_id,
                                           jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, to_jsonb(v_new_content), in_actor_id)),
                                           in_actor_id);
   end if;

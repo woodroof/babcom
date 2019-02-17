@@ -26,7 +26,6 @@ declare
   v_chat_bot_title text := json.get_string(data.get_attribute_value(v_chat_bot_id, v_title_attribute_id, v_master_group_id));
 
   v_title text := pp_utils.format_date(clock_timestamp()) || E'\n' || v_chat_bot_title;
-  v_chat_title text := json.get_string_opt(data.get_attribute_value(v_master_chat_id, v_title_attribute_id, v_master_group_id), null);
 
   v_person_id integer;
 
@@ -60,7 +59,7 @@ begin
        and oo.parent_object_id <> oo.object_id)
   loop
     if not pp_utils.is_actor_subscribed(v_person_id, v_master_chat_id) then
-      v_chat_unread_messages := json.get_integer_opt(data.get_attribute_value(v_master_chat_id, v_chat_unread_messages_attribute_id, v_person_id), 0);
+      v_chat_unread_messages := json.get_integer_opt(data.get_raw_attribute_value_for_update(v_master_chat_id, v_chat_unread_messages_attribute_id, v_person_id), 0);
       perform data.change_object_and_notify(v_master_chat_id, 
                                             jsonb_build_array(data.attribute_change2jsonb(v_chat_unread_messages_attribute_id, to_jsonb(v_chat_unread_messages + 1), v_person_id)),
                                             v_person_id);

@@ -10,11 +10,11 @@ declare
   v_status_name text := json.get_string(in_params, 'status_name');
   v_status_value integer := json.get_integer(in_params, 'value');
   v_status_attribute_id integer = data.get_attribute_id('system_person_next_' || v_status_name || '_status');
-  v_economy_type text := json.get_string(data.get_attribute_value(v_actor_id, 'system_person_economy_type'));
+  v_economy_type text := json.get_string(data.get_attribute_value_for_share(v_actor_id, 'system_person_economy_type'));
   v_currency_attribute_id integer = data.get_attribute_id(case when v_economy_type = 'un' then 'system_person_coin' else 'system_money' end);
   v_status_prices integer[] := data.get_integer_array_param(v_status_name || '_status_prices');
-  v_current_status_value integer;
-  v_current_sum bigint;
+  v_current_status_value integer := json.get_integer(data.get_attribute_value_for_update(v_actor_id, v_status_attribute_id));
+  v_current_sum bigint := json.get_bigint(data.get_attribute_value_for_update(v_actor_id, v_currency_attribute_id));
   v_price bigint;
   v_diff jsonb;
   v_notified boolean;
@@ -22,28 +22,6 @@ begin
   assert in_request_id is not null;
   assert in_user_params is null;
   assert in_default_params is null;
-
-  select json.get_integer(av.value)
-  into v_current_status_value
-  from data.attribute_values av
-  where
-    av.object_id = v_actor_id and
-    av.attribute_id = v_status_attribute_id and
-    av.value_object_id is null
-  for update;
-
-  assert v_current_status_value is not null;
-
-  select json.get_bigint(av.value)
-  into v_current_sum
-  from data.attribute_values av
-  where
-    av.object_id = v_actor_id and
-    av.attribute_id = v_currency_attribute_id and
-    av.value_object_id is null
-  for update;
-
-  assert v_current_sum is not null;
 
   select sum(v_status_prices[value])
   into v_price
@@ -70,7 +48,7 @@ begin
       format(
         'Покупка %s статуса "%s"',
         (case when v_status_value = 1 then 'бронзового' when v_status_value = 2 then 'серебряного' else 'золотого' end),
-        json.get_string(data.get_raw_attribute_value(data.get_class_id(v_status_name || '_status_page'), 'title', null))),
+        json.get_string(data.get_raw_attribute_value(v_status_name || '_status_page', 'title'))),
       -v_price,
       v_current_sum - v_price,
       null,

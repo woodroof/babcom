@@ -18,6 +18,7 @@ begin
     raise exception 'Attempt to remove object % from itself', in_object_id;
   end if;
 
+  -- Блокируем запись, чтобы параллельно с нами никто не удалил из той же группы
   select id
   into v_connection_id
   from data.object_objects
@@ -30,6 +31,47 @@ begin
   if v_connection_id is null then
     raise exception 'Attempt to remove non-existing connection from object % to object %', in_object_id, in_parent_object_id;
   end if;
+
+  -- Блокируем parent'ы и child'ы на чтение, чтобы никто за это время не поменял нужные нам группы
+  perform *
+  from data.object_objects
+  where
+    id in (
+      select oo.id
+      from (
+        select array_agg(os.value) as value
+        from
+        (
+          select distinct(object_id) as value
+          from data.object_objects
+          where parent_object_id = in_object_id
+        ) os
+      ) o
+      join (
+        select array_agg(ps.value) as value
+        from
+        (
+          select distinct(parent_object_id) as value
+          from data.object_objects
+          where object_id = in_parent_object_id
+        ) ps
+      ) po
+      on true
+      join data.object_objects oo
+      on
+        (
+          (
+            oo.parent_object_id = any(o.value) and
+            oo.object_id = any(o.value)
+          ) or
+          (
+            oo.parent_object_id = any(po.value) and
+            oo.object_id = any(po.value)
+          )
+        ) and
+        oo.intermediate_object_ids is null
+    )
+  for share;
 
   select array_agg(i.id)
   into v_ids

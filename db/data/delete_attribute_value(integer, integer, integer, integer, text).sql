@@ -6,6 +6,7 @@ volatile
 as
 $$
 -- Как правило вместо этой функции следует вызывать data.change_object
+-- Эта функция не проставляет правильно блокировки и не рассылает уведомлений
 declare
   v_attribute_value_id integer;
 begin

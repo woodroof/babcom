@@ -32,6 +32,7 @@ begin
     )
   for update;
 
+  -- Блокируем эти записи, чтобы никто параллельно с нами не добавлял в ту же группу
   select true
   into v_exists
   from data.object_objects
@@ -55,6 +56,7 @@ begin
     raise exception 'Cycle detected while adding object % to object %!', in_object_id, in_parent_object_id;
   end if;
 
+  -- Блокируем parent'ы и child'ы на чтение, чтобы никто за это время не поменял нужные нам группы
   perform *
   from data.object_objects
   where
@@ -91,7 +93,6 @@ begin
             oo.object_id = any(po.value)
           )
         ) and
-        oo.parent_object_id != oo.object_id and
         oo.intermediate_object_ids is null
     )
   for share;

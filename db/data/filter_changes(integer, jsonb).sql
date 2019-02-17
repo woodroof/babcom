@@ -8,6 +8,7 @@ $$
 declare
   v_change record;
   v_filtered_changes jsonb := jsonb '[]';
+  v_id integer;
   v_value jsonb;
   v_next_change jsonb;
 begin
@@ -23,15 +24,38 @@ begin
     from jsonb_array_elements(in_changes)
   )
   loop
-    v_value := data.get_raw_attribute_value(in_object_id, v_change.id, v_change.value_object_id);
+    if v_change.value is null then
+      if v_change.value_object_id is null then
+        select id
+        into v_id
+        from data.attribute_values
+        where
+          object_id = in_object_id and
+          attribute_id = v_change.id and
+          value_object_id is null
+        for update;
+      else
+        select id
+        into v_id
+        from data.attribute_values
+        where
+          object_id = in_object_id and
+          attribute_id = v_change.id and
+          value_object_id = v_change.value_object_id
+        for update;
+      end if;
 
-    if
       -- Удалять нечего
-      v_change.value is null and v_value is null or
+      if v_id is null then
+        continue;
+      end if;
+    else
+      v_value := data.get_raw_attribute_value_for_update(in_object_id, v_change.id, v_change.value_object_id);
+
       -- Уже то же значение
-      v_change.value = v_value
-    then
-      continue;
+      if v_change.value = v_value then
+        continue;
+      end if;
     end if;
 
     v_next_change := jsonb_build_object('id', v_change.id);

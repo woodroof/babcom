@@ -8,8 +8,8 @@ $$
 declare
   v_document_code text := json.get_string(in_params, 'document_code');
   v_document_id integer := data.get_object_id(v_document_code);
-  v_actor_id integer :=data.get_active_actor_id(in_client_id);
-  v_system_document_category text := json.get_string_opt(data.get_attribute_value(v_document_id, 'system_document_category'),'~');
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_system_document_category text := json.get_string_opt(data.get_attribute_value_for_update(v_document_id, 'system_document_category'),'~');
   v_system_document_author integer := json.get_integer(data.get_attribute_value(v_document_id, 'system_document_author'));
   v_my_documents_id integer := data.get_object_id('my_documents');
   v_official_documents_id integer := data.get_object_id('official_documents');
@@ -17,7 +17,7 @@ declare
   v_message_sent boolean;
 
   v_list_attributes jsonb;
-  v_document_title text := json.get_string_opt(data.get_attribute_value(v_document_id, 'title', v_actor_id),'');
+  v_document_title text := json.get_string_opt(data.get_attribute_value_for_share(v_document_id, 'title'),'');
   v_content text[];
   v_signer_list_id integer;
 begin
@@ -34,10 +34,8 @@ begin
                                                jsonb_build_array(data.attribute_change2jsonb('system_document_category', jsonb '"official"'),
                                                                  data.attribute_change2jsonb('document_status', jsonb '"draft"')));
 
-
-
   -- Создаём объект для изменения списка участников документа
-  if not data.is_object(v_document_code || '_signers_list') then
+  if not data.is_object_exists(v_document_code || '_signers_list') then
     v_content:= pallas_project.get_document_possible_signers(v_document_id);
     v_list_attributes := jsonb_build_array(
       jsonb_build_object('code', 'title', 'value', 'Добавление участников документа ' || v_document_title),

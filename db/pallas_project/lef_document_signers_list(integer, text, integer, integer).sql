@@ -6,7 +6,7 @@ volatile
 as
 $$
 declare
-  v_actor_id integer :=data.get_active_actor_id(in_client_id);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_document_code text := replace(data.get_object_code(in_object_id), '_signers_list', '');
   v_document_id integer := data.get_object_id(v_document_code);
   v_system_document_participants jsonb;
@@ -28,10 +28,7 @@ begin
   assert in_request_id is not null;
   assert in_list_object_id is not null;
 
-  perform * from data.objects where id = v_document_id for update;
-  perform * from data.objects where id = in_object_id for update;
-
-  v_system_document_participants := data.get_attribute_value(v_document_id, 'system_document_participants');
+  v_system_document_participants := data.get_attribute_value_for_update(v_document_id, 'system_document_participants');
   v_system_document_participants := v_system_document_participants || jsonb_build_object(v_list_object_code, false);
 
   v_document_participants := pallas_project.get_document_participants(v_system_document_participants, v_actor_id, true);

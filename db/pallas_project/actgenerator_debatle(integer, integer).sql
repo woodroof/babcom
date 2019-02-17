@@ -54,7 +54,7 @@ begin
         format(', "debatle_change_theme": {"code": "debatle_change_theme", "name": "Изменить тему", "disabled": false, '||
                 '"params": {"debatle_code": "%s"}, "user_params": [{"code": "title", "description": "Введите тему дебатла", "type": "string", "default_value": "%s" }]}',
                 v_debatle_code,
-                json.get_string_opt(data.get_raw_attribute_value(in_object_id, v_system_debatle_theme_attribute_id, null),''));
+                json.get_string_opt(data.get_raw_attribute_value(in_object_id, v_system_debatle_theme_attribute_id),''));
   end if;
 
   if v_is_master then
@@ -62,7 +62,7 @@ begin
         format(', "debatle_change_subtitle": {"code": "debatle_change_subtitle", "name": "Изменить место и время", "disabled": false, '||
                 '"params": {"debatle_code": "%s"}, "user_params": [{"code": "subtitle", "description": "Введите место и время текстом", "type": "string", "default_value": "%s" }]}',
                 v_debatle_code,
-                json.get_string_opt(data.get_raw_attribute_value(in_object_id, v_subtitle_attribute_id, null),''));
+                json.get_string_opt(data.get_raw_attribute_value(in_object_id, v_subtitle_attribute_id),''));
   end if;
 
   if (v_is_master or in_actor_id = v_person1_id) and v_debatle_status in ('draft') then

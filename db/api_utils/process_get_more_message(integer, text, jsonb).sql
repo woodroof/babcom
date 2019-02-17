@@ -16,16 +16,11 @@ begin
   into v_actor_id
   from data.clients
   where id = in_client_id
-  for update;
+  for share;
 
   if v_actor_id is null then
     raise exception 'Client % has no active actor', in_client_id;
   end if;
-
-  perform 1
-  from data.objects
-  where id = v_object_id
-  for update;
 
   v_list := data.get_next_list(in_client_id, v_object_id);
 

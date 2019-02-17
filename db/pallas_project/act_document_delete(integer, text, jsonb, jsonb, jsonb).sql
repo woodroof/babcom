@@ -8,7 +8,7 @@ $$
 declare
   v_document_code text := json.get_string(in_params, 'document_code');
   v_document_id integer := data.get_object_id(v_document_code);
-  v_actor_id integer :=data.get_active_actor_id(in_client_id);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_master_group_id integer := data.get_object_id('master');
 
   v_document_author integer;
@@ -16,8 +16,6 @@ declare
   v_changes jsonb[];
 begin
   assert in_request_id is not null;
-
-  perform * from data.objects where id = v_document_id for update;
 
   v_document_author := json.get_integer(data.get_attribute_value(v_document_id, 'system_document_author'));
   v_changes := array[]::jsonb[];
@@ -30,7 +28,6 @@ begin
                                         v_actor_id);
 
   perform api_utils.create_go_back_action_notification(in_client_id, in_request_id);
-
 end;
 $$
 language plpgsql;

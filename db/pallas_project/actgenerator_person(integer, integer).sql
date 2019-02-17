@@ -12,7 +12,7 @@ declare
   v_actions jsonb := jsonb '{}';
 begin
   if v_master then
-    v_economy_type := data.get_attribute_value(in_object_id, 'system_person_economy_type');
+    v_economy_type := data.get_attribute_value_for_share(in_object_id, 'system_person_economy_type');
     if v_economy_type is not null then
       v_actions :=
         v_actions ||

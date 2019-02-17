@@ -15,13 +15,17 @@ begin
   assert in_is_master_chat is not null;
   -- Собираем список всех персонажей, кроме тех, кто уже в чате
   -- in_but_masters = true - без мастеров
-  select array_agg(o.code order by av.value) into v_content
-  from data.object_objects oo
-    left join data.objects o on o.id = oo.object_id
+  select array_agg(code) into v_content
+  from (
+    select o.code
+    from data.object_objects oo
+    join data.objects o on o.id = oo.object_id
     left join data.attribute_values av on av.object_id = o.id and av.attribute_id = v_title_attribute_id and av.value_object_id is null
-  where (oo.parent_object_id = v_player_id or in_is_master_chat and oo.parent_object_id in (v_master_id, v_all_person_id))
-    and oo.object_id not in (oo.parent_object_id)
-    and oo.object_id not in (select chat.object_id from data.object_objects chat where chat.parent_object_id = in_chat_id);
+    where (oo.parent_object_id = v_player_id or in_is_master_chat and oo.parent_object_id in (v_master_id, v_all_person_id))
+      and oo.object_id not in (oo.parent_object_id)
+      and oo.object_id not in (select chat.object_id from data.object_objects chat where chat.parent_object_id = in_chat_id)
+    order by av.value
+    for share of o) a;
 
   if v_content is null then
     v_content := array[]::text[];

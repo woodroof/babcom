@@ -11,9 +11,9 @@ declare
   v_master_group_id integer := data.get_object_id('master');
   v_document_code text := data.get_object_code(in_object_id);
   v_document_author integer := json.get_integer(data.get_attribute_value(in_object_id, 'system_document_author'));
-  v_document_category text := json.get_string(data.get_attribute_value(in_object_id, 'system_document_category'));
-  v_document_status text := json.get_string_opt(data.get_attribute_value(in_object_id, 'document_status'),'');
-  v_system_document_participants jsonb := data.get_attribute_value(in_object_id, 'system_document_participants');
+  v_document_category text := json.get_string(data.get_attribute_value_for_share(in_object_id, 'system_document_category'));
+  v_document_status text := json.get_string_opt(data.get_attribute_value_for_share(in_object_id, 'document_status'),'');
+  v_system_document_participants jsonb := data.get_attribute_value_for_share(in_object_id, 'system_document_participants');
   v_document_list_content text[];
   v_my_documents_id integer := data.get_object_id('my_documents');
   v_official_documents_id integer := data.get_object_id('official_documents');
@@ -28,8 +28,8 @@ begin
   "user_params": [{"code": "title", "description": "Заголовок", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"},
   {"code": "document_text", "description": "Текст документа", "type": "string", "restrictions": {"min_length": 1, "multiline": true}, "default_value": %s}]}',
                   v_document_code,
-                  json.get_string_opt(data.get_attribute_value(in_object_id, 'title', in_actor_id), null),
-                  coalesce(data.get_attribute_value(in_object_id, 'document_text')::text, '""'));
+                  json.get_string_opt(data.get_raw_attribute_value_for_share(in_object_id, 'title'), null),
+                  coalesce(data.get_attribute_value_for_share(in_object_id, 'document_text')::text, '""'));
 
       v_actions_list := v_actions_list || 
           format(', "document_delete": {"code": "document_delete", "name": "Удалить", "disabled": false, "warning": "Документ исчезнет безвозвратно. Точно удаляем?", '||
@@ -51,9 +51,9 @@ begin
 
     if not v_is_master and v_document_category in ('private', 'official') then
       if v_document_category = 'private' then
-        v_document_list_content := json.get_string_array_opt(data.get_attribute_value(v_my_documents_id, 'content', in_actor_id), array[]::text[]);
+        v_document_list_content := json.get_string_array_opt(data.get_raw_attribute_value_for_share(v_my_documents_id, 'content', in_actor_id), array[]::text[]);
       elseif v_document_category = 'official' then
-        v_document_list_content := json.get_string_array_opt(data.get_attribute_value(v_official_documents_id, 'content', in_actor_id), array[]::text[]);
+        v_document_list_content := json.get_string_array_opt(data.get_raw_attribute_value_for_share(v_official_documents_id, 'content', in_actor_id), array[]::text[]);
       end if;
       if array_position(v_document_list_content, v_document_code) is null then
         v_actions_list := v_actions_list || 

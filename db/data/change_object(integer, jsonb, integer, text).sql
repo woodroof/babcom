@@ -35,11 +35,6 @@ begin
 
   v_object_code := data.get_object_code(in_object_id);
 
-  perform *
-  from data.objects
-  where id = in_object_id
-  for update;
-
   -- Сохраним атрибуты и действия для всех клиентов, подписанных на получение изменений данного объекта
   declare
     v_subscription record;

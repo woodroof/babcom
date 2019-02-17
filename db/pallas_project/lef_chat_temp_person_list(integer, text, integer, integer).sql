@@ -6,7 +6,7 @@ volatile
 as
 $$
 declare
-  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_chat_code text := replace(data.get_object_code(in_object_id), '_person_list', '');
   v_chat_id integer := data.get_object_id(v_chat_code);
 
@@ -15,10 +15,10 @@ declare
 
   v_title_attribute_id integer := data.get_attribute_id('title');
 
-  v_chat_is_renamed boolean := json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'system_chat_is_renamed'), false);
+  v_chat_is_renamed boolean := json.get_boolean_opt(data.get_attribute_value_for_share(v_chat_id, 'system_chat_is_renamed'), false);
   v_chat_parent_list text := json.get_string_opt(data.get_attribute_value(v_chat_id, 'system_chat_parent_list'), '~');
   v_new_chat_subtitle text := '';
-  v_chat_title text := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), '');
+  v_chat_title text;
 
   v_changes jsonb[];
   v_message_sent boolean;
@@ -42,12 +42,12 @@ begin
   v_new_chat_subtitle := trim(v_new_chat_subtitle, ', ');
 
   -- Меняем заголовок чата
-  perform * from data.objects where id = v_chat_id for update;
   v_changes := array[]::jsonb[];
   if not v_chat_is_renamed then 
     v_chat_title := v_new_chat_subtitle;
     v_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, to_jsonb(v_chat_title)));
   else
+    v_chat_title := json.get_string_opt(data.get_raw_attribute_value_for_update(v_chat_id, v_title_attribute_id, v_actor_id), '');
     v_changes := array_append(v_changes, data.attribute_change2jsonb('subtitle', to_jsonb(v_new_chat_subtitle)));
   end if;
   perform data.change_object_and_notify(v_chat_id, 

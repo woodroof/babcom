@@ -8,7 +8,7 @@ $$
 declare
   v_document_code text := json.get_string(in_params, 'document_code');
   v_document_id integer := data.get_object_id(v_document_code);
-  v_actor_id integer :=data.get_active_actor_id(in_client_id);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
 
   v_system_document_participants jsonb;
   v_document_participants text;
@@ -23,12 +23,10 @@ declare
 begin
   assert in_request_id is not null;
 
-  perform * from data.objects where id = v_document_id for update;
-
-  v_document_status := json.get_string_opt(data.get_attribute_value(v_document_id, 'document_status'),'');
+  v_document_status := json.get_string_opt(data.get_attribute_value_for_update(v_document_id, 'document_status'),'');
   assert v_document_status = 'signing';
 
-  v_system_document_participants := data.get_attribute_value(v_document_id, 'system_document_participants');
+  v_system_document_participants := data.get_attribute_value_for_update(v_document_id, 'system_document_participants');
   -- Отзываем все подписи
   for v_person_code in (select x.key
                           from jsonb_each_text(v_system_document_participants) x

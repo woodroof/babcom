@@ -20,9 +20,7 @@ declare
 begin
   assert in_request_id is not null;
 
-  perform * from data.objects where id = v_document_id for update;
-
-  v_system_document_participants := data.get_attribute_value(v_document_id, 'system_document_participants');
+  v_system_document_participants := data.get_attribute_value_for_share(v_document_id, 'system_document_participants');
 
   v_changes := array[]::jsonb[];
 
