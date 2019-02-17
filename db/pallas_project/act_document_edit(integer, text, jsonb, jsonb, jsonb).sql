@@ -10,6 +10,7 @@ declare
   v_title text := json.get_string(in_user_params, 'title');
   v_document_text text := json.get_string(in_user_params, 'document_text');
   v_document_id integer := data.get_object_id(v_document_code);
+  v_document_signers_list_id integer;
   v_actor_id integer := data.get_active_actor_id(in_client_id);
 
   v_changes jsonb[];
@@ -27,6 +28,15 @@ begin
                                                  in_request_id,
                                                  v_document_id, 
                                                  to_jsonb(v_changes));
+
+  if data.is_object(v_document_code || '_signers_list') then
+    v_document_signers_list_id := data.get_object_id(v_document_code || '_signers_list');
+    perform data.change_object_and_notify(v_document_signers_list_id, 
+                                        jsonb_build_array(
+                                          data.attribute_change2jsonb('title', to_jsonb('Добавление участников документа ' || v_title))
+                                        ),
+                                        v_actor_id);
+  end if;
 
   if not v_message_sent then
     perform api_utils.create_ok_notification(in_client_id, in_request_id);

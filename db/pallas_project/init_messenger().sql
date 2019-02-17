@@ -299,7 +299,6 @@ begin
   insert into data.actions(code, function) values
   ('create_chat', 'pallas_project.act_create_chat'),
   ('chat_write', 'pallas_project.act_chat_write'),
-  ('chat_add_person','pallas_project.act_chat_add_person'),
   ('chat_leave','pallas_project.act_chat_leave'),
   ('chat_mute','pallas_project.act_chat_mute'),
   ('chat_rename','pallas_project.act_chat_rename'),

@@ -122,6 +122,7 @@ begin
     {"code": "is_visible", "value": true},
     {"code": "priority", "value": 95},
     {"code": "actions_function", "value": "pallas_project.actgenerator_document"},
+    {"code": "list_actions_function", "value": "pallas_project.actgenerator_document_content"},
     {"code": "system_document_participants", "value": {}},
     {
       "code": "mini_card_template",
@@ -200,10 +201,10 @@ begin
   ('document_share_list', 'pallas_project.act_document_share_list'),
   ('document_add_to_my', 'pallas_project.act_document_add_to_my'),
   ('document_make_official', 'pallas_project.act_document_make_official'),
-  ('document_add_signers', 'pallas_project.act_document_add_signers'),
   ('document_send_to_sign', 'pallas_project.act_document_send_to_sign'),
   ('document_sign', 'pallas_project.act_document_sign'),
-  ('document_back_to_editing', 'pallas_project.act_document_back_to_editing');
+  ('document_back_to_editing', 'pallas_project.act_document_back_to_editing'),
+  ('document_delete_signer', 'pallas_project.act_document_delete_signer');
 
 
 end;

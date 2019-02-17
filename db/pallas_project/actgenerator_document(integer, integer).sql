@@ -65,9 +65,9 @@ begin
 
     if v_document_category = 'official' and v_document_status = 'draft' and (v_is_master or in_actor_id = v_document_author) then
       v_actions_list := v_actions_list || 
-          format(', "document_add_signers": {"code": "document_add_signers", "name": "Добавить участников", "disabled": false, '||
-                  '"params": {"document_code": "%s"}}',
-                  v_document_code);
+          format(', "document_add_signers": {"code": "act_open_object", "name": "Добавить участников", "disabled": false, '||
+                  '"params": {"object_code": "%s"}}',
+                  v_document_code || '_signers_list');
 
       v_actions_list := v_actions_list || 
           format(', "document_send_to_sign": {"code": "document_send_to_sign", "name": "Отправить на подпись", "disabled": false, "warning": "Всем участникам будут отправлены уведомления со ссылкой на документ. Редактирование документа будет невозможно. Продолжаем?",'||

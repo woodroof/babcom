@@ -1,6 +1,6 @@
 -- drop function pallas_project.get_document_participants(jsonb, integer, boolean);
 
-create or replace function pallas_project.get_document_participants(in_document_peartitpants jsonb, in_actor_id integer, in_with_sign_info boolean default false)
+create or replace function pallas_project.get_document_participants(in_document_participants jsonb, in_actor_id integer, in_with_sign_info boolean default false)
 returns text
 volatile
 as
@@ -13,7 +13,7 @@ begin
                           (case 
                             when in_with_sign_info then (case when x.value = 'true' then ' - Есть подпись' else ' - Нет подписи' end) 
                             else '' end) sign
-                   from jsonb_each_text(in_document_peartitpants) x) loop
+                   from jsonb_each_text(in_document_participants) x) loop
     v_persons:= v_persons || E'\n' || pp_utils.link(v_record.key, in_actor_id) || v_record.sign;
   end loop;
 

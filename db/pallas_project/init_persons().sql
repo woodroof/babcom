@@ -52,6 +52,17 @@ begin
       "is_visible": true,
       "priority": 200,
       "actions_function": "pallas_project.actgenerator_person",
+      "mini_card_template": {
+        "title": "title",
+        "groups": [
+          {
+            "code": "person_mini_document",
+            "actions": [
+              "document_delete_signer"
+            ]
+          }
+        ]
+      },
       "template": {
         "title": "title",
         "subtitle": "person_occupation",

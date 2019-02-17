@@ -33,8 +33,8 @@ begin
 
   if not v_chat_cant_see_members then
     v_actions_list := v_actions_list || 
-        format(', "chat_add_person": {"code": "chat_add_person", "name": "%s участников", "disabled": false, '||
-                '"params": {"chat_code": "%s"}}',
+        format(', "chat_add_person": {"code": "act_open_object", "name": "%s участников", "disabled": false, '||
+                '"params": {"object_code": "%s_person_list"}}',
                 case when v_is_master and v_chat_parent_list <> 'master_chats' or v_chat_can_invite then 'Добавить/посмотреть'
                 else 'Посмотреть' end,
                 v_chat_code);
