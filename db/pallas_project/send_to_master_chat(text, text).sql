@@ -34,7 +34,7 @@ declare
   v_chat_unread_messages_attribute_id integer := data.get_attribute_id('chat_unread_messages');
 begin
   if in_object_code is not null then
-    v_text := in_text || '. [Перейти](babcom:'||in_object_code||')';
+    v_text := in_text || ' ' || pp_utils.link(in_object_code, v_master_group_id);
   else
    v_text := in_text;
   end if;

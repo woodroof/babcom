@@ -12,7 +12,8 @@ declare
   v_document_code text := data.get_object_code(in_object_id);
   v_document_author integer := json.get_integer(data.get_attribute_value(in_object_id, 'system_document_author'));
   v_document_category text := json.get_string(data.get_attribute_value(in_object_id, 'system_document_category'));
-  v_document_status text := json.get_string_opt(data.get_attribute_value(in_object_id, 'document_status',v_master_group_id),'');
+  v_document_status text := json.get_string_opt(data.get_attribute_value(in_object_id, 'document_status'),'');
+  v_system_document_participants jsonb := data.get_attribute_value(in_object_id, 'system_document_participants');
   v_document_list_content text[];
   v_my_documents_id integer := data.get_object_id('my_documents');
   v_official_documents_id integer := data.get_object_id('official_documents');
@@ -67,6 +68,19 @@ begin
           format(', "document_add_signers": {"code": "document_add_signers", "name": "Добавить участников", "disabled": false, '||
                   '"params": {"document_code": "%s"}}',
                   v_document_code);
+
+      v_actions_list := v_actions_list || 
+          format(', "document_send_to_sign": {"code": "document_send_to_sign", "name": "Отправить на подпись", "disabled": false, "warning": "Всем участникам будут отправлены уведомления со ссылкой на документ. Редактирование документа будет невозможно. Продолжаем?",'||
+                 '"params": {"document_code": "%s"}}',
+                  v_document_code);
+    end if;
+    if v_document_category = 'official' 
+    and v_document_status = 'signing' 
+    and not json.get_boolean_opt(v_system_document_participants, data.get_object_code(in_actor_id), null) then
+      v_actions_list := v_actions_list || 
+        format(', "document_sign": {"code": "document_sign", "name": "Подписать", "disabled": false, "warning": "Подпись нельзя отозвать назад, если только документ не будет изменён. Вы уверены, что хотите подписать этот документ?",'||
+               '"params": {"document_code": "%s"}}',
+               v_document_code);
     end if;
   end if;
   return jsonb ('{'||trim(v_actions_list,',')||'}');

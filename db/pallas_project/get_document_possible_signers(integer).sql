@@ -18,7 +18,7 @@ begin
     left join data.attribute_values av on av.object_id = o.id and av.attribute_id = v_title_attribute_id and av.value_object_id is null
   where oo.parent_object_id = v_player_id
     and oo.object_id not in (oo.parent_object_id)
-    and o.code not in (select x.code from jsonb_to_recordset(v_system_document_participants) as x(code text));
+    and o.code not in (select x.key from jsonb_each_text(v_system_document_participants) x);
 
   if v_content is null then
     v_content := array[]::text[];

@@ -38,8 +38,7 @@ begin
   assert v_chat_id is not null;
 
   if in_object_code is not null then
-   v_object_title := json.get_string_opt(data.get_attribute_value(data.get_object_id(in_object_code), 'title', in_actor_id), '???');
-    v_text := in_text || ' ' || format('[%s](babcom:%s)', v_object_title, in_object_code);
+    v_text := in_text || ' ' || pp_utils.link(in_object_code, in_actor_id);
   else
    v_text := in_text;
   end if;

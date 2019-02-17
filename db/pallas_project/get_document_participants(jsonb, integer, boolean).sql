@@ -9,12 +9,12 @@ declare
   v_persons text := '';
   v_record record;
 begin
-  for v_record in (select x.code, 
+  for v_record in (select x.key, 
                           (case 
-                            when in_with_sign_info then (case when signed then ' - Подписано' else ' - Неподписано' end) 
+                            when in_with_sign_info then (case when x.value = 'true' then ' - Есть подпись' else ' - Нет подписи' end) 
                             else '' end) sign
-                   from jsonb_to_recordset(in_document_peartitpants) as x(code text, signed boolean)) loop
-    v_persons:= v_persons || E'\n' || pp_utils.link(v_record.code, in_actor_id) || v_record.sign;
+                   from jsonb_each_text(in_document_peartitpants) x) loop
+    v_persons:= v_persons || E'\n' || pp_utils.link(v_record.key, in_actor_id) || v_record.sign;
   end loop;
 
   return v_persons;

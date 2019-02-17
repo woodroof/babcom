@@ -32,13 +32,13 @@ begin
   perform * from data.objects where id = in_object_id for update;
 
   v_system_document_participants := data.get_attribute_value(v_document_id, 'system_document_participants');
-  v_system_document_participants := v_system_document_participants || jsonb_build_object('code', v_list_object_code, 'signed', false);
+  v_system_document_participants := v_system_document_participants || jsonb_build_object(v_list_object_code, false);
 
   v_document_participants := pallas_project.get_document_participants(v_system_document_participants, v_actor_id, true);
   v_document_signers_list_participants := pallas_project.get_document_participants(v_system_document_participants, v_actor_id);
 
-  select array_agg(x.code) into v_document_content
-    from jsonb_to_recordset(v_system_document_participants) as x(code text);
+  select array_agg(x.key) into v_document_content
+    from jsonb_each_text(v_system_document_participants) x ;
 
   perform data.change_object_and_notify(v_document_id,
                                         jsonb_build_array(

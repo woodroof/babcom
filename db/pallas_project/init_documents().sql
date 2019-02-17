@@ -17,8 +17,7 @@ begin
   ('document_last_edit_time', 'Последнее обновление', 'Дата и время последнего редактирования документа', 'normal', 'full', null, true),
   ('system_document_participants', null, 'Участники, подписывающие документ', 'system', null, null, false),
   ('document_participants', 'Подписи', 'Участники, подписывающие документ', 'normal', 'full', null, false),
-  ('document_sent_to_sign', null, 'Признак того, что документ был отправлен на подпись', 'normal', 'full', null, false),
-  ('document_status', 'Статус', 'Статус документа', 'normal', 'full', 'pallas_project.vd_document_status', true),
+  ('document_status', 'Статус', 'Статус документа', 'normal', 'full', 'pallas_project.vd_document_status', false),
   -- для дополнительных
   ('system_document_temp_share_list', null, 'Список кодов тех, с кем поделиться', 'system', null, null, false),
   ('document_temp_share_list', 'Поделиться с', 'Список персонажей, с которыми хотим поделиться документом', 'normal', 'full', null, false),
@@ -123,7 +122,7 @@ begin
     {"code": "is_visible", "value": true},
     {"code": "priority", "value": 95},
     {"code": "actions_function", "value": "pallas_project.actgenerator_document"},
-    {"code": "system_document_participants", "value": []},
+    {"code": "system_document_participants", "value": {}},
     {
       "code": "mini_card_template",
       "value": {
@@ -135,9 +134,9 @@ begin
       "code": "template",
       "value": {
         "title": "title",
-        "groups": [{"code": "document_group1", "actions": ["document_edit", "document_delete", "document_share_list", "document_add_to_my", "document_make_official", "document_add_signers"]},
+        "groups": [{"code": "document_group1", "actions": ["document_edit", "document_delete", "document_share_list", "document_add_to_my", "document_make_official"]},
                    {"code": "document_group2", "attributes": ["document_text"]},
-                   {"code": "document_group3", "attributes": ["document_status", "document_participants", "document_sent_to_sign"]},
+                   {"code": "document_group3", "attributes": ["document_status", "document_participants", "document_sent_to_sign"], "actions": ["document_add_signers", "document_send_to_sign", "document_sign"]},
                    {"code": "document_group4", "attributes": ["document_author", "document_last_edit_time"]}]
       }
     }
@@ -201,7 +200,9 @@ begin
   ('document_share_list', 'pallas_project.act_document_share_list'),
   ('document_add_to_my', 'pallas_project.act_document_add_to_my'),
   ('document_make_official', 'pallas_project.act_document_make_official'),
-  ('document_add_signers', 'pallas_project.act_document_add_signers');
+  ('document_add_signers', 'pallas_project.act_document_add_signers'),
+  ('document_send_to_sign', 'pallas_project.act_document_send_to_sign'),
+  ('document_sign', 'pallas_project.act_document_sign');
 
 
 end;

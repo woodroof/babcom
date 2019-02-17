@@ -22,7 +22,7 @@ begin
   v_document_author := json.get_integer(data.get_attribute_value(v_document_id, 'system_document_author'));
   v_changes := array[]::jsonb[];
 
-  v_changes := array_append(v_changes, data.attribute_change2jsonb('document_status', jsonb '"deleted"', v_master_group_id));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('document_status', jsonb '"deleted"'));
   v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', to_jsonb(false), null));
 
   perform data.change_object_and_notify(v_document_id, 

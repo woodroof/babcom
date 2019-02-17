@@ -9,7 +9,11 @@ declare
   v_text_value text := json.get_string(in_value);
 begin
   case when v_text_value = 'draft' then
-    return 'На редактировании';
+    return 'Редактируется';
+  when v_text_value = 'signing' then
+    return 'Отправлен на подпись';
+  when v_text_value = 'signed' then
+    return 'Подписан';
   when v_text_value = 'deleted' then
     return 'Удалён';
   else
