@@ -74,6 +74,14 @@ begin
                  '"params": {"document_code": "%s"}}',
                   v_document_code);
     end if;
+
+    if v_document_category = 'official' and v_document_status = 'signing' and (v_is_master or in_actor_id = v_document_author) then
+      v_actions_list := v_actions_list || 
+          format(', "document_back_to_editing": {"code": "document_back_to_editing", "name": "Вернуть на редактирование", "disabled": false, "warning": "Все подписи будут отозваны. Вы уверены, что хотите вернуть документ на редактирование?",'||
+                  '"params": {"document_code": "%s"}}',
+                  v_document_code);
+    end if;
+
     if v_document_category = 'official' 
     and v_document_status = 'signing' 
     and not json.get_boolean_opt(v_system_document_participants, data.get_object_code(in_actor_id), null) then

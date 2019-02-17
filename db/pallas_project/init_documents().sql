@@ -136,7 +136,7 @@ begin
         "title": "title",
         "groups": [{"code": "document_group1", "actions": ["document_edit", "document_delete", "document_share_list", "document_add_to_my", "document_make_official"]},
                    {"code": "document_group2", "attributes": ["document_text"]},
-                   {"code": "document_group3", "attributes": ["document_status", "document_participants", "document_sent_to_sign"], "actions": ["document_add_signers", "document_send_to_sign", "document_sign"]},
+                   {"code": "document_group3", "attributes": ["document_status", "document_participants", "document_sent_to_sign"], "actions": ["document_add_signers", "document_send_to_sign", "document_sign", "document_back_to_editing"]},
                    {"code": "document_group4", "attributes": ["document_author", "document_last_edit_time"]}]
       }
     }
@@ -202,7 +202,8 @@ begin
   ('document_make_official', 'pallas_project.act_document_make_official'),
   ('document_add_signers', 'pallas_project.act_document_add_signers'),
   ('document_send_to_sign', 'pallas_project.act_document_send_to_sign'),
-  ('document_sign', 'pallas_project.act_document_sign');
+  ('document_sign', 'pallas_project.act_document_sign'),
+  ('document_back_to_editing', 'pallas_project.act_document_back_to_editing');
 
 
 end;

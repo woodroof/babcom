@@ -10196,6 +10196,73 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_document_back_to_editing(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_document_back_to_editing(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_document_code text := json.get_string(in_params, 'document_code');
+  v_document_id integer := data.get_object_id(v_document_code);
+  v_actor_id integer :=data.get_active_actor_id(in_client_id);
+
+  v_system_document_participants jsonb;
+  v_document_participants text;
+  v_document_status text;
+  v_person_code text;
+
+  v_message text := 'Документ возвращён на редактирование';
+
+  v_document_content text[];
+  v_changes jsonb[];
+  v_message_sent boolean := false;
+begin
+  assert in_request_id is not null;
+
+  perform * from data.objects where id = v_document_id for update;
+
+  v_document_status := json.get_string_opt(data.get_attribute_value(v_document_id, 'document_status'),'');
+  assert v_document_status = 'signing';
+
+  v_system_document_participants := data.get_attribute_value(v_document_id, 'system_document_participants');
+  -- Отзываем все подписи
+  for v_person_code in (select x.key
+                          from jsonb_each_text(v_system_document_participants) x
+                          where x.value = 'true') loop
+    v_system_document_participants := jsonb_set(v_system_document_participants, array[v_person_code], jsonb 'false');
+  end loop;
+
+  v_document_participants := pallas_project.get_document_participants(v_system_document_participants, v_actor_id, true);
+
+  v_changes := array[]::jsonb[];
+
+  select array_agg(x.key) into v_document_content
+    from jsonb_each_text(v_system_document_participants) x;
+
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('document_status', jsonb '"draft"'));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('system_document_participants', v_system_document_participants));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('document_participants', to_jsonb(v_document_participants)));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('content', to_jsonb(v_document_content), v_document_code || '_signers_list'));
+  v_message_sent := data.change_current_object(in_client_id, 
+                                               in_request_id,
+                                               v_document_id, 
+                                               to_jsonb(v_changes));
+
+  for v_person_code in (select x.key
+                          from jsonb_each_text(v_system_document_participants) x
+                          where x.value = 'false') loop
+    perform pp_utils.add_notification(data.get_object_id(v_person_code), v_message, v_document_id);
+  end loop;
+
+  if not v_message_sent then
+   perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_document_create(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_document_create(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -11216,6 +11283,14 @@ begin
                  '"params": {"document_code": "%s"}}',
                   v_document_code);
     end if;
+
+    if v_document_category = 'official' and v_document_status = 'signing' and (v_is_master or in_actor_id = v_document_author) then
+      v_actions_list := v_actions_list || 
+          format(', "document_back_to_editing": {"code": "document_back_to_editing", "name": "Вернуть на редактирование", "disabled": false, "warning": "Все подписи будут отозваны. Вы уверены, что хотите вернуть документ на редактирование?",'||
+                  '"params": {"document_code": "%s"}}',
+                  v_document_code);
+    end if;
+
     if v_document_category = 'official' 
     and v_document_status = 'signing' 
     and not json.get_boolean_opt(v_system_document_participants, data.get_object_code(in_actor_id), null) then
@@ -13161,7 +13236,7 @@ begin
         "title": "title",
         "groups": [{"code": "document_group1", "actions": ["document_edit", "document_delete", "document_share_list", "document_add_to_my", "document_make_official"]},
                    {"code": "document_group2", "attributes": ["document_text"]},
-                   {"code": "document_group3", "attributes": ["document_status", "document_participants", "document_sent_to_sign"], "actions": ["document_add_signers", "document_send_to_sign", "document_sign"]},
+                   {"code": "document_group3", "attributes": ["document_status", "document_participants", "document_sent_to_sign"], "actions": ["document_add_signers", "document_send_to_sign", "document_sign", "document_back_to_editing"]},
                    {"code": "document_group4", "attributes": ["document_author", "document_last_edit_time"]}]
       }
     }
@@ -13227,7 +13302,8 @@ begin
   ('document_make_official', 'pallas_project.act_document_make_official'),
   ('document_add_signers', 'pallas_project.act_document_add_signers'),
   ('document_send_to_sign', 'pallas_project.act_document_send_to_sign'),
-  ('document_sign', 'pallas_project.act_document_sign');
+  ('document_sign', 'pallas_project.act_document_sign'),
+  ('document_back_to_editing', 'pallas_project.act_document_back_to_editing');
 
 
 end;
