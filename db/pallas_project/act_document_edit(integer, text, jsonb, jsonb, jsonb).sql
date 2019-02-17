@@ -29,11 +29,11 @@ begin
                                                  v_document_id, 
                                                  to_jsonb(v_changes));
 
-  if data.is_object(v_document_code || '_signers_list') then
+  if data.is_object_exists(v_document_code || '_signers_list') then
     v_document_signers_list_id := data.get_object_id(v_document_code || '_signers_list');
     perform data.change_object_and_notify(v_document_signers_list_id, 
                                         jsonb_build_array(
-                                          data.attribute_change2jsonb('title', to_jsonb('Добавление участников документа ' || v_title))
+                                          data.attribute_change2jsonb('title', to_jsonb('Р”РѕР±Р°РІР»РµРЅРёРµ СѓС‡Р°СЃС‚РЅРёРєРѕРІ РґРѕРєСѓРјРµРЅС‚Р° ' || v_title))
                                         ),
                                         v_actor_id);
   end if;

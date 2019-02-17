@@ -4505,6 +4505,28 @@ end;
 $$
 language plpgsql;
 
+-- drop function data.is_class_or_object_exists(text);
+
+create or replace function data.is_class_or_object_exists(in_object_code text)
+returns boolean
+stable
+as
+$$
+declare
+  v_exists boolean;
+begin
+  assert in_object_code is not null;
+
+  select true
+  into v_exists
+  from data.objects
+  where code = in_object_code;
+
+  return coalesce(v_exists, false);
+end;
+$$
+language plpgsql;
+
 -- drop function data.is_hidden_attribute(integer);
 
 create or replace function data.is_hidden_attribute(in_attribute_id integer)
@@ -4570,6 +4592,30 @@ begin
   from data.objects
   where
     id = in_object_id and
+    type = 'instance';
+
+  return coalesce(v_exists, false);
+end;
+$$
+language plpgsql;
+
+-- drop function data.is_object_exists(text);
+
+create or replace function data.is_object_exists(in_object_code text)
+returns boolean
+stable
+as
+$$
+declare
+  v_exists boolean;
+begin
+  assert in_object_code is not null;
+
+  select true
+  into v_exists
+  from data.objects
+  where
+    code = in_object_code and
     type = 'instance';
 
   return coalesce(v_exists, false);
@@ -10914,13 +10960,10 @@ declare
 begin
   assert in_request_id is not null;
 
-  perform * from data.objects where id = v_document_id for update;
-  perform * from data.objects where id = v_document_signers_list_id for update;
-
-  v_document_status := json.get_string_opt(data.get_attribute_value(v_document_id, 'document_status'),'');
+  v_document_status := json.get_string_opt(data.get_attribute_value_for_share(v_document_id, 'document_status'),'');
   assert v_document_status = 'draft';
 
-  v_system_document_participants := data.get_attribute_value(v_document_id, 'system_document_participants');
+  v_system_document_participants := data.get_attribute_value_for_update(v_document_id, 'system_document_participants');
   v_system_document_participants := v_system_document_participants - v_list_code;
 
   v_document_participants := pallas_project.get_document_participants(v_system_document_participants, v_actor_id, true);
@@ -10986,7 +11029,7 @@ begin
                                                  v_document_id, 
                                                  to_jsonb(v_changes));
 
-  if data.is_object(v_document_code || '_signers_list') then
+  if data.is_object_exists(v_document_code || '_signers_list') then
     v_document_signers_list_id := data.get_object_id(v_document_code || '_signers_list');
     perform data.change_object_and_notify(v_document_signers_list_id, 
                                         jsonb_build_array(
@@ -11021,7 +11064,7 @@ declare
   v_message_sent boolean;
 
   v_list_attributes jsonb;
-  v_document_title text := json.get_string_opt(data.get_attribute_value_for_share(v_document_id, 'title'),'');
+  v_document_title text := json.get_string_opt(data.get_raw_attribute_value_for_share(v_document_id, 'title'),'');
   v_content text[];
   v_signer_list_id integer;
 begin
@@ -11931,8 +11974,8 @@ declare
   v_document_code text := data.get_object_code(in_object_id);
   v_list_code text := data.get_object_code(in_list_object_id);
   v_document_author integer := json.get_integer(data.get_attribute_value(in_object_id, 'system_document_author'));
-  v_document_category text := json.get_string(data.get_attribute_value(in_object_id, 'system_document_category'));
-  v_document_status text := json.get_string_opt(data.get_attribute_value(in_object_id, 'document_status'),'');
+  v_document_category text := json.get_string(data.get_attribute_value_for_share(in_object_id, 'system_document_category'));
+  v_document_status text := json.get_string_opt(data.get_attribute_value_for_share(in_object_id, 'document_status'),'');
 begin
   assert in_actor_id is not null;
 

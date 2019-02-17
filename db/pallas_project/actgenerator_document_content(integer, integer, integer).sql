@@ -12,8 +12,8 @@ declare
   v_document_code text := data.get_object_code(in_object_id);
   v_list_code text := data.get_object_code(in_list_object_id);
   v_document_author integer := json.get_integer(data.get_attribute_value(in_object_id, 'system_document_author'));
-  v_document_category text := json.get_string(data.get_attribute_value(in_object_id, 'system_document_category'));
-  v_document_status text := json.get_string_opt(data.get_attribute_value(in_object_id, 'document_status'),'');
+  v_document_category text := json.get_string(data.get_attribute_value_for_share(in_object_id, 'system_document_category'));
+  v_document_status text := json.get_string_opt(data.get_attribute_value_for_share(in_object_id, 'document_status'),'');
 begin
   assert in_actor_id is not null;
 

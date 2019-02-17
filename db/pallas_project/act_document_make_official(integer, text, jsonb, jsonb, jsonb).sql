@@ -17,7 +17,7 @@ declare
   v_message_sent boolean;
 
   v_list_attributes jsonb;
-  v_document_title text := json.get_string_opt(data.get_attribute_value_for_share(v_document_id, 'title'),'');
+  v_document_title text := json.get_string_opt(data.get_raw_attribute_value_for_share(v_document_id, 'title'),'');
   v_content text[];
   v_signer_list_id integer;
 begin

@@ -25,13 +25,10 @@ declare
 begin
   assert in_request_id is not null;
 
-  perform * from data.objects where id = v_document_id for update;
-  perform * from data.objects where id = v_document_signers_list_id for update;
-
-  v_document_status := json.get_string_opt(data.get_attribute_value(v_document_id, 'document_status'),'');
+  v_document_status := json.get_string_opt(data.get_attribute_value_for_share(v_document_id, 'document_status'),'');
   assert v_document_status = 'draft';
 
-  v_system_document_participants := data.get_attribute_value(v_document_id, 'system_document_participants');
+  v_system_document_participants := data.get_attribute_value_for_update(v_document_id, 'system_document_participants');
   v_system_document_participants := v_system_document_participants - v_list_code;
 
   v_document_participants := pallas_project.get_document_participants(v_system_document_participants, v_actor_id, true);
