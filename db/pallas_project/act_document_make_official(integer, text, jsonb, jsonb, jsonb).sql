@@ -14,6 +14,7 @@ declare
   v_my_documents_id integer := data.get_object_id('my_documents');
   v_official_documents_id integer := data.get_object_id('official_documents');
   v_person_id integer;
+  v_master_group_id integer := data.get_object_id('master');
   v_message_sent boolean;
 
   v_list_attributes jsonb;
@@ -25,9 +26,15 @@ begin
   assert v_system_document_category = 'private';
 
   for v_person_id in select * from unnest(pallas_project.get_group_members('all_person')) loop
-    perform pp_utils.list_remove_and_notify(v_my_documents_id, v_document_code, v_person_id);
-    perform pp_utils.list_prepend_and_notify(v_official_documents_id, v_document_code, v_person_id);
+    v_content := json.get_string_array_opt(data.get_raw_attribute_value_for_share(v_my_documents_id, 'content', v_person_id), array[]::text[]);
+    if array_position(v_content, v_document_code) is not null then
+      perform pp_utils.list_remove_and_notify(v_my_documents_id, v_document_code, v_person_id);
+      perform pp_utils.list_prepend_and_notify(v_official_documents_id, v_document_code, v_person_id);
+    end if;
   end loop;
+  perform pp_utils.list_remove_and_notify(v_my_documents_id, v_document_code, v_master_group_id);
+  perform pp_utils.list_prepend_and_notify(v_official_documents_id, v_document_code, v_master_group_id);
+
   v_message_sent := data.change_current_object(in_client_id, 
                                                in_request_id,
                                                v_document_id, 

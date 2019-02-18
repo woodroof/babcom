@@ -11061,6 +11061,7 @@ declare
   v_my_documents_id integer := data.get_object_id('my_documents');
   v_official_documents_id integer := data.get_object_id('official_documents');
   v_person_id integer;
+  v_master_group_id integer := data.get_object_id('master');
   v_message_sent boolean;
 
   v_list_attributes jsonb;
@@ -11072,9 +11073,15 @@ begin
   assert v_system_document_category = 'private';
 
   for v_person_id in select * from unnest(pallas_project.get_group_members('all_person')) loop
-    perform pp_utils.list_remove_and_notify(v_my_documents_id, v_document_code, v_person_id);
-    perform pp_utils.list_prepend_and_notify(v_official_documents_id, v_document_code, v_person_id);
+    v_content := json.get_string_array_opt(data.get_raw_attribute_value_for_share(v_my_documents_id, 'content', v_person_id), array[]::text[]);
+    if array_position(v_content, v_document_code) is not null then
+      perform pp_utils.list_remove_and_notify(v_my_documents_id, v_document_code, v_person_id);
+      perform pp_utils.list_prepend_and_notify(v_official_documents_id, v_document_code, v_person_id);
+    end if;
   end loop;
+  perform pp_utils.list_remove_and_notify(v_my_documents_id, v_document_code, v_master_group_id);
+  perform pp_utils.list_prepend_and_notify(v_official_documents_id, v_document_code, v_master_group_id);
+
   v_message_sent := data.change_current_object(in_client_id, 
                                                in_request_id,
                                                v_document_id, 
@@ -11116,6 +11123,7 @@ declare
 
   v_system_document_participants jsonb;
   v_person_code text;
+  v_unsined_count integer;
 
   v_message text := 'Вам на подпись пришёл документ';
 
@@ -11128,8 +11136,18 @@ begin
 
   v_changes := array[]::jsonb[];
 
-  v_changes := array_append(v_changes, data.attribute_change2jsonb('document_status', jsonb '"signing"'));
   v_changes := array_append(v_changes, data.attribute_change2jsonb('content', null, v_document_code || '_signers_list'));
+
+-- Считаем, сколько осталось отсутствующих подписей. Если нисколько, меняем статус документа
+  select count(1) into v_unsined_count
+    from jsonb_each_text(v_system_document_participants) x 
+    where x.value = 'false';
+  if v_unsined_count = 0 then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('document_status', jsonb '"signed"'));
+  else 
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('document_status', jsonb '"signing"'));
+  end if;
+
   v_message_sent := data.change_current_object(in_client_id, 
                                                in_request_id,
                                                v_document_id, 
@@ -11140,6 +11158,8 @@ begin
                           where x.value = 'false') loop
     perform pp_utils.add_notification(data.get_object_id(v_person_code), v_message, v_document_id, true);
   end loop;
+
+
 
   if not v_message_sent then
    perform api_utils.create_ok_notification(in_client_id, in_request_id);
@@ -11289,6 +11309,57 @@ begin
     perform pallas_project.send_to_master_chat(v_message, v_document_code);
   end if;
 
+  v_message_sent := data.change_current_object(in_client_id, 
+                                               in_request_id,
+                                               v_document_id, 
+                                               to_jsonb(v_changes));
+
+  if not v_message_sent then
+   perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_document_sign_for_signer(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_document_sign_for_signer(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_document_code text := json.get_string(in_params, 'document_code');
+  v_list_code text := json.get_string(in_params, 'list_code');
+  v_document_id integer := data.get_object_id(v_document_code);
+  v_document_signers_list_id integer := data.get_object_id(v_document_code || '_signers_list');
+  v_actor_id integer :=data.get_active_actor_id(in_client_id);
+
+  v_system_document_participants jsonb;
+  v_document_participants text;
+  v_document_signers_list_participants text;
+  v_document_status text;
+  v_person_code text;
+
+  v_document_content text[];
+  v_content text[];
+  v_changes jsonb[];
+  v_message_sent boolean := false;
+begin
+  assert in_request_id is not null;
+
+  v_document_status := json.get_string_opt(data.get_attribute_value_for_share(v_document_id, 'document_status'),'');
+  assert v_document_status = 'draft';
+
+  v_system_document_participants := data.get_attribute_value_for_update(v_document_id, 'system_document_participants');
+  v_system_document_participants := jsonb_set(v_system_document_participants, array[v_list_code], jsonb 'true');
+
+  v_document_participants := pallas_project.get_document_participants(v_system_document_participants, v_actor_id, true);
+
+  v_changes := array[]::jsonb[];
+
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('system_document_participants', v_system_document_participants));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('document_participants', to_jsonb(v_document_participants)));
   v_message_sent := data.change_current_object(in_client_id, 
                                                in_request_id,
                                                v_document_id, 
@@ -11934,9 +12005,10 @@ begin
                   v_document_code || '_signers_list');
 
       v_actions_list := v_actions_list || 
-          format(', "document_send_to_sign": {"code": "document_send_to_sign", "name": "Отправить на подпись", "disabled": false, "warning": "Всем участникам будут отправлены уведомления со ссылкой на документ. Редактирование документа будет невозможно. Продолжаем?",'||
+          format(', "document_send_to_sign": {"code": "document_send_to_sign", "name": "Отправить на подпись", "disabled": %s, "warning": "Всем, кому нужно расписаться, будут отправлены уведомления со ссылкой на документ. Редактирование документа станет невозможным. Продолжаем?",'||
                  '"params": {"document_code": "%s"}}',
-                  v_document_code);
+                 (case when v_system_document_participants <> jsonb '{}' then 'false' else 'true' end),
+                 v_document_code);
     end if;
 
     if v_document_category = 'official' and v_document_status = 'signing' and (v_is_master or in_actor_id = v_document_author) then
@@ -11976,17 +12048,27 @@ declare
   v_document_author integer := json.get_integer(data.get_attribute_value(in_object_id, 'system_document_author'));
   v_document_category text := json.get_string(data.get_attribute_value_for_share(in_object_id, 'system_document_category'));
   v_document_status text := json.get_string_opt(data.get_attribute_value_for_share(in_object_id, 'document_status'),'');
+  v_system_document_participants jsonb := data.get_attribute_value_for_share(in_object_id, 'system_document_participants');
 begin
   assert in_actor_id is not null;
 
   v_is_master := pp_utils.is_in_group(in_actor_id, 'master');
   if v_document_status <> 'deleted' then
-    if v_document_category = 'official' and v_document_status = 'draft' and (v_is_master or in_actor_id = v_document_author) then
-      v_actions_list := v_actions_list || 
-          format(', "document_delete_signer": {"code": "document_delete_signer", "name": "Удалить", "disabled": false, '||
-                  '"params": {"document_code": "%s", "list_code": "%s"}}',
-                  v_document_code,
-                  v_list_code);
+    if v_document_category = 'official' and v_document_status = 'draft' then
+      if (v_is_master or in_actor_id = v_document_author) then
+        v_actions_list := v_actions_list || 
+            format(', "document_delete_signer": {"code": "document_delete_signer", "name": "Удалить", "disabled": false, '||
+                    '"params": {"document_code": "%s", "list_code": "%s"}}',
+                    v_document_code,
+                    v_list_code);
+      end if;
+      if v_is_master and not json.get_boolean_opt(v_system_document_participants, v_list_code, true) then
+        v_actions_list := v_actions_list || 
+            format(', "document_sign_for_signer": {"code": "document_sign_for_signer", "name": "Подписать", "disabled": false, '||
+                    '"params": {"document_code": "%s", "list_code": "%s"}}',
+                    v_document_code,
+                    v_list_code);
+      end if;
     end if;
   end if;
   return jsonb ('{'||trim(v_actions_list,',')||'}');
@@ -12025,6 +12107,7 @@ $$
 declare
   v_actions_list text := '';
   v_share_list_code text := data.get_object_code(in_object_id);
+  v_system_document_temp_share_list integer[] := json.get_integer_array_Opt(data.get_attribute_value_for_share(in_object_id, 'system_document_temp_share_list'),array[]::integer[]);
 begin
   assert in_actor_id is not null;
 
@@ -12033,8 +12116,9 @@ begin
                 '"params": {}}';
 
   v_actions_list := v_actions_list || 
-          format(', "document_share": {"code": "document_share", "name": "Поделиться", "disabled": false, "warning": "Ссылка на документ будет отправлена выбранным лицам, и забрать её назад вы не сможете. Продолжаем?",'||
+          format(', "document_share": {"code": "document_share", "name": "Поделиться", "disabled": %s, "warning": "Ссылка на документ будет отправлена выбранным лицам, и забрать её назад вы не сможете. Продолжаем?",'||
                   '"params": {"share_list_code": "%s"}}',
+                  (case when coalesce(array_length(v_system_document_temp_share_list, 1), 0) = 0 then 'true' else 'false' end),
                   v_share_list_code);
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;
@@ -14026,8 +14110,8 @@ begin
   ('document_send_to_sign', 'pallas_project.act_document_send_to_sign'),
   ('document_sign', 'pallas_project.act_document_sign'),
   ('document_back_to_editing', 'pallas_project.act_document_back_to_editing'),
-  ('document_delete_signer', 'pallas_project.act_document_delete_signer');
-
+  ('document_delete_signer', 'pallas_project.act_document_delete_signer'),
+  ('document_sign_for_signer', 'pallas_project.act_document_sign_for_signer');
 
 end;
 $$
@@ -14822,7 +14906,7 @@ begin
           {
             "code": "person_mini_document",
             "actions": [
-              "document_delete_signer"
+              "document_delete_signer", "document_sign_for_signer"
             ]
           }
         ]

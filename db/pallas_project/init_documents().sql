@@ -204,8 +204,8 @@ begin
   ('document_send_to_sign', 'pallas_project.act_document_send_to_sign'),
   ('document_sign', 'pallas_project.act_document_sign'),
   ('document_back_to_editing', 'pallas_project.act_document_back_to_editing'),
-  ('document_delete_signer', 'pallas_project.act_document_delete_signer');
-
+  ('document_delete_signer', 'pallas_project.act_document_delete_signer'),
+  ('document_sign_for_signer', 'pallas_project.act_document_sign_for_signer');
 
 end;
 $$

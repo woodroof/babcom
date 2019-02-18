@@ -70,9 +70,10 @@ begin
                   v_document_code || '_signers_list');
 
       v_actions_list := v_actions_list || 
-          format(', "document_send_to_sign": {"code": "document_send_to_sign", "name": "Отправить на подпись", "disabled": false, "warning": "Всем участникам будут отправлены уведомления со ссылкой на документ. Редактирование документа будет невозможно. Продолжаем?",'||
+          format(', "document_send_to_sign": {"code": "document_send_to_sign", "name": "Отправить на подпись", "disabled": %s, "warning": "Всем, кому нужно расписаться, будут отправлены уведомления со ссылкой на документ. Редактирование документа станет невозможным. Продолжаем?",'||
                  '"params": {"document_code": "%s"}}',
-                  v_document_code);
+                 (case when v_system_document_participants <> jsonb '{}' then 'false' else 'true' end),
+                 v_document_code);
     end if;
 
     if v_document_category = 'official' and v_document_status = 'signing' and (v_is_master or in_actor_id = v_document_author) then

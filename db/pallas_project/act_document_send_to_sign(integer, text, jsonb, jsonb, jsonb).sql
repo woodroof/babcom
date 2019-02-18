@@ -12,6 +12,7 @@ declare
 
   v_system_document_participants jsonb;
   v_person_code text;
+  v_unsined_count integer;
 
   v_message text := 'Вам на подпись пришёл документ';
 
@@ -24,8 +25,18 @@ begin
 
   v_changes := array[]::jsonb[];
 
-  v_changes := array_append(v_changes, data.attribute_change2jsonb('document_status', jsonb '"signing"'));
   v_changes := array_append(v_changes, data.attribute_change2jsonb('content', null, v_document_code || '_signers_list'));
+
+-- Считаем, сколько осталось отсутствующих подписей. Если нисколько, меняем статус документа
+  select count(1) into v_unsined_count
+    from jsonb_each_text(v_system_document_participants) x 
+    where x.value = 'false';
+  if v_unsined_count = 0 then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('document_status', jsonb '"signed"'));
+  else 
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('document_status', jsonb '"signing"'));
+  end if;
+
   v_message_sent := data.change_current_object(in_client_id, 
                                                in_request_id,
                                                v_document_id, 
@@ -36,6 +47,8 @@ begin
                           where x.value = 'false') loop
     perform pp_utils.add_notification(data.get_object_id(v_person_code), v_message, v_document_id, true);
   end loop;
+
+
 
   if not v_message_sent then
    perform api_utils.create_ok_notification(in_client_id, in_request_id);

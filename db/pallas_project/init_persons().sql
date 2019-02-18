@@ -58,7 +58,7 @@ begin
           {
             "code": "person_mini_document",
             "actions": [
-              "document_delete_signer"
+              "document_delete_signer", "document_sign_for_signer"
             ]
           }
         ]
