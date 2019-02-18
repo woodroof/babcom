@@ -42,6 +42,7 @@ begin
   ('system_person_next_recreation_status', null, 'system', null, null, false),
   ('system_person_next_police_status', null, 'system', null, null, false),
   ('system_person_next_administrative_services_status', null, 'system', null, null, false),
+  ('system_person_notification_count', null, 'system', null, null, false),
   ('person_district', 'Район проживания', 'normal', 'full', 'pallas_project.vd_link', false);
 
   -- Объект класса для персон

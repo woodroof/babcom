@@ -17,6 +17,8 @@ begin
   insert into data.logins(code) values(in_login_code) returning id into v_login_id;
   insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
 
+  perform data.set_attribute_value(v_person_id, 'system_person_notification_count', jsonb '0');
+
   if v_economy_type is not null then
     declare
       v_cycle integer;

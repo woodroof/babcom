@@ -45,8 +45,9 @@ begin
       "actions_function": "pallas_project.actgenerator_menu",
       "template": {
         "groups": [
-          {"code": "menu_group1", "actions": ["login", "profile"]},
+          {"code": "menu_notifications", "actions": ["notifications"]},
           {"code": "menu_lottery", "actions": ["lottery"]},
+          {"code": "menu_group1", "actions": ["login", "profile"]},
           {"code": "menu_group2", "actions": ["statuses", "next_statuses", "debatles", "chats", "all_chats", "persons", "districts", "documents", "transactions", "important_notifications", "master_chats"]},
           {"code": "menu_group3", "actions": ["logout"]}
         ]
@@ -58,6 +59,11 @@ begin
     'notifications',
     jsonb '{
       "is_visible": true,
+      "title": "Уведомления",
+      "template": {"title": "title", "groups": [{"code": "group", "actions": ["clear_notifications"]}]},
+      "actions_function": "pallas_project.actgenerator_notifications",
+      "list_actions_function": "pallas_project.actgenerator_notifications_content",
+      "list_element_function": "pallas_project.lef_notifications",
       "content": []
     }');
 
@@ -89,7 +95,17 @@ begin
   ('login', 'pallas_project.act_login'),
   ('logout', 'pallas_project.act_logout'),
   ('go_back', 'pallas_project.act_go_back'),
-  ('create_random_person', 'pallas_project.act_create_random_person');
+  ('create_random_person', 'pallas_project.act_create_random_person'),
+  ('remove_notification', 'pallas_project.act_remove_notification'),
+  ('clear_notifications', 'pallas_project.act_clear_notifications');
+
+  -- Базовые классы
+  perform data.create_class(
+    'notification',
+    jsonb '{
+      "type": "notification",
+      "template": {"groups": [{"code": "group", "attributes": ["title"], "actions": ["remove_notification"]}]}
+    }');
 
   perform pallas_project.init_groups();
   perform pallas_project.init_economics();

@@ -67,6 +67,20 @@ begin
         }';
     end if;
 
+    declare
+      v_notification_count integer := json.get_integer(data.get_attribute_value_for_share(in_actor_id, 'system_person_notification_count'));
+    begin
+      if v_notification_count > 0 then
+        v_actions :=
+          v_actions ||
+          format(
+            '{
+              "notifications": {"code": "act_open_object", "name": "🎉 Уведомления 🎉 (%s)", "disabled": false, "params": {"object_code": "notifications"}}
+            }',
+            v_notification_count)::jsonb;
+      end if;
+    end;
+
     v_actions :=
       v_actions ||
       jsonb '{

@@ -9969,6 +9969,39 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_clear_notifications(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_clear_notifications(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_notifications_id integer := data.get_object_id('notifications');
+  v_notified boolean;
+begin
+  perform data.change_object_and_notify(
+    v_actor_id,
+    jsonb_build_object('system_person_notification_count', jsonb '0'),
+    v_actor_id,
+    'Open notification');
+
+  v_notified :=
+    data.change_current_object(
+      in_client_id,
+      in_request_id,
+      v_notifications_id,
+      jsonb '[]' || data.attribute_change2jsonb('content', jsonb '[]', v_actor_id),
+      'Open notification');
+
+  if not v_notified then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_create_chat(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_create_chat(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -11498,6 +11531,46 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_remove_notification(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_remove_notification(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_notification_code text := json.get_string(in_params);
+  v_notification_id integer := data.get_object_id(v_notification_code);
+  v_system_person_notification_count_attr_id integer := data.get_attribute_id('system_person_notification_count');
+  v_content_attr_id integer := data.get_attribute_id('content');
+  v_notifications_id integer := data.get_object_id('notifications');
+  v_notifications_count integer := json.get_integer(data.get_attribute_value_for_update(v_actor_id, v_system_person_notification_count_attr_id)) - 1;
+  v_content text[] :=
+    array_remove(
+      json.get_string_array(data.get_raw_attribute_value_for_update(v_notifications_id, v_content_attr_id, v_actor_id)),
+      v_notification_code);
+  v_notified boolean;
+begin
+  perform data.set_attribute_value(v_notification_id, 'is_visible', jsonb 'false', v_actor_id);
+  perform data.change_object_and_notify(
+    v_actor_id,
+    jsonb_build_object('system_person_notification_count', v_notifications_count),
+    v_actor_id,
+    'Open notification');
+
+  v_notified :=
+    data.change_current_object(
+      in_client_id,
+      in_request_id,
+      v_notifications_id,
+      jsonb '[]' || data.attribute_change2jsonb('content', to_jsonb(v_content), v_actor_id),
+      'Open notification');
+  assert v_notified;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.actgenerator_anonymous(integer, integer);
 
 create or replace function pallas_project.actgenerator_anonymous(in_object_id integer, in_actor_id integer)
@@ -12313,6 +12386,20 @@ begin
         }';
     end if;
 
+    declare
+      v_notification_count integer := json.get_integer(data.get_attribute_value_for_share(in_actor_id, 'system_person_notification_count'));
+    begin
+      if v_notification_count > 0 then
+        v_actions :=
+          v_actions ||
+          format(
+            '{
+              "notifications": {"code": "act_open_object", "name": "🎉 Уведомления 🎉 (%s)", "disabled": false, "params": {"object_code": "notifications"}}
+            }',
+            v_notification_count)::jsonb;
+      end if;
+    end;
+
     v_actions :=
       v_actions ||
       jsonb '{
@@ -12464,6 +12551,33 @@ begin
   end loop;
 
   return v_actions;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.actgenerator_notifications(integer, integer);
+
+create or replace function pallas_project.actgenerator_notifications(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+begin
+  return jsonb '{"clear_notifications": {"code": "clear_notifications", "name": "Очистить", "disabled": false, "params": null}}';
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.actgenerator_notifications_content(integer, integer, integer);
+
+create or replace function pallas_project.actgenerator_notifications_content(in_object_id integer, in_list_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+begin
+  return format('{"remove_notification": {"code": "remove_notification", "name": "Удалить", "disabled": false, "params": "%s"}}', data.get_object_code(in_list_object_id))::jsonb;
 end;
 $$
 language plpgsql;
@@ -12754,6 +12868,8 @@ declare
 begin
   insert into data.logins(code) values(in_login_code) returning id into v_login_id;
   insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
+
+  perform data.set_attribute_value(v_person_id, 'system_person_notification_count', jsonb '0');
 
   if v_economy_type is not null then
     declare
@@ -13417,8 +13533,9 @@ begin
       "actions_function": "pallas_project.actgenerator_menu",
       "template": {
         "groups": [
-          {"code": "menu_group1", "actions": ["login", "profile"]},
+          {"code": "menu_notifications", "actions": ["notifications"]},
           {"code": "menu_lottery", "actions": ["lottery"]},
+          {"code": "menu_group1", "actions": ["login", "profile"]},
           {"code": "menu_group2", "actions": ["statuses", "next_statuses", "debatles", "chats", "all_chats", "persons", "districts", "documents", "transactions", "important_notifications", "master_chats"]},
           {"code": "menu_group3", "actions": ["logout"]}
         ]
@@ -13430,6 +13547,11 @@ begin
     'notifications',
     jsonb '{
       "is_visible": true,
+      "title": "Уведомления",
+      "template": {"title": "title", "groups": [{"code": "group", "actions": ["clear_notifications"]}]},
+      "actions_function": "pallas_project.actgenerator_notifications",
+      "list_actions_function": "pallas_project.actgenerator_notifications_content",
+      "list_element_function": "pallas_project.lef_notifications",
       "content": []
     }');
 
@@ -13461,7 +13583,17 @@ begin
   ('login', 'pallas_project.act_login'),
   ('logout', 'pallas_project.act_logout'),
   ('go_back', 'pallas_project.act_go_back'),
-  ('create_random_person', 'pallas_project.act_create_random_person');
+  ('create_random_person', 'pallas_project.act_create_random_person'),
+  ('remove_notification', 'pallas_project.act_remove_notification'),
+  ('clear_notifications', 'pallas_project.act_clear_notifications');
+
+  -- Базовые классы
+  perform data.create_class(
+    'notification',
+    jsonb '{
+      "type": "notification",
+      "template": {"groups": [{"code": "group", "attributes": ["title"], "actions": ["remove_notification"]}]}
+    }');
 
   perform pallas_project.init_groups();
   perform pallas_project.init_economics();
@@ -14890,6 +15022,7 @@ begin
   ('system_person_next_recreation_status', null, 'system', null, null, false),
   ('system_person_next_police_status', null, 'system', null, null, false),
   ('system_person_next_administrative_services_status', null, 'system', null, null, false),
+  ('system_person_notification_count', null, 'system', null, null, false),
   ('person_district', 'Район проживания', 'normal', 'full', 'pallas_project.vd_link', false);
 
   -- Объект класса для персон
@@ -15454,6 +15587,41 @@ begin
   if not v_message_sent then
     perform api_utils.create_ok_notification(in_client_id, in_request_id);
   end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.lef_notifications(integer, text, integer, integer);
+
+create or replace function pallas_project.lef_notifications(in_client_id integer, in_request_id text, in_object_id integer, in_list_object_id integer)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_system_person_notification_count_attr_id integer := data.get_attribute_id('system_person_notification_count');
+  v_redirect_object_code text := data.get_object_code(json.get_integer(data.get_raw_attribute_value(in_list_object_id, 'redirect')));
+  v_content_attr_id integer := data.get_attribute_id('content');
+  v_notifications_count integer := json.get_integer(data.get_attribute_value_for_update(v_actor_id, v_system_person_notification_count_attr_id)) - 1;
+  v_content text[] :=
+    array_remove(
+      json.get_string_array(data.get_raw_attribute_value_for_update(in_object_id, v_content_attr_id, v_actor_id)),
+      data.get_object_code(in_list_object_id));
+begin
+  perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, v_redirect_object_code);
+
+  perform data.set_attribute_value(in_list_object_id, 'is_visible', jsonb 'false', v_actor_id);
+  perform data.change_object_and_notify(
+    in_object_id,
+    jsonb_build_object('content', to_json(v_content)),
+    v_actor_id,
+    'Open notification');
+  perform data.change_object_and_notify(
+    v_actor_id,
+    jsonb_build_object('system_person_notification_count', v_notifications_count),
+    v_actor_id,
+    'Open notification');
 end;
 $$
 language plpgsql;
@@ -16141,27 +16309,28 @@ declare
 
   v_title_attribute_id integer := data.get_attribute_id('title');
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
-  v_temporary_object_attribute_id integer := data.get_attribute_id('temporary_object');
   v_redirect_attribute_id integer := data.get_attribute_id('redirect');
+  v_system_person_notification_count_attribute_id integer := data.get_attribute_id('system_person_notification_count');
 
   v_notifications_id integer := data.get_object_id('notifications');
+  v_notification_count integer :=
+    json.get_integer(data.get_attribute_value_for_update(in_actor_id, v_system_person_notification_count_attribute_id)) + 1;
 begin
   -- создаём новый объект для нотификации
-  insert into data.objects default values returning id, code into v_notification_id, v_notification_code;
+  insert into data.objects(class_id) values(data.get_class_id('notification')) returning id, code into v_notification_id, v_notification_code;
 
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_notification_id, v_title_attribute_id, to_jsonb(in_text), null),
   (v_notification_id, v_is_visible_attribute_id, jsonb 'true', in_actor_id),
-  (v_notification_id, v_temporary_object_attribute_id, jsonb 'true', null),
-  (v_notification_id, v_redirect_attribute_id, to_jsonb (in_redirect_object), in_actor_id);
+  (v_notification_id, v_redirect_attribute_id, to_jsonb(in_redirect_object), null);
 
   -- Вставляем в начало списка и рассылаем уведомления
   perform pp_utils.list_prepend_and_notify(v_notifications_id, v_notification_code, in_actor_id);
+  perform data.change_object_and_notify(in_actor_id, jsonb '[]' || data.attribute_change2jsonb(v_system_person_notification_count_attribute_id, to_jsonb(v_notification_count)));
 
   if in_is_important then
     perform pallas_project.send_to_important_notifications(in_actor_id, in_text, data.get_object_code(in_redirect_object));
   end if;
-
 end;
 $$
 language plpgsql;
