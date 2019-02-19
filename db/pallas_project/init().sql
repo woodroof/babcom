@@ -104,6 +104,7 @@ begin
     'notification',
     jsonb '{
       "type": "notification",
+      "touch_function": "pallas_project.touch_notification",
       "template": {"groups": [{"code": "group", "attributes": ["title"], "actions": ["remove_notification"]}]}
     }');
 
