@@ -22,11 +22,12 @@ begin
   null,
     jsonb_build_array(
       jsonb_build_object('code', 'title', 'value', v_document_title),
-      jsonb_build_object('code', 'system_document_category', 'value', 'private'),
+      jsonb_build_object('code', 'document_category', 'value', 'private'),
       jsonb_build_object('code', 'system_document_author', 'value', v_actor_id),
       jsonb_build_object('code', 'document_author', 'value', json.get_string(data.get_attribute_value(v_actor_id, 'title', v_actor_id)) , 'value_object_id', v_master_group_id),
       jsonb_build_object('code', 'document_last_edit_time', 'value', to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss'), 'value_object_id', v_master_group_id),
-      jsonb_build_object('code', 'document_last_edit_time', 'value', to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss'), 'value_object_id', v_actor_id)
+      jsonb_build_object('code', 'document_last_edit_time', 'value', to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss'), 'value_object_id', v_actor_id),
+      jsonb_build_object('code', 'system_document_is_my', 'value', true, 'value_object_id', v_actor_id)
     ),
   'document');
 

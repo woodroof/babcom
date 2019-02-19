@@ -8,7 +8,7 @@ $$
 declare
   v_actions_list text := '';
   v_share_list_code text := data.get_object_code(in_object_id);
-  v_system_document_temp_share_list integer[] := json.get_integer_array_Opt(data.get_attribute_value_for_share(in_object_id, 'system_document_temp_share_list'),array[]::integer[]);
+  v_system_document_temp_share_list integer[] := json.get_integer_array_opt(data.get_attribute_value_for_share(in_object_id, 'system_document_temp_share_list'),array[]::integer[]);
 begin
   assert in_actor_id is not null;
 

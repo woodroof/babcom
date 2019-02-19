@@ -9,7 +9,7 @@ declare
   v_document_code text := json.get_string(in_params, 'document_code');
   v_document_id integer := data.get_object_id(v_document_code);
   v_actor_id integer := data.get_active_actor_id(in_client_id);
-  v_system_document_category text := json.get_string_opt(data.get_attribute_value_for_update(v_document_id, 'system_document_category'),'~');
+  v_document_category text := json.get_string_opt(data.get_attribute_value_for_update(v_document_id, 'document_category'),'~');
   v_system_document_author integer := json.get_integer(data.get_attribute_value(v_document_id, 'system_document_author'));
   v_my_documents_id integer := data.get_object_id('my_documents');
   v_official_documents_id integer := data.get_object_id('official_documents');
@@ -23,7 +23,7 @@ declare
   v_signer_list_id integer;
 begin
   assert in_request_id is not null;
-  assert v_system_document_category = 'private';
+  assert v_document_category = 'private';
 
   for v_person_id in select * from unnest(pallas_project.get_group_members('all_person')) loop
     v_content := json.get_string_array_opt(data.get_raw_attribute_value_for_share(v_my_documents_id, 'content', v_person_id), array[]::text[]);
@@ -38,7 +38,7 @@ begin
   v_message_sent := data.change_current_object(in_client_id, 
                                                in_request_id,
                                                v_document_id, 
-                                               jsonb_build_array(data.attribute_change2jsonb('system_document_category', jsonb '"official"'),
+                                               jsonb_build_array(data.attribute_change2jsonb('document_category', jsonb '"official"'),
                                                                  data.attribute_change2jsonb('document_status', jsonb '"draft"')));
 
   -- Создаём объект для изменения списка участников документа

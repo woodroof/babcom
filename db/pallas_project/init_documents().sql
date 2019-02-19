@@ -10,7 +10,7 @@ declare
 begin
   -- Атрибуты для документов
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
-  ('system_document_category', null, 'Категория документа', 'system', null, null, false),
+  ('document_category', null, 'Категория документа', 'normal', 'full', 'pallas_project.vd_document_category', false),
   ('document_text', null, 'Текст документа', 'normal', 'full', null, false),
   ('system_document_author', null, 'Автор документа', 'system', null, null, false),
   ('document_author', null, 'Автор документа', 'normal', 'full', null, true),
@@ -18,6 +18,7 @@ begin
   ('system_document_participants', null, 'Участники, подписывающие документ', 'system', null, null, false),
   ('document_participants', 'Подписи', 'Участники, подписывающие документ', 'normal', 'full', null, false),
   ('document_status', 'Статус', 'Статус документа', 'normal', 'full', 'pallas_project.vd_document_status', false),
+  ('system_document_is_my', null, 'Признак, что документ в моих списках', 'system', null, null, true),
   -- для дополнительных
   ('system_document_temp_share_list', null, 'Список кодов тех, с кем поделиться', 'system', null, null, false),
   ('document_temp_share_list', 'Поделиться с', 'Список персонажей, с которыми хотим поделиться документом', 'normal', 'full', null, false),
@@ -135,7 +136,7 @@ begin
       "code": "template",
       "value": {
         "title": "title",
-        "groups": [{"code": "document_group1", "actions": ["document_edit", "document_delete", "document_share_list", "document_add_to_my", "document_make_official"]},
+        "groups": [{"code": "document_group1", "attributes": ["document_category"], "actions": ["document_edit", "document_delete", "document_share_list", "document_add_to_my", "document_make_official", "document_make_rule"]},
                    {"code": "document_group2", "attributes": ["document_text"]},
                    {"code": "document_group3", "attributes": ["document_status", "document_participants", "document_sent_to_sign"], "actions": ["document_add_signers", "document_send_to_sign", "document_sign", "document_back_to_editing"]},
                    {"code": "document_group4", "attributes": ["document_author", "document_last_edit_time"]}]
@@ -205,7 +206,8 @@ begin
   ('document_sign', 'pallas_project.act_document_sign'),
   ('document_back_to_editing', 'pallas_project.act_document_back_to_editing'),
   ('document_delete_signer', 'pallas_project.act_document_delete_signer'),
-  ('document_sign_for_signer', 'pallas_project.act_document_sign_for_signer');
+  ('document_sign_for_signer', 'pallas_project.act_document_sign_for_signer'),
+  ('document_make_rule', 'pallas_project.act_document_make_rule');
 
 end;
 $$

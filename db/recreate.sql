@@ -10802,20 +10802,35 @@ declare
   v_document_code text := json.get_string(in_params, 'document_code');
   v_document_id integer := data.get_object_id(v_document_code);
   v_actor_id integer := data.get_active_actor_id(in_client_id);
-  v_system_document_category text := json.get_string_opt(data.get_attribute_value_for_share(v_document_id, 'system_document_category'),'~');
+  v_document_category text := json.get_string_opt(data.get_attribute_value_for_share(v_document_id, 'document_category'),'~');
   v_my_documents_id integer := data.get_object_id('my_documents');
   v_official_documents_id integer := data.get_object_id('official_documents');
+  v_rules_documents_id integer := data.get_object_id('rules_documents');
+  v_system_document_is_my boolean := json.get_boolean_opt(data.get_raw_attribute_value_for_update(v_document_id, 'system_document_is_my', v_actor_id), false);
+  v_message_sent boolean;
 begin
   assert in_request_id is not null;
+  assert not v_system_document_is_my;
 
-  case v_system_document_category
+  case v_document_category
   when 'private' then 
     perform pp_utils.list_prepend_and_notify(v_my_documents_id, v_document_code, v_actor_id);
   when 'official' then
     perform pp_utils.list_prepend_and_notify(v_official_documents_id, v_document_code, v_actor_id);
+  when 'rule' then
+    perform pp_utils.list_prepend_and_notify(v_rules_documents_id, v_document_code, v_actor_id);
   else
     null;
   end case;
+
+  v_message_sent := data.change_current_object(in_client_id, 
+                                               in_request_id,
+                                               v_document_id, 
+                                               jsonb_build_array(data.attribute_change2jsonb('system_document_is_my', jsonb 'true', v_actor_id)));
+
+  if not v_message_sent then
+   perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
 
   perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
@@ -10911,11 +10926,12 @@ begin
   null,
     jsonb_build_array(
       jsonb_build_object('code', 'title', 'value', v_document_title),
-      jsonb_build_object('code', 'system_document_category', 'value', 'private'),
+      jsonb_build_object('code', 'document_category', 'value', 'private'),
       jsonb_build_object('code', 'system_document_author', 'value', v_actor_id),
       jsonb_build_object('code', 'document_author', 'value', json.get_string(data.get_attribute_value(v_actor_id, 'title', v_actor_id)) , 'value_object_id', v_master_group_id),
       jsonb_build_object('code', 'document_last_edit_time', 'value', to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss'), 'value_object_id', v_master_group_id),
-      jsonb_build_object('code', 'document_last_edit_time', 'value', to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss'), 'value_object_id', v_actor_id)
+      jsonb_build_object('code', 'document_last_edit_time', 'value', to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss'), 'value_object_id', v_actor_id),
+      jsonb_build_object('code', 'system_document_is_my', 'value', true, 'value_object_id', v_actor_id)
     ),
   'document');
 
@@ -11089,7 +11105,7 @@ declare
   v_document_code text := json.get_string(in_params, 'document_code');
   v_document_id integer := data.get_object_id(v_document_code);
   v_actor_id integer := data.get_active_actor_id(in_client_id);
-  v_system_document_category text := json.get_string_opt(data.get_attribute_value_for_update(v_document_id, 'system_document_category'),'~');
+  v_document_category text := json.get_string_opt(data.get_attribute_value_for_update(v_document_id, 'document_category'),'~');
   v_system_document_author integer := json.get_integer(data.get_attribute_value(v_document_id, 'system_document_author'));
   v_my_documents_id integer := data.get_object_id('my_documents');
   v_official_documents_id integer := data.get_object_id('official_documents');
@@ -11103,7 +11119,7 @@ declare
   v_signer_list_id integer;
 begin
   assert in_request_id is not null;
-  assert v_system_document_category = 'private';
+  assert v_document_category = 'private';
 
   for v_person_id in select * from unnest(pallas_project.get_group_members('all_person')) loop
     v_content := json.get_string_array_opt(data.get_raw_attribute_value_for_share(v_my_documents_id, 'content', v_person_id), array[]::text[]);
@@ -11118,7 +11134,7 @@ begin
   v_message_sent := data.change_current_object(in_client_id, 
                                                in_request_id,
                                                v_document_id, 
-                                               jsonb_build_array(data.attribute_change2jsonb('system_document_category', jsonb '"official"'),
+                                               jsonb_build_array(data.attribute_change2jsonb('document_category', jsonb '"official"'),
                                                                  data.attribute_change2jsonb('document_status', jsonb '"draft"')));
 
   -- Создаём объект для изменения списка участников документа
@@ -11134,6 +11150,51 @@ begin
     perform data.add_object_to_object(v_system_document_author, v_signer_list_id);
     perform data.add_object_to_object(data.get_object_id('master'), v_signer_list_id);
   end if;
+
+  if not v_message_sent then
+   perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_document_make_rule(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_document_make_rule(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_document_code text := json.get_string(in_params, 'document_code');
+  v_document_id integer := data.get_object_id(v_document_code);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_document_category text := json.get_string_opt(data.get_attribute_value_for_update(v_document_id, 'system_document_category'),'~');
+  v_my_documents_id integer := data.get_object_id('my_documents');
+  v_rules_documents_id integer := data.get_object_id('rules_documents');
+  v_person_id integer;
+  v_master_group_id integer := data.get_object_id('master');
+  v_message_sent boolean;
+
+  v_content text[];
+begin
+  assert in_request_id is not null;
+  assert v_document_category = 'private';
+
+  for v_person_id in select * from unnest(pallas_project.get_group_members('all_person')) loop
+    v_content := json.get_string_array_opt(data.get_raw_attribute_value_for_share(v_my_documents_id, 'content', v_person_id), array[]::text[]);
+    if array_position(v_content, v_document_code) is not null then
+      perform pp_utils.list_remove_and_notify(v_my_documents_id, v_document_code, v_person_id);
+      perform pp_utils.list_prepend_and_notify(v_rules_documents_id, v_document_code, v_person_id);
+    end if;
+  end loop;
+  perform pp_utils.list_remove_and_notify(v_my_documents_id, v_document_code, v_master_group_id);
+  perform pp_utils.list_prepend_and_notify(v_rules_documents_id, v_document_code, v_master_group_id);
+
+  v_message_sent := data.change_current_object(in_client_id, 
+                                               in_request_id,
+                                               v_document_id, 
+                                               jsonb_build_array(data.attribute_change2jsonb('document_category', jsonb '"rule"')));
 
   if not v_message_sent then
    perform api_utils.create_ok_notification(in_client_id, in_request_id);
@@ -12019,12 +12080,14 @@ declare
   v_master_group_id integer := data.get_object_id('master');
   v_document_code text := data.get_object_code(in_object_id);
   v_document_author integer := json.get_integer(data.get_attribute_value(in_object_id, 'system_document_author'));
-  v_document_category text := json.get_string(data.get_attribute_value_for_share(in_object_id, 'system_document_category'));
+  v_document_category text := json.get_string(data.get_attribute_value_for_share(in_object_id, 'document_category'));
   v_document_status text := json.get_string_opt(data.get_attribute_value_for_share(in_object_id, 'document_status'),'');
   v_system_document_participants jsonb := data.get_attribute_value_for_share(in_object_id, 'system_document_participants');
+  v_system_document_is_my boolean := json.get_boolean_opt(data.get_raw_attribute_value_for_share(in_object_id, 'system_document_is_my', in_actor_id), false);
   v_document_list_content text[];
   v_my_documents_id integer := data.get_object_id('my_documents');
   v_official_documents_id integer := data.get_object_id('official_documents');
+  v_rules_documents_id integer := data.get_object_id('rules_documents');
 begin
   assert in_actor_id is not null;
 
@@ -12052,23 +12115,23 @@ begin
       end if;
     end if;
 
+    if v_is_master and v_document_category = 'private' then
+      v_actions_list := v_actions_list || 
+          format(', "document_make_rule": {"code": "document_make_rule", "name": "Перенести в правила", "disabled": false, "warning": "Документ перенесётся в правила для всех, у кого он есть в документах. Переносим?", '||
+                  '"params": {"document_code": "%s"}}',
+                  v_document_code);
+    end if;
+
     v_actions_list := v_actions_list || 
             format(', "document_share_list": {"code": "document_share_list", "name": "Поделиться", "disabled": false, '||
                     '"params": {"document_code": "%s"}}',
                     v_document_code);
 
-    if not v_is_master and v_document_category in ('private', 'official') then
-      if v_document_category = 'private' then
-        v_document_list_content := json.get_string_array_opt(data.get_raw_attribute_value_for_share(v_my_documents_id, 'content', in_actor_id), array[]::text[]);
-      elseif v_document_category = 'official' then
-        v_document_list_content := json.get_string_array_opt(data.get_raw_attribute_value_for_share(v_official_documents_id, 'content', in_actor_id), array[]::text[]);
-      end if;
-      if array_position(v_document_list_content, v_document_code) is null then
-        v_actions_list := v_actions_list || 
-                format(', "document_add_to_my": {"code": "document_add_to_my", "name": "Добавить себе", "disabled": false, '||
-                      '"params": {"document_code": "%s"}}',
-                      v_document_code);
-      end if;
+    if not v_is_master and v_document_category in ('private', 'official', 'rule') and not v_system_document_is_my then
+      v_actions_list := v_actions_list || 
+              format(', "document_add_to_my": {"code": "document_add_to_my", "name": "Добавить себе", "disabled": false, '||
+                    '"params": {"document_code": "%s"}}',
+                    v_document_code);
     end if;
 
     if v_document_category = 'official' and v_document_status = 'draft' and (v_is_master or in_actor_id = v_document_author) then
@@ -12119,7 +12182,7 @@ declare
   v_document_code text := data.get_object_code(in_object_id);
   v_list_code text := data.get_object_code(in_list_object_id);
   v_document_author integer := json.get_integer(data.get_attribute_value(in_object_id, 'system_document_author'));
-  v_document_category text := json.get_string(data.get_attribute_value_for_share(in_object_id, 'system_document_category'));
+  v_document_category text := json.get_string(data.get_attribute_value_for_share(in_object_id, 'document_category'));
   v_document_status text := json.get_string_opt(data.get_attribute_value_for_share(in_object_id, 'document_status'),'');
   v_system_document_participants jsonb := data.get_attribute_value_for_share(in_object_id, 'system_document_participants');
 begin
@@ -12180,7 +12243,7 @@ $$
 declare
   v_actions_list text := '';
   v_share_list_code text := data.get_object_code(in_object_id);
-  v_system_document_temp_share_list integer[] := json.get_integer_array_Opt(data.get_attribute_value_for_share(in_object_id, 'system_document_temp_share_list'),array[]::integer[]);
+  v_system_document_temp_share_list integer[] := json.get_integer_array_opt(data.get_attribute_value_for_share(in_object_id, 'system_document_temp_share_list'),array[]::integer[]);
 begin
   assert in_actor_id is not null;
 
@@ -14049,7 +14112,7 @@ declare
 begin
   -- Атрибуты для документов
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
-  ('system_document_category', null, 'Категория документа', 'system', null, null, false),
+  ('document_category', null, 'Категория документа', 'normal', 'full', 'pallas_project.vd_document_category', false),
   ('document_text', null, 'Текст документа', 'normal', 'full', null, false),
   ('system_document_author', null, 'Автор документа', 'system', null, null, false),
   ('document_author', null, 'Автор документа', 'normal', 'full', null, true),
@@ -14057,6 +14120,7 @@ begin
   ('system_document_participants', null, 'Участники, подписывающие документ', 'system', null, null, false),
   ('document_participants', 'Подписи', 'Участники, подписывающие документ', 'normal', 'full', null, false),
   ('document_status', 'Статус', 'Статус документа', 'normal', 'full', 'pallas_project.vd_document_status', false),
+  ('system_document_is_my', null, 'Признак, что документ в моих списках', 'system', null, null, true),
   -- для дополнительных
   ('system_document_temp_share_list', null, 'Список кодов тех, с кем поделиться', 'system', null, null, false),
   ('document_temp_share_list', 'Поделиться с', 'Список персонажей, с которыми хотим поделиться документом', 'normal', 'full', null, false),
@@ -14174,7 +14238,7 @@ begin
       "code": "template",
       "value": {
         "title": "title",
-        "groups": [{"code": "document_group1", "actions": ["document_edit", "document_delete", "document_share_list", "document_add_to_my", "document_make_official"]},
+        "groups": [{"code": "document_group1", "attributes": ["document_category"], "actions": ["document_edit", "document_delete", "document_share_list", "document_add_to_my", "document_make_official", "document_make_rule"]},
                    {"code": "document_group2", "attributes": ["document_text"]},
                    {"code": "document_group3", "attributes": ["document_status", "document_participants", "document_sent_to_sign"], "actions": ["document_add_signers", "document_send_to_sign", "document_sign", "document_back_to_editing"]},
                    {"code": "document_group4", "attributes": ["document_author", "document_last_edit_time"]}]
@@ -14244,7 +14308,8 @@ begin
   ('document_sign', 'pallas_project.act_document_sign'),
   ('document_back_to_editing', 'pallas_project.act_document_back_to_editing'),
   ('document_delete_signer', 'pallas_project.act_document_delete_signer'),
-  ('document_sign_for_signer', 'pallas_project.act_document_sign_for_signer');
+  ('document_sign_for_signer', 'pallas_project.act_document_sign_for_signer'),
+  ('document_make_rule', 'pallas_project.act_document_make_rule');
 
 end;
 $$
@@ -15982,6 +16047,29 @@ begin
     return 'Выберите судью дебатла';
   else
     return 'Что-то пошло не так';
+  end case;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.vd_document_category(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_document_category(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+declare
+  v_text_value text := json.get_string(in_value);
+begin
+  case when v_text_value = 'private' then
+    return '';
+  when v_text_value = 'official' then
+    return 'Официальный';
+  when v_text_value = 'rule' then
+    return 'Правило';
+  else
+    return 'Неизвестно';
   end case;
 end;
 $$
