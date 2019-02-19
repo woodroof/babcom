@@ -117,7 +117,7 @@ begin
         v_actions :=
           v_actions ||
           jsonb '{
-              "lottery": {"code": "act_open_object", "name": "Лотерея гражданства ООН", "disabled": false, "params": {"object_code": "lottery"}}
+              "lottery": {"code": "act_open_object", "name": "🇺🇳 Лотерея гражданства 🇺🇳", "disabled": false, "params": {"object_code": "lottery"}}
           }';
       end if;
     end if;

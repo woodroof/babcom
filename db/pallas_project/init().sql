@@ -11,7 +11,8 @@ declare
 begin
   insert into data.attributes(code, description, type, card_type, can_be_overridden) values
   ('description', 'Текстовый блок с развёрнутым описанием объекта, string', 'normal', 'full', true),
-  ('mini_description', 'Текстовый блок с коротким описанием объекта, string', 'normal', 'mini', true);
+  ('mini_description', 'Текстовый блок с коротким описанием объекта, string', 'normal', 'mini', true),
+  ('force_object_diff', 'Атрибут для принудительной генерации diff''а, integer', 'hidden', null, false);
 
   -- Создадим актора по умолчанию
   v_default_actor_id :=
@@ -43,6 +44,7 @@ begin
     jsonb '{
       "is_visible": true,
       "actions_function": "pallas_project.actgenerator_menu",
+      "force_object_diff": 0,
       "template": {
         "groups": [
           {"code": "menu_notifications", "actions": ["notifications"]},

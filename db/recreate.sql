@@ -9406,10 +9406,32 @@ returns void
 volatile
 as
 $$
+declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_lottery_id integer := data.get_object_id('lottery');
+  v_lottery_status text := json.get_string(data.get_attribute_value_for_update(v_lottery_id, 'lottery_status'));
+  v_menu_attr integer := json.get_integer(data.get_attribute_value_for_update('menu', 'force_object_diff'));
+  v_notified boolean;
 begin
   assert in_request_id is not null;
+  assert pp_utils.is_in_group(v_actor_id, 'master');
 
-  -- todo
+  if v_lottery_status = 'active' then
+    v_notified :=
+      data.change_current_object(
+        in_client_id,
+        in_request_id,
+        v_lottery_id,
+        jsonb '{"lottery_status": "cancelled"}',
+        'Cancel lottery action');
+    assert v_notified;
+    perform data.change_object_and_notify(
+      data.get_object_id('menu'),
+      jsonb_build_object('force_object_diff', v_menu_attr + 1),
+      v_actor_id,
+      'Cancel lottery action');
+    return;
+  end if;
 
   perform api_utils.create_ok_notification(
     in_client_id,
@@ -12499,7 +12521,7 @@ begin
         v_actions :=
           v_actions ||
           jsonb '{
-              "lottery": {"code": "act_open_object", "name": "Лотерея гражданства ООН", "disabled": false, "params": {"object_code": "lottery"}}
+              "lottery": {"code": "act_open_object", "name": "🇺🇳 Лотерея гражданства 🇺🇳", "disabled": false, "params": {"object_code": "lottery"}}
           }';
       end if;
     end if;
@@ -13562,7 +13584,8 @@ declare
 begin
   insert into data.attributes(code, description, type, card_type, can_be_overridden) values
   ('description', 'Текстовый блок с развёрнутым описанием объекта, string', 'normal', 'full', true),
-  ('mini_description', 'Текстовый блок с коротким описанием объекта, string', 'normal', 'mini', true);
+  ('mini_description', 'Текстовый блок с коротким описанием объекта, string', 'normal', 'mini', true),
+  ('force_object_diff', 'Атрибут для принудительной генерации diff''а, integer', 'hidden', null, false);
 
   -- Создадим актора по умолчанию
   v_default_actor_id :=
@@ -13594,6 +13617,7 @@ begin
     jsonb '{
       "is_visible": true,
       "actions_function": "pallas_project.actgenerator_menu",
+      "force_object_diff": 0,
       "template": {
         "groups": [
           {"code": "menu_notifications", "actions": ["notifications"]},
@@ -14955,6 +14979,17 @@ begin
 
   --  СВП, 4000, Роберт Ли, Лаура Джаррет и Люк Ламбер
   --  Starbucks (картель), 2000, Марк Попов
+  --  Клининговая компания “Чистый астероид”, Янг
+  --  Свободное небо - мормон, 3500 на счету
+  --  Вишнёвый сад - экономист
+  --  Тариэль - Валентин Штерн, 1000 на счету
+
+  -- Прочие организации:
+  --  Сантьяго Де ла Круз (головной картель)
+
+  -- Синонимы:
+  --  Салон "Третий глаз" -> (картель)
+  --  Тату-салон -> (СВП)
 
   -- Поставщики, не видны в общем списке:
   -- Лёд
@@ -14981,18 +15016,6 @@ begin
   --  Toom
   --  Amazon.com, Inc.
   --  Большой Склад
-
-  -- Личные организации:
-  --  Свободное небо - мормон, 3500 на счету
-  --  Вишнёвый сад - экономист
-  --  Тариэль - Валентин Штерн, 1000 на счету
-
-  -- Прочие организации:
-  --  Сантьяго Де ла Круз (головной картель)
-
-  -- Синонимы:
-  --  Салон "Третий глаз" -> (картель)
-  --  Тату-салон -> (СВП)
 end;
 $$
 language plpgsql;
