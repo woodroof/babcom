@@ -75,7 +75,7 @@ begin
           v_actions ||
           format(
             '{
-              "notifications": {"code": "act_open_object", "name": "🎉 Уведомления 🎉 (%s)", "disabled": false, "params": {"object_code": "notifications"}}
+              "notifications": {"code": "act_open_object", "name": "🔥 Уведомления 🔥 (%s)", "disabled": false, "params": {"object_code": "notifications"}}
             }',
             v_notification_count)::jsonb;
       end if;

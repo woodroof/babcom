@@ -12,7 +12,6 @@ $$
 -- Возвращается массив объектов с полями id, value_object_id, value
 declare
   v_change record;
-  v_object_id integer;
   v_elem jsonb;
   v_ret_val jsonb := '[]';
 begin
@@ -56,12 +55,7 @@ begin
 
         v_elem := v_elem || jsonb_build_object('value_object_id', v_change.value_object_id);
       elsif v_change.value_object_code is not null then
-        select id
-        into v_object_id
-        from data.objects
-        where code = v_change.value_object_code;
-
-        v_elem := v_elem || jsonb_build_object('value_object_id', v_object_id);
+        v_elem := v_elem || jsonb_build_object('value_object_id', data.get_object_id(v_change.value_object_code));
       end if;
 
       if v_change.value is not null then
