@@ -2,7 +2,7 @@
 
 create or replace function data.attribute_change2jsonb(in_attribute_id integer, in_value jsonb, in_value_object_id integer)
 returns jsonb
-volatile
+immutable
 as
 $$
 declare

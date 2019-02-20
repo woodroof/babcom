@@ -2,7 +2,7 @@
 
 create or replace function data.join_diffs(in_diffs1 jsonb, in_diffs2 jsonb)
 returns jsonb
-volatile
+immutable
 as
 $$
 -- Функция пока не поддерживает объединение diff'ов с изменениями списков

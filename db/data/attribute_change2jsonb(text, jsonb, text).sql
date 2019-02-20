@@ -2,7 +2,7 @@
 
 create or replace function data.attribute_change2jsonb(in_attribute_code text, in_value jsonb, in_value_object_code text)
 returns jsonb
-volatile
+stable
 as
 $$
 begin

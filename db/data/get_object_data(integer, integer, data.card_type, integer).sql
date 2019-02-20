@@ -2,7 +2,7 @@
 
 create or replace function data.get_object_data(in_object_id integer, in_actor_id integer, in_card_type data.card_type, in_actions_object_id integer)
 returns jsonb
-stable
+volatile
 as
 $$
 declare

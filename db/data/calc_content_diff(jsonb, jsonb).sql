@@ -2,7 +2,7 @@
 
 create or replace function data.calc_content_diff(in_original_content jsonb, in_new_content jsonb)
 returns jsonb
-volatile
+immutable
 as
 $$
 -- add - массив объектов с полями position и object_code, position может отсутствовать

@@ -2,7 +2,7 @@
 
 create or replace function pallas_project.vd_administrative_services_status(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
 returns text
-immutable
+stable
 as
 $$
 declare

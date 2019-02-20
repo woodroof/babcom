@@ -2,7 +2,7 @@
 
 create or replace function data.preprocess_changes_with_codes(in_changes jsonb)
 returns jsonb
-volatile
+stable
 as
 $$
 -- У параметра in_changes есть два возможных формата:

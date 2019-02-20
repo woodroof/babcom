@@ -1347,7 +1347,7 @@ language plpgsql;
 
 create or replace function data.attribute_change2jsonb(in_attribute_id integer, in_value jsonb)
 returns jsonb
-volatile
+immutable
 as
 $$
 declare
@@ -1370,7 +1370,7 @@ language plpgsql;
 
 create or replace function data.attribute_change2jsonb(in_attribute_id integer, in_value jsonb, in_value_object_id integer)
 returns jsonb
-volatile
+immutable
 as
 $$
 declare
@@ -1393,7 +1393,7 @@ language plpgsql;
 
 create or replace function data.attribute_change2jsonb(in_attribute_id integer, in_value jsonb, in_value_object_code text)
 returns jsonb
-volatile
+stable
 as
 $$
 begin
@@ -1406,7 +1406,7 @@ language plpgsql;
 
 create or replace function data.attribute_change2jsonb(in_attribute_code text, in_value jsonb)
 returns jsonb
-volatile
+stable
 as
 $$
 begin
@@ -1419,7 +1419,7 @@ language plpgsql;
 
 create or replace function data.attribute_change2jsonb(in_attribute_code text, in_value jsonb, in_value_object_id integer)
 returns jsonb
-volatile
+stable
 as
 $$
 begin
@@ -1432,7 +1432,7 @@ language plpgsql;
 
 create or replace function data.attribute_change2jsonb(in_attribute_code text, in_value jsonb, in_value_object_code text)
 returns jsonb
-volatile
+stable
 as
 $$
 begin
@@ -1445,7 +1445,7 @@ language plpgsql;
 
 create or replace function data.calc_content_diff(in_original_content jsonb, in_new_content jsonb)
 returns jsonb
-volatile
+immutable
 as
 $$
 -- add - массив объектов с полями position и object_code, position может отсутствовать
@@ -3701,7 +3701,7 @@ language plpgsql;
 
 create or replace function data.get_object(in_object_id integer, in_actor_id integer, in_card_type data.card_type, in_actions_object_id integer)
 returns jsonb
-stable
+volatile
 as
 $$
 declare
@@ -3787,7 +3787,7 @@ language plpgsql;
 
 create or replace function data.get_object_data(in_object_id integer, in_actor_id integer, in_card_type data.card_type, in_actions_object_id integer)
 returns jsonb
-stable
+volatile
 as
 $$
 declare
@@ -4651,7 +4651,7 @@ language plpgsql;
 
 create or replace function data.join_diffs(in_diffs1 jsonb, in_diffs2 jsonb)
 returns jsonb
-volatile
+immutable
 as
 $$
 -- Функция пока не поддерживает объединение diff'ов с изменениями списков
@@ -4770,7 +4770,7 @@ language plpgsql;
 
 create or replace function data.preprocess_changes_with_codes(in_changes jsonb)
 returns jsonb
-volatile
+stable
 as
 $$
 -- У параметра in_changes есть два возможных формата:
@@ -15909,7 +15909,7 @@ language plpgsql;
 
 create or replace function pallas_project.vd_administrative_services_status(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
 returns text
-immutable
+stable
 as
 $$
 declare
@@ -16127,7 +16127,7 @@ language plpgsql;
 
 create or replace function pallas_project.vd_health_care_status(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
 returns text
-immutable
+stable
 as
 $$
 declare
@@ -16160,7 +16160,7 @@ language plpgsql;
 
 create or replace function pallas_project.vd_life_support_status(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
 returns text
-immutable
+stable
 as
 $$
 declare
@@ -16193,7 +16193,7 @@ language plpgsql;
 
 create or replace function pallas_project.vd_link(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
 returns text
-immutable
+stable
 as
 $$
 begin
@@ -16354,7 +16354,7 @@ language plpgsql;
 
 create or replace function pallas_project.vd_police_status(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
 returns text
-immutable
+stable
 as
 $$
 declare
@@ -16387,7 +16387,7 @@ language plpgsql;
 
 create or replace function pallas_project.vd_recreation_status(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
 returns text
-immutable
+stable
 as
 $$
 declare
@@ -16606,7 +16606,7 @@ language plpgsql;
 
 create or replace function pp_utils.link(in_code text, in_actor_id integer)
 returns text
-immutable
+stable
 as
 $$
 declare

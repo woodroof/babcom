@@ -2,7 +2,7 @@
 
 create or replace function pp_utils.link(in_code text, in_actor_id integer)
 returns text
-immutable
+stable
 as
 $$
 declare
