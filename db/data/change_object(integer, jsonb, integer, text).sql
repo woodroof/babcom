@@ -122,7 +122,7 @@ begin
   declare
     v_subscription record;
     v_list record;
-    v_list_objects jsonb := jsonb '[]';
+    v_list_objects jsonb;
     v_list_object jsonb;
   begin
     for v_subscription in
@@ -140,6 +140,8 @@ begin
         object_id != in_object_id
     )
     loop
+      v_list_objects := jsonb '[]';
+
       for v_list in
       (
         select
