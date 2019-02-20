@@ -2727,7 +2727,7 @@ declare
   v_class_id integer;
 begin
   assert data.is_instance(in_object_id);
-  assert data.is_instance(in_actor_id);
+  assert in_actor_id is null or data.is_instance(in_actor_id);
   assert data.can_attribute_be_overridden(in_attribute_id);
 
   select av.value
@@ -9535,7 +9535,7 @@ begin
       format(
         'Покупка %s статуса "%s"',
         (case when v_status_value = 1 then 'бронзового' when v_status_value = 2 then 'серебряного' else 'золотого' end),
-        json.get_string(data.get_raw_attribute_value(v_status_name || '_status_page', 'title'))),
+        json.get_string(data.get_raw_attribute_value(data.get_class_id(v_status_name || '_status_page'), 'title'))),
       -v_price,
       v_current_sum - v_price,
       null,
@@ -11656,22 +11656,82 @@ declare
   v_lottery_id integer := data.get_object_id('lottery');
   v_lottery_status text := json.get_string(data.get_attribute_value_for_update(v_lottery_id, 'lottery_status'));
   v_menu_attr integer := json.get_integer(data.get_attribute_value_for_update('menu', 'force_object_diff'));
-  v_lottery_owner text := json.get_string_opt(data.get_attribute_value_for_share(in_object_id, 'system_lottery_owner'), null);
+  v_lottery_owner text := json.get_string_opt(data.get_attribute_value_for_share(v_lottery_id, 'system_lottery_owner'), null);
+  v_total_ticket_count integer;
+  v_win_ticket_num integer;
+  v_current_ticket_num integer := 0;
+  v_aster record;
+  v_aster_id integer;
+  v_text text;
+  v_player_id integer;
   v_notified boolean;
 begin
   assert in_request_id is not null;
   assert pp_utils.is_in_group(v_actor_id, 'master') or v_actor_id = data.get_object_id(v_lottery_owner);
 
   if v_lottery_status = 'active' then
-    -- todo: выявление победителя (lock с покупкой билета), перевод его в ООН, уведомление всем жителям Паллады, уведомление победителю
-    -- todo: на странице лотереи писать победителя
+    -- Ищем победителя
+    select sum(ticket_count)
+    into v_total_ticket_count
+    from
+    (
+      select json.get_integer(value) ticket_count
+      from data.attribute_values
+      where
+        object_id = v_lottery_id and
+        attribute_id = data.get_attribute_id('lottery_ticket_count') and
+        value_object_id is not null
+      for share
+    ) a;
 
+    v_win_ticket_num := random.random_integer(1, v_total_ticket_count);
+
+    for v_aster in
+    (
+      select value_object_id, json.get_integer(value) ticket_count
+      from data.attribute_values
+      where
+        object_id = v_lottery_id and
+        attribute_id = data.get_attribute_id('lottery_ticket_count') and
+        value_object_id is not null
+    )
+    loop
+      v_current_ticket_num := v_current_ticket_num + v_aster.ticket_count;
+      if v_current_ticket_num >= v_win_ticket_num then
+        v_aster_id := v_aster.value_object_id;
+        exit;
+      end if;
+    end loop;
+
+    v_text := 'Лотерея завершена. Победитель: ' || pp_utils.link(v_aster_id, null);
+
+    -- Отправляем уведомление игрокам
+    for v_player_id in
+    (
+      select object_id
+      from data.object_objects
+      where
+        parent_object_id = data.get_object_id('player') and
+        object_id != parent_object_id and
+        object_id != v_aster_id
+    )
+    loop
+      perform pp_utils.add_notification(v_player_id, v_text, v_lottery_id, true);
+    end loop;
+
+    -- Отправляем уведомление победителю
+    perform pp_utils.add_notification(v_aster_id, 'Поздравляем, вы выиграли в лотерее и получаете гражданство ООН!', v_lottery_id, true);
+
+    -- Меняем экономику на гражданина
+    perform pallas_project.change_aster_to_un(v_aster_id, v_actor_id);
+
+    -- Завершаем лотерею
     v_notified :=
       data.change_current_object(
         in_client_id,
         in_request_id,
         v_lottery_id,
-        jsonb '{"lottery_status": "finished"}',
+        format('{"lottery_status": "finished", "lottery_winner": "%s"}', data.get_object_code(v_aster_id))::jsonb,
         'Finish lottery action');
     assert v_notified;
     perform data.change_object_and_notify(
@@ -12909,6 +12969,76 @@ begin
   end if;
 
   return v_actions;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.change_aster_to_un(integer, integer);
+
+create or replace function pallas_project.change_aster_to_un(in_aster_id integer, in_actor_id integer)
+returns void
+volatile
+as
+$$
+declare
+  v_base_coins integer := data.get_integer_param('base_un_coins');
+  v_life_support_prices integer[] := data.get_integer_array_param('life_support_status_prices');
+  v_person_economy_type jsonb := data.get_attribute_value_for_update(in_aster_id, 'system_person_economy_type');
+  v_reason text := 'Смена гражданства';
+  v_un_hints_id integer;
+  v_aster_code text := data.get_object_code(in_aster_id);
+begin
+  assert v_person_economy_type = jsonb '"asters"';
+
+  -- Начисление коинов
+  perform pallas_project.change_coins(in_aster_id, v_base_coins - v_life_support_prices[1], in_actor_id, v_reason);
+  -- Сброс статусов следующего цикла
+  perform data.change_object_and_notify(
+    data.get_object_id(v_aster_code || '_next_statuses'),
+    '[
+      {"code": "money"},
+      {"code": "life_support_next_status", "value": 1},
+      {"code": "health_care_next_status", "value": 0},
+      {"code": "recreation_next_status", "value": 0},
+      {"code": "police_next_status", "value": 0},
+      {"code": "administrative_services_next_status", "value": 0}
+    ]',
+    in_actor_id,
+    v_reason);
+  -- Смена типа экономики
+  perform data.change_object_and_notify(
+    in_aster_id,
+    format(
+      '[
+        {"code": "person_state", "value": "un"},
+        {"code": "person_un_rating", "value": %s}, 
+        {"code": "system_person_economy_type", "value": "un"},
+        {"code": "person_economy_type", "value": "un", "value_object_code": "master"},
+        {"code": "system_money"},
+        {"code": "money", "value_object_id": %s},
+        {"code": "money", "value_object_code": "master"},
+        {"code": "system_person_deposit_money"},
+        {"code": "person_deposit_money", "value_object_id": %s},
+        {"code": "person_deposit_money", "value_object_code": "master"}
+      ]',
+      data.get_integer_param('base_un_rating'),
+      in_aster_id,
+      in_aster_id)::jsonb);
+  -- Уведомление
+  v_un_hints_id :=
+    data.create_object(
+      null,
+      format(
+        '[
+          {"code": "type", "value": "un_citizen_hints"},
+          {"code": "is_visible", "value": true, "value_object_id": %s},
+          {"code": "title", "value": "Советы для получивших гражданство"},
+          {"code": "description", "value": "Уважаемый гражданин!\n\nТеперь вы являетесь полноценным представителем ООН, а значит, можете работать на благо всего общества.\nПозвольте дать вам несколько советов:\n1. Ваши статусы на следующий цикл выставлены в значение по умолчанию, также вам начислено количество коинов, соответствующее вашему рейтингу гражданина. Не забудьте их [потратить](babcom:%s_next_statuses)!\n2. Гражданин не просто может, но *должен* работать. Найдите работу, чтобы ваш рейтинг не падал, а вы не потеряли с таким трудом приобретённое гражданство.\n3. Работайте лучше. Чем лучше вы работаете, тем быстрее растёт ваш рейтинг и тем более ответственные должности вы можете занимать.\n\nНадеемся на долгое сотрудничетво, ваши коллеги из ООН!"},
+          {"code": "template", "value": {"title": "title", "groups": [{"code": "group", "attributes": ["description"]}]}}
+        ]',
+        in_aster_id,
+        v_aster_code)::jsonb);
+  perform pp_utils.add_notification(in_aster_id, 'Вам доступна памятка гражданина ООН, не забудьте ознакомиться!', v_un_hints_id, true);
 end;
 $$
 language plpgsql;
@@ -14536,7 +14666,9 @@ begin
   ('health_care_status_prices', jsonb '[1, 6, 8]'),
   ('recreation_status_prices', jsonb '[2, 4, 4]'),
   ('police_status_prices', jsonb '[1, 5, 6]'),
-  ('administrative_services_status_prices', jsonb '[2, 6, 7]');
+  ('administrative_services_status_prices', jsonb '[2, 6, 7]'),
+  ('base_un_coins', jsonb '12'),
+  ('base_un_rating', jsonb '150');
 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
   ('life_support_status', null, 'Описание на странице статуса', 'normal', null, 'pallas_project.vd_life_support_status', false),
@@ -14771,6 +14903,7 @@ begin
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
   ('lottery_ticket_count', 'Количество билетов', 'Количество купленных лотерейных билетов', 'normal', 'full', null, true),
   ('lottery_status', 'Статус', null, 'normal', 'full', 'pallas_project.vd_lottery_status', false),
+  ('lottery_winner', 'Победитель', null, 'normal', 'full', 'pallas_project.vd_link', false),
   ('system_lottery_owner', null, 'Человек, завершающий лотерею', 'system', null, null, false);
 
   insert into data.actions(code, function) values
@@ -14797,13 +14930,13 @@ begin
           {"code": "lottery_status", "value": "active"},
           {"code": "system_lottery_owner", "value": "%s"},
           {"code": "actions_function", "value": "pallas_project.actgenerator_lottery"},
-          {"code": "description", "value": "Все неграждане, присутствующие на астероиде Паллада на момент старта лотереи, официально зарегистрированные и имеющие комм на момент начала лотереи, получают ОДИН билет ЛОТЕРЕИ ГРАЖДАНСТВА совершенно бесплатно.\n\nКаждый негражданин может ДОПОЛНИТЕЛЬНО приобрести ЛЮБОЕ количество билетов лотереи. Стоимость дополнительного билета — UN$10.\n\nПерепродажа и передача билетов ЛОТЕРЕИ ГРАЖДАНСТВА запрещены.\n\nОтказаться от участия в ЛОТЕРЕЕ ГРАЖДАНСТВА нельзя.\n\nОДИН победитель определяется методом случайного выбора между ВСЕМИ (гарантированными и дополнительно приобретенными) билетами ЛОТЕРЕИ ГРАЖДАНСТВА.\n\nЛОТЕРЕЯ ГРАЖДАНСТВА проводится Амандой Ганди, заместителем отдела внутренней ревизии Управления по вопросам космического пространства ООН. Контролёрами ЛОТЕРЕИ ГРАЖДАНСТВА со стороны астероида Паллада назначаются Александр Корсак, главный экономист, и Кара Трейс, военный наблюдатель.\n\nПОБЕДИТЕЛЬ получит официальное уведомление на свой комм сразу же после завершения лотереи, также он будет объявлен в местных и земных новостях.\n\nГражданство может быть отозвано, если выяснится, что награжденный скрывался от правосудия или совершил уголовно наказуемое деяние до победы в лотерее.\n\nФинальный этап состоится на празднике, посвященном юбилею станции, после торжественной речи Аманды Ганди."},
+          {"code": "description", "value": "Все неграждане, присутствующие на астероиде Паллада на момент старта лотереи, официально зарегистрированные и имеющие комм на момент начала лотереи, получают ОДИН билет ЛОТЕРЕИ ГРАЖДАНСТВА совершенно бесплатно.\n\nКаждый негражданин может ДОПОЛНИТЕЛЬНО приобрести ЛЮБОЕ количество билетов лотереи. Стоимость дополнительного билета — UN$10.\n\nПерепродажа и передача билетов ЛОТЕРЕИ ГРАЖДАНСТВА запрещены.\n\nОтказаться от участия в ЛОТЕРЕЕ ГРАЖДАНСТВА нельзя.\n\nОДИН победитель определяется методом случайного выбора между ВСЕМИ (гарантированными и дополнительно приобретенными) билетами ЛОТЕРЕИ ГРАЖДАНСТВА.\n\nЛОТЕРЕЯ ГРАЖДАНСТВА проводится Амандой Ганди, заместителем отдела внутренней ревизии Управления по вопросам космического пространства ООН. Контролёрами ЛОТЕРЕИ ГРАЖДАНСТВА со стороны астероида Паллада назначаются Александра Корсак, главный экономист, и Кара Трейс, военный наблюдатель.\n\nПОБЕДИТЕЛЬ получит официальное уведомление на свой комм сразу же после завершения лотереи, также он будет объявлен в местных и земных новостях.\n\nГражданство может быть отозвано, если выяснится, что награжденный скрывался от правосудия или совершил уголовно наказуемое деяние до победы в лотерее.\n\nФинальный этап состоится на празднике, посвященном юбилею станции, после торжественной речи Аманды Ганди."},
           {
             "code": "template",
             "value": {
               "title": "title",
               "groups": [
-                {"code": "tickets", "attributes": ["lottery_status", "lottery_ticket_count"], "actions": ["buy_lottery_ticket", "finish_lottery", "cancel_lottery"]},
+                {"code": "tickets", "attributes": ["lottery_status", "lottery_winner", "lottery_ticket_count"], "actions": ["buy_lottery_ticket", "finish_lottery", "cancel_lottery"]},
                 {"name": "Правила проведения ЛОТЕРЕИ ГРАЖДАНСТВА", "code": "rules", "attributes": ["description"]}
               ]
             }
@@ -15417,6 +15550,38 @@ begin
       "system_person_administrative_services_status": 3,
       "person_district": "sector_B"}',
     array['all_person', 'un', 'player']);
+  perform pallas_project.create_person(
+    'p4',
+    jsonb '{
+      "title": "Алисия Сильверстоун",
+      "person_occupation": "Специалист по сейсморазведке",
+      "system_money": 25000,
+      "system_person_deposit_money": 100000,
+      "person_opa_rating": 1,
+      "system_person_economy_type": "asters",
+      "system_person_life_support_status": 2,
+      "system_person_health_care_status": 1,
+      "system_person_recreation_status": 2,
+      "system_person_police_status": 1,
+      "system_person_administrative_services_status": 1,
+      "person_district": "sector_D"}',
+    array['all_person', 'player', 'aster']);
+  perform pallas_project.create_person(
+    'p5',
+    jsonb '{
+      "title": "Амели Сноу",
+      "person_occupation": "Бригадир грузчиков",
+      "system_money": 25000,
+      "system_person_deposit_money": 100000,
+      "person_opa_rating": 2,
+      "system_person_economy_type": "asters",
+      "system_person_life_support_status": 2,
+      "system_person_health_care_status": 1,
+      "system_person_recreation_status": 2,
+      "system_person_police_status": 1,
+      "system_person_administrative_services_status": 1,
+      "person_district": "sector_G"}',
+    array['all_person', 'player', 'aster']);
 
   -- Игротехнические персонажи и тайные личности
   -- Сантьяго де ла Крус - большой картель
@@ -16784,6 +16949,21 @@ end;
 $$
 language plpgsql;
 
+-- drop function pp_utils.link(integer, integer);
+
+create or replace function pp_utils.link(in_object_id integer, in_actor_id integer)
+returns text
+stable
+as
+$$
+declare
+  v_title text := json.get_string_opt(data.get_attribute_value(in_object_id, 'title', in_actor_id), '???');
+begin
+  return format('[%s](babcom:%s)', v_title, data.get_object_code(in_object_id));
+end;
+$$
+language plpgsql;
+
 -- drop function pp_utils.link(text, integer);
 
 create or replace function pp_utils.link(in_code text, in_actor_id integer)
@@ -16794,8 +16974,6 @@ $$
 declare
   v_title text := json.get_string_opt(data.get_attribute_value(data.get_object_id(in_code), 'title', in_actor_id), '???');
 begin
-  assert in_actor_id is not null;
-
   return format('[%s](babcom:%s)', v_title, in_code);
 end;
 $$

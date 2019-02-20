@@ -166,6 +166,38 @@ begin
       "system_person_administrative_services_status": 3,
       "person_district": "sector_B"}',
     array['all_person', 'un', 'player']);
+  perform pallas_project.create_person(
+    'p4',
+    jsonb '{
+      "title": "Алисия Сильверстоун",
+      "person_occupation": "Специалист по сейсморазведке",
+      "system_money": 25000,
+      "system_person_deposit_money": 100000,
+      "person_opa_rating": 1,
+      "system_person_economy_type": "asters",
+      "system_person_life_support_status": 2,
+      "system_person_health_care_status": 1,
+      "system_person_recreation_status": 2,
+      "system_person_police_status": 1,
+      "system_person_administrative_services_status": 1,
+      "person_district": "sector_D"}',
+    array['all_person', 'player', 'aster']);
+  perform pallas_project.create_person(
+    'p5',
+    jsonb '{
+      "title": "Амели Сноу",
+      "person_occupation": "Бригадир грузчиков",
+      "system_money": 25000,
+      "system_person_deposit_money": 100000,
+      "person_opa_rating": 2,
+      "system_person_economy_type": "asters",
+      "system_person_life_support_status": 2,
+      "system_person_health_care_status": 1,
+      "system_person_recreation_status": 2,
+      "system_person_police_status": 1,
+      "system_person_administrative_services_status": 1,
+      "person_district": "sector_G"}',
+    array['all_person', 'player', 'aster']);
 
   -- Игротехнические персонажи и тайные личности
   -- Сантьяго де ла Крус - большой картель
