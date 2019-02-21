@@ -12,7 +12,8 @@ begin
   insert into data.attributes(code, description, type, card_type, can_be_overridden) values
   ('description', 'Текстовый блок с развёрнутым описанием объекта, string', 'normal', 'full', true),
   ('mini_description', 'Текстовый блок с коротким описанием объекта, string', 'normal', 'mini', true),
-  ('force_object_diff', 'Атрибут для принудительной генерации diff''а, integer', 'hidden', null, false);
+  ('force_object_diff', 'Атрибут для принудительной генерации diff''а, integer', 'hidden', null, false),
+  ('system_is_master_object', 'Мастерский персонаж, boolean', 'system', null, false);
 
   -- Создадим актора по умолчанию
   v_default_actor_id :=
@@ -50,7 +51,7 @@ begin
           {"code": "menu_notifications", "actions": ["notifications"]},
           {"code": "menu_lottery", "actions": ["lottery"]},
           {"code": "menu_group1", "actions": ["login", "profile"]},
-          {"code": "menu_group2", "actions": ["statuses", "next_statuses", "debatles", "chats", "all_chats", "persons", "districts", "documents", "transactions", "important_notifications", "master_chats"]},
+          {"code": "menu_group2", "actions": ["statuses", "next_statuses", "debatles", "chats", "all_chats", "persons", "districts", "organizations", "documents", "transactions", "important_notifications", "master_chats"]},
           {"code": "menu_group3", "actions": ["logout"]}
         ]
       }

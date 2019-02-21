@@ -10,8 +10,9 @@ declare
   v_district record;
 begin
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
-  ('district_control', 'Контроль', 'Организация, контролирующая район', 'normal', null, 'pallas_project.vd_link', false),
-  ('district_population', 'Население', 'Население района', 'normal', null, null, false);
+  ('district_control', 'Контроль', 'Организация, контролирующая район', 'normal', null, 'pallas_project.vd_district_control', false),
+  ('district_population', 'Население', 'Население района', 'normal', null, null, false),
+  ('district_influence', 'Влияние', 'Влияние организаций в районе', 'normal', null, 'pallas_project.vd_district_influence', false);
 
   -- Класс района
   perform data.create_class(
@@ -24,7 +25,7 @@ begin
         "value": {
           "title": "title",
           "groups": [
-            {"code": "group", "attributes": ["district_population", "district_control"]}
+            {"code": "group", "attributes": ["district_population", "district_control", "district_influence"]}
           ]
         }
       }
@@ -35,16 +36,18 @@ begin
   (
     select
       json.get_string(value, 'sector') sector,
-      json.get_integer(value, 'population') population
+      json.get_integer(value, 'population') population,
+      json.get_object(value, 'district_influence') influence,
+      value->'district_control' control
     from jsonb_array_elements(
       jsonb '[
-        {"sector": "A", "population": 22500},
-        {"sector": "B", "population": 45000},
-        {"sector": "C", "population": 67500},
-        {"sector": "D", "population": 112500},
-        {"sector": "E", "population": 225000},
-        {"sector": "F", "population": 112500},
-        {"sector": "G", "population": 225000}
+        {"sector": "A", "population": 22500, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
+        {"sector": "B", "population": 45000, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
+        {"sector": "C", "population": 67500, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
+        {"sector": "D", "population": 112500, "district_influence": {"opa": 1, "cartel": 0, "administration": 0}, "district_control": "opa"},
+        {"sector": "E", "population": 225000, "district_influence": {"opa": 0, "cartel": 0, "administration": 0}, "district_control": null},
+        {"sector": "F", "population": 112500, "district_influence": {"opa": 1, "cartel": 0, "administration": 0}, "district_control": "opa"},
+        {"sector": "G", "population": 225000, "district_influence": {"opa": 0, "cartel": 1, "administration": 0}, "district_control": "cartel"}
       ]')
   )
   loop
@@ -54,11 +57,15 @@ begin
         '[
           {"code": "title", "value": "%s"},
           {"code": "district_population", "value": %s},
+          {"code": "district_influence", "value": %s},
+          {"code": "district_control", "value": %s},
           {"code": "content", "value": []},
           {"code": "content", "value": [], "value_object_code": "master"}
         ]',
         'Сектор ' || v_district.sector,
-        v_district.population)::jsonb,
+        v_district.population,
+        v_district.influence::text,
+        v_district.control::text)::jsonb,
       'district');
 
     v_districts := v_districts || to_jsonb('sector_' || v_district.sector);

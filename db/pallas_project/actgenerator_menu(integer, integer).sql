@@ -94,7 +94,8 @@ begin
     v_actions ||
     jsonb '{
       "persons": {"code": "act_open_object", "name": "Люди", "disabled": false, "params": {"object_code": "persons"}},
-      "districts": {"code": "act_open_object", "name": "Районы", "disabled": false, "params": {"object_code": "districts"}}
+      "districts": {"code": "act_open_object", "name": "Районы", "disabled": false, "params": {"object_code": "districts"}},
+      "organizations": {"code": "act_open_object", "name": "Организации", "disabled": false, "params": {"object_code": "organizations"}}
     }';
 
   declare

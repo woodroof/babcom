@@ -12740,7 +12740,8 @@ begin
     v_actions ||
     jsonb '{
       "persons": {"code": "act_open_object", "name": "Люди", "disabled": false, "params": {"object_code": "persons"}},
-      "districts": {"code": "act_open_object", "name": "Районы", "disabled": false, "params": {"object_code": "districts"}}
+      "districts": {"code": "act_open_object", "name": "Районы", "disabled": false, "params": {"object_code": "districts"}},
+      "organizations": {"code": "act_open_object", "name": "Организации", "disabled": false, "params": {"object_code": "organizations"}}
     }';
 
   declare
@@ -13188,6 +13189,24 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.control_to_org_code(text);
+
+create or replace function pallas_project.control_to_org_code(in_control text)
+returns text
+immutable
+as
+$$
+begin
+  if in_control = 'opa' or in_control = 'administration' then
+    return 'org_' || in_control;
+  end if;
+
+  assert in_control = 'cartel';
+  return 'org_starbucks';
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.create_chat(text, jsonb);
 
 create or replace function pallas_project.create_chat(in_code text, in_attributes jsonb)
@@ -13243,6 +13262,69 @@ begin
   perform data.create_object( v_chat_code || '_person_list', v_list_attributes, 'chat_person_list');
 
   return v_chat_id;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.create_organization(text, jsonb);
+
+create or replace function pallas_project.create_organization(in_object_code text, in_attributes jsonb)
+returns void
+volatile
+as
+$$
+-- Не для использования на игре, т.к. обновляет атрибуты напрямую, без уведомлений и блокировок!
+declare
+  v_master_group_id integer := data.get_object_id('master');
+  v_org_id integer := data.create_object(in_object_code, in_attributes, 'organization');
+  v_head_group_id integer := data.create_object(in_object_code || '_head', jsonb '{}');
+  v_economist_group_id integer := data.create_object(in_object_code || '_economist', jsonb '{}');
+  v_auditor_group_id integer := data.create_object(in_object_code || '_auditor', jsonb '{}');
+  v_money jsonb := data.get_attribute_value(v_org_id, 'system_money');
+  v_org_districts_control jsonb := data.get_attribute_value(v_org_id, 'system_org_districts_control');
+  v_org_districts_influence jsonb := data.get_attribute_value(v_org_id, 'system_org_districts_influence');
+  v_org_economics_type jsonb := data.get_attribute_value(v_org_id, 'system_org_economics_type');
+  v_value jsonb;
+begin
+  perform json.get_bigint(v_money);
+  assert json.get_string(v_org_economics_type) in ('normal', 'budget', 'profit');
+
+  -- Перекладываем деньги
+  perform data.set_attribute_value(v_org_id, 'money', v_money, v_master_group_id);
+  perform data.set_attribute_value(v_org_id, 'money', v_money, v_head_group_id);
+  perform data.set_attribute_value(v_org_id, 'money', v_money, v_economist_group_id);
+  perform data.set_attribute_value(v_org_id, 'money', v_money, v_auditor_group_id);
+
+  -- Заполняем контроль и влияние
+  if v_org_districts_control is not null then
+    perform data.set_attribute_value(v_org_id, 'org_districts_control', v_org_districts_control, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'org_districts_control', v_org_districts_control, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'org_districts_control', v_org_districts_control, v_economist_group_id);
+  end if;
+
+  if v_org_districts_influence is not null then
+    perform data.set_attribute_value(v_org_id, 'org_districts_influence', v_org_districts_influence, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'org_districts_influence', v_org_districts_influence, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'org_districts_influence', v_org_districts_influence, v_economist_group_id);
+  end if;
+
+  perform data.set_attribute_value(v_org_id, 'org_economics_type', v_org_economics_type, v_master_group_id);
+
+  if v_org_economics_type = jsonb '"budget"' then
+    v_value := data.get_attribute_value(v_org_id, 'system_org_budget');
+    perform json.get_integer(v_value);
+
+    perform data.set_attribute_value(v_org_id, 'org_budget', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'org_budget', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'org_budget', v_value, v_economist_group_id);
+  elsif v_org_economics_type = jsonb '"profit"' then
+    v_value := data.get_attribute_value(v_org_id, 'system_org_profit');
+    perform json.get_integer(v_value);
+
+    perform data.set_attribute_value(v_org_id, 'org_profit', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'org_profit', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'org_profit', v_value, v_economist_group_id);
+  end if;
 end;
 $$
 language plpgsql;
@@ -13476,6 +13558,42 @@ begin
       perform data.set_attribute_value(v_district_id, 'content', v_content, v_master_group_id);
     end if;
   end;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.create_synonym(text, jsonb);
+
+create or replace function pallas_project.create_synonym(in_original_object_code text, in_attributes jsonb)
+returns void
+volatile
+as
+$$
+-- Не для использования на игре, т.к. обновляет атрибуты напрямую, без уведомлений и блокировок!
+begin
+  perform pallas_project.create_synonym(null, in_original_object_code, in_attributes);
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.create_synonym(text, text, jsonb);
+
+create or replace function pallas_project.create_synonym(in_object_code text, in_original_object_code text, in_attributes jsonb)
+returns void
+volatile
+as
+$$
+-- Не для использования на игре, т.к. обновляет атрибуты напрямую, без уведомлений и блокировок!
+declare
+  v_object_id integer;
+begin
+  v_object_id :=
+    data.create_object(
+      in_object_code,
+      in_attributes,
+      'organization');
+  perform data.set_attribute_value(v_object_id, 'system_org_synonym', to_jsonb(in_original_object_code));
+  perform data.set_attribute_value(v_object_id, 'org_synonym', to_jsonb(in_original_object_code), data.get_object_id('master'));
 end;
 $$
 language plpgsql;
@@ -13897,7 +14015,8 @@ begin
   insert into data.attributes(code, description, type, card_type, can_be_overridden) values
   ('description', 'Текстовый блок с развёрнутым описанием объекта, string', 'normal', 'full', true),
   ('mini_description', 'Текстовый блок с коротким описанием объекта, string', 'normal', 'mini', true),
-  ('force_object_diff', 'Атрибут для принудительной генерации diff''а, integer', 'hidden', null, false);
+  ('force_object_diff', 'Атрибут для принудительной генерации diff''а, integer', 'hidden', null, false),
+  ('system_is_master_object', 'Мастерский персонаж, boolean', 'system', null, false);
 
   -- Создадим актора по умолчанию
   v_default_actor_id :=
@@ -13935,7 +14054,7 @@ begin
           {"code": "menu_notifications", "actions": ["notifications"]},
           {"code": "menu_lottery", "actions": ["lottery"]},
           {"code": "menu_group1", "actions": ["login", "profile"]},
-          {"code": "menu_group2", "actions": ["statuses", "next_statuses", "debatles", "chats", "all_chats", "persons", "districts", "documents", "transactions", "important_notifications", "master_chats"]},
+          {"code": "menu_group2", "actions": ["statuses", "next_statuses", "debatles", "chats", "all_chats", "persons", "districts", "organizations", "documents", "transactions", "important_notifications", "master_chats"]},
           {"code": "menu_group3", "actions": ["logout"]}
         ]
       }
@@ -14357,8 +14476,9 @@ declare
   v_district record;
 begin
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
-  ('district_control', 'Контроль', 'Организация, контролирующая район', 'normal', null, 'pallas_project.vd_link', false),
-  ('district_population', 'Население', 'Население района', 'normal', null, null, false);
+  ('district_control', 'Контроль', 'Организация, контролирующая район', 'normal', null, 'pallas_project.vd_district_control', false),
+  ('district_population', 'Население', 'Население района', 'normal', null, null, false),
+  ('district_influence', 'Влияние', 'Влияние организаций в районе', 'normal', null, 'pallas_project.vd_district_influence', false);
 
   -- Класс района
   perform data.create_class(
@@ -14371,7 +14491,7 @@ begin
         "value": {
           "title": "title",
           "groups": [
-            {"code": "group", "attributes": ["district_population", "district_control"]}
+            {"code": "group", "attributes": ["district_population", "district_control", "district_influence"]}
           ]
         }
       }
@@ -14382,16 +14502,18 @@ begin
   (
     select
       json.get_string(value, 'sector') sector,
-      json.get_integer(value, 'population') population
+      json.get_integer(value, 'population') population,
+      json.get_object(value, 'district_influence') influence,
+      value->'district_control' control
     from jsonb_array_elements(
       jsonb '[
-        {"sector": "A", "population": 22500},
-        {"sector": "B", "population": 45000},
-        {"sector": "C", "population": 67500},
-        {"sector": "D", "population": 112500},
-        {"sector": "E", "population": 225000},
-        {"sector": "F", "population": 112500},
-        {"sector": "G", "population": 225000}
+        {"sector": "A", "population": 22500, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
+        {"sector": "B", "population": 45000, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
+        {"sector": "C", "population": 67500, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
+        {"sector": "D", "population": 112500, "district_influence": {"opa": 1, "cartel": 0, "administration": 0}, "district_control": "opa"},
+        {"sector": "E", "population": 225000, "district_influence": {"opa": 0, "cartel": 0, "administration": 0}, "district_control": null},
+        {"sector": "F", "population": 112500, "district_influence": {"opa": 1, "cartel": 0, "administration": 0}, "district_control": "opa"},
+        {"sector": "G", "population": 225000, "district_influence": {"opa": 0, "cartel": 1, "administration": 0}, "district_control": "cartel"}
       ]')
   )
   loop
@@ -14401,11 +14523,15 @@ begin
         '[
           {"code": "title", "value": "%s"},
           {"code": "district_population", "value": %s},
+          {"code": "district_influence", "value": %s},
+          {"code": "district_control", "value": %s},
           {"code": "content", "value": []},
           {"code": "content", "value": [], "value_object_code": "master"}
         ]',
         'Сектор ' || v_district.sector,
-        v_district.population)::jsonb,
+        v_district.population,
+        v_district.influence::text,
+        v_district.control::text)::jsonb,
       'district');
 
     v_districts := v_districts || to_jsonb('sector_' || v_district.sector);
@@ -15283,54 +15409,343 @@ returns void
 volatile
 as
 $$
+declare
+  v_district record;
 begin
-  -- Организации на игре:
-  --  Администрация, 55000 на цикл, 
-  --  Де Бирс, 1380 на цикл, Мишон Грей и Абрахам Грей
-  --  Теко Марс, 1940 за цикл, Рашид Файзи
-  --  Akira SC, 2000 на цикл, Марк Попов и Роберт Ли
-  --  Клиника, 250 на цикл, Лина Ковач
-  --  Star Helix, 1300 на цикл, Кайла Ангас
+  insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
+  ('system_org_synonym', null, 'Код оригинальной организации, string', 'system', null, null, false),
+  ('org_synonym', 'Синоним', null, 'normal', 'full', 'pallas_project.vd_link', true),
+  ('system_org_districts_control', null, 'Список кодов районов, которые контролирует организация', 'system', null, null, false),
+  ('org_districts_control', 'Контроль', null, 'normal', 'full', 'pallas_project.vd_org_districts_control', true),
+  ('system_org_districts_influence', null, 'Может ли организация контролировать районы, string', 'normal', null, null, false),
+  ('org_districts_influence', 'Влияние', null, 'normal', 'full', 'pallas_project.vd_org_districts_influence', true),
+  ('system_org_economics_type', null, 'Тип экономики (normal, budget, profit)', 'system', null, null, false),
+  ('org_economics_type', 'Тип экономики', null, 'normal', 'full', 'pallas_project.vd_org_economics_type', true),
+  ('system_org_budget', null, null, 'system', null, null, false),
+  ('org_budget', 'Бюджет на следующий цикл', null, 'normal', 'full', 'pallas_project.vd_money', true),
+  ('system_org_profit', null, null, 'system', null, null, false),
+  ('org_profit', 'Поступления в следующем цикле', null, 'normal', 'full', 'pallas_project.vd_money', true);
 
-  --  СВП, 4000, Роберт Ли, Лаура Джаррет и Люк Ламбер
-  --  Starbucks (картель), 2000, Марк Попов
-  --  Клининговая компания “Чистый астероид”, Янг
-  --  Свободное небо - мормон, 3500 на счету
-  --  Вишнёвый сад - экономист
-  --  Тариэль - Валентин Штерн, 1000 на счету
+  perform data.create_class(
+    'organization',
+    jsonb '{
+      "type": "organization",
+      "is_visible": true,
+      "template": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [
+          {"code": "personal_info", "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_districts_control", "org_districts_influence"]},
+          {"code": "info", "attributes": ["description"]}
+        ]
+      },
+      "mini_card_template": {"title": "title", "subtitle": "subtitle", "groups": []}
+    }');
 
-  -- Прочие организации:
-  --  Сантьяго Де ла Круз (головной картель)
+  -- Организации
+  perform pallas_project.create_organization(
+    'org_administration',
+    jsonb '{
+      "title": "Администрация",
+      "system_org_districts_control": ["sector_A", "sector_B", "sector_C"],
+      "system_org_districts_influence": {"sector_A": 1, "sector_B": 1, "sector_C": 1, "sector_D": 0, "sector_E": 0, "sector_F": 0, "sector_G": 0},
+      "system_org_economics_type": "budget",
+      "system_org_budget": 55000,
+      "system_money": 55000
+    }');
+  perform pallas_project.create_organization(
+    'org_opa',
+    jsonb '{
+      "title": "СВП",
+      "system_org_districts_control": ["sector_D", "sector_F"],
+      "system_org_districts_influence": {"sector_A": 0, "sector_B": 0, "sector_C": 0, "sector_D": 1, "sector_E": 0, "sector_F": 1, "sector_G": 0},
+      "system_org_economics_type": "normal",
+      "system_money": 4000
+    }');
+  perform pallas_project.create_organization(
+    'org_starbucks',
+    jsonb '{
+      "title": "Starbucks",
+      "system_org_districts_control": ["sector_G"],
+      "system_org_districts_influence": {"sector_A": 0, "sector_B": 0, "sector_C": 0, "sector_D": 0, "sector_E": 0, "sector_F": 0, "sector_G": 1},
+      "system_org_economics_type": "normal",
+      "system_money": 2000
+    }');
 
-  -- Синонимы:
-  --  Салон "Третий глаз" -> (картель)
-  --  Тату-салон -> (СВП)
+  perform pallas_project.create_organization(
+    'org_de_beers',
+    jsonb '{
+      "title": "Де Бирс",
+      "system_org_economics_type": "budget",
+      "system_org_budget": 1380,
+      "system_money": 1380
+    }');
+  perform pallas_project.create_organization(
+    'org_akira_sc',
+    jsonb '{
+      "title": "Akira SC",
+      "system_org_economics_type": "budget",
+      "system_org_budget": 2000,
+      "system_money": 2000
+    }');
+  perform pallas_project.create_organization(
+    'org_clinic',
+    jsonb '{
+      "title": "Клиника",
+      "system_org_economics_type": "budget",
+      "system_org_budget": 250,
+      "system_money": 250
+    }');
+  perform pallas_project.create_organization(
+    'org_star_helix',
+    jsonb '{
+      "title": "Star Helix",
+      "system_org_economics_type": "budget",
+      "system_org_budget": 1300,
+      "system_money": 1300
+    }');
 
-  -- Поставщики, не видны в общем списке:
+  perform pallas_project.create_organization(
+    'org_teco_mars',
+    jsonb '{
+      "title": "Теко Марс",
+      "system_org_economics_type": "profit",
+      "system_org_profit": 1940,
+      "system_money": 1940
+    }');
+
+  perform pallas_project.create_organization(
+    'org_clean_asteroid',
+    jsonb '{
+      "title": "Чистый астероид",
+      "subtitle": "Клининговая компания",
+      "system_org_economics_type": "normal",
+      "system_money": 0
+    }');
+  perform pallas_project.create_organization(
+    'org_free_sky',
+    jsonb '{
+      "title": "Свободное небо",
+      "system_org_economics_type": "normal",
+      "system_money": 3500
+    }');
+  perform pallas_project.create_organization(
+    'org_cherry_orchard',
+    jsonb '{
+      "title": "Вишнёвый сад",
+      "system_org_economics_type": "normal",
+      "system_money": 10000
+    }');
+  perform pallas_project.create_organization(
+    'org_tariel',
+    jsonb '{
+      "title": "Тариэль",
+      "subtitle": "Транспортная компания",
+      "system_org_economics_type": "normal",
+      "system_money": 1000
+    }');
+
+  -- Мастерская компания
+  perform pallas_project.create_organization(
+    'org_white_star',
+    jsonb '{
+      "title": "White star",
+      "subtitle": "IT-компания",
+      "system_org_economics_type": "normal",
+      "system_money": 0,
+      "system_is_master_object": true
+    }');
+
+  -- Синонимы
+  perform pallas_project.create_synonym(
+    'org_starbucks',
+    jsonb '{
+      "title": "Третий глаз",
+      "subtitle": "Салон"
+    }');
+  perform pallas_project.create_synonym(
+    'org_opa',
+    jsonb '{
+      "title": "Тату-салон"
+    }');
+
+  -- Синонимы-поставщики
   -- Лёд
-  --  Аква Галактика (в никуда)
-  --  Джонни Квик (мормон)
-  --  Midnight Diggers (картель)
+  perform pallas_project.create_synonym(
+    'org_aqua_galactic',
+    'org_white_star',
+    jsonb '{
+      "title": "Аква Галактика"
+    }');
+  perform pallas_project.create_synonym(
+    'org_jonny_quick',
+    'org_free_sky',
+    jsonb '{
+      "title": "Джонни Квик"
+    }');
+  perform pallas_project.create_synonym(
+    'org_midnight_diggers',
+    'org_starbucks',
+    jsonb '{
+      "title": "Midnight Diggers"
+    }');
   -- Продукты
-  --  Alfa Prime
-  --  Совхоз им. Ленина (СВП)
-  --  Гидропонические системы Ганимеда (картель)
+  perform pallas_project.create_synonym(
+    'org_alfa_prime',
+    'org_white_star',
+    jsonb '{
+      "title": "Alfa Prime"
+    }');
+  perform pallas_project.create_synonym(
+    'org_lenin_state_farm',
+    'org_opa',
+    jsonb '{
+      "title": "Совхоз им. Ленина"
+    }');
+  perform pallas_project.create_synonym(
+    'org_ganymede_hydroponical_systems',
+    'org_starbucks',
+    jsonb '{
+      "title": "Гидропонические системы Ганимеда"
+    }');
   -- Медикаменты
-  --  Merck
-  --  Флора Фармасьютикалс
-  --  Вектор
+  perform pallas_project.create_synonym(
+    'org_merck',
+    'org_white_star',
+    jsonb '{
+      "title": "Merck"
+    }');
+  perform pallas_project.create_synonym(
+    'org_flora',
+    'org_opa',
+    jsonb '{
+      "title": "Флора Фармасьютикалс"
+    }');
+  perform pallas_project.create_synonym(
+    'org_vector',
+    'org_starbucks',
+    jsonb '{
+      "title": "Вектор"
+    }');
   -- Уран
-  --  Westinghouse
-  --  TransUranium
-  --  Heavy Industries Co. (мормон)
+  perform pallas_project.create_synonym(
+    'org_westinghouse',
+    'org_white_star',
+    jsonb '{
+      "title": "Westinghouse"
+    }');
+  perform pallas_project.create_synonym(
+    'org_trans_uranium',
+    'org_opa',
+    jsonb '{
+      "title": "TransUranium"
+    }');
+  perform pallas_project.create_synonym(
+    'org_heavy_industries',
+    'org_free_sky',
+    jsonb '{
+      "title": "Heavy Industries Co."
+    }');
   -- Метан
-  --  Comet Petroleum
-  --  Stardust Industries
-  --  PDVSA
+  perform pallas_project.create_synonym(
+    'org_comet_petroleum',
+    'org_white_star',
+    jsonb '{
+      "title": "Comet Petroleum"
+    }');
+  perform pallas_project.create_synonym(
+    'org_stardust_industries',
+    'org_opa',
+    jsonb '{
+      "title": "Stardust Industries"
+    }');
+  perform pallas_project.create_synonym(
+    'org_pdvsa',
+    'org_starbucks',
+    jsonb '{
+      "title": "PDVSA"
+    }');
   -- Товары
-  --  Toom
-  --  Amazon.com, Inc.
-  --  Большой Склад
+  perform pallas_project.create_synonym(
+    'org_toom',
+    'org_white_star',
+    jsonb '{
+      "title": "Toom"
+    }');
+  perform pallas_project.create_synonym(
+    'org_amazon',
+    'org_opa',
+    jsonb '{
+      "title": "Amazon.com, Inc."
+    }');
+  perform pallas_project.create_synonym(
+    'org_big_warehouse',
+    'org_starbucks',
+    jsonb '{
+      "title": "Большой Склад"
+    }');
+
+  -- Создадим объект со списком организаций
+  declare
+    v_organization_list jsonb;
+    v_class_id integer := data.get_class_id('organization');
+  begin
+    select jsonb_agg(o.code order by data.get_raw_attribute_value(o.code, 'title'))
+    into v_organization_list
+    from data.objects o
+    where o.class_id = v_class_id;
+
+    perform data.create_object(
+      'organizations',
+      format(
+        '{
+          "type": "organization_list",
+          "is_visible": true,
+          "title": "Все организации",
+          "content": %s,
+          "template": {
+            "title": "title",
+            "groups": []
+          }
+        }',
+        v_organization_list::text)::jsonb);
+  end;
+
+  -- И класс для личных организаций
+  perform data.create_class(
+    'my_organizations',
+    jsonb '{
+      "title": "Мои организации",
+      "type": "organization_list",
+      "template": {
+        "title": "title",
+        "groups": []
+      }
+    }');
+
+  -- Лёд: org_aqua_galactic, org_jonny_quick, org_midnight_diggers
+  -- Продукты: org_alfa_prime, org_lenin_state_farm, org_ganymede_hydroponical_systems
+  -- Медикаменты: org_merck, org_flora, org_vector
+  -- Уран: org_westinghouse, org_trans_uranium, org_heavy_industries
+  -- Метан: org_comet_petroleum, org_stardust_industries, org_pdvsa
+  -- Товары: org_toom, org_amazon, org_big_warehouse
+
+  -- Люди:
+  --  org_administration: экономист - Александра Корсак, руководитель - Фрида Фогель
+  --  org_opa: Роберт Ли, Лаура Джаррет и Люк Ламбер
+  --  org_starbucks: Марк Попов
+  --  org_de_beers: Мишон Грей и Абрахам Грей
+  --  org_akira_sc: Марк Попов и Роберт Ли
+  --  org_clinic: Лина Ковач
+  --  org_star_helix: Кайла Ангас
+  --  org_teco_mars: Рашид Файзи
+  --  org_clean_asteroid: Янг
+  --  org_free_sky: мормон
+  --  org_cherry_orchard: Александра Корсак
+  --  org_tariel: Валентин Штерн
+
+  -- Прочие люди:
+  --  Сантьяго Де ла Круз (головной картель)
 end;
 $$
 language plpgsql;
@@ -16422,6 +16837,32 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.vd_district_control(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_district_control(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+begin
+  return 'todo: ' || in_value::text; 
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.vd_district_influence(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_district_influence(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+begin
+  return 'todo: ' || in_value::text; 
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.vd_document_category(integer, jsonb, data.card_type, integer);
 
 create or replace function pallas_project.vd_document_category(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
@@ -16616,6 +17057,55 @@ begin
   end if;
 
   return 'Меньше значит больше';
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.vd_org_districts_control(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_org_districts_control(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+begin
+  return 'todo: ' || in_value::text; 
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.vd_org_districts_influence(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_org_districts_influence(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+begin
+  return 'todo: ' || in_value::text; 
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.vd_org_economics_type(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_org_economics_type(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+declare
+  v_economics_type text := json.get_string(in_value);
+begin
+  assert v_economics_type in ('normal', 'budget', 'profit');
+
+  if v_economics_type = 'normal' then
+    return 'Организация без внешнего дохода';
+  elsif v_economics_type = 'budget' then
+    return 'Организация, счёт которой дополняется до фиксированного бюджета на цикл';
+  else
+    return 'Организация, получающая фиксированную сумму в цикл';
+  end if;
 end;
 $$
 language plpgsql;
