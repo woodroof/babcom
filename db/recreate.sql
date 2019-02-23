@@ -13298,8 +13298,10 @@ declare
   v_economist_group_id integer := data.create_object(in_object_code || '_economist', jsonb '{}');
   v_auditor_group_id integer := data.create_object(in_object_code || '_auditor', jsonb '{}');
   v_money jsonb := data.get_attribute_value(v_org_id, 'system_money');
-  v_org_districts_control jsonb := data.get_attribute_value(v_org_id, 'system_org_districts_control');
-  v_org_districts_influence jsonb := data.get_attribute_value(v_org_id, 'system_org_districts_influence');
+  v_org_tax jsonb := data.get_attribute_value(v_org_id, 'system_org_tax');
+  v_org_next_tax jsonb;
+  v_org_districts_control jsonb;
+  v_org_districts_influence jsonb;
   v_org_economics_type jsonb := data.get_attribute_value(v_org_id, 'system_org_economics_type');
   v_value jsonb;
 begin
@@ -13312,14 +13314,30 @@ begin
   perform data.set_attribute_value(v_org_id, 'money', v_money, v_economist_group_id);
   perform data.set_attribute_value(v_org_id, 'money', v_money, v_auditor_group_id);
 
-  -- Заполняем контроль и влияние
-  if v_org_districts_control is not null then
+  if v_org_tax is not null then
+    v_org_next_tax := data.get_attribute_value(v_org_id, 'system_org_next_tax');
+    v_org_districts_control := data.get_attribute_value(v_org_id, 'system_org_districts_control');
+    v_org_districts_influence := data.get_attribute_value(v_org_id, 'system_org_districts_influence');
+
+    perform json.get_integer(v_org_tax);
+    perform json.get_integer(v_org_next_tax);
+    assert json.is_string_array(v_org_districts_control);
+    perform json.get_object(v_org_districts_influence);
+
+    -- Заполняем ставки налога
+    perform data.set_attribute_value(v_org_id, 'org_tax', v_org_tax, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'org_tax', v_org_tax, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'org_tax', v_org_tax, v_economist_group_id);
+
+    perform data.set_attribute_value(v_org_id, 'org_next_tax', v_org_next_tax, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'org_next_tax', v_org_next_tax, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'org_next_tax', v_org_next_tax, v_economist_group_id);
+
+    -- Заполняем контроль и влияние
     perform data.set_attribute_value(v_org_id, 'org_districts_control', v_org_districts_control, v_master_group_id);
     perform data.set_attribute_value(v_org_id, 'org_districts_control', v_org_districts_control, v_head_group_id);
     perform data.set_attribute_value(v_org_id, 'org_districts_control', v_org_districts_control, v_economist_group_id);
-  end if;
 
-  if v_org_districts_influence is not null then
     perform data.set_attribute_value(v_org_id, 'org_districts_influence', v_org_districts_influence, v_master_group_id);
     perform data.set_attribute_value(v_org_id, 'org_districts_influence', v_org_districts_influence, v_head_group_id);
     perform data.set_attribute_value(v_org_id, 'org_districts_influence', v_org_districts_influence, v_economist_group_id);
@@ -14493,9 +14511,10 @@ declare
   v_district record;
 begin
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
-  ('district_control', 'Контроль', 'Организация, контролирующая район', 'normal', null, 'pallas_project.vd_district_control', false),
-  ('district_population', 'Население', 'Население района', 'normal', null, null, false),
-  ('district_influence', 'Влияние', 'Влияние организаций в районе', 'normal', null, 'pallas_project.vd_district_influence', false);
+  ('district_control', 'Контроль', null, 'normal', null, 'pallas_project.vd_district_control', false),
+  ('district_population', 'Население', null, 'normal', null, null, false),
+  ('district_influence', 'Влияние', null, 'normal', null, 'pallas_project.vd_district_influence', false),
+  ('district_tax', 'Налоговая ставка', null, 'normal', null, 'pallas_project.vd_percent', false);
 
   -- Класс района
   perform data.create_class(
@@ -14508,7 +14527,7 @@ begin
         "value": {
           "title": "title",
           "groups": [
-            {"code": "group", "attributes": ["district_population", "district_control", "district_influence"]}
+            {"code": "group", "attributes": ["district_tax", "district_control", "district_influence", "district_population"]}
           ]
         }
       }
@@ -14520,17 +14539,18 @@ begin
     select
       json.get_string(value, 'sector') sector,
       json.get_integer(value, 'population') population,
+      json.get_integer(value, 'district_tax') tax,
       json.get_object(value, 'district_influence') influence,
       value->'district_control' control
     from jsonb_array_elements(
       jsonb '[
-        {"sector": "A", "population": 22500, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
-        {"sector": "B", "population": 45000, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
-        {"sector": "C", "population": 67500, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
-        {"sector": "D", "population": 112500, "district_influence": {"opa": 1, "cartel": 0, "administration": 0}, "district_control": "opa"},
-        {"sector": "E", "population": 225000, "district_influence": {"opa": 0, "cartel": 0, "administration": 0}, "district_control": null},
-        {"sector": "F", "population": 112500, "district_influence": {"opa": 1, "cartel": 0, "administration": 0}, "district_control": "opa"},
-        {"sector": "G", "population": 225000, "district_influence": {"opa": 0, "cartel": 1, "administration": 0}, "district_control": "cartel"}
+        {"sector": "A", "population": 22500, "district_tax": 25, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
+        {"sector": "B", "population": 45000, "district_tax": 25, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
+        {"sector": "C", "population": 67500, "district_tax": 25, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
+        {"sector": "D", "population": 112500, "district_tax": 10, "district_influence": {"opa": 1, "cartel": 0, "administration": 0}, "district_control": "opa"},
+        {"sector": "E", "population": 225000, "district_tax": 0, "district_influence": {"opa": 0, "cartel": 0, "administration": 0}, "district_control": null},
+        {"sector": "F", "population": 112500, "district_tax": 10, "district_influence": {"opa": 1, "cartel": 0, "administration": 0}, "district_control": "opa"},
+        {"sector": "G", "population": 225000, "district_tax": 20, "district_influence": {"opa": 0, "cartel": 1, "administration": 0}, "district_control": "cartel"}
       ]')
   )
   loop
@@ -14540,6 +14560,7 @@ begin
         '[
           {"code": "title", "value": "%s"},
           {"code": "district_population", "value": %s},
+          {"code": "district_tax", "value": %s},
           {"code": "district_influence", "value": %s},
           {"code": "district_control", "value": %s},
           {"code": "content", "value": []},
@@ -14547,6 +14568,7 @@ begin
         ]',
         'Сектор ' || v_district.sector,
         v_district.population,
+        v_district.tax,
         v_district.influence::text,
         v_district.control::text)::jsonb,
       'district');
@@ -15441,7 +15463,11 @@ begin
   ('system_org_budget', null, null, 'system', null, null, false),
   ('org_budget', 'Бюджет на следующий цикл', null, 'normal', 'full', 'pallas_project.vd_money', true),
   ('system_org_profit', null, null, 'system', null, null, false),
-  ('org_profit', 'Поступления в следующем цикле', null, 'normal', 'full', 'pallas_project.vd_money', true);
+  ('org_profit', 'Поступления в следующем цикле', null, 'normal', 'full', 'pallas_project.vd_money', true),
+  ('system_org_tax', null, null, 'system', null, null, false),
+  ('org_tax', 'Текущая налоговая ставка', null, 'normal', 'full', 'pallas_project.vd_percent', true),
+  ('system_org_next_tax', null, null, 'system', null, null, false),
+  ('org_next_tax', 'Налоговая ставка на следующий цикл', null, 'normal', 'full', 'pallas_project.vd_percent', true);
 
   perform data.create_class(
     'organization',
@@ -15452,7 +15478,7 @@ begin
         "title": "title",
         "subtitle": "subtitle",
         "groups": [
-          {"code": "personal_info", "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_districts_control", "org_districts_influence"]},
+          {"code": "personal_info", "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_tax", "org_next_tax", "org_districts_control", "org_districts_influence"]},
           {"code": "info", "attributes": ["description"]}
         ]
       },
@@ -15468,7 +15494,9 @@ begin
       "system_org_districts_influence": {"sector_A": 1, "sector_B": 1, "sector_C": 1, "sector_D": 0, "sector_E": 0, "sector_F": 0, "sector_G": 0},
       "system_org_economics_type": "budget",
       "system_org_budget": 55000,
-      "system_money": 55000
+      "system_money": 55000,
+      "system_org_tax": 25,
+      "system_org_next_tax": 25
     }');
   perform pallas_project.create_organization(
     'org_opa',
@@ -15477,7 +15505,9 @@ begin
       "system_org_districts_control": ["sector_D", "sector_F"],
       "system_org_districts_influence": {"sector_A": 0, "sector_B": 0, "sector_C": 0, "sector_D": 1, "sector_E": 0, "sector_F": 1, "sector_G": 0},
       "system_org_economics_type": "normal",
-      "system_money": 4000
+      "system_money": 4000,
+      "system_org_tax": 10,
+      "system_org_next_tax": 10
     }');
   perform pallas_project.create_organization(
     'org_starbucks',
@@ -15486,7 +15516,9 @@ begin
       "system_org_districts_control": ["sector_G"],
       "system_org_districts_influence": {"sector_A": 0, "sector_B": 0, "sector_C": 0, "sector_D": 0, "sector_E": 0, "sector_F": 0, "sector_G": 1},
       "system_org_economics_type": "normal",
-      "system_money": 2000
+      "system_money": 2000,
+      "system_org_tax": 20,
+      "system_org_next_tax": 20
     }');
 
   perform pallas_project.create_organization(
@@ -17160,6 +17192,19 @@ begin
   else
     return 'Организация, получающая фиксированную сумму в цикл';
   end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.vd_percent(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_percent(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+begin
+  return json.get_integer(in_value) || '%';
 end;
 $$
 language plpgsql;
