@@ -10,42 +10,33 @@ declare
   v_debatle_code text := json.get_string(in_params, 'debatle_code');
   v_debatle_id  integer := data.get_object_id(v_debatle_code);
   v_debatle_status text := json.get_string(data.get_attribute_value(v_debatle_id,'debatle_status'));
-  v_system_debatle_person1 integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person1'), -1);
+  v_debatle_person1 text := json.get_string_opt(data.get_attribute_value_for_share(v_debatle_id, 'debatle_person1'), null);
 
   v_actor_id  integer := data.get_active_actor_id(in_client_id);
   v_is_master boolean := pp_utils.is_in_group(v_actor_id, 'master');
   v_message_sent boolean := false;
-  v_system_debatle_theme_attribute_id integer := data.get_attribute_id('system_debatle_theme');
+
+  v_title_attribute_id integer := data.get_attribute_id('title');
 begin
   assert in_request_id is not null;
 
-  if v_title = '' then
-    perform api_utils.create_notification(
+  if not v_is_master and (v_debatle_status <> 'draft' or v_debatle_person1 <> data.get_object_code(v_actor_id)) then
+    perform api_utils.create_show_message_actrion_notification(
       in_client_id,
       in_request_id,
-      'action',
-      format('{"action": "show_message", "action_data": {"title": "%s", "message": "%s"}}', 'Ошибка', 'Нельзя изменить тему на пустую')::jsonb); 
+      'Ошибка', 
+      'Тему дебатла нельзя изменить на этом этапе'); 
     return;
   end if;
 
-  if not v_is_master and (v_debatle_status <> 'draft' or v_system_debatle_person1 <> v_actor_id) then
-    perform api_utils.create_notification(
-      in_client_id,
-      in_request_id,
-      'action',
-      format('{"action": "show_message", "action_data": {"title": "%s", "message": "%s"}}', 'Ошибка', 'Тему дебатла нельзя изменить на этом этапе')::jsonb); 
-    return;
-  end if;
-
-  perform * from data.objects o where o.id = v_debatle_id for update;
-  if coalesce(data.get_raw_attribute_value(v_debatle_id, v_system_debatle_theme_attribute_id), jsonb '"~~~"') <> to_jsonb(v_title) then
+  if coalesce(data.get_raw_attribute_value_for_update(v_debatle_id, v_title_attribute_id), jsonb '"~~~"') <> to_jsonb(v_title) then
     v_message_sent := data.change_current_object(in_client_id, 
-                                               in_request_id,
-                                               v_debatle_id, 
-                                               jsonb_build_array(data.attribute_change2jsonb('system_debatle_theme', to_jsonb(v_title))));
+                                                 in_request_id,
+                                                 v_debatle_id, 
+                                                 jsonb_build_array(data.attribute_change2jsonb(v_title_attribute_id, to_jsonb(v_title))));
   end if;
   if not v_message_sent then
-   perform api_utils.create_notification(in_client_id, in_request_id, 'ok', jsonb '{}');
+   perform api_utils.create_ok_notification(in_client_id, in_request_id);
   end if;
 end;
 $$

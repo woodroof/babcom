@@ -11,9 +11,7 @@ declare
   v_debatle_id  integer := data.get_object_id(v_debatle_code);
   v_actor_id  integer := data.get_active_actor_id(in_client_id);
 
-  v_debatle_status text := json.get_string(data.get_attribute_value(v_debatle_id,'debatle_status'));
-  v_system_debatle_person1 integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person1'), -1);
-  v_system_debatle_person2 integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person2'), -1);
+  v_debatle_status text := json.get_string(data.get_attribute_value_for_share(v_debatle_id,'debatle_status'));
   v_system_debatle_person1_my_vote integer;
   v_system_debatle_person2_my_vote integer;
   v_system_debatle_person1_votes integer;
@@ -43,8 +41,8 @@ begin
 
   perform * from data.objects o where o.id = v_debatle_id for update;
 
-  v_system_debatle_person1_my_vote := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person1_my_vote', v_actor_id), 0);
-  v_system_debatle_person2_my_vote := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person2_my_vote', v_actor_id), 0);
+  v_system_debatle_person1_my_vote := json.get_integer_opt(data.get_raw_attribute_value_for_update(v_debatle_id, 'system_debatle_person1_my_vote', v_actor_id), 0);
+  v_system_debatle_person2_my_vote := json.get_integer_opt(data.get_raw_attribute_value_for_update(v_debatle_id, 'system_debatle_person2_my_vote', v_actor_id), 0);
 
   assert v_system_debatle_person1_my_vote >= 0;
   assert v_system_debatle_person2_my_vote >= 0;
@@ -66,8 +64,8 @@ begin
   end if;
 
   if not v_nothing_changed then
-    v_system_debatle_person1_votes := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person1_votes'), 0);
-    v_system_debatle_person2_votes := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person2_votes'), 0);
+    v_system_debatle_person1_votes := json.get_integer_opt(data.get_attribute_value_for_update(v_debatle_id, 'system_debatle_person1_votes'), 0);
+    v_system_debatle_person2_votes := json.get_integer_opt(data.get_attribute_value_for_update(v_debatle_id, 'system_debatle_person2_votes'), 0);
     v_person1_votes_new := v_system_debatle_person1_votes + v_person1_my_vote_new - v_system_debatle_person1_my_vote;
     v_person2_votes_new := v_system_debatle_person2_votes + v_person2_my_vote_new - v_system_debatle_person2_my_vote;
 

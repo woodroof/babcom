@@ -7,32 +7,38 @@ as
 $$
 declare
   v_actions_list text := '';
-  v_person1_id integer;
-  v_person2_id integer;
-  v_judge_id integer;
-  v_is_master boolean;
+  v_person1 text := json.get_string_opt(data.get_attribute_value_for_share(in_object_id, 'debatle_person1'), null);
+  v_person1_id integer := data.get_object_id_opt(v_person1);
+  v_person2 text := json.get_string_opt(data.get_attribute_value_for_share(in_object_id, 'debatle_person2'), null);
+  v_person2_id integer := data.get_object_id_opt(v_person2);
+  v_judge text := json.get_string_opt(data.get_attribute_value_for_share(in_object_id, 'debatle_judge'), null);
+  v_judge_id integer := data.get_object_id_opt(v_judge);
+  v_is_master boolean := pp_utils.is_in_group(in_actor_id, 'master');
   v_debatle_code text;
-  v_debatle_status text;
-  v_system_debatle_theme_attribute_id integer := data.get_attribute_id('system_debatle_theme');
-  v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
+  v_debatle_status text := json.get_string_opt(data.get_attribute_value_for_share(in_object_id, 'debatle_status'), null);
+  v_title text := json.get_string_opt(data.get_raw_attribute_value_for_share(in_object_id, 'title'), '');
+  v_subtitle text := json.get_string_opt(data.get_raw_attribute_value_for_share(in_object_id, 'subtitle'), '');
   v_chat_id integer;
   v_chat_length integer;
   v_chat_unread integer;
 begin
   assert in_actor_id is not null;
-
-  v_is_master := pp_utils.is_in_group(in_actor_id, 'master');
   v_debatle_code := data.get_object_code(in_object_id);
-  v_person1_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person1'), null);
-  v_person2_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person2'), null);
-  v_judge_id := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_judge'), null);
-  v_debatle_status := json.get_string_opt(data.get_attribute_value(in_object_id, 'debatle_status'), null);
 
   if v_is_master then
     v_actions_list := v_actions_list || 
         format(', "debatle_change_instigator": {"code": "debatle_change_person", "name": "Изменить зачинщика", "disabled": false, '||
                 '"params": {"debatle_code": "%s", "edited_person": "instigator"}}',
                 v_debatle_code);
+    v_actions_list := v_actions_list || 
+        format(', "debatle_change_judge": {"code": "debatle_change_person", "name": "Изменить судью", "disabled": false, '||
+                '"params": {"debatle_code": "%s", "edited_person": "judge"}}',
+                v_debatle_code);
+    v_actions_list := v_actions_list || 
+        format(', "debatle_change_subtitle": {"code": "debatle_change_subtitle", "name": "Изменить место и время", "disabled": false, '||
+                '"params": {"debatle_code": "%s"}, "user_params": [{"code": "subtitle", "description": "Введите место и время текстом", "type": "string", "default_value": "%s" }]}',
+                v_debatle_code,
+                v_subtitle);
   end if;
 
   if v_is_master or in_actor_id = v_person1_id and v_debatle_status in ('draft') then
@@ -40,29 +46,17 @@ begin
         format(', "debatle_change_opponent": {"code": "debatle_change_person", "name": "Изменить оппонента", "disabled": false, '||
                 '"params": {"debatle_code": "%s", "edited_person": "opponent"}}',
                 v_debatle_code);
-  end if;
-
-  if v_is_master then
-      v_actions_list := v_actions_list || 
-        format(', "debatle_change_judge": {"code": "debatle_change_person", "name": "Изменить судью", "disabled": false, '||
-                '"params": {"debatle_code": "%s", "edited_person": "judge"}}',
-                v_debatle_code);
-  end if;
-
-  if v_is_master or in_actor_id = v_person1_id and v_debatle_status in ('draft') then
     v_actions_list := v_actions_list || 
         format(', "debatle_change_theme": {"code": "debatle_change_theme", "name": "Изменить тему", "disabled": false, '||
-                '"params": {"debatle_code": "%s"}, "user_params": [{"code": "title", "description": "Введите тему дебатла", "type": "string", "default_value": "%s" }]}',
+                '"params": {"debatle_code": "%s"}, "user_params": [{"code": "title", "description": "Введите тему дебатла", "type": "string", "default_value": "%s", "restrictions": {"min_length": 1}}]}',
                 v_debatle_code,
-                json.get_string_opt(data.get_raw_attribute_value(in_object_id, v_system_debatle_theme_attribute_id),''));
+                v_title);
   end if;
-
-  if v_is_master then
+  if v_is_master and v_debatle_status in ('draft', 'new') or in_actor_id = v_person1_id and v_debatle_status in ('draft') then
     v_actions_list := v_actions_list || 
-        format(', "debatle_change_subtitle": {"code": "debatle_change_subtitle", "name": "Изменить место и время", "disabled": false, '||
-                '"params": {"debatle_code": "%s"}, "user_params": [{"code": "subtitle", "description": "Введите место и время текстом", "type": "string", "default_value": "%s" }]}',
-                v_debatle_code,
-                json.get_string_opt(data.get_raw_attribute_value(in_object_id, v_subtitle_attribute_id),''));
+        format(', "debatle_change_target_audience": {"code": "act_open_object", "name": "Изменить целевую аудиторию", "disabled": false, '||
+                '"params": {"object_code": "%s"}}',
+                v_debatle_code || '_target_audience');
   end if;
 
   if (v_is_master or in_actor_id = v_person1_id) and v_debatle_status in ('draft') then

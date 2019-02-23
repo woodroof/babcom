@@ -12,7 +12,7 @@ declare
   v_actor_id  integer :=data.get_active_actor_id(in_client_id);
 
   v_debatle_status text;
-  v_debatle_title text := json.get_string_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_theme'), '');
+  v_debatle_title text := json.get_string_opt(data.get_raw_attribute_value_for_share(v_debatle_id, 'title'), '');
 
   v_debatle_person_bonuses jsonb;
 
@@ -43,9 +43,9 @@ begin
   end if;
 
   if v_judged_person = 'instigator' then
-    v_debatle_person_bonuses := data.get_attribute_value(v_debatle_id, 'debatle_person1_bonuses');
+    v_debatle_person_bonuses := coalesce(data.get_attribute_value_for_share(v_debatle_id, 'debatle_person1_bonuses'), jsonb '[]');
   else
-    v_debatle_person_bonuses := data.get_attribute_value(v_debatle_id, 'debatle_person2_bonuses');
+    v_debatle_person_bonuses := coalesce(data.get_attribute_value_for_share(v_debatle_id, 'debatle_person2_bonuses'), jsonb '[]');
   end if;
 
   -- создаём темповый список бонусов и штрафов
@@ -70,11 +70,10 @@ begin
     (v_temp_object_id, v_content_attribute_id, to_jsonb(v_content), null);
   end  if;
 
-  perform api_utils.create_notification(
+  perform api_utils.create_open_object_action_notification(
     in_client_id,
     in_request_id,
-    'action',
-    format('{"action": "open_object", "action_data": {"object_id": "%s"}}', v_temp_object_code)::jsonb);
+    v_temp_object_code);
 end;
 $$
 language plpgsql;

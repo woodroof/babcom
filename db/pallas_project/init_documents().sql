@@ -129,6 +129,7 @@ begin
       "code": "mini_card_template",
       "value": {
         "title": "title",
+        "subtitle": "document_status",
         "groups": []
       }
     },

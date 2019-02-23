@@ -7,16 +7,18 @@ as
 $$
 declare
   v_actor_id  integer :=data.get_active_actor_id(in_client_id);
-  v_edited_person text := json.get_string(data.get_attribute_value(in_object_id, 'debatle_temp_person_list_edited_person'));
-  v_debatle_id integer := json.get_integer(data.get_attribute_value(in_object_id, 'system_debatle_temp_person_list_debatle_id'));
+  v_edited_person text := json.get_string(data.get_attribute_value_for_share(in_object_id, 'debatle_temp_person_list_edited_person'));
+  v_debatle_id integer := json.get_integer(data.get_attribute_value_for_share(in_object_id, 'system_debatle_temp_person_list_debatle_id'));
   v_debatle_code text := data.get_object_code(v_debatle_id);
+  v_list_code text := data.get_object_code(in_list_object_id);
 
-  v_system_debatle_person1 integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person1'), -1);
-  v_system_debatle_person2 integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_person2'), -1);
-  v_system_debatle_judge integer := json.get_integer_opt(data.get_attribute_value(v_debatle_id, 'system_debatle_judge'), -1);
+  v_debatle_person1 text := json.get_string_opt(data.get_attribute_value_for_update(v_debatle_id, 'debatle_person1'), null);
+  v_debatle_person2 text := json.get_string_opt(data.get_attribute_value(v_debatle_id, 'debatle_person2'), null);
+  v_debatle_judge integer := json.get_string_opt(data.get_attribute_value(v_debatle_id, 'debatle_judge'), null);
   v_debatle_status text := json.get_string(data.get_attribute_value(v_debatle_id, 'debatle_status'));
 
-  v_old_person integer;
+  v_old_person text;
+  v_old_person_id integer;
 
   v_debatles_my_id integer := data.get_object_id('debatles_my');
 
@@ -32,37 +34,36 @@ begin
   assert in_list_object_id is not null;
 
   if v_edited_person not in ('instigator', 'opponent', 'judge') then
-    perform api_utils.create_notification(
+    perform api_utils.create_show_message_action_notification(
       in_client_id,
       in_request_id,
-      'action',
-      format('{"action": "show_message ", "action_data": {"title": "%s", "message": "%s"}}', 'Ошибка', 'Непонятно, какую из персон менять. Наверное что-то пошло не так. Обратитесь к мастеру.')::jsonb); 
+      'Ошибка', 
+      'Непонятно, какую из персон менять. Наверное что-то пошло не так. Обратитесь к мастеру.'); 
     return;
   end if;
 
-  perform * from data.objects where id = v_debatle_id for update;
-
   if v_edited_person = 'instigator' then
-    v_old_person := v_system_debatle_person1;
-    if v_old_person <> in_list_object_id then
-      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person1', to_jsonb(in_list_object_id)));
+    v_old_person := v_debatle_person1;
+    if v_old_person is distinct from v_list_code then
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_person1', to_jsonb(v_list_code)));
     end if;
   elsif v_edited_person = 'opponent' then
-    v_old_person := v_system_debatle_person2;
-    if v_old_person <> in_list_object_id then
-      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_person2', to_jsonb(in_list_object_id)));
+    v_old_person := v_debatle_person2;
+    if v_old_person is distinct from v_list_code then
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_person2', to_jsonb(v_list_code)));
     end if;
   elsif v_edited_person = 'judge' then
-    v_old_person := v_system_debatle_judge;
-    if v_old_person <> in_list_object_id then
-      v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_judge', to_jsonb(in_list_object_id)));
+    v_old_person := v_debatle_judge;
+    if v_old_person is distinct from v_list_code then
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_judge', to_jsonb(v_list_code)));
     end if;
   end if;
 
-  -- TODO тут по идее ещё надо проверять, что персона не попадает в аудиторию дебатла, и тогда тоже убирать даже в случае публичных статусов
-  if v_old_person <> -1 
+  v_old_person_id := data.get_object_id_opt(v_old_person);
+
+  if v_old_person_id is not null 
   and v_debatle_status not in ('vote', 'vote_over', 'closed') then
-    v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', null::jsonb, v_old_person));
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', null, v_old_person_id));
   end if;
   if v_edited_person = 'instigator' 
     or (v_edited_person in ('opponent','judge') and v_debatle_status in ('future', 'vote', 'vote_over', 'closed')) then
@@ -70,32 +71,14 @@ begin
   end if;
   perform data.change_object_and_notify(v_debatle_id, to_jsonb(v_changes), v_actor_id);
 
-  if v_old_person <> in_list_object_id and v_old_person <> -1 then
+  if v_old_person_id is not null and v_old_person_id <> in_list_object_id then
     --Удаляем из моих дебатлов у старой персоны,
-    perform * from data.objects where id = v_debatles_my_id for update;
-    v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_my_id, 'content', v_old_person), array[]::text[]);
-    v_new_content := array_remove(v_content, v_debatle_code);
-    if v_content <> v_new_content then
-      v_change_debatles_my := array_prepend(data.attribute_change2jsonb(v_content_attribute_id, to_jsonb(v_new_content), v_old_person), v_change_debatles_my);
-    end if;
+    perform pp_utils.list_remove_and_notify(v_debatles_my_id, v_debatle_code, v_old_person_id);
   end if;
   -- Добавляем в мои дебатлы новой персоне
-  v_content := json.get_string_array_opt(data.get_attribute_value(v_debatles_my_id, 'content', in_list_object_id), array[]::text[]);
-  v_new_content := array_prepend(v_debatle_code, v_content);
-  if v_content <> v_new_content then
-    v_change_debatles_my := array_prepend(data.attribute_change2jsonb(v_content_attribute_id, to_jsonb(v_new_content), in_list_object_id), v_change_debatles_my);
-  end if;
-  if array_length(v_change_debatles_my, 1) > 0 then
-    perform data.change_object_and_notify(v_debatles_my_id, 
-                                          to_jsonb(v_change_debatles_my),
-                                          v_actor_id);
-  end if;
+  perform pp_utils.list_prepend_and_notify(v_debatles_my_id, v_debatle_code, in_list_object_id);
 
-  perform api_utils.create_notification(
-    in_client_id,
-    in_request_id,
-    'action',
-    '{"action": "go_back", "action_data": {}}'::jsonb);
+  perform api_utils.create_go_back_action_notification(in_client_id, in_request_id);
 end;
 $$
 language plpgsql;
