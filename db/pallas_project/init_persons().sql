@@ -82,7 +82,8 @@ begin
             "actions": [
               "open_current_statuses",
               "open_next_statuses",
-              "open_transactions"
+              "open_transactions",
+              "transfer_money"
             ]
           },
           {

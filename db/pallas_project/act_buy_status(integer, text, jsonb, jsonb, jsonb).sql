@@ -42,7 +42,7 @@ begin
   if v_economy_type = 'un' then
     v_diff := pallas_project.change_coins(v_actor_id, (v_current_sum - v_price)::integer, v_actor_id, 'Status purchase');
   else
-    v_diff := pallas_project.change_person_money(v_actor_id, v_current_sum - v_price, v_actor_id, 'Status purchase');
+    v_diff := pallas_project.change_money(v_actor_id, v_current_sum - v_price, v_actor_id, 'Status purchase');
     perform pallas_project.create_transaction(
       v_actor_id,
       format(

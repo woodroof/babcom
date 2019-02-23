@@ -13,7 +13,8 @@ begin
   ('district_control', 'Контроль', null, 'normal', null, 'pallas_project.vd_district_control', false),
   ('district_population', 'Население', null, 'normal', null, null, false),
   ('district_influence', 'Влияние', null, 'normal', null, 'pallas_project.vd_district_influence', false),
-  ('district_tax', 'Налоговая ставка', null, 'normal', null, 'pallas_project.vd_percent', false);
+  ('district_tax', 'Налоговая ставка', null, 'normal', null, 'pallas_project.vd_percent', false),
+  ('system_district_tax_coeff', null, 'Коэффициент, на который умножаются налоговые поступления', 'system', null, null, false);
 
   -- Класс района
   perform data.create_class(
@@ -37,19 +38,20 @@ begin
   (
     select
       json.get_string(value, 'sector') sector,
+      json.get_number(value, 'coeff') coeff,
       json.get_integer(value, 'population') population,
       json.get_integer(value, 'district_tax') tax,
       json.get_object(value, 'district_influence') influence,
       value->'district_control' control
     from jsonb_array_elements(
       jsonb '[
-        {"sector": "A", "population": 22500, "district_tax": 25, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
-        {"sector": "B", "population": 45000, "district_tax": 25, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
-        {"sector": "C", "population": 67500, "district_tax": 25, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
-        {"sector": "D", "population": 112500, "district_tax": 10, "district_influence": {"opa": 1, "cartel": 0, "administration": 0}, "district_control": "opa"},
-        {"sector": "E", "population": 225000, "district_tax": 0, "district_influence": {"opa": 0, "cartel": 0, "administration": 0}, "district_control": null},
-        {"sector": "F", "population": 112500, "district_tax": 10, "district_influence": {"opa": 1, "cartel": 0, "administration": 0}, "district_control": "opa"},
-        {"sector": "G", "population": 225000, "district_tax": 20, "district_influence": {"opa": 0, "cartel": 1, "administration": 0}, "district_control": "cartel"}
+        {"sector": "A", "coeff": 2.5, "population": 22500, "district_tax": 25, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
+        {"sector": "B", "coeff": 5, "population": 45000, "district_tax": 25, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
+        {"sector": "C", "coeff": 7.5, "population": 67500, "district_tax": 25, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
+        {"sector": "D", "coeff": 12.5, "population": 112500, "district_tax": 10, "district_influence": {"opa": 1, "cartel": 0, "administration": 0}, "district_control": "opa"},
+        {"sector": "E", "coeff": 25, "population": 225000, "district_tax": 0, "district_influence": {"opa": 0, "cartel": 0, "administration": 0}, "district_control": null},
+        {"sector": "F", "coeff": 12.5, "population": 112500, "district_tax": 10, "district_influence": {"opa": 1, "cartel": 0, "administration": 0}, "district_control": "opa"},
+        {"sector": "G", "coeff": 25, "population": 225000, "district_tax": 20, "district_influence": {"opa": 0, "cartel": 1, "administration": 0}, "district_control": "cartel"}
       ]')
   )
   loop
@@ -58,6 +60,7 @@ begin
       format(
         '[
           {"code": "title", "value": "%s"},
+          {"code": "system_district_tax_coeff", "value": %s},
           {"code": "district_population", "value": %s},
           {"code": "district_tax", "value": %s},
           {"code": "district_influence", "value": %s},
@@ -66,6 +69,7 @@ begin
           {"code": "content", "value": [], "value_object_code": "master"}
         ]',
         'Сектор ' || v_district.sector,
+        v_district.coeff,
         v_district.population,
         v_district.tax,
         v_district.influence::text,

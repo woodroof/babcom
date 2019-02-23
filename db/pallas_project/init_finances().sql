@@ -6,6 +6,9 @@ volatile
 as
 $$
 begin
+  insert into data.actions(code, function) values
+  ('transfer_money', 'pallas_project.act_transfer_money');
+
   perform data.create_class(
     'transaction',
     jsonb '[

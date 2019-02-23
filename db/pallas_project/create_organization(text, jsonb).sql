@@ -17,6 +17,7 @@ declare
   v_org_next_tax jsonb;
   v_org_districts_control jsonb;
   v_org_districts_influence jsonb;
+  v_org_current_tax_sum jsonb;
   v_org_economics_type jsonb := data.get_attribute_value(v_org_id, 'system_org_economics_type');
   v_value jsonb;
 begin
@@ -33,11 +34,13 @@ begin
     v_org_next_tax := data.get_attribute_value(v_org_id, 'system_org_next_tax');
     v_org_districts_control := data.get_attribute_value(v_org_id, 'system_org_districts_control');
     v_org_districts_influence := data.get_attribute_value(v_org_id, 'system_org_districts_influence');
+    v_org_current_tax_sum := data.get_attribute_value(v_org_id, 'system_org_current_tax_sum');
 
     perform json.get_integer(v_org_tax);
     perform json.get_integer(v_org_next_tax);
     assert json.is_string_array(v_org_districts_control);
     perform json.get_object(v_org_districts_influence);
+    perform json.get_bigint(v_org_current_tax_sum);
 
     -- Заполняем ставки налога
     perform data.set_attribute_value(v_org_id, 'org_tax', v_org_tax, v_master_group_id);
@@ -56,6 +59,9 @@ begin
     perform data.set_attribute_value(v_org_id, 'org_districts_influence', v_org_districts_influence, v_master_group_id);
     perform data.set_attribute_value(v_org_id, 'org_districts_influence', v_org_districts_influence, v_head_group_id);
     perform data.set_attribute_value(v_org_id, 'org_districts_influence', v_org_districts_influence, v_economist_group_id);
+
+    -- Заполняем накопленные налоги
+    perform data.set_attribute_value(v_org_id, 'org_current_tax_sum', v_org_current_tax_sum, v_master_group_id);
   end if;
 
   perform data.set_attribute_value(v_org_id, 'org_economics_type', v_org_economics_type, v_master_group_id);

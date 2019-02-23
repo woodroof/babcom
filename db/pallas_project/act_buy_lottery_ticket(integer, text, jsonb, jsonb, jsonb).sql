@@ -34,7 +34,7 @@ begin
     return;
   end if;
 
-  v_diff := pallas_project.change_person_money(v_actor_id, v_current_sum - v_price, v_actor_id, 'Status purchase');
+  v_diff := pallas_project.change_money(v_actor_id, v_current_sum - v_price, v_actor_id, 'Status purchase');
   perform pallas_project.create_transaction(
     v_actor_id,
     'Покупка лотерейного билета',

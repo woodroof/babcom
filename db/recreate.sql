@@ -9455,7 +9455,7 @@ begin
     return;
   end if;
 
-  v_diff := pallas_project.change_person_money(v_actor_id, v_current_sum - v_price, v_actor_id, 'Status purchase');
+  v_diff := pallas_project.change_money(v_actor_id, v_current_sum - v_price, v_actor_id, 'Status purchase');
   perform pallas_project.create_transaction(
     v_actor_id,
     'Покупка лотерейного билета',
@@ -9526,7 +9526,7 @@ begin
   if v_economy_type = 'un' then
     v_diff := pallas_project.change_coins(v_actor_id, (v_current_sum - v_price)::integer, v_actor_id, 'Status purchase');
   else
-    v_diff := pallas_project.change_person_money(v_actor_id, v_current_sum - v_price, v_actor_id, 'Status purchase');
+    v_diff := pallas_project.change_money(v_actor_id, v_current_sum - v_price, v_actor_id, 'Status purchase');
     perform pallas_project.create_transaction(
       v_actor_id,
       format(
@@ -11893,6 +11893,117 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_transfer_money(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_transfer_money(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_object_id integer := data.get_object_id(json.get_string(in_params));
+  v_sum bigint := json.get_bigint(in_user_params, 'sum');
+  v_comment text := pp_utils.trim(json.get_string(in_user_params, 'comment'));
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_actor_economy_type text := json.get_string(data.get_attribute_value_for_share(v_actor_id, 'system_person_economy_type'));
+  v_actor_current_sum bigint := json.get_bigint(data.get_attribute_value_for_update(v_actor_id, 'system_money'));
+  v_object_economy_type text := json.get_string_opt(data.get_attribute_value_for_share(v_object_id, 'system_person_economy_type'), '');
+  v_object_current_sum bigint := json.get_bigint(data.get_attribute_value_for_update(v_object_id, 'system_money'));
+  v_tax bigint;
+  v_tax_organization_id integer;
+  v_tax_sum bigint;
+  v_tax_coeff numeric;
+  v_diff jsonb;
+  v_single_diff jsonb;
+  v_notified boolean;
+begin
+  assert v_actor_id != v_object_id;
+
+  if v_comment = '' then
+    v_comment := 'Перевод средств';
+  else
+    v_comment := E'Перевод средств\nКомментарий:\n' || v_comment;
+  end if;
+
+  if v_actor_economy_type = 'un' or v_object_economy_type = 'un' then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+    return;
+  end if;
+
+  if v_actor_current_sum < v_sum then
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Не хватает денег', 'На вашем счету нет указанной суммы.');
+    return;
+  end if;
+
+  if v_object_economy_type != '' then
+    declare
+      v_district_id integer := data.get_object_id(json.get_string(data.get_attribute_value_for_share(v_object_id, 'person_district')));
+      v_district_control jsonb := data.get_attribute_value_for_share(v_district_id, 'district_control');
+      v_org_tax integer;
+    begin
+      assert v_district_control is not null;
+
+      if v_district_control != jsonb 'null' then
+        v_tax_coeff := json.get_number(data.get_attribute_value_for_share(v_district_id, 'system_district_tax_coeff'));
+        v_tax_organization_id := data.get_object_id(pallas_project.control_to_org_code(json.get_string(v_district_control)));
+        v_org_tax := json.get_integer(data.get_attribute_value_for_share(v_tax_organization_id, 'system_org_tax'));
+        v_tax := ceil(v_org_tax * 0.01 * v_sum);
+      end if;
+    end;
+  end if;
+
+  v_diff := pallas_project.change_money(v_actor_id, v_actor_current_sum - v_sum, v_actor_id, 'Transfer');
+  v_diff := v_diff || pallas_project.change_money(v_object_id, v_object_current_sum + v_sum - coalesce(v_tax, 0), v_actor_id, 'Transfer');
+
+  perform pallas_project.notify_transfer_sender(v_actor_id, v_sum);
+  perform pallas_project.notify_transfer_receiver(v_object_id, v_sum - coalesce(v_tax, 0));
+
+  if v_tax_organization_id is not null and v_tax != 0 then
+    assert v_tax_organization_id != v_object_id;
+
+    -- Начисление налога на следующий цикл
+    v_tax_sum := json.get_bigint(data.get_attribute_value_for_update(v_tax_organization_id, 'system_org_current_tax_sum'));
+    perform data.change_object_and_notify(
+      v_tax_organization_id,
+      format(
+      '[
+        {"code": "system_org_current_tax_sum", "value": %s},
+        {"code": "org_current_tax_sum", "value": %s, "value_object_code": "master"}
+      ]',
+      v_tax_sum + (v_tax * v_tax_coeff)::bigint,
+      v_tax_sum + (v_tax * v_tax_coeff)::bigint)::jsonb,
+      v_actor_id,
+      'Transfer tax');
+  end if;
+
+  v_notified :=
+    data.process_diffs_and_notify_current_object(
+      v_diff,
+      in_client_id,
+      in_request_id,
+      v_object_id);
+  assert v_notified;
+
+  perform pallas_project.create_transaction(
+    v_actor_id,
+    v_comment,
+    -v_sum,
+    v_actor_current_sum - v_sum,
+    v_tax,
+    v_object_id,
+    v_actor_id);
+  perform pallas_project.create_transaction(
+    v_object_id,
+    v_comment,
+    v_sum,
+    v_object_current_sum + v_sum - coalesce(v_tax, 0),
+    v_tax,
+    v_actor_id,
+    v_actor_id);
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.actgenerator_anonymous(integer, integer);
 
 create or replace function pallas_project.actgenerator_anonymous(in_object_id integer, in_actor_id integer)
@@ -12917,11 +13028,13 @@ $$
 declare
   v_object_code text := data.get_object_code(in_object_id);
   v_master boolean := pp_utils.is_in_group(in_actor_id, 'master');
-  v_economy_type jsonb;
+  v_economy_type jsonb := data.get_attribute_value_for_share(in_object_id, 'system_person_economy_type');
+  v_actor_economy_type text;
+  v_actor_money bigint;
+  v_tax integer;
   v_actions jsonb := jsonb '{}';
 begin
   if v_master then
-    v_economy_type := data.get_attribute_value_for_share(in_object_id, 'system_person_economy_type');
     if v_economy_type is not null then
       v_actions :=
         v_actions ||
@@ -12961,6 +13074,53 @@ begin
                 }
               }
             }', v_object_code)::jsonb;
+        end if;
+      end if;
+    end if;
+  else
+    if in_object_id != in_actor_id and v_economy_type in (jsonb '"asters"', jsonb '"mcr"') then
+      v_actor_economy_type := json.get_string_opt(data.get_attribute_value_for_share(in_actor_id, 'system_person_economy_type'), null);
+      if v_actor_economy_type in ('asters', 'mcr') then
+        v_actor_money := json.get_bigint(data.get_attribute_value_for_share(in_actor_id, 'system_money'));
+        if v_actor_money <= 0 then
+          v_actions :=
+            v_actions ||
+            jsonb '{
+              "transfer_money": {
+                "name": "Перевести деньги",
+                "disabled": true
+              }
+            }';
+        else
+          v_tax := pallas_project.get_person_tax_for_share(in_object_id);
+          v_actions :=
+            v_actions ||
+            format(
+              '{
+                "transfer_money": {
+                  "code": "transfer_money",
+                  "name": "Перевести деньги",
+                  "warning": "С суммы перевода будет списан налог в размере %s%% с округлением вверх, продолжить?",
+                  "params": "%s",
+                  "user_params": [
+                    {
+                      "code": "sum",
+                      "description": "Сумма, UN$",
+                      "type": "integer",
+                      "restrictions": {"min_value": 1, "max_value": %s}
+                    },
+                    {
+                      "code": "comment",
+                      "description": "Комментарий",
+                      "type": "string",
+                      "restrictions": {"max_length": 1000, "multiline": true}
+                    }
+                  ]
+                }
+              }',
+              v_tax,
+              v_object_code,
+              v_actor_money)::jsonb;
         end if;
       end if;
     end if;
@@ -13118,6 +13278,43 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.change_money(integer, bigint, integer, text);
+
+create or replace function pallas_project.change_money(in_object_id integer, in_new_value bigint, in_actor_id integer, in_reason text)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_object_code text := data.get_object_code(in_object_id);
+  v_diffs jsonb;
+begin
+  -- Изменяемые объекты: сам объект, его страница покупки статусов (для астеров и марсиан)
+  v_diffs :=
+    data.change_object(
+      in_object_id,
+      jsonb '[]' ||
+      data.attribute_change2jsonb('system_money', to_jsonb(in_new_value)) ||
+      data.attribute_change2jsonb('money', to_jsonb(in_new_value), in_object_id) ||
+      data.attribute_change2jsonb('money', to_jsonb(in_new_value), 'master'),
+      in_actor_id,
+      in_reason);
+  if data.is_object_exists(v_object_code || '_next_statuses') then
+    v_diffs :=
+      v_diffs ||
+      data.change_object(
+        data.get_object_id(v_object_code || '_next_statuses'),
+        jsonb '[]' ||
+        data.attribute_change2jsonb('money', to_jsonb(in_new_value)),
+        in_actor_id,
+        in_reason);
+  end if;
+
+  return v_diffs;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.change_next_status(integer, text, integer, integer, text);
 
 create or replace function pallas_project.change_next_status(in_object_id integer, in_status_name text, in_new_value integer, in_actor_id integer, in_reason text)
@@ -13143,41 +13340,6 @@ begin
       data.get_object_id(v_object_code || '_next_statuses'),
       jsonb '[]' ||
       data.attribute_change2jsonb(in_status_name || '_next_status', to_jsonb(in_new_value)),
-      in_actor_id,
-      in_reason);
-
-  return v_diffs;
-end;
-$$
-language plpgsql;
-
--- drop function pallas_project.change_person_money(integer, bigint, integer, text);
-
-create or replace function pallas_project.change_person_money(in_object_id integer, in_new_value bigint, in_actor_id integer, in_reason text)
-returns jsonb
-volatile
-as
-$$
-declare
-  v_object_code text := data.get_object_code(in_object_id);
-  v_diffs jsonb;
-begin
-  -- Изменяемые объекты: сам объект, его страница покупки статусов
-  v_diffs :=
-    data.change_object(
-      in_object_id,
-      jsonb '[]' ||
-      data.attribute_change2jsonb('system_money', to_jsonb(in_new_value)) ||
-      data.attribute_change2jsonb('money', to_jsonb(in_new_value), in_object_id) ||
-      data.attribute_change2jsonb('money', to_jsonb(in_new_value), 'master'),
-      in_actor_id,
-      in_reason);
-  v_diffs :=
-    v_diffs ||
-    data.change_object(
-      data.get_object_id(v_object_code || '_next_statuses'),
-      jsonb '[]' ||
-      data.attribute_change2jsonb('money', to_jsonb(in_new_value)),
       in_actor_id,
       in_reason);
 
@@ -13302,6 +13464,7 @@ declare
   v_org_next_tax jsonb;
   v_org_districts_control jsonb;
   v_org_districts_influence jsonb;
+  v_org_current_tax_sum jsonb;
   v_org_economics_type jsonb := data.get_attribute_value(v_org_id, 'system_org_economics_type');
   v_value jsonb;
 begin
@@ -13318,11 +13481,13 @@ begin
     v_org_next_tax := data.get_attribute_value(v_org_id, 'system_org_next_tax');
     v_org_districts_control := data.get_attribute_value(v_org_id, 'system_org_districts_control');
     v_org_districts_influence := data.get_attribute_value(v_org_id, 'system_org_districts_influence');
+    v_org_current_tax_sum := data.get_attribute_value(v_org_id, 'system_org_current_tax_sum');
 
     perform json.get_integer(v_org_tax);
     perform json.get_integer(v_org_next_tax);
     assert json.is_string_array(v_org_districts_control);
     perform json.get_object(v_org_districts_influence);
+    perform json.get_bigint(v_org_current_tax_sum);
 
     -- Заполняем ставки налога
     perform data.set_attribute_value(v_org_id, 'org_tax', v_org_tax, v_master_group_id);
@@ -13341,6 +13506,9 @@ begin
     perform data.set_attribute_value(v_org_id, 'org_districts_influence', v_org_districts_influence, v_master_group_id);
     perform data.set_attribute_value(v_org_id, 'org_districts_influence', v_org_districts_influence, v_head_group_id);
     perform data.set_attribute_value(v_org_id, 'org_districts_influence', v_org_districts_influence, v_economist_group_id);
+
+    -- Заполняем накопленные налоги
+    perform data.set_attribute_value(v_org_id, 'org_current_tax_sum', v_org_current_tax_sum, v_master_group_id);
   end if;
 
   perform data.set_attribute_value(v_org_id, 'org_economics_type', v_org_economics_type, v_master_group_id);
@@ -13648,12 +13816,12 @@ declare
   v_second_object_code text;
 begin
   assert in_comment is not null;
-  assert in_value is not null and in_value != 0;
+  assert in_value is not null;
   assert in_balance is not null;
-  assert in_tax is null or in_tax >= 0 and in_tax < abs(in_value);
+  assert in_tax is null or in_tax >= 0 and in_tax <= abs(in_value);
 
   if in_second_object_id is not null then
-    v_second_object_title := json.get_string_opt(data.get_attribute_value(v_second_object_title, 'title', in_object_id), null);
+    v_second_object_title := json.get_string_opt(data.get_attribute_value(in_second_object_id, 'title', in_object_id), null);
     if v_second_object_title is not null then
       v_second_object_code := data.get_object_code(in_second_object_id);
     end if;
@@ -13676,8 +13844,8 @@ begin
         pp_utils.format_date(clock_timestamp()),
         '+' || pp_utils.format_money(in_value - coalesce(in_tax, 0)),
         in_comment,
-        (case when v_second_object_title is not null then format(E'\Отправитель: [%s](babcom:%s)', v_second_object_title, v_second_object_code) else '' end),
-        (case when in_tax is not null then format(E'\nНалог: %s\Сумма перевода до налога: %s', pp_utils.format_money(in_tax), pp_utils.format_money(in_value)) else '' end),
+        (case when v_second_object_title is not null then format(E'\nОтправитель: [%s](babcom:%s)', v_second_object_title, v_second_object_code) else '' end),
+        (case when in_tax is not null then format(E'\nНалог: %s\nСумма перевода до налога: %s', pp_utils.format_money(in_tax), pp_utils.format_money(in_value)) else '' end),
         pp_utils.format_money(in_balance));
   end if;
 
@@ -14032,6 +14200,22 @@ begin
       where oo.parent_object_id = v_group_id
         and oo.parent_object_id <> oo.object_id;
   return v_objects;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.get_person_tax_for_share(integer);
+
+create or replace function pallas_project.get_person_tax_for_share(in_person_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_district_id integer := data.get_object_id(json.get_string(data.get_raw_attribute_value_for_share(in_person_id, 'person_district')));
+  v_district_tax integer := json.get_integer(data.get_raw_attribute_value_for_share(v_district_id, 'district_tax'));
+begin
+  return v_district_tax;
 end;
 $$
 language plpgsql;
@@ -14514,7 +14698,8 @@ begin
   ('district_control', 'Контроль', null, 'normal', null, 'pallas_project.vd_district_control', false),
   ('district_population', 'Население', null, 'normal', null, null, false),
   ('district_influence', 'Влияние', null, 'normal', null, 'pallas_project.vd_district_influence', false),
-  ('district_tax', 'Налоговая ставка', null, 'normal', null, 'pallas_project.vd_percent', false);
+  ('district_tax', 'Налоговая ставка', null, 'normal', null, 'pallas_project.vd_percent', false),
+  ('system_district_tax_coeff', null, 'Коэффициент, на который умножаются налоговые поступления', 'system', null, null, false);
 
   -- Класс района
   perform data.create_class(
@@ -14538,19 +14723,20 @@ begin
   (
     select
       json.get_string(value, 'sector') sector,
+      json.get_number(value, 'coeff') coeff,
       json.get_integer(value, 'population') population,
       json.get_integer(value, 'district_tax') tax,
       json.get_object(value, 'district_influence') influence,
       value->'district_control' control
     from jsonb_array_elements(
       jsonb '[
-        {"sector": "A", "population": 22500, "district_tax": 25, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
-        {"sector": "B", "population": 45000, "district_tax": 25, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
-        {"sector": "C", "population": 67500, "district_tax": 25, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
-        {"sector": "D", "population": 112500, "district_tax": 10, "district_influence": {"opa": 1, "cartel": 0, "administration": 0}, "district_control": "opa"},
-        {"sector": "E", "population": 225000, "district_tax": 0, "district_influence": {"opa": 0, "cartel": 0, "administration": 0}, "district_control": null},
-        {"sector": "F", "population": 112500, "district_tax": 10, "district_influence": {"opa": 1, "cartel": 0, "administration": 0}, "district_control": "opa"},
-        {"sector": "G", "population": 225000, "district_tax": 20, "district_influence": {"opa": 0, "cartel": 1, "administration": 0}, "district_control": "cartel"}
+        {"sector": "A", "coeff": 2.5, "population": 22500, "district_tax": 25, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
+        {"sector": "B", "coeff": 5, "population": 45000, "district_tax": 25, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
+        {"sector": "C", "coeff": 7.5, "population": 67500, "district_tax": 25, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
+        {"sector": "D", "coeff": 12.5, "population": 112500, "district_tax": 10, "district_influence": {"opa": 1, "cartel": 0, "administration": 0}, "district_control": "opa"},
+        {"sector": "E", "coeff": 25, "population": 225000, "district_tax": 0, "district_influence": {"opa": 0, "cartel": 0, "administration": 0}, "district_control": null},
+        {"sector": "F", "coeff": 12.5, "population": 112500, "district_tax": 10, "district_influence": {"opa": 1, "cartel": 0, "administration": 0}, "district_control": "opa"},
+        {"sector": "G", "coeff": 25, "population": 225000, "district_tax": 20, "district_influence": {"opa": 0, "cartel": 1, "administration": 0}, "district_control": "cartel"}
       ]')
   )
   loop
@@ -14559,6 +14745,7 @@ begin
       format(
         '[
           {"code": "title", "value": "%s"},
+          {"code": "system_district_tax_coeff", "value": %s},
           {"code": "district_population", "value": %s},
           {"code": "district_tax", "value": %s},
           {"code": "district_influence", "value": %s},
@@ -14567,6 +14754,7 @@ begin
           {"code": "content", "value": [], "value_object_code": "master"}
         ]',
         'Сектор ' || v_district.sector,
+        v_district.coeff,
         v_district.population,
         v_district.tax,
         v_district.influence::text,
@@ -15001,6 +15189,9 @@ volatile
 as
 $$
 begin
+  insert into data.actions(code, function) values
+  ('transfer_money', 'pallas_project.act_transfer_money');
+
   perform data.create_class(
     'transaction',
     jsonb '[
@@ -15467,7 +15658,9 @@ begin
   ('system_org_tax', null, null, 'system', null, null, false),
   ('org_tax', 'Текущая налоговая ставка', null, 'normal', 'full', 'pallas_project.vd_percent', true),
   ('system_org_next_tax', null, null, 'system', null, null, false),
-  ('org_next_tax', 'Налоговая ставка на следующий цикл', null, 'normal', 'full', 'pallas_project.vd_percent', true);
+  ('org_next_tax', 'Налоговая ставка на следующий цикл', null, 'normal', 'full', 'pallas_project.vd_percent', true),
+  ('system_org_current_tax_sum', null, 'Накопленная сумма налогов за текущий цикл', 'system', null, null, false),
+  ('org_current_tax_sum', 'Накопленная сумма налогов за текущий цикл', null, 'normal', 'full', 'pallas_project.vd_money', true);
 
   perform data.create_class(
     'organization',
@@ -15478,7 +15671,7 @@ begin
         "title": "title",
         "subtitle": "subtitle",
         "groups": [
-          {"code": "personal_info", "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_tax", "org_next_tax", "org_districts_control", "org_districts_influence"]},
+          {"code": "personal_info", "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_tax", "org_next_tax", "org_current_tax_sum", "org_districts_control", "org_districts_influence"]},
           {"code": "info", "attributes": ["description"]}
         ]
       },
@@ -15496,7 +15689,8 @@ begin
       "system_org_budget": 55000,
       "system_money": 55000,
       "system_org_tax": 25,
-      "system_org_next_tax": 25
+      "system_org_next_tax": 25,
+      "system_org_current_tax_sum": 0
     }');
   perform pallas_project.create_organization(
     'org_opa',
@@ -15507,7 +15701,8 @@ begin
       "system_org_economics_type": "normal",
       "system_money": 4000,
       "system_org_tax": 10,
-      "system_org_next_tax": 10
+      "system_org_next_tax": 10,
+      "system_org_current_tax_sum": 0
     }');
   perform pallas_project.create_organization(
     'org_starbucks',
@@ -15518,7 +15713,8 @@ begin
       "system_org_economics_type": "normal",
       "system_money": 2000,
       "system_org_tax": 20,
-      "system_org_next_tax": 20
+      "system_org_next_tax": 20,
+      "system_org_current_tax_sum": 0
     }');
 
   perform pallas_project.create_organization(
@@ -15930,7 +16126,8 @@ begin
             "actions": [
               "open_current_statuses",
               "open_next_statuses",
-              "open_transactions"
+              "open_transactions",
+              "transfer_money"
             ]
           },
           {
@@ -16547,6 +16744,54 @@ declare
     perform data.set_attribute_value(in_object_id, v_title_attribute_id, v_new_title, in_actor_id, in_actor_id);
   end if;
 
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.notify_transfer_receiver(integer, bigint);
+
+create or replace function pallas_project.notify_transfer_receiver(in_receiver_id integer, in_money bigint)
+returns void
+volatile
+as
+$$
+declare
+  v_type text := json.get_string(data.get_attribute_value(in_receiver_id, 'type', in_receiver_id));
+begin
+  if v_type = 'organization' then
+    -- todo
+  else
+    assert v_type = 'person';
+
+    perform pp_utils.add_notification(
+      in_receiver_id,
+      format('Входящий перевод на сумму %s', pp_utils.format_money(in_money)),
+      data.get_object_id(data.get_object_code(in_receiver_id) || '_transactions'));
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.notify_transfer_sender(integer, bigint);
+
+create or replace function pallas_project.notify_transfer_sender(in_sender_id integer, in_money bigint)
+returns void
+volatile
+as
+$$
+declare
+  v_type text := json.get_string(data.get_attribute_value(in_sender_id, 'type', in_sender_id));
+begin
+  if v_type = 'organization' then
+    -- todo
+  else
+    assert v_type = 'person';
+
+    perform pp_utils.add_notification(
+      in_sender_id,
+      format('Списана сумма %s', pp_utils.format_money(in_money)),
+      data.get_object_id(data.get_object_code(in_sender_id) || '_transactions'));
+  end if;
 end;
 $$
 language plpgsql;
@@ -17645,6 +17890,19 @@ begin
                                           jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, to_jsonb(v_new_content), in_actor_id)),
                                           in_actor_id);
   end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pp_utils.trim(text);
+
+create or replace function pp_utils.trim(in_text text)
+returns text
+immutable
+as
+$$
+begin
+  return trim(in_text, E' \t\n');
 end;
 $$
 language plpgsql;

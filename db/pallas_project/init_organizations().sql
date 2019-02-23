@@ -24,7 +24,9 @@ begin
   ('system_org_tax', null, null, 'system', null, null, false),
   ('org_tax', 'Текущая налоговая ставка', null, 'normal', 'full', 'pallas_project.vd_percent', true),
   ('system_org_next_tax', null, null, 'system', null, null, false),
-  ('org_next_tax', 'Налоговая ставка на следующий цикл', null, 'normal', 'full', 'pallas_project.vd_percent', true);
+  ('org_next_tax', 'Налоговая ставка на следующий цикл', null, 'normal', 'full', 'pallas_project.vd_percent', true),
+  ('system_org_current_tax_sum', null, 'Накопленная сумма налогов за текущий цикл', 'system', null, null, false),
+  ('org_current_tax_sum', 'Накопленная сумма налогов за текущий цикл', null, 'normal', 'full', 'pallas_project.vd_money', true);
 
   perform data.create_class(
     'organization',
@@ -35,7 +37,7 @@ begin
         "title": "title",
         "subtitle": "subtitle",
         "groups": [
-          {"code": "personal_info", "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_tax", "org_next_tax", "org_districts_control", "org_districts_influence"]},
+          {"code": "personal_info", "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_tax", "org_next_tax", "org_current_tax_sum", "org_districts_control", "org_districts_influence"]},
           {"code": "info", "attributes": ["description"]}
         ]
       },
@@ -53,7 +55,8 @@ begin
       "system_org_budget": 55000,
       "system_money": 55000,
       "system_org_tax": 25,
-      "system_org_next_tax": 25
+      "system_org_next_tax": 25,
+      "system_org_current_tax_sum": 0
     }');
   perform pallas_project.create_organization(
     'org_opa',
@@ -64,7 +67,8 @@ begin
       "system_org_economics_type": "normal",
       "system_money": 4000,
       "system_org_tax": 10,
-      "system_org_next_tax": 10
+      "system_org_next_tax": 10,
+      "system_org_current_tax_sum": 0
     }');
   perform pallas_project.create_organization(
     'org_starbucks',
@@ -75,7 +79,8 @@ begin
       "system_org_economics_type": "normal",
       "system_money": 2000,
       "system_org_tax": 20,
-      "system_org_next_tax": 20
+      "system_org_next_tax": 20,
+      "system_org_current_tax_sum": 0
     }');
 
   perform pallas_project.create_organization(
