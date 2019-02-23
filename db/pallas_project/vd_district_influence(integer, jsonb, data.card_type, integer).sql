@@ -5,8 +5,17 @@ returns text
 immutable
 as
 $$
+declare
+  v_ret_val text;
 begin
-  return 'todo: ' || in_value::text; 
+  select E'\n' || string_agg(format('%s: %s', title, influence), E'\n')
+  into v_ret_val
+  from (
+    select pallas_project.control_to_text(key) title, json.get_integer(value) influence
+    from jsonb_each(in_value)
+    order by title) a;
+
+  return v_ret_val; 
 end;
 $$
 language plpgsql;

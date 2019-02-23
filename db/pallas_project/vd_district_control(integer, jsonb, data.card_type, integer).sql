@@ -6,7 +6,8 @@ immutable
 as
 $$
 begin
-  return 'todo: ' || in_value::text; 
+  assert in_value is not null;
+  return case when in_value = jsonb 'null' then 'нет' else pallas_project.control_to_text(json.get_string(in_value)) end;
 end;
 $$
 language plpgsql;

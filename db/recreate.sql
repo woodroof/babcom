@@ -3135,7 +3135,6 @@ declare
   v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_last_object_id integer;
   v_content text[];
-  v_content_length integer;
   v_client_subscription_id integer;
   v_object record;
   v_mini_card_function text;
@@ -3151,8 +3150,6 @@ begin
   v_content = json.get_string_array(data.get_attribute_value(in_object_id, 'content', v_actor_id));
   assert array_utils.is_unique(v_content);
   assert array_position(v_content, v_object_code) is null;
-
-  v_content_length := array_length(v_content, 1);
 
   select id
   into v_client_subscription_id
@@ -13207,6 +13204,26 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.control_to_text(text);
+
+create or replace function pallas_project.control_to_text(in_control text)
+returns text
+immutable
+as
+$$
+begin
+  if in_control = 'opa' then
+    return 'СВП';
+  elsif in_control = 'administration' then
+    return 'Администрация';
+  end if;
+
+  assert in_control = 'cartel';
+  return 'Картель';
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.create_chat(text, jsonb);
 
 create or replace function pallas_project.create_chat(in_code text, in_attributes jsonb)
@@ -16845,7 +16862,8 @@ immutable
 as
 $$
 begin
-  return 'todo: ' || in_value::text; 
+  assert in_value is not null;
+  return case when in_value = jsonb 'null' then 'нет' else pallas_project.control_to_text(json.get_string(in_value)) end;
 end;
 $$
 language plpgsql;
@@ -16857,8 +16875,17 @@ returns text
 immutable
 as
 $$
+declare
+  v_ret_val text;
 begin
-  return 'todo: ' || in_value::text; 
+  select E'\n' || string_agg(format('%s: %s', title, influence), E'\n')
+  into v_ret_val
+  from (
+    select pallas_project.control_to_text(key) title, json.get_integer(value) influence
+    from jsonb_each(in_value)
+    order by title) a;
+
+  return v_ret_val; 
 end;
 $$
 language plpgsql;
@@ -17068,8 +17095,25 @@ returns text
 immutable
 as
 $$
+declare
+  v_title_attr_id integer := data.get_attribute_id('title');
+  v_districts text[] := json.get_string_array(in_value);
+  v_description text;
 begin
-  return 'todo: ' || in_value::text; 
+  if coalesce(array_length(v_districts, 1), 0) = 0 then
+    return 'нет';
+  end if;
+
+  select string_agg(format('[%s](babcom:%s)', title, code), ', ')
+  into v_description
+  from (
+    select code, json.get_string(data.get_attribute_value(id, v_title_attr_id, in_actor_id)) title
+    from (
+      select value code, data.get_object_id(value) id
+      from unnest(v_districts) a(value)) d
+    order by title) t;
+
+  return v_description; 
 end;
 $$
 language plpgsql;
@@ -17081,8 +17125,18 @@ returns text
 immutable
 as
 $$
+declare
+  v_title_attr_id integer := data.get_attribute_id('title');
+  v_ret_val text;
 begin
-  return 'todo: ' || in_value::text; 
+  select E'\n' || string_agg(format('[%s](babcom:%s): %s', title, code, influence), E'\n')
+  into v_ret_val
+  from (
+    select key code, json.get_string(data.get_attribute_value(key, v_title_attr_id, in_actor_id)) title, json.get_integer(value) influence
+    from jsonb_each(in_value)
+    order by title) a;
+
+  return v_ret_val; 
 end;
 $$
 language plpgsql;

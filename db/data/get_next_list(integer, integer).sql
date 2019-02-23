@@ -11,7 +11,6 @@ declare
   v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_last_object_id integer;
   v_content text[];
-  v_content_length integer;
   v_client_subscription_id integer;
   v_object record;
   v_mini_card_function text;
@@ -27,8 +26,6 @@ begin
   v_content = json.get_string_array(data.get_attribute_value(in_object_id, 'content', v_actor_id));
   assert array_utils.is_unique(v_content);
   assert array_position(v_content, v_object_code) is null;
-
-  v_content_length := array_length(v_content, 1);
 
   select id
   into v_client_subscription_id
