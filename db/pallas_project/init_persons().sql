@@ -108,16 +108,29 @@ begin
       }
     }');
 
+  -- Класс для личных организаций
+  perform data.create_class(
+    'my_organizations',
+    jsonb '{
+      "title": "Мои организации",
+      "type": "organization_list",
+      "template": {
+        "title": "title",
+        "groups": []
+      }
+    }');
+
   -- Мастера
-  perform pallas_project.create_person('m1', jsonb '{"title": "Саша", "person_occupation": "Мастер"}', array['master']);
-  perform pallas_project.create_person('m2', jsonb '{"title": "Петя", "person_occupation": "Мастер"}', array['master']);
-  perform pallas_project.create_person('m3', jsonb '{"title": "Данил", "person_occupation": "Мастер"}', array['master']);
-  perform pallas_project.create_person('m4', jsonb '{"title": "Нина", "person_occupation": "Мастер"}', array['master']);
-  perform pallas_project.create_person('m5', jsonb '{"title": "Оля", "person_occupation": "Мастер"}', array['master']);
-  perform pallas_project.create_person('m6', jsonb '{"title": "Юра", "person_occupation": "Мастер"}', array['master']);
+  perform pallas_project.create_person(null, 'm1', jsonb '{"title": "Саша", "person_occupation": "Мастер"}', array['master']);
+  perform pallas_project.create_person(null, 'm2', jsonb '{"title": "Петя", "person_occupation": "Мастер"}', array['master']);
+  perform pallas_project.create_person(null, 'm3', jsonb '{"title": "Данил", "person_occupation": "Мастер"}', array['master']);
+  perform pallas_project.create_person(null, 'm4', jsonb '{"title": "Нина", "person_occupation": "Мастер"}', array['master']);
+  perform pallas_project.create_person(null, 'm5', jsonb '{"title": "Оля", "person_occupation": "Мастер"}', array['master']);
+  perform pallas_project.create_person(null, 'm6', jsonb '{"title": "Юра", "person_occupation": "Мастер"}', array['master']);
 
   -- Игроки
   perform pallas_project.create_person(
+    'player1',
     'p1',
     jsonb '{
       "title": "Джерри Адамс",
@@ -135,6 +148,7 @@ begin
       "person_district": "sector_A"}',
     array['all_person', 'un', 'player']);
   perform pallas_project.create_person(
+    'player2',
     'p2',
     jsonb '{
       "title": "Сьюзан Сидорова",
@@ -151,6 +165,7 @@ begin
       "person_district": "sector_E"}',
     array['all_person', 'opa', 'player', 'aster']);
   perform pallas_project.create_person(
+    'player3',
     'p3',
     jsonb '{
       "title": "Чарли Чандрасекар",
@@ -168,6 +183,7 @@ begin
       "person_district": "sector_B"}',
     array['all_person', 'un', 'player']);
   perform pallas_project.create_person(
+    'player4',
     'p4',
     jsonb '{
       "title": "Алисия Сильверстоун",
@@ -184,6 +200,7 @@ begin
       "person_district": "sector_D"}',
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
+    null,
     'p5',
     jsonb '{
       "title": "Амели Сноу",
@@ -204,6 +221,7 @@ begin
   -- Сантьяго де ла Крус - большой картель
 
   perform pallas_project.create_person(
+    null,
     'p10',
     jsonb '{
       "title": "АСС",
@@ -211,6 +229,7 @@ begin
     array['all_person']);
 
   perform pallas_project.create_person(
+    null,
     'p11',
     jsonb '{
       "title": "Шенг",

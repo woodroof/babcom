@@ -1,6 +1,6 @@
--- drop function pallas_project.create_transaction(integer, text, bigint, bigint, bigint, integer, integer);
+-- drop function pallas_project.create_transaction(integer, text, bigint, bigint, bigint, integer, integer, integer[]);
 
-create or replace function pallas_project.create_transaction(in_object_id integer, in_comment text, in_value bigint, in_balance bigint, in_tax bigint, in_second_object_id integer, in_actor_id integer)
+create or replace function pallas_project.create_transaction(in_object_id integer, in_comment text, in_value bigint, in_balance bigint, in_tax bigint, in_second_object_id integer, in_actor_id integer, in_visible_object_ids integer[])
 returns void
 volatile
 as
@@ -8,6 +8,8 @@ $$
 declare
   v_object_code text := data.get_object_code(in_object_id);
   v_description text;
+  v_visible_object_id integer;
+  v_attributes jsonb;
   v_transaction_id integer;
   v_second_object_title text;
   v_second_object_code text;
@@ -46,16 +48,26 @@ begin
         pp_utils.format_money(in_balance));
   end if;
 
+  v_attributes :=
+    format(
+      '[
+        {"code": "mini_description", "value": %s}
+      ]',
+      to_jsonb(v_description)::text)::jsonb;
+
+  for v_visible_object_id in
+  (
+    select value
+    from unnest(in_visible_object_ids) a(value)
+  )
+  loop
+    v_attributes := v_attributes || format('{"code": "is_visible", "value": true, "value_object_id": %s}', v_visible_object_id)::jsonb;
+  end loop;
+
   v_transaction_id :=
     data.create_object(
       null,
-      format(
-        '[
-          {"code": "is_visible", "value": true, "value_object_id": %s},
-          {"code": "mini_description", "value": %s}
-        ]',
-        in_object_id,
-        to_jsonb(v_description)::text)::jsonb,
+      v_attributes,
       'transaction');
 
   perform pp_utils.list_prepend_and_notify(

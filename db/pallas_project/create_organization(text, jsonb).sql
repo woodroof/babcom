@@ -12,6 +12,7 @@ declare
   v_head_group_id integer := data.create_object(in_object_code || '_head', jsonb '{}');
   v_economist_group_id integer := data.create_object(in_object_code || '_economist', jsonb '{}');
   v_auditor_group_id integer := data.create_object(in_object_code || '_auditor', jsonb '{}');
+  v_temporary_auditor_group_id integer := data.create_object(in_object_code || '_temporary_auditor', jsonb '{}');
   v_money jsonb := data.get_attribute_value(v_org_id, 'system_money');
   v_org_tax jsonb := data.get_attribute_value(v_org_id, 'system_org_tax');
   v_org_next_tax jsonb;
@@ -29,6 +30,7 @@ begin
   perform data.set_attribute_value(v_org_id, 'money', v_money, v_head_group_id);
   perform data.set_attribute_value(v_org_id, 'money', v_money, v_economist_group_id);
   perform data.set_attribute_value(v_org_id, 'money', v_money, v_auditor_group_id);
+  perform data.set_attribute_value(v_org_id, 'money', v_money, v_temporary_auditor_group_id);
 
   if v_org_tax is not null then
     v_org_next_tax := data.get_attribute_value(v_org_id, 'system_org_next_tax');
@@ -81,6 +83,27 @@ begin
     perform data.set_attribute_value(v_org_id, 'org_profit', v_value, v_head_group_id);
     perform data.set_attribute_value(v_org_id, 'org_profit', v_value, v_economist_group_id);
   end if;
+
+  -- Создадим страницу с историей транзакций
+  perform data.create_object(
+    in_object_code || '_transactions',
+    format(
+      '[
+        {"code": "title", "value": "%s"},
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "content", "value": []}
+      ]',
+      format('История транзакций, %s', json.get_string(data.get_attribute_value(v_org_id, 'title', v_org_id))),
+      v_head_group_id,
+      v_economist_group_id,
+      v_auditor_group_id,
+      v_temporary_auditor_group_id,
+      v_master_group_id)::jsonb,
+    'transactions');
 end;
 $$
 language plpgsql;

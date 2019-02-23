@@ -6,14 +6,16 @@ volatile
 as
 $$
 declare
-  v_object_id integer := data.get_object_id(json.get_string(in_params));
+  v_object_code text := json.get_string(in_params);
+  v_object_id integer := data.get_object_id(v_object_code);
+  v_original_object_code text;
   v_sum bigint := json.get_bigint(in_user_params, 'sum');
   v_comment text := pp_utils.trim(json.get_string(in_user_params, 'comment'));
   v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_actor_economy_type text := json.get_string(data.get_attribute_value_for_share(v_actor_id, 'system_person_economy_type'));
   v_actor_current_sum bigint := json.get_bigint(data.get_attribute_value_for_update(v_actor_id, 'system_money'));
-  v_object_economy_type text := json.get_string_opt(data.get_attribute_value_for_share(v_object_id, 'system_person_economy_type'), '');
-  v_object_current_sum bigint := json.get_bigint(data.get_attribute_value_for_update(v_object_id, 'system_money'));
+  v_object_economy_type text;
+  v_object_current_sum bigint;
   v_tax bigint;
   v_tax_organization_id integer;
   v_tax_sum bigint;
@@ -21,8 +23,18 @@ declare
   v_diff jsonb;
   v_single_diff jsonb;
   v_notified boolean;
+  v_groups integer[];
 begin
+  v_original_object_code := json.get_string_opt(data.get_attribute_value(v_object_id, 'system_org_synonym'), null);
+  if v_original_object_code is not null then
+    v_object_id := data.get_object_id(v_original_object_code);
+    v_object_code := v_original_object_code;
+  end if;
+
   assert v_actor_id != v_object_id;
+
+  v_object_economy_type := json.get_string_opt(data.get_attribute_value_for_share(v_object_id, 'system_person_economy_type'), '');
+  v_object_current_sum := json.get_bigint(data.get_attribute_value_for_update(v_object_id, 'system_money'));
 
   if v_comment = '' then
     v_comment := 'Перевод средств';
@@ -58,7 +70,10 @@ begin
   end if;
 
   v_diff := pallas_project.change_money(v_actor_id, v_actor_current_sum - v_sum, v_actor_id, 'Transfer');
-  v_diff := v_diff || pallas_project.change_money(v_object_id, v_object_current_sum + v_sum - coalesce(v_tax, 0), v_actor_id, 'Transfer');
+  v_diff :=
+    data.join_diffs(
+      v_diff,
+      pallas_project.change_money(v_object_id, v_object_current_sum + v_sum - coalesce(v_tax, 0), v_actor_id, 'Transfer'));
 
   perform pallas_project.notify_transfer_sender(v_actor_id, v_sum);
   perform pallas_project.notify_transfer_receiver(v_object_id, v_sum - coalesce(v_tax, 0));
@@ -89,6 +104,17 @@ begin
       v_object_id);
   assert v_notified;
 
+  if v_object_economy_type != '' then
+    v_groups := array[v_object_id];
+  else
+    v_groups :=
+      array[
+        data.get_object_id(v_object_code || '_head'),
+        data.get_object_id(v_object_code || '_economist'),
+        data.get_object_id(v_object_code || '_auditor'),
+        data.get_object_id(v_object_code || '_temporary_auditor')];
+  end if;
+
   perform pallas_project.create_transaction(
     v_actor_id,
     v_comment,
@@ -96,7 +122,8 @@ begin
     v_actor_current_sum - v_sum,
     v_tax,
     v_object_id,
-    v_actor_id);
+    v_actor_id,
+    array[v_actor_id]);
   perform pallas_project.create_transaction(
     v_object_id,
     v_comment,
@@ -104,7 +131,8 @@ begin
     v_object_current_sum + v_sum - coalesce(v_tax, 0),
     v_tax,
     v_actor_id,
-    v_actor_id);
+    v_actor_id,
+    v_groups);
 end;
 $$
 language plpgsql;

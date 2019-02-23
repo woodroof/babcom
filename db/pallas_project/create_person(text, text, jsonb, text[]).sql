@@ -1,13 +1,13 @@
--- drop function pallas_project.create_person(text, jsonb, text[]);
+-- drop function pallas_project.create_person(text, text, jsonb, text[]);
 
-create or replace function pallas_project.create_person(in_login_code text, in_attributes jsonb, in_groups text[])
+create or replace function pallas_project.create_person(in_person_code text, in_login_code text, in_attributes jsonb, in_groups text[])
 returns void
 volatile
 as
 $$
 -- Не для использования на игре, т.к. обновляет атрибуты напрямую, без уведомлений и блокировок!
 declare
-  v_person_id integer := data.create_object(null, in_attributes, 'person', in_groups);
+  v_person_id integer := data.create_object(in_person_code, in_attributes, 'person', in_groups);
   v_person_code text := data.get_object_code(v_person_id);
   v_login_id integer;
   v_master_group_id integer := data.get_object_id('master');
@@ -227,6 +227,17 @@ begin
       perform data.set_attribute_value(v_district_id, 'content', v_content, v_master_group_id);
     end if;
   end;
+
+  -- Создадим "Мои организации"
+  perform data.create_object(
+    v_person_code || '_my_organizations',
+    format(
+      '[
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "content", "value": []}
+      ]',
+      v_person_id)::jsonb,
+    'my_organizations');
 end;
 $$
 language plpgsql;

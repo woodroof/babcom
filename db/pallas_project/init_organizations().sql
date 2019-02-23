@@ -33,11 +33,16 @@ begin
     jsonb '{
       "type": "organization",
       "is_visible": true,
+      "actions_function": "pallas_project.actgenerator_organization",
       "template": {
         "title": "title",
         "subtitle": "subtitle",
         "groups": [
-          {"code": "personal_info", "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_tax", "org_next_tax", "org_current_tax_sum", "org_districts_control", "org_districts_influence"]},
+          {
+            "code": "personal_info",
+            "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_tax", "org_next_tax", "org_current_tax_sum", "org_districts_control", "org_districts_influence"],
+            "actions": ["transfer_money", "show_transactions"]
+          },
           {"code": "info", "attributes": ["description"]}
         ]
       },
@@ -321,18 +326,6 @@ begin
         }',
         v_organization_list::text)::jsonb);
   end;
-
-  -- И класс для личных организаций
-  perform data.create_class(
-    'my_organizations',
-    jsonb '{
-      "title": "Мои организации",
-      "type": "organization_list",
-      "template": {
-        "title": "title",
-        "groups": []
-      }
-    }');
 
   -- Лёд: org_aqua_galactic, org_jonny_quick, org_midnight_diggers
   -- Продукты: org_alfa_prime, org_lenin_state_farm, org_ganymede_hydroponical_systems

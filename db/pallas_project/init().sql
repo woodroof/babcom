@@ -50,9 +50,10 @@ begin
         "groups": [
           {"code": "menu_notifications", "actions": ["notifications"]},
           {"code": "menu_lottery", "actions": ["lottery"]},
-          {"code": "menu_group1", "actions": ["login", "profile"]},
-          {"code": "menu_group2", "actions": ["statuses", "next_statuses", "debatles", "chats", "all_chats", "persons", "districts", "organizations", "documents", "transactions", "important_notifications", "master_chats"]},
-          {"code": "menu_group3", "actions": ["logout"]}
+          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "chats", "master_chats", "documents", "my_organizations", "important_notifications"]},
+          {"code": "menu_social", "actions": ["all_chats", "debatles"]},
+          {"code": "menu_info", "actions": ["persons", "districts", "organizations"]},
+          {"code": "menu_logout", "actions": ["logout"]}
         ]
       }
     }');
@@ -117,6 +118,7 @@ begin
   perform pallas_project.init_districts();
   perform pallas_project.init_persons();
   perform pallas_project.init_organizations();
+  perform pallas_project.init_organization_roles();
   perform pallas_project.init_debatles();
   perform pallas_project.init_messenger();
   perform pallas_project.init_person_list();

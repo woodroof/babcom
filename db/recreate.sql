@@ -11888,14 +11888,16 @@ volatile
 as
 $$
 declare
-  v_object_id integer := data.get_object_id(json.get_string(in_params));
+  v_object_code text := json.get_string(in_params);
+  v_object_id integer := data.get_object_id(v_object_code);
+  v_original_object_code text;
   v_sum bigint := json.get_bigint(in_user_params, 'sum');
   v_comment text := pp_utils.trim(json.get_string(in_user_params, 'comment'));
   v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_actor_economy_type text := json.get_string(data.get_attribute_value_for_share(v_actor_id, 'system_person_economy_type'));
   v_actor_current_sum bigint := json.get_bigint(data.get_attribute_value_for_update(v_actor_id, 'system_money'));
-  v_object_economy_type text := json.get_string_opt(data.get_attribute_value_for_share(v_object_id, 'system_person_economy_type'), '');
-  v_object_current_sum bigint := json.get_bigint(data.get_attribute_value_for_update(v_object_id, 'system_money'));
+  v_object_economy_type text;
+  v_object_current_sum bigint;
   v_tax bigint;
   v_tax_organization_id integer;
   v_tax_sum bigint;
@@ -11903,8 +11905,18 @@ declare
   v_diff jsonb;
   v_single_diff jsonb;
   v_notified boolean;
+  v_groups integer[];
 begin
+  v_original_object_code := json.get_string_opt(data.get_attribute_value(v_object_id, 'system_org_synonym'), null);
+  if v_original_object_code is not null then
+    v_object_id := data.get_object_id(v_original_object_code);
+    v_object_code := v_original_object_code;
+  end if;
+
   assert v_actor_id != v_object_id;
+
+  v_object_economy_type := json.get_string_opt(data.get_attribute_value_for_share(v_object_id, 'system_person_economy_type'), '');
+  v_object_current_sum := json.get_bigint(data.get_attribute_value_for_update(v_object_id, 'system_money'));
 
   if v_comment = '' then
     v_comment := 'Перевод средств';
@@ -11940,7 +11952,10 @@ begin
   end if;
 
   v_diff := pallas_project.change_money(v_actor_id, v_actor_current_sum - v_sum, v_actor_id, 'Transfer');
-  v_diff := v_diff || pallas_project.change_money(v_object_id, v_object_current_sum + v_sum - coalesce(v_tax, 0), v_actor_id, 'Transfer');
+  v_diff :=
+    data.join_diffs(
+      v_diff,
+      pallas_project.change_money(v_object_id, v_object_current_sum + v_sum - coalesce(v_tax, 0), v_actor_id, 'Transfer'));
 
   perform pallas_project.notify_transfer_sender(v_actor_id, v_sum);
   perform pallas_project.notify_transfer_receiver(v_object_id, v_sum - coalesce(v_tax, 0));
@@ -11971,6 +11986,17 @@ begin
       v_object_id);
   assert v_notified;
 
+  if v_object_economy_type != '' then
+    v_groups := array[v_object_id];
+  else
+    v_groups :=
+      array[
+        data.get_object_id(v_object_code || '_head'),
+        data.get_object_id(v_object_code || '_economist'),
+        data.get_object_id(v_object_code || '_auditor'),
+        data.get_object_id(v_object_code || '_temporary_auditor')];
+  end if;
+
   perform pallas_project.create_transaction(
     v_actor_id,
     v_comment,
@@ -11978,7 +12004,8 @@ begin
     v_actor_current_sum - v_sum,
     v_tax,
     v_object_id,
-    v_actor_id);
+    v_actor_id,
+    array[v_actor_id]);
   perform pallas_project.create_transaction(
     v_object_id,
     v_comment,
@@ -11986,7 +12013,8 @@ begin
     v_object_current_sum + v_sum - coalesce(v_tax, 0),
     v_tax,
     v_actor_id,
-    v_actor_id);
+    v_actor_id,
+    v_groups);
 end;
 $$
 language plpgsql;
@@ -12878,6 +12906,46 @@ begin
       end if;
     end;
 
+    declare
+      v_lottery_id integer := data.get_object_id('lottery');
+      v_lottery_status text := json.get_string(data.get_attribute_value_for_share(v_lottery_id, 'lottery_status'));
+      v_generate boolean := false;
+      v_lottery_owner text;
+    begin
+      if v_lottery_status = 'active' then
+        if v_is_master or v_economy_type = 'asters' then
+          v_generate := true;
+        else
+          v_lottery_owner := json.get_string(data.get_attribute_value_for_share(v_lottery_id, 'system_lottery_owner'));
+          if v_lottery_owner = v_actor_code then
+            v_generate := true;
+          end if;
+        end if;
+
+        if v_generate then
+          v_actions :=
+            v_actions ||
+            jsonb '{
+              "lottery": {"code": "act_open_object", "name": "🇺🇳 Лотерея гражданства 🇺🇳", "disabled": false, "params": {"object_code": "lottery"}}
+            }';
+        end if;
+      end if;
+    end;
+
+    declare
+      v_groups jsonb := data.get_raw_attribute_value_for_share(data.get_object_id(v_actor_code || '_my_organizations'), 'content');
+    begin
+      if v_groups != jsonb '[]' then
+        v_actions :=
+          v_actions ||
+          format(
+            '{
+              "my_organizations": {"code": "act_open_object", "name": "Мои организации", "disabled": false, "params": {"object_code": "%s"}}
+            }',
+            v_actor_code || '_my_organizations')::jsonb;
+      end if;
+    end;
+
     v_actions :=
       v_actions ||
       jsonb '{
@@ -12894,32 +12962,6 @@ begin
       "districts": {"code": "act_open_object", "name": "Районы", "disabled": false, "params": {"object_code": "districts"}},
       "organizations": {"code": "act_open_object", "name": "Организации", "disabled": false, "params": {"object_code": "organizations"}}
     }';
-
-  declare
-    v_lottery_id integer := data.get_object_id('lottery');
-    v_lottery_status text := json.get_string(data.get_attribute_value_for_share(v_lottery_id, 'lottery_status'));
-    v_generate boolean := false;
-    v_lottery_owner text;
-  begin
-    if v_lottery_status = 'active' then
-      if v_is_master or v_economy_type = 'asters' then
-        v_generate := true;
-      else
-        v_lottery_owner := json.get_string(data.get_attribute_value_for_share(v_lottery_id, 'system_lottery_owner'));
-        if v_lottery_owner = v_actor_code then
-          v_generate := true;
-        end if;
-      end if;
-
-      if v_generate then
-        v_actions :=
-          v_actions ||
-          jsonb '{
-              "lottery": {"code": "act_open_object", "name": "🇺🇳 Лотерея гражданства 🇺🇳", "disabled": false, "params": {"object_code": "lottery"}}
-          }';
-      end if;
-    end if;
-  end;
 
   return v_actions;
 end;
@@ -13061,6 +13103,83 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.actgenerator_organization(integer, integer);
+
+create or replace function pallas_project.actgenerator_organization(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_object_code text := data.get_object_code(in_object_id);
+  v_master boolean := pp_utils.is_in_group(in_actor_id, 'master');
+  v_actor_economy_type text := json.get_string_opt(data.get_attribute_value_for_share(in_actor_id, 'system_person_economy_type'), null);
+  v_actor_money bigint;
+  v_has_read_rights boolean := pallas_project.can_see_organization(in_actor_id, v_object_code);
+  v_actions jsonb := jsonb '{}';
+begin
+  if v_master or v_has_read_rights then
+    v_actions :=
+      v_actions ||
+      format(
+        '{
+          "show_transactions": {
+            "code": "act_open_object",
+            "name": "Посмотреть историю транзакций",
+            "params": {
+              "object_code": "%s_transactions"
+            }
+          }
+        }',
+        v_object_code)::jsonb;
+  end if;
+
+  if v_actor_economy_type in ('asters', 'mcr') then
+    v_actor_money := json.get_bigint(data.get_attribute_value_for_share(in_actor_id, 'system_money'));
+    if v_actor_money <= 0 then
+      v_actions :=
+        v_actions ||
+        jsonb '{
+          "transfer_money": {
+            "name": "Перевести деньги",
+            "disabled": true
+          }
+        }';
+    else
+      v_actions :=
+        v_actions ||
+        format(
+          '{
+            "transfer_money": {
+              "code": "transfer_money",
+              "name": "Перевести деньги",
+              "params": "%s",
+              "user_params": [
+                {
+                  "code": "sum",
+                  "description": "Сумма, UN$",
+                  "type": "integer",
+                  "restrictions": {"min_value": 1, "max_value": %s}
+                },
+                {
+                  "code": "comment",
+                  "description": "Комментарий",
+                  "type": "string",
+                  "restrictions": {"max_length": 1000, "multiline": true}
+                }
+              ]
+            }
+          }',
+          v_object_code,
+          v_actor_money)::jsonb;
+    end if;
+  end if;
+
+  return v_actions;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.actgenerator_person(integer, integer);
 
 create or replace function pallas_project.actgenerator_person(in_object_id integer, in_actor_id integer)
@@ -13170,6 +13289,34 @@ begin
   end if;
 
   return v_actions;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.can_see_organization(integer, text);
+
+create or replace function pallas_project.can_see_organization(in_person_id integer, in_organization_code text)
+returns boolean
+stable
+as
+$$
+declare
+  v_has_read_rights boolean := false;
+begin
+  select true
+  into v_has_read_rights
+  where exists (
+    select 1
+    from data.object_objects
+    where
+      object_id = in_person_id and
+      parent_object_id in (
+        data.get_object_id(in_organization_code || '_head'),
+        data.get_object_id(in_organization_code || '_economist'),
+        data.get_object_id(in_organization_code || '_auditor'),
+        data.get_object_id(in_organization_code || '_temporary_auditor')));
+
+  return v_has_read_rights;
 end;
 $$
 language plpgsql;
@@ -13330,18 +13477,34 @@ as
 $$
 declare
   v_object_code text := data.get_object_code(in_object_id);
+  v_changes jsonb :=
+    jsonb '[]' ||
+    data.attribute_change2jsonb('system_money', to_jsonb(in_new_value));
+  v_money_attr_id integer := data.get_attribute_id('money');
+  v_value_object_id integer;
   v_diffs jsonb;
 begin
   -- Изменяемые объекты: сам объект, его страница покупки статусов (для астеров и марсиан)
+  for v_value_object_id in
+  (
+    select value_object_id
+    from data.attribute_values
+    where
+      object_id = in_object_id and
+      attribute_id = v_money_attr_id and
+      value_object_id is not null
+  )
+  loop
+    v_changes := v_changes || data.attribute_change2jsonb(v_money_attr_id, to_jsonb(in_new_value), v_value_object_id);
+  end loop;
+
   v_diffs :=
     data.change_object(
       in_object_id,
-      jsonb '[]' ||
-      data.attribute_change2jsonb('system_money', to_jsonb(in_new_value)) ||
-      data.attribute_change2jsonb('money', to_jsonb(in_new_value), in_object_id) ||
-      data.attribute_change2jsonb('money', to_jsonb(in_new_value), 'master'),
+      v_changes,
       in_actor_id,
       in_reason);
+
   if data.is_object_exists(v_object_code || '_next_statuses') then
     v_diffs :=
       v_diffs ||
@@ -13502,6 +13665,7 @@ declare
   v_head_group_id integer := data.create_object(in_object_code || '_head', jsonb '{}');
   v_economist_group_id integer := data.create_object(in_object_code || '_economist', jsonb '{}');
   v_auditor_group_id integer := data.create_object(in_object_code || '_auditor', jsonb '{}');
+  v_temporary_auditor_group_id integer := data.create_object(in_object_code || '_temporary_auditor', jsonb '{}');
   v_money jsonb := data.get_attribute_value(v_org_id, 'system_money');
   v_org_tax jsonb := data.get_attribute_value(v_org_id, 'system_org_tax');
   v_org_next_tax jsonb;
@@ -13519,6 +13683,7 @@ begin
   perform data.set_attribute_value(v_org_id, 'money', v_money, v_head_group_id);
   perform data.set_attribute_value(v_org_id, 'money', v_money, v_economist_group_id);
   perform data.set_attribute_value(v_org_id, 'money', v_money, v_auditor_group_id);
+  perform data.set_attribute_value(v_org_id, 'money', v_money, v_temporary_auditor_group_id);
 
   if v_org_tax is not null then
     v_org_next_tax := data.get_attribute_value(v_org_id, 'system_org_next_tax');
@@ -13571,20 +13736,41 @@ begin
     perform data.set_attribute_value(v_org_id, 'org_profit', v_value, v_head_group_id);
     perform data.set_attribute_value(v_org_id, 'org_profit', v_value, v_economist_group_id);
   end if;
+
+  -- Создадим страницу с историей транзакций
+  perform data.create_object(
+    in_object_code || '_transactions',
+    format(
+      '[
+        {"code": "title", "value": "%s"},
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "content", "value": []}
+      ]',
+      format('История транзакций, %s', json.get_string(data.get_attribute_value(v_org_id, 'title', v_org_id))),
+      v_head_group_id,
+      v_economist_group_id,
+      v_auditor_group_id,
+      v_temporary_auditor_group_id,
+      v_master_group_id)::jsonb,
+    'transactions');
 end;
 $$
 language plpgsql;
 
--- drop function pallas_project.create_person(text, jsonb, text[]);
+-- drop function pallas_project.create_person(text, text, jsonb, text[]);
 
-create or replace function pallas_project.create_person(in_login_code text, in_attributes jsonb, in_groups text[])
+create or replace function pallas_project.create_person(in_person_code text, in_login_code text, in_attributes jsonb, in_groups text[])
 returns void
 volatile
 as
 $$
 -- Не для использования на игре, т.к. обновляет атрибуты напрямую, без уведомлений и блокировок!
 declare
-  v_person_id integer := data.create_object(null, in_attributes, 'person', in_groups);
+  v_person_id integer := data.create_object(in_person_code, in_attributes, 'person', in_groups);
   v_person_code text := data.get_object_code(v_person_id);
   v_login_id integer;
   v_master_group_id integer := data.get_object_id('master');
@@ -13804,6 +13990,17 @@ begin
       perform data.set_attribute_value(v_district_id, 'content', v_content, v_master_group_id);
     end if;
   end;
+
+  -- Создадим "Мои организации"
+  perform data.create_object(
+    v_person_code || '_my_organizations',
+    format(
+      '[
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "content", "value": []}
+      ]',
+      v_person_id)::jsonb,
+    'my_organizations');
 end;
 $$
 language plpgsql;
@@ -13844,9 +14041,9 @@ end;
 $$
 language plpgsql;
 
--- drop function pallas_project.create_transaction(integer, text, bigint, bigint, bigint, integer, integer);
+-- drop function pallas_project.create_transaction(integer, text, bigint, bigint, bigint, integer, integer, integer[]);
 
-create or replace function pallas_project.create_transaction(in_object_id integer, in_comment text, in_value bigint, in_balance bigint, in_tax bigint, in_second_object_id integer, in_actor_id integer)
+create or replace function pallas_project.create_transaction(in_object_id integer, in_comment text, in_value bigint, in_balance bigint, in_tax bigint, in_second_object_id integer, in_actor_id integer, in_visible_object_ids integer[])
 returns void
 volatile
 as
@@ -13854,6 +14051,8 @@ $$
 declare
   v_object_code text := data.get_object_code(in_object_id);
   v_description text;
+  v_visible_object_id integer;
+  v_attributes jsonb;
   v_transaction_id integer;
   v_second_object_title text;
   v_second_object_code text;
@@ -13892,16 +14091,26 @@ begin
         pp_utils.format_money(in_balance));
   end if;
 
+  v_attributes :=
+    format(
+      '[
+        {"code": "mini_description", "value": %s}
+      ]',
+      to_jsonb(v_description)::text)::jsonb;
+
+  for v_visible_object_id in
+  (
+    select value
+    from unnest(in_visible_object_ids) a(value)
+  )
+  loop
+    v_attributes := v_attributes || format('{"code": "is_visible", "value": true, "value_object_id": %s}', v_visible_object_id)::jsonb;
+  end loop;
+
   v_transaction_id :=
     data.create_object(
       null,
-      format(
-        '[
-          {"code": "is_visible", "value": true, "value_object_id": %s},
-          {"code": "mini_description", "value": %s}
-        ]',
-        in_object_id,
-        to_jsonb(v_description)::text)::jsonb,
+      v_attributes,
       'transaction');
 
   perform pp_utils.list_prepend_and_notify(
@@ -14294,9 +14503,10 @@ begin
         "groups": [
           {"code": "menu_notifications", "actions": ["notifications"]},
           {"code": "menu_lottery", "actions": ["lottery"]},
-          {"code": "menu_group1", "actions": ["login", "profile"]},
-          {"code": "menu_group2", "actions": ["statuses", "next_statuses", "debatles", "chats", "all_chats", "persons", "districts", "organizations", "documents", "transactions", "important_notifications", "master_chats"]},
-          {"code": "menu_group3", "actions": ["logout"]}
+          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "chats", "master_chats", "documents", "my_organizations", "important_notifications"]},
+          {"code": "menu_social", "actions": ["all_chats", "debatles"]},
+          {"code": "menu_info", "actions": ["persons", "districts", "organizations"]},
+          {"code": "menu_logout", "actions": ["logout"]}
         ]
       }
     }');
@@ -14361,6 +14571,7 @@ begin
   perform pallas_project.init_districts();
   perform pallas_project.init_persons();
   perform pallas_project.init_organizations();
+  perform pallas_project.init_organization_roles();
   perform pallas_project.init_debatles();
   perform pallas_project.init_messenger();
   perform pallas_project.init_person_list();
@@ -15695,6 +15906,28 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.init_organization_roles();
+
+create or replace function pallas_project.init_organization_roles()
+returns void
+volatile
+as
+$$
+begin
+  -- Добавляем персонажей в организации
+  perform data.add_object_to_object(data.get_object_id('player1'), data.get_object_id('org_administration_head'));
+  perform data.add_object_to_object(data.get_object_id('player2'), data.get_object_id('org_administration_economist'));
+  perform data.add_object_to_object(data.get_object_id('player3'), data.get_object_id('org_administration_auditor'));
+  perform data.add_object_to_object(data.get_object_id('player4'), data.get_object_id('org_administration_temporary_auditor'));
+
+  perform data.set_attribute_value(data.get_object_id('player1_my_organizations'), 'content', jsonb '["org_administration"]');
+  perform data.set_attribute_value(data.get_object_id('player2_my_organizations'), 'content', jsonb '["org_administration"]');
+  perform data.set_attribute_value(data.get_object_id('player3_my_organizations'), 'content', jsonb '["org_administration"]');
+  perform data.set_attribute_value(data.get_object_id('player4_my_organizations'), 'content', jsonb '["org_administration"]');
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.init_organizations();
 
 create or replace function pallas_project.init_organizations()
@@ -15730,11 +15963,16 @@ begin
     jsonb '{
       "type": "organization",
       "is_visible": true,
+      "actions_function": "pallas_project.actgenerator_organization",
       "template": {
         "title": "title",
         "subtitle": "subtitle",
         "groups": [
-          {"code": "personal_info", "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_tax", "org_next_tax", "org_current_tax_sum", "org_districts_control", "org_districts_influence"]},
+          {
+            "code": "personal_info",
+            "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_tax", "org_next_tax", "org_current_tax_sum", "org_districts_control", "org_districts_influence"],
+            "actions": ["transfer_money", "show_transactions"]
+          },
           {"code": "info", "attributes": ["description"]}
         ]
       },
@@ -16019,18 +16257,6 @@ begin
         v_organization_list::text)::jsonb);
   end;
 
-  -- И класс для личных организаций
-  perform data.create_class(
-    'my_organizations',
-    jsonb '{
-      "title": "Мои организации",
-      "type": "organization_list",
-      "template": {
-        "title": "title",
-        "groups": []
-      }
-    }');
-
   -- Лёд: org_aqua_galactic, org_jonny_quick, org_midnight_diggers
   -- Продукты: org_alfa_prime, org_lenin_state_farm, org_ganymede_hydroponical_systems
   -- Медикаменты: org_merck, org_flora, org_vector
@@ -16215,16 +16441,29 @@ begin
       }
     }');
 
+  -- Класс для личных организаций
+  perform data.create_class(
+    'my_organizations',
+    jsonb '{
+      "title": "Мои организации",
+      "type": "organization_list",
+      "template": {
+        "title": "title",
+        "groups": []
+      }
+    }');
+
   -- Мастера
-  perform pallas_project.create_person('m1', jsonb '{"title": "Саша", "person_occupation": "Мастер"}', array['master']);
-  perform pallas_project.create_person('m2', jsonb '{"title": "Петя", "person_occupation": "Мастер"}', array['master']);
-  perform pallas_project.create_person('m3', jsonb '{"title": "Данил", "person_occupation": "Мастер"}', array['master']);
-  perform pallas_project.create_person('m4', jsonb '{"title": "Нина", "person_occupation": "Мастер"}', array['master']);
-  perform pallas_project.create_person('m5', jsonb '{"title": "Оля", "person_occupation": "Мастер"}', array['master']);
-  perform pallas_project.create_person('m6', jsonb '{"title": "Юра", "person_occupation": "Мастер"}', array['master']);
+  perform pallas_project.create_person(null, 'm1', jsonb '{"title": "Саша", "person_occupation": "Мастер"}', array['master']);
+  perform pallas_project.create_person(null, 'm2', jsonb '{"title": "Петя", "person_occupation": "Мастер"}', array['master']);
+  perform pallas_project.create_person(null, 'm3', jsonb '{"title": "Данил", "person_occupation": "Мастер"}', array['master']);
+  perform pallas_project.create_person(null, 'm4', jsonb '{"title": "Нина", "person_occupation": "Мастер"}', array['master']);
+  perform pallas_project.create_person(null, 'm5', jsonb '{"title": "Оля", "person_occupation": "Мастер"}', array['master']);
+  perform pallas_project.create_person(null, 'm6', jsonb '{"title": "Юра", "person_occupation": "Мастер"}', array['master']);
 
   -- Игроки
   perform pallas_project.create_person(
+    'player1',
     'p1',
     jsonb '{
       "title": "Джерри Адамс",
@@ -16242,6 +16481,7 @@ begin
       "person_district": "sector_A"}',
     array['all_person', 'un', 'player']);
   perform pallas_project.create_person(
+    'player2',
     'p2',
     jsonb '{
       "title": "Сьюзан Сидорова",
@@ -16258,6 +16498,7 @@ begin
       "person_district": "sector_E"}',
     array['all_person', 'opa', 'player', 'aster']);
   perform pallas_project.create_person(
+    'player3',
     'p3',
     jsonb '{
       "title": "Чарли Чандрасекар",
@@ -16275,6 +16516,7 @@ begin
       "person_district": "sector_B"}',
     array['all_person', 'un', 'player']);
   perform pallas_project.create_person(
+    'player4',
     'p4',
     jsonb '{
       "title": "Алисия Сильверстоун",
@@ -16291,6 +16533,7 @@ begin
       "person_district": "sector_D"}',
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
+    null,
     'p5',
     jsonb '{
       "title": "Амели Сноу",
@@ -16311,6 +16554,7 @@ begin
   -- Сантьяго де ла Крус - большой картель
 
   perform pallas_project.create_person(
+    null,
     'p10',
     jsonb '{
       "title": "АСС",
@@ -16318,6 +16562,7 @@ begin
     array['all_person']);
 
   perform pallas_project.create_person(
+    null,
     'p11',
     jsonb '{
       "title": "Шенг",
@@ -16778,16 +17023,45 @@ as
 $$
 declare
   v_type text := json.get_string(data.get_attribute_value(in_receiver_id, 'type', in_receiver_id));
+  v_transactions_id integer := data.get_object_id(data.get_object_code(in_receiver_id) || '_transactions');
+  v_org_code text;
+  v_org_person integer;
+  v_org_message text;
 begin
   if v_type = 'organization' then
-    -- todo
+    v_org_code := data.get_object_code(in_receiver_id);
+    v_org_message :=
+      format(
+        'Входящий перевод для организации [%s](babcom:%s) на сумму %s',
+        json.get_string(data.get_attribute_value(in_receiver_id, 'title', in_receiver_id)),
+        v_org_code,
+        pp_utils.format_money(in_money));
+
+    for v_org_person in
+    (
+      select distinct object_id
+      from data.object_objects
+      where
+        parent_object_id in (
+          data.get_object_id(v_org_code || '_head'),
+          data.get_object_id(v_org_code || '_economist'),
+          data.get_object_id(v_org_code || '_auditor'),
+          data.get_object_id(v_org_code || '_temporary_auditor')) and
+        object_id != parent_object_id
+    )
+    loop
+      perform pp_utils.add_notification(
+        v_org_person,
+        v_org_message,
+        v_transactions_id);
+    end loop;
   else
     assert v_type = 'person';
 
     perform pp_utils.add_notification(
       in_receiver_id,
       format('Входящий перевод на сумму %s', pp_utils.format_money(in_money)),
-      data.get_object_id(data.get_object_code(in_receiver_id) || '_transactions'));
+      v_transactions_id);
   end if;
 end;
 $$
@@ -16802,16 +17076,45 @@ as
 $$
 declare
   v_type text := json.get_string(data.get_attribute_value(in_sender_id, 'type', in_sender_id));
+  v_transactions_id integer := data.get_object_id(data.get_object_code(in_sender_id) || '_transactions');
+  v_org_code text;
+  v_org_person integer;
+  v_org_message text;
 begin
   if v_type = 'organization' then
-    -- todo
+    v_org_code := data.get_object_code(in_sender_id);
+    v_org_message :=
+      format(
+        'Исходящий перевод со счёта организации [%s](babcom:%s) на сумму %s',
+        json.get_string(data.get_attribute_value(in_sender_id, 'title', in_sender_id)),
+        v_org_code,
+        pp_utils.format_money(in_money));
+
+    for v_org_person in
+    (
+      select distinct object_id
+      from data.object_objects
+      where
+        parent_object_id in (
+          data.get_object_id(v_org_code || '_head'),
+          data.get_object_id(v_org_code || '_economist'),
+          data.get_object_id(v_org_code || '_auditor'),
+          data.get_object_id(v_org_code || '_temporary_auditor')) and
+        object_id != parent_object_id
+    )
+    loop
+      perform pp_utils.add_notification(
+        v_org_person,
+        v_org_message,
+        v_transactions_id);
+    end loop;
   else
     assert v_type = 'person';
 
     perform pp_utils.add_notification(
       in_sender_id,
       format('Списана сумма %s', pp_utils.format_money(in_money)),
-      data.get_object_id(data.get_object_code(in_sender_id) || '_transactions'));
+      v_transactions_id);
   end if;
 end;
 $$

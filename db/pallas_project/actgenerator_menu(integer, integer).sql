@@ -81,6 +81,46 @@ begin
       end if;
     end;
 
+    declare
+      v_lottery_id integer := data.get_object_id('lottery');
+      v_lottery_status text := json.get_string(data.get_attribute_value_for_share(v_lottery_id, 'lottery_status'));
+      v_generate boolean := false;
+      v_lottery_owner text;
+    begin
+      if v_lottery_status = 'active' then
+        if v_is_master or v_economy_type = 'asters' then
+          v_generate := true;
+        else
+          v_lottery_owner := json.get_string(data.get_attribute_value_for_share(v_lottery_id, 'system_lottery_owner'));
+          if v_lottery_owner = v_actor_code then
+            v_generate := true;
+          end if;
+        end if;
+
+        if v_generate then
+          v_actions :=
+            v_actions ||
+            jsonb '{
+              "lottery": {"code": "act_open_object", "name": "🇺🇳 Лотерея гражданства 🇺🇳", "disabled": false, "params": {"object_code": "lottery"}}
+            }';
+        end if;
+      end if;
+    end;
+
+    declare
+      v_groups jsonb := data.get_raw_attribute_value_for_share(data.get_object_id(v_actor_code || '_my_organizations'), 'content');
+    begin
+      if v_groups != jsonb '[]' then
+        v_actions :=
+          v_actions ||
+          format(
+            '{
+              "my_organizations": {"code": "act_open_object", "name": "Мои организации", "disabled": false, "params": {"object_code": "%s"}}
+            }',
+            v_actor_code || '_my_organizations')::jsonb;
+      end if;
+    end;
+
     v_actions :=
       v_actions ||
       jsonb '{
@@ -97,32 +137,6 @@ begin
       "districts": {"code": "act_open_object", "name": "Районы", "disabled": false, "params": {"object_code": "districts"}},
       "organizations": {"code": "act_open_object", "name": "Организации", "disabled": false, "params": {"object_code": "organizations"}}
     }';
-
-  declare
-    v_lottery_id integer := data.get_object_id('lottery');
-    v_lottery_status text := json.get_string(data.get_attribute_value_for_share(v_lottery_id, 'lottery_status'));
-    v_generate boolean := false;
-    v_lottery_owner text;
-  begin
-    if v_lottery_status = 'active' then
-      if v_is_master or v_economy_type = 'asters' then
-        v_generate := true;
-      else
-        v_lottery_owner := json.get_string(data.get_attribute_value_for_share(v_lottery_id, 'system_lottery_owner'));
-        if v_lottery_owner = v_actor_code then
-          v_generate := true;
-        end if;
-      end if;
-
-      if v_generate then
-        v_actions :=
-          v_actions ||
-          jsonb '{
-              "lottery": {"code": "act_open_object", "name": "🇺🇳 Лотерея гражданства 🇺🇳", "disabled": false, "params": {"object_code": "lottery"}}
-          }';
-      end if;
-    end if;
-  end;
 
   return v_actions;
 end;
