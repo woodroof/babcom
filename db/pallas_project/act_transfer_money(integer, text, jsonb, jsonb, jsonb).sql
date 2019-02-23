@@ -102,6 +102,7 @@ begin
       in_client_id,
       in_request_id,
       v_object_id);
+  -- Как минимум поменяется max_value у действия
   assert v_notified;
 
   if v_object_economy_type != '' then

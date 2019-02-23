@@ -4204,9 +4204,9 @@ begin
 
   select jsonb_agg(value)
   into v_ret_val
-  from jsonb_each(v_diffs1_object || v_diffs2_object);
+  from jsonb_each(coalesce(v_diffs1_object, jsonb '{}') || coalesce(v_diffs2_object, jsonb '{}'));
 
-  return v_ret_val;
+  return coalesce(v_ret_val, jsonb '[]');
 end;
 $$
 language plpgsql;
@@ -11984,6 +11984,7 @@ begin
       in_client_id,
       in_request_id,
       v_object_id);
+  -- Как минимум поменяется max_value у действия
   assert v_notified;
 
   if v_object_economy_type != '' then
