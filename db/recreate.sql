@@ -9945,7 +9945,7 @@ as
 $$
 declare
   v_actor_id integer := data.get_active_actor_id(in_client_id);
-  v_notifications_id integer := data.get_object_id('notifications');
+  v_notifications_id integer := data.get_object_id(data.get_object_code(v_actor_id) || '_notifications');
   v_notified boolean;
 begin
   perform data.change_object_and_notify(
@@ -9959,7 +9959,7 @@ begin
       in_client_id,
       in_request_id,
       v_notifications_id,
-      jsonb '[]' || data.attribute_change2jsonb('content', jsonb '[]', v_actor_id),
+      jsonb '[]' || data.attribute_change2jsonb('content', jsonb '[]'),
       'Open notification');
 
   if not v_notified then
@@ -10082,8 +10082,6 @@ declare
   v_debatle_person1 text := json.get_string_opt(data.get_attribute_value_for_share(v_debatle_id, 'debatle_person1'), null);
   v_debatle_target_audience text;
 
-  v_force_object_diff integer := json.get_integer_opt(data.get_attribute_value_for_update(v_list_id, 'force_object_diff'), 0);
-
   v_changes jsonb[];
   v_message_sent boolean;
 begin
@@ -10107,10 +10105,9 @@ begin
 
   perform data.change_object_and_notify(v_debatle_id, to_jsonb(v_changes), v_actor_id);
 
-  perform data.change_object_and_notify(v_list_id, jsonb_build_array(data.attribute_change2jsonb('force_object_diff', to_jsonb(v_force_object_diff + 1))), v_actor_id);
-
   v_changes := array[]::jsonb[];
   v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_target_audience', to_jsonb(v_debatle_target_audience)));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_target_audience', to_jsonb(v_system_debatle_target_audience)));
   v_message_sent := data.change_current_object(in_client_id,
                                                in_request_id,
                                                v_debatle_change_id, 
@@ -11840,15 +11837,14 @@ declare
   v_notification_id integer := data.get_object_id(v_notification_code);
   v_system_person_notification_count_attr_id integer := data.get_attribute_id('system_person_notification_count');
   v_content_attr_id integer := data.get_attribute_id('content');
-  v_notifications_id integer := data.get_object_id('notifications');
+  v_notifications_id integer := data.get_object_id(data.get_object_code(v_actor_id) || '_notifications');
   v_notifications_count integer := json.get_integer(data.get_attribute_value_for_update(v_actor_id, v_system_person_notification_count_attr_id)) - 1;
   v_content text[] :=
     array_remove(
-      json.get_string_array(data.get_raw_attribute_value_for_update(v_notifications_id, v_content_attr_id, v_actor_id)),
+      json.get_string_array(data.get_raw_attribute_value_for_update(v_notifications_id, v_content_attr_id)),
       v_notification_code);
   v_notified boolean;
 begin
-  perform data.set_attribute_value(v_notification_id, 'is_visible', jsonb 'false', v_actor_id);
   perform data.change_object_and_notify(
     v_actor_id,
     jsonb_build_object('system_person_notification_count', v_notifications_count),
@@ -11860,7 +11856,7 @@ begin
       in_client_id,
       in_request_id,
       v_notifications_id,
-      jsonb '[]' || data.attribute_change2jsonb('content', to_jsonb(v_content), v_actor_id),
+      jsonb '[]' || data.attribute_change2jsonb('content', to_jsonb(v_content)),
       'Open notification');
   assert v_notified;
 end;
@@ -12418,7 +12414,7 @@ declare
   v_debatle_id integer := data.get_object_id(v_debatle_code);
   v_list_code text := data.get_object_code(in_list_object_id);
   v_debatle_status text := json.get_string_opt(data.get_attribute_value_for_share(v_debatle_id, 'debatle_status'),'');
-  v_system_debatle_target_audience text[] := json.get_string_array_opt(data.get_attribute_value_for_share(v_debatle_id, 'system_debatle_target_audience'), array[]::text[]);
+  v_system_debatle_target_audience text[] := json.get_string_array_opt(data.get_attribute_value_for_share(in_object_id, 'system_debatle_target_audience'), array[]::text[]);
   v_is_in_array boolean;
 begin
   assert in_actor_id is not null;
@@ -14020,6 +14016,22 @@ begin
       ]',
       v_person_id)::jsonb,
     'my_organizations');
+
+  -- Уведомления
+  declare
+    v_notifications_id integer :=
+      data.create_object(
+        v_person_code || '_notifications',
+        format(
+          '[
+            {"code": "is_visible", "value": true, "value_object_id": %s},
+            {"code": "content", "value": []}
+          ]',
+          v_person_id)::jsonb,
+        'notification_list');
+  begin
+    perform data.set_attribute_value(data.get_object_id('notifications'), 'redirect', to_jsonb(v_notifications_id), v_person_id);
+  end;
 end;
 $$
 language plpgsql;
@@ -14137,104 +14149,6 @@ begin
     data.get_object_code(v_transaction_id),
     null,
     in_actor_id);
-end;
-$$
-language plpgsql;
-
--- drop function pallas_project.fcard_debatle(integer, integer);
-
-create or replace function pallas_project.fcard_debatle(in_object_id integer, in_actor_id integer)
-returns void
-volatile
-as
-$$
-declare
-  v_debatle_status text;
-  v_debatle_my_vote_attribute_id integer := data.get_attribute_id('debatle_my_vote');
-  v_debatle_person1_votes_attribute_id integer := data.get_attribute_id('debatle_person1_votes');
-  v_debatle_person2_votes_attribute_id integer := data.get_attribute_id('debatle_person2_votes');
-
-  v_system_debatle_person1_my_vote integer;
-  v_system_debatle_person2_my_vote integer;
-
-  v_system_debatle_person1_votes integer;
-  v_system_debatle_person2_votes integer;
-
-  v_debatle_person1_bonuses_json jsonb;
-  v_debatle_person2_bonuses_json jsonb;
-
-  v_debatle_person1_bonuses integer;
-  v_debatle_person2_bonuses integer;
-
-  v_new_title jsonb;
-  v_new_person1 jsonb;
-  v_new_person2 jsonb;
-  v_new_judge jsonb;
-  v_new_debatle_my_vote jsonb;
-  v_new_debatle_person1_votes jsonb;
-  v_new_debatle_person2_votes jsonb;
-begin
-  perform * from data.objects where id = in_object_id for update;
-
-  v_debatle_status := json.get_string(data.get_attribute_value(in_object_id,'debatle_status'));
-
-  --debatle_my_vote
-  if v_debatle_status in ('vote', 'vote_over', 'closed') then
-    v_system_debatle_person1_my_vote := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person1_my_vote', in_actor_id), 0);
-    v_system_debatle_person2_my_vote := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person2_my_vote', in_actor_id), 0);
-
-    if in_actor_id = v_person1_id 
-      or in_actor_id = v_person2_id 
-      or in_actor_id = v_judge_id 
-      or pp_utils.is_in_group(in_actor_id, 'master') then
-      v_new_debatle_my_vote := jsonb '"Вы не можете голосовать"';
-    elsif v_system_debatle_person1_my_vote = 0 and v_system_debatle_person2_my_vote = 0 then
-      if v_debatle_status = 'vote' then
-        v_new_debatle_my_vote := jsonb '"Вы ещё не проголосовали"';
-      else
-        v_new_debatle_my_vote := jsonb '"Вы не голосовали"';
-      end if;
-    elsif v_system_debatle_person1_my_vote > 0 then
-      v_new_debatle_my_vote := to_jsonb(format('Вы проголосовали за %s', json.get_string_opt(v_new_person1, 'зачинщика')));
-    elsif v_system_debatle_person2_my_vote > 0 then
-      v_new_debatle_my_vote := to_jsonb(format('Вы проголосовали за %s', json.get_string_opt(v_new_person2, 'оппонента')));
-    end if;
-    if coalesce(data.get_raw_attribute_value(in_object_id, v_debatle_my_vote_attribute_id, in_actor_id), jsonb '"~~~"') <> coalesce(v_new_debatle_my_vote, jsonb '"~~~"') then
-      perform data.set_attribute_value(in_object_id, v_debatle_my_vote_attribute_id, v_new_debatle_my_vote, in_actor_id, in_actor_id);
-    end if;
-
-    v_system_debatle_person1_votes := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person1_votes'), 0);
-    v_system_debatle_person2_votes := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person2_votes'), 0);
-
-    v_debatle_person1_bonuses_json := data.get_attribute_value(in_object_id, 'debatle_person1_bonuses');
-    v_debatle_person2_bonuses_json := data.get_attribute_value(in_object_id, 'debatle_person2_bonuses');
-
-    select coalesce(sum(x.votes), 0) into v_debatle_person1_bonuses from jsonb_to_recordset(v_debatle_person1_bonuses_json) as x(code text, name text, votes int);
-    select coalesce(sum(x.votes), 0) into v_debatle_person2_bonuses from jsonb_to_recordset(v_debatle_person2_bonuses_json) as x(code text, name text, votes int);
-
-    v_new_debatle_person1_votes := to_jsonb(format('Количество голосов за %s: %s + %s (от судьи) = %s',
-                                                    json.get_string_opt(v_new_person1, 'зачинщика'), 
-                                                    v_system_debatle_person1_votes, 
-                                                    v_debatle_person1_bonuses, 
-                                                    v_system_debatle_person1_votes + v_debatle_person1_bonuses));
-    v_new_debatle_person2_votes := to_jsonb(format('Количество голосов за %s: %s + %s (от судьи) = %s', 
-                                                    json.get_string_opt(v_new_person2, 'оппонента'), 
-                                                    v_system_debatle_person2_votes, 
-                                                    v_debatle_person2_bonuses,
-                                                    v_system_debatle_person2_votes + v_debatle_person2_bonuses));
-
-    if coalesce(data.get_raw_attribute_value(in_object_id, v_debatle_person1_votes_attribute_id, in_actor_id), jsonb '"~~~"') <> coalesce(v_new_debatle_person1_votes, jsonb '"~~~"') then
-      perform data.set_attribute_value(in_object_id, v_debatle_person1_votes_attribute_id, v_new_debatle_person1_votes, in_actor_id, in_actor_id);
-    end if;
-    if coalesce(data.get_raw_attribute_value(in_object_id, v_debatle_person2_votes_attribute_id, in_actor_id), jsonb '"~~~"') <> coalesce(v_new_debatle_person2_votes, jsonb '"~~~"') then
-      perform data.set_attribute_value(in_object_id, v_debatle_person2_votes_attribute_id, v_new_debatle_person2_votes, in_actor_id, in_actor_id);
-    end if;
-  end if;
-  --TODO 
-  -- разобрать json с аудиториями и вывести списком через запятую
-  -- посчитать стоимость голосования в зависимости от того, кто смотрит (астерам и марсианам по курсу коина, оон-овцам просто 1 коин)
-  -- разобрать бонусы и штрафы.показывать только судье, мастерам и участникам (при этом участникам без кнопок изменения)
-
 end;
 $$
 language plpgsql;
@@ -14585,17 +14499,18 @@ begin
     }');
 
   -- И пустой список уведомлений
-  perform data.create_object(
-    'notifications',
+  perform data.create_class(
+    'notification_list',
     jsonb '{
-      "is_visible": true,
       "title": "Уведомления",
       "template": {"title": "title", "groups": [{"code": "group", "actions": ["clear_notifications"]}]},
       "actions_function": "pallas_project.actgenerator_notifications",
       "list_actions_function": "pallas_project.actgenerator_notifications_content",
-      "list_element_function": "pallas_project.lef_notifications",
-      "content": []
+      "list_element_function": "pallas_project.lef_notifications"
     }');
+  perform data.create_object(
+    'notifications',
+    jsonb '{}');
 
   -- Создадим объект для страницы 404
   declare
@@ -14635,7 +14550,7 @@ begin
     jsonb '{
       "type": "notification",
       "touch_function": "pallas_project.touch_notification",
-      "template": {"groups": [{"code": "group", "attributes": ["title"], "actions": ["remove_notification"]}]}
+      "mini_card_template": {"groups": [{"code": "group", "attributes": ["title"], "actions": ["remove_notification"]}]}
     }');
 
   perform pallas_project.init_groups();
@@ -17096,7 +17011,7 @@ declare
   v_notifications_count integer := json.get_integer(data.get_attribute_value_for_update(v_actor_id, v_system_person_notification_count_attr_id)) - 1;
   v_content text[] :=
     array_remove(
-      json.get_string_array(data.get_raw_attribute_value_for_update(in_object_id, v_content_attr_id, v_actor_id)),
+      json.get_string_array(data.get_raw_attribute_value_for_update(in_object_id, v_content_attr_id)),
       data.get_object_code(in_list_object_id));
 begin
   perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, v_redirect_object_code);
@@ -17363,11 +17278,11 @@ declare
   v_notification_code text := data.get_object_code(in_object_id);
   v_system_person_notification_count_attr_id integer := data.get_attribute_id('system_person_notification_count');
   v_content_attr_id integer := data.get_attribute_id('content');
-  v_notifications_id integer := data.get_object_id('notifications');
+  v_notifications_id integer := data.get_object_id(data.get_object_code(v_actor_id) || '_notifications');
   v_notifications_count integer := json.get_integer(data.get_attribute_value_for_update(in_actor_id, v_system_person_notification_count_attr_id)) - 1;
   v_content text[] :=
     array_remove(
-      json.get_string_array(data.get_raw_attribute_value_for_update(v_notifications_id, v_content_attr_id, in_actor_id)),
+      json.get_string_array(data.get_raw_attribute_value_for_update(v_notifications_id, v_content_attr_id)),
       v_notification_code);
 begin
   perform data.set_attribute_value(in_object_id, 'is_visible', jsonb 'false', in_actor_id);
@@ -17378,7 +17293,7 @@ begin
     'Touch notification');
   perform data.change_current_object(
     v_notifications_id,
-    jsonb '[]' || data.attribute_change2jsonb('content', to_jsonb(v_content), in_actor_id),
+    jsonb '[]' || data.attribute_change2jsonb('content', to_jsonb(v_content)),
     in_actor_id,
     'Touch notification');
 end;
@@ -18064,7 +17979,7 @@ declare
   v_redirect_attribute_id integer := data.get_attribute_id('redirect');
   v_system_person_notification_count_attribute_id integer := data.get_attribute_id('system_person_notification_count');
 
-  v_notifications_id integer := data.get_object_id('notifications');
+  v_notifications_id integer := data.get_object_id(data.get_object_code(in_actor_id) || '_notifications');
   v_notification_count integer :=
     json.get_integer(data.get_attribute_value_for_update(in_actor_id, v_system_person_notification_count_attribute_id)) + 1;
 begin
@@ -18087,7 +18002,7 @@ begin
   end if;
 
   -- Вставляем в начало списка и рассылаем уведомления
-  perform pp_utils.list_prepend_and_notify(v_notifications_id, v_notification_code, in_actor_id);
+  perform pp_utils.list_prepend_and_notify(v_notifications_id, v_notification_code, null);
   perform data.change_object_and_notify(in_actor_id, jsonb '[]' || data.attribute_change2jsonb(v_system_person_notification_count_attribute_id, to_jsonb(v_notification_count)));
 
   if in_is_important then

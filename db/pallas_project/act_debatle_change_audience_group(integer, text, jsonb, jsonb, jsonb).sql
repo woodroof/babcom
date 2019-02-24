@@ -19,8 +19,6 @@ declare
   v_debatle_person1 text := json.get_string_opt(data.get_attribute_value_for_share(v_debatle_id, 'debatle_person1'), null);
   v_debatle_target_audience text;
 
-  v_force_object_diff integer := json.get_integer_opt(data.get_attribute_value_for_update(v_list_id, 'force_object_diff'), 0);
-
   v_changes jsonb[];
   v_message_sent boolean;
 begin
@@ -44,10 +42,9 @@ begin
 
   perform data.change_object_and_notify(v_debatle_id, to_jsonb(v_changes), v_actor_id);
 
-  perform data.change_object_and_notify(v_list_id, jsonb_build_array(data.attribute_change2jsonb('force_object_diff', to_jsonb(v_force_object_diff + 1))), v_actor_id);
-
   v_changes := array[]::jsonb[];
   v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_target_audience', to_jsonb(v_debatle_target_audience)));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_target_audience', to_jsonb(v_system_debatle_target_audience)));
   v_message_sent := data.change_current_object(in_client_id,
                                                in_request_id,
                                                v_debatle_change_id, 

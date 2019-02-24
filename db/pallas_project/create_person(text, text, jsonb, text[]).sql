@@ -238,6 +238,22 @@ begin
       ]',
       v_person_id)::jsonb,
     'my_organizations');
+
+  -- Уведомления
+  declare
+    v_notifications_id integer :=
+      data.create_object(
+        v_person_code || '_notifications',
+        format(
+          '[
+            {"code": "is_visible", "value": true, "value_object_id": %s},
+            {"code": "content", "value": []}
+          ]',
+          v_person_id)::jsonb,
+        'notification_list');
+  begin
+    perform data.set_attribute_value(data.get_object_id('notifications'), 'redirect', to_jsonb(v_notifications_id), v_person_id);
+  end;
 end;
 $$
 language plpgsql;

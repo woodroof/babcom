@@ -13,7 +13,7 @@ declare
   v_debatle_id integer := data.get_object_id(v_debatle_code);
   v_list_code text := data.get_object_code(in_list_object_id);
   v_debatle_status text := json.get_string_opt(data.get_attribute_value_for_share(v_debatle_id, 'debatle_status'),'');
-  v_system_debatle_target_audience text[] := json.get_string_array_opt(data.get_attribute_value_for_share(v_debatle_id, 'system_debatle_target_audience'), array[]::text[]);
+  v_system_debatle_target_audience text[] := json.get_string_array_opt(data.get_attribute_value_for_share(in_object_id, 'system_debatle_target_audience'), array[]::text[]);
   v_is_in_array boolean;
 begin
   assert in_actor_id is not null;

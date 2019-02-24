@@ -7,7 +7,7 @@ as
 $$
 declare
   v_actor_id integer := data.get_active_actor_id(in_client_id);
-  v_notifications_id integer := data.get_object_id('notifications');
+  v_notifications_id integer := data.get_object_id(data.get_object_code(v_actor_id) || '_notifications');
   v_notified boolean;
 begin
   perform data.change_object_and_notify(
@@ -21,7 +21,7 @@ begin
       in_client_id,
       in_request_id,
       v_notifications_id,
-      jsonb '[]' || data.attribute_change2jsonb('content', jsonb '[]', v_actor_id),
+      jsonb '[]' || data.attribute_change2jsonb('content', jsonb '[]'),
       'Open notification');
 
   if not v_notified then

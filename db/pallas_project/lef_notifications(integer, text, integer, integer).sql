@@ -13,7 +13,7 @@ declare
   v_notifications_count integer := json.get_integer(data.get_attribute_value_for_update(v_actor_id, v_system_person_notification_count_attr_id)) - 1;
   v_content text[] :=
     array_remove(
-      json.get_string_array(data.get_raw_attribute_value_for_update(in_object_id, v_content_attr_id, v_actor_id)),
+      json.get_string_array(data.get_raw_attribute_value_for_update(in_object_id, v_content_attr_id)),
       data.get_object_code(in_list_object_id));
 begin
   perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, v_redirect_object_code);

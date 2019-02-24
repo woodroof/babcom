@@ -16,7 +16,7 @@ declare
   v_redirect_attribute_id integer := data.get_attribute_id('redirect');
   v_system_person_notification_count_attribute_id integer := data.get_attribute_id('system_person_notification_count');
 
-  v_notifications_id integer := data.get_object_id('notifications');
+  v_notifications_id integer := data.get_object_id(data.get_object_code(in_actor_id) || '_notifications');
   v_notification_count integer :=
     json.get_integer(data.get_attribute_value_for_update(in_actor_id, v_system_person_notification_count_attribute_id)) + 1;
 begin
@@ -39,7 +39,7 @@ begin
   end if;
 
   -- Вставляем в начало списка и рассылаем уведомления
-  perform pp_utils.list_prepend_and_notify(v_notifications_id, v_notification_code, in_actor_id);
+  perform pp_utils.list_prepend_and_notify(v_notifications_id, v_notification_code, null);
   perform data.change_object_and_notify(in_actor_id, jsonb '[]' || data.attribute_change2jsonb(v_system_person_notification_count_attribute_id, to_jsonb(v_notification_count)));
 
   if in_is_important then

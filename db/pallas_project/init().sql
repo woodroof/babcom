@@ -60,17 +60,18 @@ begin
     }');
 
   -- И пустой список уведомлений
-  perform data.create_object(
-    'notifications',
+  perform data.create_class(
+    'notification_list',
     jsonb '{
-      "is_visible": true,
       "title": "Уведомления",
       "template": {"title": "title", "groups": [{"code": "group", "actions": ["clear_notifications"]}]},
       "actions_function": "pallas_project.actgenerator_notifications",
       "list_actions_function": "pallas_project.actgenerator_notifications_content",
-      "list_element_function": "pallas_project.lef_notifications",
-      "content": []
+      "list_element_function": "pallas_project.lef_notifications"
     }');
+  perform data.create_object(
+    'notifications',
+    jsonb '{}');
 
   -- Создадим объект для страницы 404
   declare
@@ -110,7 +111,7 @@ begin
     jsonb '{
       "type": "notification",
       "touch_function": "pallas_project.touch_notification",
-      "template": {"groups": [{"code": "group", "attributes": ["title"], "actions": ["remove_notification"]}]}
+      "mini_card_template": {"groups": [{"code": "group", "attributes": ["title"], "actions": ["remove_notification"]}]}
     }');
 
   perform pallas_project.init_groups();
