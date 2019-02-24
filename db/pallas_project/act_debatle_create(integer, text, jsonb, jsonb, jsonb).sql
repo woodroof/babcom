@@ -16,18 +16,21 @@ declare
 
   v_master_group_id integer := data.get_object_id('master');
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
+  v_system_debatle_confirm_presence_id_attribute_id integer := data.get_attribute_id('system_debatle_confirm_presence_id');
+  v_debatle_confirm_presence_link_attribute_id integer := data.get_attribute_id('debatle_confirm_presence_link');
+v_debatle_confirm_presence_id integer;
 begin
   assert in_request_id is not null;
   -- создаём новый дебатл
 
- v_debatle_id := data.create_object(
-  null,
-  jsonb_build_array(
-    jsonb_build_object('code', 'title', 'value', v_title),
-    jsonb_build_object('code', 'debatle_status', 'value', 'draft'),
-    jsonb_build_object('code', 'debatle_person1', 'value', to_jsonb(data.get_object_code(v_actor_id)))
-  ),
-  'debatle');
+  v_debatle_id := data.create_object(
+    null,
+    jsonb_build_array(
+      jsonb_build_object('code', 'title', 'value', v_title),
+      jsonb_build_object('code', 'debatle_status', 'value', 'draft'),
+      jsonb_build_object('code', 'debatle_person1', 'value', to_jsonb(data.get_object_code(v_actor_id)))
+    ),
+    'debatle');
 
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_debatle_id, v_is_visible_attribute_id, jsonb 'true', v_debatle_id);
@@ -37,11 +40,22 @@ begin
   v_debatle_code := data.get_object_code(v_debatle_id);
 
   perform data.create_object(
-  v_debatle_code || '_target_audience',
-  jsonb_build_array(
-    jsonb_build_object('code', 'is_visible', 'value', true, 'value_object_id', v_debatle_id)
-  ),
-  'debatle_target_audience');
+    v_debatle_code || '_target_audience',
+    jsonb_build_array(
+      jsonb_build_object('code', 'is_visible', 'value', true, 'value_object_id', v_debatle_id)
+    ),
+    'debatle_target_audience');
+
+  v_debatle_confirm_presence_id := data.create_object(
+    null,
+    jsonb_build_array(
+      jsonb_build_object('code', 'system_debatle_id', 'value', v_debatle_id)
+    ),
+    'debatle_confirm_presence');
+
+  insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
+  (v_debatle_id, v_system_debatle_confirm_presence_id_attribute_id, to_jsonb(v_debatle_confirm_presence_id), null),
+  (v_debatle_id, v_debatle_confirm_presence_link_attribute_id, to_jsonb(json.get_string_opt(data.get_param('objects_url'), '') || data.get_object_code(v_debatle_confirm_presence_id)), v_master_group_id);
 
   -- Добавляем дебатл в список всех и в список моих для того, кто создаёт
   perform pp_utils.list_prepend_and_notify(v_debatles_all_id, v_debatle_code, v_master_group_id, v_actor_id);

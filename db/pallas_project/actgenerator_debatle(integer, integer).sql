@@ -18,9 +18,14 @@ declare
   v_debatle_status text := json.get_string_opt(data.get_attribute_value_for_share(in_object_id, 'debatle_status'), null);
   v_title text := json.get_string_opt(data.get_raw_attribute_value_for_share(in_object_id, 'title'), '');
   v_subtitle text := json.get_string_opt(data.get_raw_attribute_value_for_share(in_object_id, 'subtitle'), '');
+  v_is_confirmed_presence boolean := json.get_boolean_opt(data.get_raw_attribute_value_for_share(in_object_id, 'system_debatle_is_confirmed_presence', in_actor_id), false);
   v_chat_id integer;
   v_chat_length integer;
   v_chat_unread integer;
+  v_person1_my_vote integer := json.get_integer_opt(data.get_raw_attribute_value_for_share(in_object_id, 'system_debatle_person1_my_vote', in_actor_id), 0);
+  v_person2_my_vote integer := json.get_integer_opt(data.get_raw_attribute_value_for_share(in_object_id, 'system_debatle_person2_my_vote', in_actor_id), 0);
+  v_economy_type text := json.get_string_opt(data.get_attribute_value_for_share(in_actor_id, 'system_person_economy_type'),'');
+  v_debatle_price_text text := case v_economy_type when 'un' then '1 коин' else pp_utils.format_money(data.get_integer_param('coin_price')) end;
 begin
   assert in_actor_id is not null;
   v_debatle_code := data.get_object_code(in_object_id);
@@ -39,6 +44,10 @@ begin
                 '"params": {"debatle_code": "%s"}, "user_params": [{"code": "subtitle", "description": "Введите место и время текстом", "type": "string", "default_value": "%s" }]}',
                 v_debatle_code,
                 v_subtitle);
+    v_actions_list := v_actions_list || 
+        format(', "debatle_refresh_link": {"code": "debatle_refresh_link", "name": "Обновить ссылку для QR-кода", "disabled": false, '||
+                '"params": {"debatle_code": "%s"}}',
+                v_debatle_code);
   end if;
 
   if v_is_master or in_actor_id = v_person1_id and v_debatle_status in ('draft') then
@@ -102,22 +111,25 @@ begin
   end if;
 
   if v_debatle_status in ('vote') 
+    and v_is_confirmed_presence
     and not v_is_master
     and v_person1_id is not null
     and v_person2_id is not null
     and v_judge_id is not null
     and in_actor_id not in (v_person1_id, v_person2_id, v_judge_id) then
       v_actions_list := v_actions_list || 
-        format(', "debatle_vote_person1": {"code": "debatle_vote", "name": "Голосовать за %s", "disabled": %s, '||
+        format(', "debatle_vote_person1": {"code": "debatle_vote", "name": "Голосовать за %s", "disabled": %s, %s'||
                 '"params": {"debatle_code": "%s", "voted_person": "instigator"}}',
                 json.get_string_opt(data.get_attribute_value(v_person1_id, 'title'), ''),
-                case when json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person1_my_vote', in_actor_id), 0) > 0 then 'true' else 'false' end,
+                case when v_person1_my_vote > 0 then 'true' else 'false' end,
+                case when v_person1_my_vote + v_person2_my_vote = 0 then '"warning": "Участие в голосовании стоит ' || v_debatle_price_text || '. Изменение голоса бесплатно.",' else '' end,
                 v_debatle_code);
      v_actions_list := v_actions_list || 
-        format(', "debatle_vote_person2": {"code": "debatle_vote", "name": "Голосовать за %s", "disabled": %s, '||
+        format(', "debatle_vote_person2": {"code": "debatle_vote", "name": "Голосовать за %s", "disabled": %s, %s'||
                 '"params": {"debatle_code": "%s", "voted_person": "opponent"}}',
                 json.get_string_opt(data.get_attribute_value(v_person2_id, 'title'), ''),
-                case when json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person2_my_vote', in_actor_id), 0) > 0 then 'true' else 'false' end,
+                case when v_person2_my_vote > 0 then 'true' else 'false' end,
+                case when v_person1_my_vote + v_person2_my_vote = 0 then '"warning": "Участие в голосовании стоит ' || v_debatle_price_text || '. Изменение голоса бесплатно.",' else '' end,
                 v_debatle_code);
   end if;
 

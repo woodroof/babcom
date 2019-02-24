@@ -20,7 +20,7 @@ declare
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
   v_title_attribute_id integer := data.get_attribute_id('title');
   v_debatle_temp_bonus_list_person_attribute_id integer := data.get_attribute_id('debatle_temp_bonus_list_person');
-  v_system_debatle_temp_bonus_list_debatle_id_attribute_id integer := data.get_attribute_id('system_debatle_temp_bonus_list_debatle_id');
+  v_system_debatle_temp_bonus_list_debatle_id_attribute_id integer := data.get_attribute_id('system_debatle_id');
   v_debatle_temp_bonus_list_bonuses_attribute_id integer := data.get_attribute_id('debatle_temp_bonus_list_bonuses');
   v_debatle_bonus_votes_attribute_id integer:= data.get_attribute_id('debatle_bonus_votes');
 

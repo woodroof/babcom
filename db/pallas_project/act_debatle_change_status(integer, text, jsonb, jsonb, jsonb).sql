@@ -27,6 +27,8 @@ declare
 
   v_content_attribute_id integer := data.get_attribute_id('content');
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
+  v_system_debatle_is_confirmed_presence_attribute_id integer := data.get_attribute_id('system_debatle_is_confirmed_presence');
+  v_debatle_my_vote_attribute_id integer := data.get_attribute_id('debatle_my_vote');
 
   v_content text[];
   v_new_content text[];
@@ -40,6 +42,7 @@ declare
 
   v_audience integer[] := pallas_project.get_groups_members(json.get_string_array_opt(data.get_attribute_value_for_share(v_debatle_id, 'system_debatle_target_audience'), array[]::text[]));
   v_person_id integer;
+  v_debatle_my_vote text;
 begin
   assert in_request_id is not null;
 
@@ -56,13 +59,17 @@ begin
       perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Зачинщик и оппонент дебатла должны быть заполнены');
       return;
     end if;
+    if v_audience is null or array_length(v_audience, 1) = 0 then
+      perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Целевая аудитория должна быть заполнена');
+      return;
+    end if;
     -- удаляем из неподтверждённых, добавляем в будущие
     perform pp_utils.list_remove_and_notify(v_debatles_new_id, v_debatle_code, null);
     perform pp_utils.list_prepend_and_notify(v_debatles_future_id, v_debatle_code, null, v_actor_id);
     -- Рассылаем уведомления
     for v_person_id in (select * from unnest(v_audience)
                         where unnest not in (coalesce(v_debatle_person1_id, -1), coalesce(v_debatle_person2_id, -1), coalesce(v_debatle_judge_id, -1))) loop
-      perform pp_utils.add_notification(v_person_id, 'Вы приглашены на дебатл ' || v_debatle_title|| '. Найдите его в разделе будущих дебатлов чтобы узнать подробности и обсудить событие', v_debatle_id);
+      perform pp_utils.add_notification(v_person_id, 'Вы приглашены на дебатл ' || v_debatle_title|| '. Найдите его в разделе будущих дебатлов, чтобы узнать подробности и обсудить событие', v_debatle_id);
     end loop;
     if v_debatle_person1_id is not null then
       perform pp_utils.add_notification(v_debatle_person1_id, 'Вы приглашены на дебатл ' || v_debatle_title|| ' в качестве зачинщика. Дебатлы, в которых вы участвуете, находятся в разделе Мои дебатлы', v_debatle_id);
@@ -108,7 +115,7 @@ begin
       perform pp_utils.list_remove_and_notify(v_debatles_closed_id, v_debatle_code, null);
     end if;
 
-    -- Рассылаем уведомления    
+    -- Рассылаем уведомления 
     if v_debatle_status in ('future', 'vote') then
       for v_person_id in (select * from unnest(v_audience)
                           where unnest not in (coalesce(v_debatle_person1_id, -1), coalesce(v_debatle_person2_id, -1), coalesce(v_debatle_judge_id, -1))) loop
@@ -134,8 +141,6 @@ begin
     return;
   end if;
 
-  perform * from data.objects where id = v_debatle_id for update;
-
   -- если статус поменялся на future, то надо добавить видимость второму участнику, судье и аудитории, плюс создать чатик
   if v_new_status = 'future' then
     if v_debatle_person2 is not null then 
@@ -144,7 +149,6 @@ begin
     if v_debatle_judge is not null then 
      v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', jsonb 'true', data.get_object_id(v_debatle_judge)));
     end if;
-    v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', jsonb 'true', v_debatle_id));
     perform pallas_project.create_chat(v_debatle_code || '_chat',
                    jsonb_build_object(
                    'content', jsonb '[]',
@@ -155,7 +159,66 @@ begin
                    'system_chat_can_rename', false,
                    'system_chat_length', 0
                  ));
+  elsif v_new_status = 'vote' then
+  -- Если стaтус поменялся на vote надо добавить всем инфу о ходе голосования
+    for v_person_id in (select * from unnest(pallas_project.get_debatle_spectators(v_debatle_id))) loop
+      if json.get_boolean_opt(data.get_raw_attribute_value_for_share(v_debatle_id, v_system_debatle_is_confirmed_presence_attribute_id, v_person_id), false) then
+        v_debatle_my_vote := 'Вы не голосовали';
+      else
+        v_debatle_my_vote := 'Отсканируйте QR-код на месте дебатла, чтобы голосовать';
+      end if;
+      v_changes := array_append(v_changes, data.attribute_change2jsonb(v_debatle_my_vote_attribute_id, to_jsonb(v_debatle_my_vote), v_person_id));
+    end loop;
+    v_debatle_my_vote := 'Вы не можете голосовать';
+    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_debatle_my_vote_attribute_id, to_jsonb(v_debatle_my_vote), v_debatle_person1_id));
+    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_debatle_my_vote_attribute_id, to_jsonb(v_debatle_my_vote), v_debatle_person2_id));
+    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_debatle_my_vote_attribute_id, to_jsonb(v_debatle_my_vote), v_debatle_judge_id));
+    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_debatle_my_vote_attribute_id, to_jsonb(v_debatle_my_vote), v_master_group_id));
+  elsif v_new_status = 'closed' then
+    -- При закрытии дебатла надо добавить единицу статуса победителю и забрать у проигравшего
+    declare
+      v_person1_opa_rating integer := json.get_integer_opt(data.get_raw_attribute_value_for_update(v_debatle_person1_id, 'person_opa_rating'), 0);
+      v_person2_opa_rating integer := json.get_integer_opt(data.get_raw_attribute_value_for_update(v_debatle_person2_id, 'person_opa_rating'), 0);
+      v_debatle_person1_bonuses jsonb := data.get_attribute_value_for_share(v_debatle_id, 'debatle_person1_bonuses');
+      v_debatle_person2_bonuses jsonb := data.get_attribute_value_for_share(v_debatle_id, 'debatle_person2_bonuses');
+      v_system_debatle_person1_votes integer := json.get_integer_opt(data.get_attribute_value_for_share(v_debatle_id, 'system_debatle_person1_votes'), 0);
+      v_system_debatle_person2_votes integer := json.get_integer_opt(data.get_attribute_value_for_share(v_debatle_id, 'system_debatle_person2_votes'), 0);
+      v_person1_votes integer;
+      v_person2_votes integer;
+      v_debatle_result text;
+    begin
+      select coalesce(sum(x.votes), 0) into v_person1_votes from jsonb_to_recordset(coalesce(v_debatle_person1_bonuses, jsonb '[]')) as x(code text, name text, votes int);
+      select coalesce(sum(x.votes), 0) into v_person2_votes from jsonb_to_recordset(coalesce(v_debatle_person2_bonuses, jsonb '[]')) as x(code text, name text, votes int);
+      v_person1_votes := v_person1_votes + v_system_debatle_person1_votes;
+      v_person2_votes := v_person2_votes + v_system_debatle_person2_votes;
+      if v_person1_votes > v_person2_votes then
+        v_person1_opa_rating := v_person1_opa_rating + 1;
+        if v_person2_opa_rating > 1 then
+          v_person1_opa_rating := v_person1_opa_rating - 1;
+        end if;
+        v_debatle_result := 'Дебатл ' || v_debatle_title || ' завершился победой ' || pp_utils.link(v_debatle_person1);
+      elsif v_person1_votes < v_person2_votes then
+        v_person2_opa_rating := v_person2_opa_rating + 1;
+        if v_person1_opa_rating > 1 then
+          v_person1_opa_rating := v_person1_opa_rating - 1;
+        end if;
+        v_debatle_result := 'Дебатл ' || v_debatle_title || ' завершился победой ' || pp_utils.link(v_debatle_person2);
+      else
+        v_debatle_result := 'Дебатл ' || v_debatle_title || ' завершился. Счёт голосов равный. Победитель не определён';
+      end if;
+      perform data.change_object_and_notify(v_debatle_person1_id,
+                                            jsonb_build_array(data.attribute_change2jsonb('person_opa_rating', to_jsonb(v_person1_opa_rating))), v_actor_id);
+      perform data.change_object_and_notify(v_debatle_person2_id,
+                                            jsonb_build_array(data.attribute_change2jsonb('person_opa_rating', to_jsonb(v_person2_opa_rating))), v_actor_id);
+      for v_person_id in (select * from unnest(pallas_project.get_debatle_spectators(v_debatle_id))) loop
+        perform pp_utils.add_notification(v_person_id, v_debatle_result, v_debatle_id);
+      end loop;
+      perform pp_utils.add_notification(v_debatle_person1_id, v_debatle_result, v_debatle_id);
+      perform pp_utils.add_notification(v_debatle_person2_id, v_debatle_result, v_debatle_id);
+      perform pp_utils.add_notification(v_debatle_judge_id, v_debatle_result, v_debatle_id);
+    end;
   end if;
+
   v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_status', to_jsonb(v_new_status)));
   v_message_sent := data.change_current_object(in_client_id,
                                                in_request_id,

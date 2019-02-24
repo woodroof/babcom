@@ -51,7 +51,7 @@ begin
     jsonb_build_object('code', 'is_visible', 'value', true, 'value_object_id', v_actor_id),
     jsonb_build_object('code', 'debatle_temp_person_list_edited_person', 'value', v_edited_person),
     jsonb_build_object('code', 'content', 'value', v_content),
-    jsonb_build_object('code', 'system_debatle_temp_person_list_debatle_id', 'value', v_debatle_id)
+    jsonb_build_object('code', 'system_debatle_id', 'value', v_debatle_id)
   ),
   'debatle_temp_person_list');
 

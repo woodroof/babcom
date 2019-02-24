@@ -8,7 +8,7 @@ $$
 declare
   v_actor_id  integer :=data.get_active_actor_id(in_client_id);
   v_edited_person text := json.get_string(data.get_attribute_value_for_share(in_object_id, 'debatle_temp_person_list_edited_person'));
-  v_debatle_id integer := json.get_integer(data.get_attribute_value_for_share(in_object_id, 'system_debatle_temp_person_list_debatle_id'));
+  v_debatle_id integer := json.get_integer(data.get_attribute_value_for_share(in_object_id, 'system_debatle_id'));
   v_debatle_code text := data.get_object_code(v_debatle_id);
   v_list_code text := data.get_object_code(in_list_object_id);
 

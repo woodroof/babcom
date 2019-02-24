@@ -18,17 +18,18 @@ begin
   ('debatle_person1_votes', null, 'Количество голосов за первого участника', 'normal', 'full', null, true),
   ('system_debatle_person2_votes', null, 'Количество голосов за второго участника', 'system', null, null, false),
   ('debatle_person2_votes', null, 'Количество голосов за второго участника', 'normal', 'full', null, true),
-  ('debatle_vote_price', 'Стоимость голосования', null, 'normal', 'full', null, true),
   ('debatle_person1_bonuses', 'Штрафы и бонусы зачинщика', null, 'normal', 'full', 'pallas_project.vd_debatle_bonuses', false),
   ('debatle_person2_bonuses', 'Штрафы и бонусы оппонента', null, 'normal', 'full', 'pallas_project.vd_debatle_bonuses', false),
   ('system_debatle_person1_my_vote', null, 'Количество голосов каждого голосующего за первого участника', 'system', null, null, true),
   ('system_debatle_person2_my_vote', null, 'Количество голосов каждого голосующего за второго участника', 'system', null, null, true),
   ('debatle_my_vote', null, 'Уведомление игрока о том, за кого он проголосовал', 'normal', 'full', null, true),
+  ('system_debatle_is_confirmed_presence', null, 'Признак подтверждённого присутствия на дебатле', 'system', null , null, true),
+  ('system_debatle_confirm_presence_id', null, 'Id объекта для подтверждения присутствия на дебатле', 'system', null , null, false),
+  ('debatle_confirm_presence_link', 'Ссылка для QR-кода', 'Ссылка для QR-кода', 'normal', 'full' , null, true),
   -- для временных объектов 
   ('debatle_temp_person_list_edited_person', null, 'Редактируемая персона в дебатле', 'normal', 'full', 'pallas_project.vd_debatle_temp_person_list_edited_person', false),
-  ('system_debatle_temp_person_list_debatle_id', null, 'Идентификатор дебатла для списка редактирования персон', 'system', null, null, false),
+  ('system_debatle_id', null, 'Идентификатор дебатла для списка редактирования персон', 'system', null, null, false),
   ('debatle_temp_bonus_list_person', null, 'Персона, которой начисляем бонусы и штрафы', 'normal', 'full', 'pallas_project.vd_debatle_temp_bonus_list_person', false),
-  ('system_debatle_temp_bonus_list_debatle_id', null, 'Идентификатор дебатла для списка редактирования бонусов и штрафов', 'system', null, null, false),
   ('debatle_temp_bonus_list_bonuses', 'Уже имеющиеся бонусы и штрафы', 'Уже имеющиеся бонусы и штрафы', 'normal', 'full', 'pallas_project.vd_debatle_bonuses', false),
   ('debatle_bonus_votes', 'Количество голосов' , 'Количество голосов бонуса или штрафа', 'normal', null, null, false);
 
@@ -176,8 +177,8 @@ begin
         },
         {
           "code": "debatle_group3",
-          "attributes": ["debatle_person1_votes", "debatle_person2_votes", "debatle_vote_price", "debatle_my_vote"],
-          "actions": ["debatle_vote_person1", "debatle_vote_person2"]
+          "attributes": ["debatle_confirm_presence_link","debatle_person1_votes", "debatle_person2_votes", "debatle_vote_price", "debatle_my_vote"],
+          "actions": ["debatle_refresh_link","debatle_vote_person1", "debatle_vote_person2"]
         },
         {
           "code": "debatle_group4",
@@ -202,6 +203,7 @@ begin
     {"code": "is_visible", "value": true, "value_object_code": "master"},
     {"code": "actions_function", "value": "pallas_project.actgenerator_debatle_target_audience"},
     {"code": "list_actions_function", "value": "pallas_project.actgenerator_debatle_target_audience_content"},
+    {"code": "list_element_function", "value": "pallas_project.lef_do_nothing"},
     {"code": "content", "value": ["all_person", "aster", "opa", "cartel"]},
     {
       "code": "template",
@@ -212,6 +214,30 @@ begin
             "code": "debatle_target_audience_group1",
             "attributes": ["debatle_target_audience"],
             "actions": ["go_back"]
+          }
+        ]
+      }
+    }
+  ]');
+
+  -- Объект-класс для подтверждения присутствия
+  perform data.create_class(
+  'debatle_confirm_presence',
+  jsonb '[
+    {"code": "type", "value": "debatle_confirm_presence"},
+    {"code": "title", "value": "Подтверждение"},
+    {"code": "description", "value": "Спасибо что подтвердили своё присутствие на дебатле"},
+    {"code": "is_visible", "value": true},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_debatle_confirm_presence"},
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "groups": [
+          {
+            "code": "debatle_confirm_presence_group1",
+            "attributes": ["description"],
+            "actions": ["debatle_confirm_presence"]
           }
         ]
       }
@@ -353,10 +379,12 @@ begin
   ('debatle_change_theme', 'pallas_project.act_debatle_change_theme'),
   ('debatle_change_status', 'pallas_project.act_debatle_change_status'),
   ('debatle_vote', 'pallas_project.act_debatle_vote'),
-  ('debatle_change_bonuses','pallas_project.act_debatle_change_bonuses'),
-  ('debatle_change_other_bonus','pallas_project.act_debatle_change_other_bonus'),
-  ('debatle_change_subtitle','pallas_project.act_debatle_change_subtitle'),
-  ('debatle_change_audience_group','pallas_project.act_debatle_change_audience_group');
+  ('debatle_change_bonuses', 'pallas_project.act_debatle_change_bonuses'),
+  ('debatle_change_other_bonus', 'pallas_project.act_debatle_change_other_bonus'),
+  ('debatle_change_subtitle', 'pallas_project.act_debatle_change_subtitle'),
+  ('debatle_change_audience_group', 'pallas_project.act_debatle_change_audience_group'),
+  ('debatle_confirm_presence', 'pallas_project.act_debatle_confirm_presence'),
+  ('debatle_refresh_link', 'pallas_project.act_debatle_refresh_link');
 
 end;
 $$
