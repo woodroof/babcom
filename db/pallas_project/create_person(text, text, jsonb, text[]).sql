@@ -208,7 +208,7 @@ begin
       v_is_person := pp_utils.is_in_group(v_person_id, 'player');
 
       if v_is_person then
-        select jsonb_agg(o.code order by data.get_attribute_value(o.id, data.get_attribute_id('title'), o.id))
+        select jsonb_agg(o.code order by data.get_attribute_value(o.id, data.get_attribute_id('title')))
         into v_content
         from jsonb_array_elements(data.get_raw_attribute_value(v_district_id, 'content') || to_jsonb(v_person_code)) arr
         join data.objects o on
@@ -218,7 +218,7 @@ begin
       end if;
 
       -- Для мастера видны все персонажи
-      select jsonb_agg(o.code order by data.get_attribute_value(o.id, data.get_attribute_id('title'), o.id))
+      select jsonb_agg(o.code order by data.get_attribute_value(o.id, data.get_attribute_id('title')))
       into v_content
       from jsonb_array_elements(data.get_raw_attribute_value(v_district_id, 'content', v_master_group_id) || to_jsonb(v_person_code)) arr
       join data.objects o on

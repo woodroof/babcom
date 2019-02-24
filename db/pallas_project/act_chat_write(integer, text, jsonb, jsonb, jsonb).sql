@@ -36,7 +36,7 @@ declare
   v_new_content text[];
   v_message_sent boolean := false;
 
-  v_actor_title text := json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id, v_actor_id));
+  v_actor_title text := json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id));
   v_title text := pp_utils.format_date(clock_timestamp()) || E'\n' || v_actor_title;
 
   v_chat_unread_messages integer;

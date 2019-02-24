@@ -66,7 +66,6 @@ begin
   (v_chats_id, v_type_attribute_id, jsonb '"chats"', null),
   (v_chats_id, v_is_visible_attribute_id, jsonb 'true', null),
   (v_chats_id, v_title_attribute_id, jsonb '"Чаты"', null),
-  (v_chats_id, v_title_attribute_id, jsonb '"Отслеживаемые игровые чаты"', v_master_group_id),
   (v_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"', null),
   (v_chats_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chats"', null),
   (v_chats_id, v_content_attribute_id, jsonb '[]', null),
@@ -111,8 +110,7 @@ begin
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_master_chats_id, v_type_attribute_id, jsonb '"chats"', null),
   (v_master_chats_id, v_is_visible_attribute_id, jsonb 'true', null),
-  (v_master_chats_id, v_title_attribute_id, jsonb '"Связь с мастерами"', null),
-  (v_master_chats_id, v_title_attribute_id, jsonb '"Мастерские чаты"', v_master_group_id),
+  (v_master_chats_id, v_title_attribute_id, jsonb '"Общение с мастерами"', null),
   (v_master_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"', null),
   (v_master_chats_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chats"', null),
   (v_master_chats_id, v_content_attribute_id, jsonb '[]', null),
@@ -254,7 +252,7 @@ begin
       null,
       jsonb_build_object(
         'content', jsonb '[]',
-        'title', 'Мастерский для ' || json.get_string_opt(data.get_attribute_value(v_person_id, v_title_attribute_id, v_person_id),' '),
+        'title', 'Мастерский для ' || json.get_string(data.get_attribute_value(v_person_id, v_title_attribute_id)),
         'system_chat_is_renamed', true,
         'system_chat_can_invite', false,
         'system_chat_can_leave', false,

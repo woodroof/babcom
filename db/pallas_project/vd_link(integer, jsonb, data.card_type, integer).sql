@@ -6,7 +6,7 @@ stable
 as
 $$
 begin
-  return pp_utils.link(json.get_string(in_value), in_actor_id);
+  return pp_utils.link(json.get_string(in_value));
 end;
 $$
 language plpgsql;

@@ -10,7 +10,7 @@ declare
   v_master_list jsonb;
 begin
   -- Список для игроков
-  select jsonb_agg(o.code order by data.get_attribute_value(o.id, 'title', o.id))
+  select jsonb_agg(o.code order by data.get_attribute_value(o.id, 'title'))
   into v_list
   from data.object_objects oo
   join data.objects o on
@@ -20,7 +20,7 @@ begin
     oo.object_id != oo.parent_object_id;
 
   -- Список для мастеров
-  select jsonb_agg(o.code order by data.get_attribute_value(o.id, 'title', o.id))
+  select jsonb_agg(o.code order by data.get_attribute_value(o.id, 'title'))
   into v_master_list
   from data.object_objects oo
   join data.objects o on
@@ -36,8 +36,7 @@ begin
       {"code": "is_visible", "value": true},
       {"code": "type", "value": "persons"},
       {"code": "template", "value": {"title": "title", "groups": []}},
-      {"code": "title", "value": "Люди \"Паллады\""},
-      {"code": "title", "value": "Все персонажи", "value_object_code": "master"}
+      {"code": "title", "value": "Люди \"Паллады\""}
     ]' ||
     data.attribute_change2jsonb('content', v_list) ||
     data.attribute_change2jsonb('content', v_master_list, 'master'));

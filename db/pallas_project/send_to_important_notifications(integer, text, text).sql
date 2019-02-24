@@ -21,7 +21,7 @@ declare
   v_chat_id integer := json.get_integer_opt(data.get_attribute_value(v_important_notifications_id, 'redirect', in_actor_id), null);
 
   v_chat_bot_id integer := data.get_object_id('chat_bot');
-  v_chat_bot_title text := json.get_string(data.get_attribute_value(v_chat_bot_id, v_title_attribute_id, in_actor_id));
+  v_chat_bot_title text := json.get_string(data.get_attribute_value(v_chat_bot_id, v_title_attribute_id));
 
   v_title text := pp_utils.format_date(clock_timestamp());
   v_object_title text;
@@ -38,7 +38,7 @@ begin
   assert v_chat_id is not null;
 
   if in_object_code is not null then
-    v_text := in_text || E'\n\n' || pp_utils.link(in_object_code, in_actor_id);
+    v_text := in_text || E'\n\n' || pp_utils.link(in_object_code);
   else
     v_text := in_text;
   end if;

@@ -14,7 +14,7 @@ declare
   v_system_document_temp_share_list integer[] := json.get_integer_array_opt(data.get_attribute_value(v_share_list_id, 'system_document_temp_share_list'), array[]::integer[]);
 
   v_person_id integer;
-  v_message text := 'Пользователь "' || json.get_string_opt(data.get_attribute_value(v_actor_id, 'title', v_actor_id), 'Неизвестный') || '" поделился с вами документом';
+  v_message text := 'Пользователь "' || json.get_string(data.get_attribute_value(v_actor_id, 'title')) || '" поделился с вами документом';
 begin
   assert in_request_id is not null;
 

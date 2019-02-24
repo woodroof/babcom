@@ -13,11 +13,11 @@ declare
     json.get_object_opt(
       (
         case when in_card_type = 'full' then
-          data.get_attribute_value(in_object_id, 'template', in_actor_id)
+          data.get_attribute_value(in_object_id, 'template')
         else
           coalesce(
-            data.get_attribute_value(in_object_id, 'mini_card_template', in_actor_id),
-            data.get_attribute_value(in_object_id, 'template', in_actor_id))
+            data.get_attribute_value(in_object_id, 'mini_card_template'),
+            data.get_attribute_value(in_object_id, 'template'))
         end
       ),
       null);

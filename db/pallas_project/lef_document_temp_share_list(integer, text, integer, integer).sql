@@ -29,7 +29,7 @@ begin
   v_system_document_temp_share_list := array_append(v_system_document_temp_share_list, in_list_object_id);
   v_changes := array_append(v_changes, data.attribute_change2jsonb(v_system_document_temp_share_list_attribute_id, to_jsonb(v_system_document_temp_share_list)));
 
-  v_document_temp_share_list := v_document_temp_share_list || E'\n' || json.get_string_opt(data.get_attribute_value(in_list_object_id, 'title', v_actor_id), '');
+  v_document_temp_share_list := v_document_temp_share_list || E'\n' || json.get_string_opt(data.get_attribute_value(in_list_object_id, 'title'), '');
   v_changes := array_append(v_changes, data.attribute_change2jsonb(v_document_temp_share_list_attribute_id, to_jsonb(v_document_temp_share_list)));
 
   v_content := array_remove(v_content, data.get_object_code(in_list_object_id));

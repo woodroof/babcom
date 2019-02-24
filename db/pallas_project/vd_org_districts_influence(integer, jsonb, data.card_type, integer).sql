@@ -12,7 +12,7 @@ begin
   select E'\n' || string_agg(format('[%s](babcom:%s): %s', title, code, influence), E'\n')
   into v_ret_val
   from (
-    select key code, json.get_string(data.get_attribute_value(key, v_title_attr_id, in_actor_id)) title, json.get_integer(value) influence
+    select key code, json.get_string(data.get_attribute_value(key, v_title_attr_id)) title, json.get_integer(value) influence
     from jsonb_each(in_value)
     order by title) a;
 

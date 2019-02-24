@@ -110,13 +110,13 @@ begin
       v_actions_list := v_actions_list || 
         format(', "debatle_vote_person1": {"code": "debatle_vote", "name": "Голосовать за %s", "disabled": %s, '||
                 '"params": {"debatle_code": "%s", "voted_person": "instigator"}}',
-                json.get_string_opt(data.get_attribute_value(v_person1_id, 'title', in_actor_id), ''),
+                json.get_string_opt(data.get_attribute_value(v_person1_id, 'title'), ''),
                 case when json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person1_my_vote', in_actor_id), 0) > 0 then 'true' else 'false' end,
                 v_debatle_code);
      v_actions_list := v_actions_list || 
         format(', "debatle_vote_person2": {"code": "debatle_vote", "name": "Голосовать за %s", "disabled": %s, '||
                 '"params": {"debatle_code": "%s", "voted_person": "opponent"}}',
-                json.get_string_opt(data.get_attribute_value(v_person2_id, 'title', in_actor_id), ''),
+                json.get_string_opt(data.get_attribute_value(v_person2_id, 'title'), ''),
                 case when json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person2_my_vote', in_actor_id), 0) > 0 then 'true' else 'false' end,
                 v_debatle_code);
   end if;
@@ -126,12 +126,12 @@ begin
       v_actions_list := v_actions_list || 
         format(', "debatle_change_bonuses1": {"code": "debatle_change_bonuses", "name": "Оштрафовать или наградить %s", "disabled": false, '||
                 '"params": {"debatle_code": "%s", "judged_person": "instigator"}}',
-                json.get_string_opt(data.get_attribute_value(v_person1_id, 'title', in_actor_id), ''),
+                json.get_string_opt(data.get_attribute_value(v_person1_id, 'title'), ''),
                 v_debatle_code);
      v_actions_list := v_actions_list || 
         format(', "debatle_change_bonuses2": {"code": "debatle_change_bonuses", "name": "Оштрафовать или наградить %s", "disabled": false, '||
                 '"params": {"debatle_code": "%s", "judged_person": "opponent"}}',
-                json.get_string_opt(data.get_attribute_value(v_person2_id, 'title', in_actor_id), ''),
+                json.get_string_opt(data.get_attribute_value(v_person2_id, 'title'), ''),
                 v_debatle_code);
   end if;
 

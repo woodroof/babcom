@@ -20,7 +20,6 @@ declare
   v_tax_organization_id integer;
   v_tax_sum bigint;
   v_tax_coeff numeric;
-  v_diff jsonb;
   v_single_diff jsonb;
   v_notified boolean;
   v_groups integer[];
@@ -69,11 +68,17 @@ begin
     end;
   end if;
 
-  v_diff := pallas_project.change_money(v_actor_id, v_actor_current_sum - v_sum, v_actor_id, 'Transfer');
-  v_diff :=
-    data.join_diffs(
-      v_diff,
-      pallas_project.change_money(v_object_id, v_object_current_sum + v_sum - coalesce(v_tax, 0), v_actor_id, 'Transfer'));
+  v_notified :=
+    data.process_diffs_and_notify_current_object(
+      pallas_project.change_money(v_actor_id, v_actor_current_sum - v_sum, v_actor_id, 'Transfer'),
+      in_client_id,
+      in_request_id,
+      v_object_id);
+  -- Как минимум поменяется max_value у действия
+  assert v_notified;
+
+  perform data.process_diffs_and_notify(
+    pallas_project.change_money(v_object_id, v_object_current_sum + v_sum - coalesce(v_tax, 0), v_actor_id, 'Transfer'));
 
   perform pallas_project.notify_transfer_sender(v_actor_id, v_sum);
   perform pallas_project.notify_transfer_receiver(v_object_id, v_sum - coalesce(v_tax, 0));
@@ -95,15 +100,6 @@ begin
       v_actor_id,
       'Transfer tax');
   end if;
-
-  v_notified :=
-    data.process_diffs_and_notify_current_object(
-      v_diff,
-      in_client_id,
-      in_request_id,
-      v_object_id);
-  -- Как минимум поменяется max_value у действия
-  assert v_notified;
 
   if v_object_economy_type != '' then
     v_groups := array[v_object_id];

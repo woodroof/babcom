@@ -57,7 +57,7 @@ begin
       end if;
     end loop;
 
-    v_text := 'Лотерея завершена. Победитель: ' || pp_utils.link(v_aster_id, null);
+    v_text := 'Лотерея завершена. Победитель: ' || pp_utils.link(v_aster_id);
 
     -- Отправляем уведомление игрокам
     for v_player_id in

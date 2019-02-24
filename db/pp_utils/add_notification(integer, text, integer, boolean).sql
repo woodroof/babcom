@@ -22,10 +22,11 @@ declare
 begin
   if in_redirect_object is not null then
     v_object_code := data.get_object_code(in_redirect_object);
-    v_notification_title := in_text || E'\n\n' || pp_utils.link(v_object_code, in_actor_id);
+    v_notification_title := in_text || E'\n\n' || pp_utils.link(v_object_code);
   else
     v_notification_title := in_text;
   end if;
+
   -- создаём новый объект для нотификации
   insert into data.objects(class_id) values(data.get_class_id('notification')) returning id, code into v_notification_id, v_notification_code;
 

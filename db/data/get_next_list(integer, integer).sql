@@ -6,10 +6,11 @@ volatile
 as
 $$
 declare
-  v_page_size integer := data.get_integer_param('page_size');
-  v_object_code text := data.get_object_code(in_object_id);
+  v_page_size integer;
+  v_object_code text;
   v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_last_object_id integer;
+  v_content_value jsonb;
   v_content text[];
   v_client_subscription_id integer;
   v_object record;
@@ -19,11 +20,19 @@ declare
   v_has_more boolean := false;
   v_objects jsonb[] := array[]::jsonb[];
 begin
-  assert v_page_size > 0;
-
   assert v_actor_id is not null;
 
-  v_content = json.get_string_array(data.get_attribute_value(in_object_id, 'content', v_actor_id));
+  v_content_value := data.get_attribute_value(in_object_id, 'content', v_actor_id);
+  if v_content_value is null then
+    return null;
+  end if;
+
+  v_page_size := data.get_integer_param('page_size');
+  assert v_page_size > 0;
+
+  v_object_code := data.get_object_code(in_object_id);
+
+  v_content = json.get_string_array(v_content_value);
   assert array_utils.is_unique(v_content);
   assert array_position(v_content, v_object_code) is null;
 

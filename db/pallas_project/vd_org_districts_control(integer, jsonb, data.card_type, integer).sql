@@ -17,7 +17,7 @@ begin
   select string_agg(format('[%s](babcom:%s)', title, code), ', ')
   into v_description
   from (
-    select code, json.get_string(data.get_attribute_value(id, v_title_attr_id, in_actor_id)) title
+    select code, json.get_string(data.get_attribute_value(id, v_title_attr_id)) title
     from (
       select value code, data.get_object_id(value) id
       from unnest(v_districts) a(value)) d

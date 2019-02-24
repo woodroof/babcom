@@ -11,13 +11,12 @@ declare
   v_set_visible integer[];
   v_set_invisible integer[];
 
+  v_content_attr_id integer;
   v_subscription record;
   v_full_card_function text;
-  v_actor_id integer;
   v_subscription_object_code text;
   v_new_data jsonb;
   v_object jsonb;
-  v_old_content jsonb;
   v_new_content jsonb;
   v_remove_list_changes jsonb;
   v_add_list_changes jsonb;
@@ -31,13 +30,17 @@ begin
     return v_ret_val;
   end if;
 
+  v_content_attr_id := data.get_attribute_id('content');
+
   for v_subscription in
   (
     select
       json.get_integer(value, 'id') as id,
       json.get_integer(value, 'client_id') as client_id,
       json.get_integer(value, 'object_id') as object_id,
+      json.get_integer(value, 'actor_id') as actor_id,
       json.get_object(value, 'data') as data,
+      json.get_array_opt(value, 'content', null) as content,
       json.get_array(value, 'list_objects') as list_objects
     from jsonb_array_elements(in_state)
   )
@@ -47,17 +50,15 @@ begin
         data.get_attribute_value(v_subscription.object_id, 'full_card_function'),
         null);
 
-    v_actor_id := data.get_active_actor_id(v_subscription.client_id);
-
     if v_full_card_function is not null then
       execute format('select %s($1, $2)', v_full_card_function)
-      using v_subscription.object_id, v_actor_id;
+      using v_subscription.object_id, v_subscription.actor_id;
     end if;
 
     v_subscription_object_code := data.get_object_code(v_subscription.object_id);
 
     -- Объект стал невидимым - отправляем специальный diff и вычищаем подписки
-    if not json.get_boolean_opt(data.get_attribute_value(v_subscription.object_id, 'is_visible', v_actor_id), false) then
+    if not json.get_boolean_opt(data.get_attribute_value(v_subscription.object_id, 'is_visible', v_subscription.actor_id), false) then
       v_ret_val :=
         v_ret_val ||
         jsonb_build_object(
@@ -77,7 +78,7 @@ begin
       continue;
     end if;
 
-    v_new_data := data.get_object(v_subscription.object_id, v_actor_id, 'full', v_subscription.object_id);
+    v_new_data := data.get_object(v_subscription.object_id, v_subscription.actor_id, 'full', v_subscription.object_id);
 
     v_object := null;
     v_list_changes := jsonb '{}';
@@ -88,17 +89,17 @@ begin
     -- Сравниваем и при нахождении различий включаем в diff
     if v_new_data != v_subscription.data then
       v_object := v_new_data;
-      v_old_content := json.get_array_opt(json.get_object_opt(json.get_object(v_subscription.data, 'attributes'), 'content', jsonb '{}'), 'value', null);
-      v_new_content := json.get_array_opt(json.get_object_opt(json.get_object(v_new_data, 'attributes'), 'content', jsonb '{}'), 'value', null);
     end if;
 
-    if v_old_content is distinct from v_new_content then
+    v_new_content := data.get_attribute_value(v_subscription.object_id, v_content_attr_id, v_subscription.actor_id);
+
+    if v_subscription.content is distinct from v_new_content then
       declare
         v_content_diff jsonb;
         v_add jsonb;
         v_remove jsonb;
       begin
-        v_content_diff := data.calc_content_diff(v_old_content, v_new_content);
+        v_content_diff := data.calc_content_diff(v_subscription.content, v_new_content);
 
         v_add := json.get_array(v_content_diff, 'add');
         v_remove := json.get_array(v_content_diff, 'remove');
@@ -166,7 +167,7 @@ begin
                     data.get_attribute_value(
                       v_object_id,
                       'is_visible',
-                      v_actor_id),
+                      v_subscription.actor_id),
                     false);
 
                 if v_add_element.position is not null then
@@ -211,7 +212,7 @@ begin
                   v_add_list_change :=
                     jsonb_build_object(
                       'object',
-                      data.get_object(v_object_id, v_actor_id, 'mini', v_subscription.object_id));
+                      data.get_object(v_object_id, v_subscription.actor_id, 'mini', v_subscription.object_id));
                   if v_position is not null then
                     v_add_list_change := v_add_list_change || jsonb_build_object('position', v_position);
                   end if;
@@ -256,17 +257,17 @@ begin
 
           if v_mini_card_function is not null then
             execute format('select %s($1, $2)', v_mini_card_function)
-            using v_list.object_id, v_actor_id;
+            using v_list.object_id, v_subscription.actor_id;
           end if;
 
-          if not json.get_boolean_opt(data.get_attribute_value(v_list.object_id, 'is_visible', v_actor_id), false) then
+          if not json.get_boolean_opt(data.get_attribute_value(v_list.object_id, 'is_visible', v_subscription.actor_id), false) then
             if v_list.is_visible then
               v_set_invisible := array_append(v_set_invisible, v_list.id);
 
               v_remove_list_changes := v_remove_list_changes || to_jsonb(data.get_object_code(v_list.object_id));
             end if;
           else
-            v_new_list_data := data.get_object(v_list.object_id, v_actor_id, 'mini', v_subscription.object_id);
+            v_new_list_data := data.get_object(v_list.object_id, v_subscription.actor_id, 'mini', v_subscription.object_id);
 
             if not v_list.is_visible or v_new_list_data != v_list.data then
               if not v_list.is_visible then

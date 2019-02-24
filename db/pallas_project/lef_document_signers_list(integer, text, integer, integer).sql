@@ -12,7 +12,6 @@ declare
   v_system_document_participants jsonb;
   v_document_participants text;
   v_document_signers_list_participants text;
-  v_title_attribute_id integer := data.get_attribute_id('title');
 
   v_list_object_code text := data.get_object_code(in_list_object_id);
 

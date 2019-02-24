@@ -54,7 +54,7 @@ begin
     select
       o.id id,
       o.code as code,
-      json.get_object_opt(data.get_attribute_value(la.actor_id, 'template', la.actor_id), null) as template
+      json.get_object_opt(data.get_attribute_value(la.actor_id, 'template'), null) as template
     from data.login_actors la
     join data.objects o
       on o.id = la.actor_id

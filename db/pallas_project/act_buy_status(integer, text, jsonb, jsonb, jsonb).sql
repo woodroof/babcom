@@ -40,9 +40,11 @@ begin
   end if;
 
   if v_economy_type = 'un' then
-    v_diff := pallas_project.change_coins(v_actor_id, (v_current_sum - v_price)::integer, v_actor_id, 'Status purchase');
+    perform data.process_diffs_and_notify(
+      pallas_project.change_coins(v_actor_id, (v_current_sum - v_price)::integer, v_actor_id, 'Status purchase'));
   else
-    v_diff := pallas_project.change_money(v_actor_id, v_current_sum - v_price, v_actor_id, 'Status purchase');
+    perform data.process_diffs_and_notify(
+      pallas_project.change_money(v_actor_id, v_current_sum - v_price, v_actor_id, 'Status purchase'));
     perform pallas_project.create_transaction(
       v_actor_id,
       format(
@@ -55,14 +57,14 @@ begin
       null,
       v_actor_id);
   end if;
-  v_diff := data.join_diffs(v_diff, pallas_project.change_next_status(v_actor_id, v_status_name, v_status_value, v_actor_id, 'Status purchase'));
 
   v_notified :=
     data.process_diffs_and_notify_current_object(
-      v_diff,
+      pallas_project.change_next_status(v_actor_id, v_status_name, v_status_value, v_actor_id, 'Status purchase'),
       in_client_id,
       in_request_id,
       data.get_object_id(data.get_object_code(v_actor_id) || '_next_statuses'));
+  -- Поменялся статус - уйдут кнопки
   assert v_notified;
 end;
 $$

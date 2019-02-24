@@ -115,7 +115,6 @@ begin
   -- Меняем состояние объекта
   declare
     v_change record;
-    v_content_attribute_id integer := data.get_attribute_id('content');
   begin
     for v_change in
     (

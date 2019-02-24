@@ -37,7 +37,7 @@ begin
   perform * from data.objects where id = v_debatle_id for update;
 
   v_bonus_code := data.get_object_code(in_list_object_id);
-  v_bonus_name := json.get_string_opt(data.get_attribute_value(in_list_object_id, 'title', v_actor_id), '');
+  v_bonus_name := json.get_string_opt(data.get_attribute_value(in_list_object_id, 'title'), '');
   v_bonus_votes := json.get_integer_opt(data.get_attribute_value(in_list_object_id, 'debatle_bonus_votes'), 1);
 
   if v_judged_person = 'instigator' then

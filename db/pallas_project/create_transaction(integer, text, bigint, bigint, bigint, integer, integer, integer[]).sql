@@ -20,7 +20,7 @@ begin
   assert in_tax is null or in_tax >= 0 and in_tax <= abs(in_value);
 
   if in_second_object_id is not null then
-    v_second_object_title := json.get_string_opt(data.get_attribute_value(in_second_object_id, 'title', in_object_id), null);
+    v_second_object_title := json.get_string_opt(data.get_attribute_value(in_second_object_id, 'title'), null);
     if v_second_object_title is not null then
       v_second_object_code := data.get_object_code(in_second_object_id);
     end if;

@@ -23,7 +23,7 @@ declare
   v_master_group_id integer := data.get_object_id('master');
 
   v_chat_bot_id integer := data.get_object_id('chat_bot');
-  v_chat_bot_title text := json.get_string(data.get_attribute_value(v_chat_bot_id, v_title_attribute_id, v_master_group_id));
+  v_chat_bot_title text := json.get_string(data.get_attribute_value(v_chat_bot_id, v_title_attribute_id));
 
   v_title text := pp_utils.format_date(clock_timestamp()) || E'\n' || v_chat_bot_title;
 
@@ -33,7 +33,7 @@ declare
   v_chat_unread_messages_attribute_id integer := data.get_attribute_id('chat_unread_messages');
 begin
   if in_object_code is not null then
-    v_text := in_text || ' ' || pp_utils.link(in_object_code, v_master_group_id);
+    v_text := in_text || ' ' || pp_utils.link(in_object_code);
   else
    v_text := in_text;
   end if;

@@ -720,7 +720,7 @@ begin
     select
       o.id id,
       o.code as code,
-      json.get_object_opt(data.get_attribute_value(la.actor_id, 'template', la.actor_id), null) as template
+      json.get_object_opt(data.get_attribute_value(la.actor_id, 'template'), null) as template
     from data.login_actors la
     join data.objects o
       on o.id = la.actor_id
@@ -806,6 +806,7 @@ begin
   end if;
 
   v_list := data.get_next_list(in_client_id, v_object_id);
+  assert v_list is not null;
 
   perform api_utils.create_notification(in_client_id, in_request_id, 'object_list', jsonb_build_object('list', v_list));
 end;
@@ -1061,8 +1062,8 @@ begin
   values(in_client_id, v_object_id);
 
   -- Получаем список, если есть
-  if v_object->'attributes' ? 'content' then
-    v_list := data.get_next_list(in_client_id, v_object_id);
+  v_list := data.get_next_list(in_client_id, v_object_id);
+  if v_list is not null then
     perform api_utils.create_notification(in_client_id, in_request_id, 'object', jsonb_build_object('object', v_object, 'list', v_list));
   else
     perform api_utils.create_notification(in_client_id, in_request_id, 'object', jsonb_build_object('object', v_object));
@@ -1761,7 +1762,6 @@ begin
   -- Меняем состояние объекта
   declare
     v_change record;
-    v_content_attribute_id integer := data.get_attribute_id('content');
   begin
     for v_change in
     (
@@ -3130,10 +3130,11 @@ volatile
 as
 $$
 declare
-  v_page_size integer := data.get_integer_param('page_size');
-  v_object_code text := data.get_object_code(in_object_id);
+  v_page_size integer;
+  v_object_code text;
   v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_last_object_id integer;
+  v_content_value jsonb;
   v_content text[];
   v_client_subscription_id integer;
   v_object record;
@@ -3143,11 +3144,19 @@ declare
   v_has_more boolean := false;
   v_objects jsonb[] := array[]::jsonb[];
 begin
-  assert v_page_size > 0;
-
   assert v_actor_id is not null;
 
-  v_content = json.get_string_array(data.get_attribute_value(in_object_id, 'content', v_actor_id));
+  v_content_value := data.get_attribute_value(in_object_id, 'content', v_actor_id);
+  if v_content_value is null then
+    return null;
+  end if;
+
+  v_page_size := data.get_integer_param('page_size');
+  assert v_page_size > 0;
+
+  v_object_code := data.get_object_code(in_object_id);
+
+  v_content = json.get_string_array(v_content_value);
   assert array_utils.is_unique(v_content);
   assert array_position(v_content, v_object_code) is null;
 
@@ -3228,11 +3237,11 @@ declare
     json.get_object_opt(
       (
         case when in_card_type = 'full' then
-          data.get_attribute_value(in_object_id, 'template', in_actor_id)
+          data.get_attribute_value(in_object_id, 'template')
         else
           coalesce(
-            data.get_attribute_value(in_object_id, 'mini_card_template', in_actor_id),
-            data.get_attribute_value(in_object_id, 'template', in_actor_id))
+            data.get_attribute_value(in_object_id, 'mini_card_template'),
+            data.get_attribute_value(in_object_id, 'template'))
         end
       ),
       null);
@@ -3943,7 +3952,7 @@ begin
     null,
     false
   ),
-  ('content', null, 'Массив идентификаторов объектов списка, integer[]', 'hidden', 'full', null, true),
+  ('content', null, 'Массив кодов объектов списка, text[]', 'system', null, null, true),
   (
     'full_card_function',
     null,
@@ -3983,7 +3992,7 @@ begin
     null,
     false
   ),
-  ('mini_card_template', null, 'Шаблон миникарточки объекта, object', 'system', null, null, true),
+  ('mini_card_template', null, 'Шаблон миникарточки объекта, object', 'system', null, null, false),
   (
     'priority',
     null,
@@ -3994,10 +4003,10 @@ begin
     false
   ),
   ('redirect', null, 'Содержит идентификатор объекта, который должен быть возвращён вместо запрошенного при получении полной карточки объекта, integer.', 'system', null, null, true),
-  ('subtitle', null, 'Подзаголовок, string', 'normal', null, null, true),
-  ('template', null, 'Шаблон объекта, object', 'system', null, null, true),
+  ('subtitle', null, 'Подзаголовок, string', 'normal', null, null, false),
+  ('template', null, 'Шаблон объекта, object', 'system', null, null, false),
   ('temporary_object', null, 'Атрибут, наличие которого говорит о том, что открытый объект не нужно сохранять в истории', 'hidden', 'full', null, false),
-  ('title', null, 'Заголовок, string', 'normal', null, null, true),
+  ('title', null, 'Заголовок, string', 'normal', null, null, false),
   (
     'touch_function',
     null,
@@ -4008,7 +4017,7 @@ begin
     null,
     false
   ),
-  ('type', null, 'Тип объекта, string', 'hidden', null, null, true);
+  ('type', null, 'Тип объекта, string', 'hidden', null, null, false);
 
   insert into data.params(code, value, description) values
   ('page_size', jsonb '10', 'Количество элементов списка, получаемых за один раз'),
@@ -4177,36 +4186,6 @@ begin
   end if;
 
   return v_ret_val;
-end;
-$$
-language plpgsql;
-
--- drop function data.join_diffs(jsonb, jsonb);
-
-create or replace function data.join_diffs(in_diffs1 jsonb, in_diffs2 jsonb)
-returns jsonb
-immutable
-as
-$$
--- Функция пока не поддерживает объединение diff'ов с изменениями списков
-declare
-  v_diffs1_object jsonb;
-  v_diffs2_object jsonb;
-  v_ret_val jsonb;
-begin
-  select jsonb_object_agg(json.get_string(value, 'object_id') || '#' || json.get_integer(value, 'client_id'), value)
-  into v_diffs1_object
-  from jsonb_array_elements(in_diffs1);
-
-  select jsonb_object_agg(json.get_string(value, 'object_id') || '#' || json.get_integer(value, 'client_id'), value)
-  into v_diffs2_object
-  from jsonb_array_elements(in_diffs2);
-
-  select jsonb_agg(value)
-  into v_ret_val
-  from jsonb_each(coalesce(v_diffs1_object, jsonb '{}') || coalesce(v_diffs2_object, jsonb '{}'));
-
-  return coalesce(v_ret_val, jsonb '[]');
 end;
 $$
 language plpgsql;
@@ -4481,215 +4460,6 @@ end;
 $$
 language plpgsql;
 
--- drop function data.process_saved_state(jsonb);
-
-create or replace function data.process_saved_state(in_state jsonb)
-returns jsonb
-volatile
-as
-$$
-declare
-  v_ret_val jsonb := jsonb '[]';
-
-  v_set_visible integer[];
-  v_set_invisible integer[];
-
-  v_subscription record;
-  v_full_card_function text;
-  v_subscription_object_code text;
-  v_new_data jsonb;
-  v_object jsonb;
-  v_list_changes jsonb;
-  v_ret_val_element jsonb;
-begin
-  assert json.is_object_array(in_state);
-
-  if in_state = jsonb '[]' then
-    return v_ret_val;
-  end if;
-
-  for v_subscription in
-  (
-    select
-      json.get_integer(value, 'id') as id,
-      json.get_integer(value, 'client_id') as client_id,
-      json.get_integer(value, 'object_id') as object_id,
-      json.get_object(value, 'data') as data,
-      json.get_array(value, 'list_objects') as list_objects
-    from jsonb_array_elements(in_state)
-  )
-  loop
-    v_full_card_function :=
-      json.get_string_opt(
-        data.get_attribute_value(v_subscription.object_id, 'full_card_function'),
-        null);
-
-    if v_full_card_function is not null then
-      execute format('select %s($1, $2)', v_full_card_function)
-      using v_subscription.object_id, in_object_id;
-    end if;
-
-    v_subscription_object_code := data.get_object_code(v_subscription.object_id);
-
-    -- Объект стал невидимым - отправляем специальный diff и вычищаем подписки
-    if not json.get_boolean_opt(data.get_attribute_value(v_subscription.object_id, 'is_visible', in_object_id), false) then
-      v_ret_val :=
-        v_ret_val ||
-        jsonb_build_object(
-          'object_id',
-          v_subscription_object_code,
-          'client_id',
-          v_subscription.client_id,
-          'object',
-          jsonb 'null');
-
-      delete from data.client_subscription_objects
-      where client_subscription_id = v_subscription.id;
-
-      delete from data.client_subscriptions
-      where id = v_subscription.id;
-
-      continue;
-    end if;
-
-    v_new_data := data.get_object(v_subscription.object_id, in_object_id, 'full', v_subscription.object_id);
-
-    v_object := null;
-    v_list_changes := jsonb '{}';
-
-    -- Сравниваем и при нахождении различий включаем в diff
-    if v_new_data != v_subscription.data then
-      v_object := v_new_data;
-    end if;
-
-    if v_subscription.list_objects != jsonb '[]' then
-      declare
-        v_list record;
-        v_mini_card_function text;
-        v_new_list_data jsonb;
-        v_add jsonb;
-        v_position_object_id integer;
-      begin
-        for v_list in
-        (
-          select
-            json.get_integer(value, 'id') as id,
-            json.get_integer(value, 'object_id') as object_id,
-            json.get_boolean(value, 'is_visible') as is_visible,
-            json.get_integer(value, 'index') as index,
-            json.get_object_opt(value, 'data', null) as data
-          from jsonb_array_elements(v_subscription.list_objects)
-        )
-        loop
-          v_mini_card_function :=
-            json.get_string_opt(
-              data.get_attribute_value(v_list.object_id, 'mini_card_function'),
-              null);
-
-          if v_mini_card_function is not null then
-            execute format('select %s($1, $2)', v_mini_card_function)
-            using v_list.object_id, in_object_id;
-          end if;
-
-          if not json.get_boolean_opt(data.get_attribute_value(v_list.object_id, 'is_visible', in_object_id), false) then
-            if v_list.is_visible then
-              v_set_invisible := array_append(v_set_invisible, v_list.id);
-
-              v_ret_val :=
-                v_ret_val ||
-                jsonb_build_object(
-                  'object_id',
-                  v_subscription_object_code,
-                  'client_id',
-                  v_subscription.client_id,
-                  'list_changes',
-                  jsonb_build_object('remove', jsonb_build_array(data.get_object_code(v_list.object_id))));
-            end if;
-          else
-            v_new_list_data := data.get_object(v_list.object_id, in_object_id, 'mini', v_subscription.object_id);
-
-            if not v_list.is_visible or v_new_list_data != v_list.data then
-              if not v_list.is_visible then
-                v_set_visible := array_append(v_set_visible, v_list.id);
-
-                v_add := jsonb_build_object('object', v_new_list_data);
-
-                select s.value
-                into v_position_object_id
-                from (
-                  select first_value(object_id) over(order by index) as value
-                  from data.client_subscription_objects
-                  where
-                    client_subscription_id = v_subscription.id and
-                    index > v_list.index and
-                    is_visible is true
-                ) s
-                limit 1;
-
-                if v_position_object_id is not null then
-                  v_add := v_add || jsonb_build_object('position', data.get_object_code(v_position_object_id));
-                end if;
-
-                v_ret_val :=
-                  v_ret_val ||
-                  jsonb_build_object(
-                    'object_id',
-                    v_subscription_object_code,
-                    'client_id',
-                    v_subscription.client_id,
-                    'list_changes',
-                    jsonb_build_object(
-                      'add',
-                      jsonb_build_array(v_add)));
-              else
-                v_ret_val :=
-                  v_ret_val ||
-                  jsonb_build_object(
-                    'object_id',
-                    v_subscription_object_code,
-                    'client_id',
-                    v_subscription.client_id,
-                    'list_changes',
-                    jsonb_build_object('change', jsonb_build_array(v_new_list_data)));
-              end if;
-            end if;
-          end if;
-        end loop;
-      end;
-    end if;
-
-    if v_object is not null or v_list_changes != jsonb '{}' then
-      v_ret_val_element := jsonb_build_object('object_id', v_subscription_object_code, 'client_id', v_subscription.client_id);
-
-      if v_object is not null then
-      v_ret_val_element := v_ret_val_element || jsonb_build_object('object', v_object);
-      end if;
-
-      if v_list_changes!= jsonb '{}' then
-        v_ret_val_element := v_ret_val_element || jsonb_build_object('list_changes', v_list_changes);
-      end if;
-
-      v_ret_val := v_ret_val || v_ret_val_element;
-    end if;
-  end loop;
-
-  if v_set_visible is not null then
-    update data.client_subscription_objects
-    set is_visible = true
-    where id = any(v_set_visible);
-  end if;
-
-  if v_set_invisible is not null then
-    update data.client_subscription_objects
-    set is_visible = false
-    where id = any(v_set_invisible);
-  end if;
-
-  return v_ret_val;
-end;
-$$
-language plpgsql;
-
 -- drop function data.remove_object_from_object(integer, integer, integer, text);
 
 create or replace function data.remove_object_from_object(in_object_id integer, in_parent_object_id integer, in_actor_id integer default null::integer, in_reason text default null::text)
@@ -4960,13 +4730,12 @@ declare
   v_set_visible integer[];
   v_set_invisible integer[];
 
+  v_content_attr_id integer;
   v_subscription record;
   v_full_card_function text;
-  v_actor_id integer;
   v_subscription_object_code text;
   v_new_data jsonb;
   v_object jsonb;
-  v_old_content jsonb;
   v_new_content jsonb;
   v_remove_list_changes jsonb;
   v_add_list_changes jsonb;
@@ -4980,13 +4749,17 @@ begin
     return v_ret_val;
   end if;
 
+  v_content_attr_id := data.get_attribute_id('content');
+
   for v_subscription in
   (
     select
       json.get_integer(value, 'id') as id,
       json.get_integer(value, 'client_id') as client_id,
       json.get_integer(value, 'object_id') as object_id,
+      json.get_integer(value, 'actor_id') as actor_id,
       json.get_object(value, 'data') as data,
+      json.get_array_opt(value, 'content', null) as content,
       json.get_array(value, 'list_objects') as list_objects
     from jsonb_array_elements(in_state)
   )
@@ -4996,17 +4769,15 @@ begin
         data.get_attribute_value(v_subscription.object_id, 'full_card_function'),
         null);
 
-    v_actor_id := data.get_active_actor_id(v_subscription.client_id);
-
     if v_full_card_function is not null then
       execute format('select %s($1, $2)', v_full_card_function)
-      using v_subscription.object_id, v_actor_id;
+      using v_subscription.object_id, v_subscription.actor_id;
     end if;
 
     v_subscription_object_code := data.get_object_code(v_subscription.object_id);
 
     -- Объект стал невидимым - отправляем специальный diff и вычищаем подписки
-    if not json.get_boolean_opt(data.get_attribute_value(v_subscription.object_id, 'is_visible', v_actor_id), false) then
+    if not json.get_boolean_opt(data.get_attribute_value(v_subscription.object_id, 'is_visible', v_subscription.actor_id), false) then
       v_ret_val :=
         v_ret_val ||
         jsonb_build_object(
@@ -5026,7 +4797,7 @@ begin
       continue;
     end if;
 
-    v_new_data := data.get_object(v_subscription.object_id, v_actor_id, 'full', v_subscription.object_id);
+    v_new_data := data.get_object(v_subscription.object_id, v_subscription.actor_id, 'full', v_subscription.object_id);
 
     v_object := null;
     v_list_changes := jsonb '{}';
@@ -5037,17 +4808,17 @@ begin
     -- Сравниваем и при нахождении различий включаем в diff
     if v_new_data != v_subscription.data then
       v_object := v_new_data;
-      v_old_content := json.get_array_opt(json.get_object_opt(json.get_object(v_subscription.data, 'attributes'), 'content', jsonb '{}'), 'value', null);
-      v_new_content := json.get_array_opt(json.get_object_opt(json.get_object(v_new_data, 'attributes'), 'content', jsonb '{}'), 'value', null);
     end if;
 
-    if v_old_content is distinct from v_new_content then
+    v_new_content := data.get_attribute_value(v_subscription.object_id, v_content_attr_id, v_subscription.actor_id);
+
+    if v_subscription.content is distinct from v_new_content then
       declare
         v_content_diff jsonb;
         v_add jsonb;
         v_remove jsonb;
       begin
-        v_content_diff := data.calc_content_diff(v_old_content, v_new_content);
+        v_content_diff := data.calc_content_diff(v_subscription.content, v_new_content);
 
         v_add := json.get_array(v_content_diff, 'add');
         v_remove := json.get_array(v_content_diff, 'remove');
@@ -5115,7 +4886,7 @@ begin
                     data.get_attribute_value(
                       v_object_id,
                       'is_visible',
-                      v_actor_id),
+                      v_subscription.actor_id),
                     false);
 
                 if v_add_element.position is not null then
@@ -5160,7 +4931,7 @@ begin
                   v_add_list_change :=
                     jsonb_build_object(
                       'object',
-                      data.get_object(v_object_id, v_actor_id, 'mini', v_subscription.object_id));
+                      data.get_object(v_object_id, v_subscription.actor_id, 'mini', v_subscription.object_id));
                   if v_position is not null then
                     v_add_list_change := v_add_list_change || jsonb_build_object('position', v_position);
                   end if;
@@ -5205,17 +4976,17 @@ begin
 
           if v_mini_card_function is not null then
             execute format('select %s($1, $2)', v_mini_card_function)
-            using v_list.object_id, v_actor_id;
+            using v_list.object_id, v_subscription.actor_id;
           end if;
 
-          if not json.get_boolean_opt(data.get_attribute_value(v_list.object_id, 'is_visible', v_actor_id), false) then
+          if not json.get_boolean_opt(data.get_attribute_value(v_list.object_id, 'is_visible', v_subscription.actor_id), false) then
             if v_list.is_visible then
               v_set_invisible := array_append(v_set_invisible, v_list.id);
 
               v_remove_list_changes := v_remove_list_changes || to_jsonb(data.get_object_code(v_list.object_id));
             end if;
           else
-            v_new_list_data := data.get_object(v_list.object_id, v_actor_id, 'mini', v_subscription.object_id);
+            v_new_list_data := data.get_object(v_list.object_id, v_subscription.actor_id, 'mini', v_subscription.object_id);
 
             if not v_list.is_visible or v_new_list_data != v_list.data then
               if not v_list.is_visible then
@@ -5302,78 +5073,91 @@ as
 $$
 declare
   v_state jsonb := jsonb '[]';
-  v_subscription record;
+  v_content_attr_id integer;
+  v_client record;
   v_actor_id integer;
   v_list_objects jsonb;
   v_list record;
   v_list_object jsonb;
+  v_length integer;
+  v_id integer;
+  v_object_id integer;
 begin
   if in_subsciptions_ids is null then
     return v_state;
   end if;
 
-  for v_subscription in
+  v_content_attr_id := data.get_attribute_id('content');
+
+  for v_client in
   (
-    select
-      id,
-      object_id,
-      client_id
+    select client_id, array_agg(array[id, object_id]) client_subscriptions
     from data.client_subscriptions
     where id = any(in_subsciptions_ids)
+    group by client_id
   )
   loop
-    v_actor_id := data.get_active_actor_id(v_subscription.client_id);
+    v_actor_id := data.get_active_actor_id(v_client.client_id);
 
-    v_list_objects := jsonb '[]';
+    v_length := array_length(v_client.client_subscriptions, 1);
+    for i in 1..v_length loop
+      v_list_objects := jsonb '[]';
+      v_id := v_client.client_subscriptions[i][1];
+      v_object_id := v_client.client_subscriptions[i][2];
 
-    for v_list in
-    (
-      select
-        id,
-        object_id,
-        is_visible,
-        index
-      from data.client_subscription_objects
-      where
-        client_subscription_id = v_subscription.id and
-        (in_filtered_list_object_id is null or object_id != in_filtered_list_object_id)
-    )
-    loop
-      v_list_object :=
+      for v_list in
+      (
+        select
+          id,
+          object_id,
+          is_visible,
+          index
+        from data.client_subscription_objects
+        where
+          client_subscription_id = v_id and
+          (in_filtered_list_object_id is null or object_id != in_filtered_list_object_id)
+      )
+      loop
+        v_list_object :=
+          jsonb_build_object(
+            'id',
+            v_list.id,
+            'object_id',
+            v_list.object_id,
+            'is_visible',
+            v_list.is_visible,
+            'index',
+            v_list.index);
+
+        if v_list.is_visible then
+          v_list_object :=
+            v_list_object ||
+              jsonb_build_object(
+                'data',
+                data.get_object(v_list.object_id, v_actor_id, 'mini', v_object_id));
+        end if;
+
+        v_list_objects := v_list_objects || v_list_object;
+      end loop;
+
+      v_state :=
+        v_state ||
         jsonb_build_object(
           'id',
-          v_list.id,
+          v_id,
+          'client_id',
+          v_client.client_id,
+          'actor_id',
+          v_actor_id,
           'object_id',
-          v_list.object_id,
-          'is_visible',
-          v_list.is_visible,
-          'index',
-          v_list.index);
-
-      if v_list.is_visible then
-        v_list_object :=
-          v_list_object ||
-            jsonb_build_object(
-              'data',
-              data.get_object(v_list.object_id, v_actor_id, 'mini', v_subscription.object_id));
-      end if;
-
-      v_list_objects := v_list_objects || v_list_object;
+          v_object_id,
+          'data',
+          data.get_object(v_object_id, v_actor_id, 'full', v_object_id),
+          'content',
+          data.get_attribute_value(v_object_id, v_content_attr_id, v_actor_id),
+          'list_objects',
+          v_list_objects);
     end loop;
-
-    v_state :=
-      v_state ||
-      jsonb_build_object(
-        'id',
-        v_subscription.id,
-        'client_id',
-        v_subscription.client_id,
-        'object_id',
-        v_subscription.object_id,
-        'data',
-        data.get_object(v_subscription.object_id, v_actor_id, 'full', v_subscription.object_id),
-        'list_objects',
-        v_list_objects);
   end loop;
 
   return v_state;
@@ -9542,9 +9326,11 @@ begin
   end if;
 
   if v_economy_type = 'un' then
-    v_diff := pallas_project.change_coins(v_actor_id, (v_current_sum - v_price)::integer, v_actor_id, 'Status purchase');
+    perform data.process_diffs_and_notify(
+      pallas_project.change_coins(v_actor_id, (v_current_sum - v_price)::integer, v_actor_id, 'Status purchase'));
   else
-    v_diff := pallas_project.change_money(v_actor_id, v_current_sum - v_price, v_actor_id, 'Status purchase');
+    perform data.process_diffs_and_notify(
+      pallas_project.change_money(v_actor_id, v_current_sum - v_price, v_actor_id, 'Status purchase'));
     perform pallas_project.create_transaction(
       v_actor_id,
       format(
@@ -9557,14 +9343,14 @@ begin
       null,
       v_actor_id);
   end if;
-  v_diff := data.join_diffs(v_diff, pallas_project.change_next_status(v_actor_id, v_status_name, v_status_value, v_actor_id, 'Status purchase'));
 
   v_notified :=
     data.process_diffs_and_notify_current_object(
-      v_diff,
+      pallas_project.change_next_status(v_actor_id, v_status_name, v_status_value, v_actor_id, 'Status purchase'),
       in_client_id,
       in_request_id,
       data.get_object_id(data.get_object_code(v_actor_id) || '_next_statuses'));
+  -- Поменялся статус - уйдут кнопки
   assert v_notified;
 end;
 $$
@@ -9836,9 +9622,9 @@ declare
   v_chat_bot_id integer := data.get_object_id('chat_bot');
 
   v_is_master boolean := pp_utils.is_in_group(v_actor_id, 'master');
-  v_actor_title text := json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id, v_actor_id));
+  v_actor_title text := json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id));
   v_title text := to_char(clock_timestamp(),'DD.MM hh24:mi:ss');
-  v_chat_title text := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id, v_actor_id), null);
+  v_chat_title text := json.get_string_opt(data.get_attribute_value(v_chat_id, v_title_attribute_id), null);
   v_chat_is_renamed boolean := json.get_boolean_opt(data.get_attribute_value_for_share(v_chat_id, 'system_chat_is_renamed'), false);
   v_chat_parent_list text := json.get_string_opt(data.get_attribute_value(v_chat_id, 'system_chat_parent_list'), '~');
 
@@ -10073,7 +9859,7 @@ declare
   v_new_content text[];
   v_message_sent boolean := false;
 
-  v_actor_title text := json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id, v_actor_id));
+  v_actor_title text := json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id));
   v_title text := pp_utils.format_date(clock_timestamp()) || E'\n' || v_actor_title;
 
   v_chat_unread_messages integer;
@@ -10582,7 +10368,6 @@ declare
   v_debatle_person2_id integer := data.get_object_id_opt(v_debatle_person2);
   v_debatle_judge_id integer := data.get_object_id_opt(v_debatle_judge);
 
-
   v_content_attribute_id integer := data.get_attribute_id('content');
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
 
@@ -10706,7 +10491,7 @@ begin
     perform pallas_project.create_chat(v_debatle_code || '_chat',
                    jsonb_build_object(
                    'content', jsonb '[]',
-                   'title', 'Обсуждение дебатла ' || json.get_string_opt(data.get_raw_attribute_value_for_share(v_debatle_id, 'title', null), ''),
+                   'title', 'Обсуждение дебатла ' || json.get_string_opt(data.get_raw_attribute_value_for_share(v_debatle_id, 'title'), ''),
                    'system_chat_is_renamed', true,
                    'system_chat_parent_list', 'chats',
                    'system_chat_can_invite', false,
@@ -11090,7 +10875,7 @@ begin
       jsonb_build_object('code', 'title', 'value', v_document_title),
       jsonb_build_object('code', 'document_category', 'value', 'private'),
       jsonb_build_object('code', 'system_document_author', 'value', v_actor_id),
-      jsonb_build_object('code', 'document_author', 'value', json.get_string(data.get_attribute_value(v_actor_id, 'title', v_actor_id)) , 'value_object_id', v_master_group_id),
+      jsonb_build_object('code', 'document_author', 'value', json.get_string(data.get_attribute_value(v_actor_id, 'title')) , 'value_object_id', v_master_group_id),
       jsonb_build_object('code', 'document_last_edit_time', 'value', to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss'), 'value_object_id', v_master_group_id),
       jsonb_build_object('code', 'document_last_edit_time', 'value', to_char(clock_timestamp(),'DD.MM.YYYY hh24:mi:ss'), 'value_object_id', v_actor_id),
       jsonb_build_object('code', 'system_document_is_my', 'value', true, 'value_object_id', v_actor_id)
@@ -11440,7 +11225,7 @@ declare
   v_system_document_temp_share_list integer[] := json.get_integer_array_opt(data.get_attribute_value(v_share_list_id, 'system_document_temp_share_list'), array[]::integer[]);
 
   v_person_id integer;
-  v_message text := 'Пользователь "' || json.get_string_opt(data.get_attribute_value(v_actor_id, 'title', v_actor_id), 'Неизвестный') || '" поделился с вами документом';
+  v_message text := 'Пользователь "' || json.get_string(data.get_attribute_value(v_actor_id, 'title')) || '" поделился с вами документом';
 begin
   assert in_request_id is not null;
 
@@ -11687,7 +11472,7 @@ begin
       end if;
     end loop;
 
-    v_text := 'Лотерея завершена. Победитель: ' || pp_utils.link(v_aster_id, null);
+    v_text := 'Лотерея завершена. Победитель: ' || pp_utils.link(v_aster_id);
 
     -- Отправляем уведомление игрокам
     for v_player_id in
@@ -11902,7 +11687,6 @@ declare
   v_tax_organization_id integer;
   v_tax_sum bigint;
   v_tax_coeff numeric;
-  v_diff jsonb;
   v_single_diff jsonb;
   v_notified boolean;
   v_groups integer[];
@@ -11951,11 +11735,17 @@ begin
     end;
   end if;
 
-  v_diff := pallas_project.change_money(v_actor_id, v_actor_current_sum - v_sum, v_actor_id, 'Transfer');
-  v_diff :=
-    data.join_diffs(
-      v_diff,
-      pallas_project.change_money(v_object_id, v_object_current_sum + v_sum - coalesce(v_tax, 0), v_actor_id, 'Transfer'));
+  v_notified :=
+    data.process_diffs_and_notify_current_object(
+      pallas_project.change_money(v_actor_id, v_actor_current_sum - v_sum, v_actor_id, 'Transfer'),
+      in_client_id,
+      in_request_id,
+      v_object_id);
+  -- Как минимум поменяется max_value у действия
+  assert v_notified;
+
+  perform data.process_diffs_and_notify(
+    pallas_project.change_money(v_object_id, v_object_current_sum + v_sum - coalesce(v_tax, 0), v_actor_id, 'Transfer'));
 
   perform pallas_project.notify_transfer_sender(v_actor_id, v_sum);
   perform pallas_project.notify_transfer_receiver(v_object_id, v_sum - coalesce(v_tax, 0));
@@ -11977,15 +11767,6 @@ begin
       v_actor_id,
       'Transfer tax');
   end if;
-
-  v_notified :=
-    data.process_diffs_and_notify_current_object(
-      v_diff,
-      in_client_id,
-      in_request_id,
-      v_object_id);
-  -- Как минимум поменяется max_value у действия
-  assert v_notified;
 
   if v_object_economy_type != '' then
     v_groups := array[v_object_id];
@@ -12319,13 +12100,13 @@ begin
       v_actions_list := v_actions_list || 
         format(', "debatle_vote_person1": {"code": "debatle_vote", "name": "Голосовать за %s", "disabled": %s, '||
                 '"params": {"debatle_code": "%s", "voted_person": "instigator"}}',
-                json.get_string_opt(data.get_attribute_value(v_person1_id, 'title', in_actor_id), ''),
+                json.get_string_opt(data.get_attribute_value(v_person1_id, 'title'), ''),
                 case when json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person1_my_vote', in_actor_id), 0) > 0 then 'true' else 'false' end,
                 v_debatle_code);
      v_actions_list := v_actions_list || 
         format(', "debatle_vote_person2": {"code": "debatle_vote", "name": "Голосовать за %s", "disabled": %s, '||
                 '"params": {"debatle_code": "%s", "voted_person": "opponent"}}',
-                json.get_string_opt(data.get_attribute_value(v_person2_id, 'title', in_actor_id), ''),
+                json.get_string_opt(data.get_attribute_value(v_person2_id, 'title'), ''),
                 case when json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_debatle_person2_my_vote', in_actor_id), 0) > 0 then 'true' else 'false' end,
                 v_debatle_code);
   end if;
@@ -12335,12 +12116,12 @@ begin
       v_actions_list := v_actions_list || 
         format(', "debatle_change_bonuses1": {"code": "debatle_change_bonuses", "name": "Оштрафовать или наградить %s", "disabled": false, '||
                 '"params": {"debatle_code": "%s", "judged_person": "instigator"}}',
-                json.get_string_opt(data.get_attribute_value(v_person1_id, 'title', in_actor_id), ''),
+                json.get_string_opt(data.get_attribute_value(v_person1_id, 'title'), ''),
                 v_debatle_code);
      v_actions_list := v_actions_list || 
         format(', "debatle_change_bonuses2": {"code": "debatle_change_bonuses", "name": "Оштрафовать или наградить %s", "disabled": false, '||
                 '"params": {"debatle_code": "%s", "judged_person": "opponent"}}',
-                json.get_string_opt(data.get_attribute_value(v_person2_id, 'title', in_actor_id), ''),
+                json.get_string_opt(data.get_attribute_value(v_person2_id, 'title'), ''),
                 v_debatle_code);
   end if;
 
@@ -13751,7 +13532,7 @@ begin
         {"code": "is_visible", "value": true, "value_object_id": %s},
         {"code": "content", "value": []}
       ]',
-      format('История транзакций, %s', json.get_string(data.get_attribute_value(v_org_id, 'title', v_org_id))),
+      format('История транзакций, %s', json.get_string(data.get_attribute_value(v_org_id, 'title'))),
       v_head_group_id,
       v_economist_group_id,
       v_auditor_group_id,
@@ -13972,7 +13753,7 @@ begin
       v_is_person := pp_utils.is_in_group(v_person_id, 'player');
 
       if v_is_person then
-        select jsonb_agg(o.code order by data.get_attribute_value(o.id, data.get_attribute_id('title'), o.id))
+        select jsonb_agg(o.code order by data.get_attribute_value(o.id, data.get_attribute_id('title')))
         into v_content
         from jsonb_array_elements(data.get_raw_attribute_value(v_district_id, 'content') || to_jsonb(v_person_code)) arr
         join data.objects o on
@@ -13982,7 +13763,7 @@ begin
       end if;
 
       -- Для мастера видны все персонажи
-      select jsonb_agg(o.code order by data.get_attribute_value(o.id, data.get_attribute_id('title'), o.id))
+      select jsonb_agg(o.code order by data.get_attribute_value(o.id, data.get_attribute_id('title')))
       into v_content
       from jsonb_array_elements(data.get_raw_attribute_value(v_district_id, 'content', v_master_group_id) || to_jsonb(v_person_code)) arr
       join data.objects o on
@@ -14064,7 +13845,7 @@ begin
   assert in_tax is null or in_tax >= 0 and in_tax <= abs(in_value);
 
   if in_second_object_id is not null then
-    v_second_object_title := json.get_string_opt(data.get_attribute_value(in_second_object_id, 'title', in_object_id), null);
+    v_second_object_title := json.get_string_opt(data.get_attribute_value(in_second_object_id, 'title'), null);
     if v_second_object_title is not null then
       v_second_object_code := data.get_object_code(in_second_object_id);
     end if;
@@ -14352,7 +14133,7 @@ begin
                             when in_with_sign_info then (case when x.value = 'true' then ' - Есть подпись' else ' - Нет подписи' end) 
                             else '' end) sign
                    from jsonb_each_text(in_document_participants) x) loop
-    v_persons:= v_persons || E'\n' || pp_utils.link(v_record.key, in_actor_id) || v_record.sign;
+    v_persons:= v_persons || E'\n' || pp_utils.link(v_record.key) || v_record.sign;
   end loop;
 
   return v_persons;
@@ -15665,7 +15446,6 @@ begin
   (v_chats_id, v_type_attribute_id, jsonb '"chats"', null),
   (v_chats_id, v_is_visible_attribute_id, jsonb 'true', null),
   (v_chats_id, v_title_attribute_id, jsonb '"Чаты"', null),
-  (v_chats_id, v_title_attribute_id, jsonb '"Отслеживаемые игровые чаты"', v_master_group_id),
   (v_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"', null),
   (v_chats_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chats"', null),
   (v_chats_id, v_content_attribute_id, jsonb '[]', null),
@@ -15710,8 +15490,7 @@ begin
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_master_chats_id, v_type_attribute_id, jsonb '"chats"', null),
   (v_master_chats_id, v_is_visible_attribute_id, jsonb 'true', null),
-  (v_master_chats_id, v_title_attribute_id, jsonb '"Связь с мастерами"', null),
-  (v_master_chats_id, v_title_attribute_id, jsonb '"Мастерские чаты"', v_master_group_id),
+  (v_master_chats_id, v_title_attribute_id, jsonb '"Общение с мастерами"', null),
   (v_master_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"', null),
   (v_master_chats_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chats"', null),
   (v_master_chats_id, v_content_attribute_id, jsonb '[]', null),
@@ -15853,7 +15632,7 @@ begin
       null,
       jsonb_build_object(
         'content', jsonb '[]',
-        'title', 'Мастерский для ' || json.get_string_opt(data.get_attribute_value(v_person_id, v_title_attribute_id, v_person_id),' '),
+        'title', 'Мастерский для ' || json.get_string(data.get_attribute_value(v_person_id, v_title_attribute_id)),
         'system_chat_is_renamed', true,
         'system_chat_can_invite', false,
         'system_chat_can_leave', false,
@@ -16297,7 +16076,7 @@ declare
   v_master_list jsonb;
 begin
   -- Список для игроков
-  select jsonb_agg(o.code order by data.get_attribute_value(o.id, 'title', o.id))
+  select jsonb_agg(o.code order by data.get_attribute_value(o.id, 'title'))
   into v_list
   from data.object_objects oo
   join data.objects o on
@@ -16307,7 +16086,7 @@ begin
     oo.object_id != oo.parent_object_id;
 
   -- Список для мастеров
-  select jsonb_agg(o.code order by data.get_attribute_value(o.id, 'title', o.id))
+  select jsonb_agg(o.code order by data.get_attribute_value(o.id, 'title'))
   into v_master_list
   from data.object_objects oo
   join data.objects o on
@@ -16323,8 +16102,7 @@ begin
       {"code": "is_visible", "value": true},
       {"code": "type", "value": "persons"},
       {"code": "template", "value": {"title": "title", "groups": []}},
-      {"code": "title", "value": "Люди \"Паллады\""},
-      {"code": "title", "value": "Все персонажи", "value_object_code": "master"}
+      {"code": "title", "value": "Люди \"Паллады\""}
     ]' ||
     data.attribute_change2jsonb('content', v_list) ||
     data.attribute_change2jsonb('content', v_master_list, 'master'));
@@ -16629,7 +16407,7 @@ begin
     v_chat_title := v_new_chat_subtitle;
     v_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, to_jsonb(v_chat_title)));
   else
-    v_chat_title := json.get_string_opt(data.get_raw_attribute_value_for_update(v_chat_id, v_title_attribute_id, v_actor_id), '');
+    v_chat_title := json.get_string_opt(data.get_raw_attribute_value_for_update(v_chat_id, v_title_attribute_id), '');
     v_changes := array_append(v_changes, data.attribute_change2jsonb('subtitle', to_jsonb(v_new_chat_subtitle)));
   end if;
   perform data.change_object_and_notify(v_chat_id, 
@@ -16731,7 +16509,7 @@ begin
   perform * from data.objects where id = v_debatle_id for update;
 
   v_bonus_code := data.get_object_code(in_list_object_id);
-  v_bonus_name := json.get_string_opt(data.get_attribute_value(in_list_object_id, 'title', v_actor_id), '');
+  v_bonus_name := json.get_string_opt(data.get_attribute_value(in_list_object_id, 'title'), '');
   v_bonus_votes := json.get_integer_opt(data.get_attribute_value(in_list_object_id, 'debatle_bonus_votes'), 1);
 
   if v_judged_person = 'instigator' then
@@ -16881,7 +16659,6 @@ declare
   v_system_document_participants jsonb;
   v_document_participants text;
   v_document_signers_list_participants text;
-  v_title_attribute_id integer := data.get_attribute_id('title');
 
   v_list_object_code text := data.get_object_code(in_list_object_id);
 
@@ -16962,7 +16739,7 @@ begin
   v_system_document_temp_share_list := array_append(v_system_document_temp_share_list, in_list_object_id);
   v_changes := array_append(v_changes, data.attribute_change2jsonb(v_system_document_temp_share_list_attribute_id, to_jsonb(v_system_document_temp_share_list)));
 
-  v_document_temp_share_list := v_document_temp_share_list || E'\n' || json.get_string_opt(data.get_attribute_value(in_list_object_id, 'title', v_actor_id), '');
+  v_document_temp_share_list := v_document_temp_share_list || E'\n' || json.get_string_opt(data.get_attribute_value(in_list_object_id, 'title'), '');
   v_changes := array_append(v_changes, data.attribute_change2jsonb(v_document_temp_share_list_attribute_id, to_jsonb(v_document_temp_share_list)));
 
   v_content := array_remove(v_content, data.get_object_code(in_list_object_id));
@@ -17023,19 +16800,18 @@ volatile
 as
 $$
 declare
-  v_type text := json.get_string(data.get_attribute_value(in_receiver_id, 'type', in_receiver_id));
-  v_transactions_id integer := data.get_object_id(data.get_object_code(in_receiver_id) || '_transactions');
-  v_org_code text;
+  v_receiver_code text := data.get_object_code(in_receiver_id);
+  v_type text := json.get_string(data.get_attribute_value(in_receiver_id, 'type'));
+  v_transactions_id integer := data.get_object_id(v_receiver_code || '_transactions');
   v_org_person integer;
   v_org_message text;
 begin
   if v_type = 'organization' then
-    v_org_code := data.get_object_code(in_receiver_id);
     v_org_message :=
       format(
         'Входящий перевод для организации [%s](babcom:%s) на сумму %s',
-        json.get_string(data.get_attribute_value(in_receiver_id, 'title', in_receiver_id)),
-        v_org_code,
+        json.get_string(data.get_attribute_value(in_receiver_id, 'title')),
+        v_receiver_code,
         pp_utils.format_money(in_money));
 
     for v_org_person in
@@ -17044,10 +16820,10 @@ begin
       from data.object_objects
       where
         parent_object_id in (
-          data.get_object_id(v_org_code || '_head'),
-          data.get_object_id(v_org_code || '_economist'),
-          data.get_object_id(v_org_code || '_auditor'),
-          data.get_object_id(v_org_code || '_temporary_auditor')) and
+          data.get_object_id(v_receiver_code || '_head'),
+          data.get_object_id(v_receiver_code || '_economist'),
+          data.get_object_id(v_receiver_code || '_auditor'),
+          data.get_object_id(v_receiver_code || '_temporary_auditor')) and
         object_id != parent_object_id
     )
     loop
@@ -17076,19 +16852,18 @@ volatile
 as
 $$
 declare
-  v_type text := json.get_string(data.get_attribute_value(in_sender_id, 'type', in_sender_id));
-  v_transactions_id integer := data.get_object_id(data.get_object_code(in_sender_id) || '_transactions');
-  v_org_code text;
+  v_sender_code text := data.get_object_code(in_sender_id);
+  v_type text := json.get_string(data.get_attribute_value(in_sender_id, 'type'));
+  v_transactions_id integer := data.get_object_id(v_sender_code || '_transactions');
   v_org_person integer;
   v_org_message text;
 begin
   if v_type = 'organization' then
-    v_org_code := data.get_object_code(in_sender_id);
     v_org_message :=
       format(
         'Исходящий перевод со счёта организации [%s](babcom:%s) на сумму %s',
-        json.get_string(data.get_attribute_value(in_sender_id, 'title', in_sender_id)),
-        v_org_code,
+        json.get_string(data.get_attribute_value(in_sender_id, 'title')),
+        v_sender_code,
         pp_utils.format_money(in_money));
 
     for v_org_person in
@@ -17097,10 +16872,10 @@ begin
       from data.object_objects
       where
         parent_object_id in (
-          data.get_object_id(v_org_code || '_head'),
-          data.get_object_id(v_org_code || '_economist'),
-          data.get_object_id(v_org_code || '_auditor'),
-          data.get_object_id(v_org_code || '_temporary_auditor')) and
+          data.get_object_id(v_sender_code || '_head'),
+          data.get_object_id(v_sender_code || '_economist'),
+          data.get_object_id(v_sender_code || '_auditor'),
+          data.get_object_id(v_sender_code || '_temporary_auditor')) and
         object_id != parent_object_id
     )
     loop
@@ -17144,7 +16919,7 @@ declare
   v_chat_id integer := json.get_integer_opt(data.get_attribute_value(v_important_notifications_id, 'redirect', in_actor_id), null);
 
   v_chat_bot_id integer := data.get_object_id('chat_bot');
-  v_chat_bot_title text := json.get_string(data.get_attribute_value(v_chat_bot_id, v_title_attribute_id, in_actor_id));
+  v_chat_bot_title text := json.get_string(data.get_attribute_value(v_chat_bot_id, v_title_attribute_id));
 
   v_title text := pp_utils.format_date(clock_timestamp());
   v_object_title text;
@@ -17161,7 +16936,7 @@ begin
   assert v_chat_id is not null;
 
   if in_object_code is not null then
-    v_text := in_text || E'\n\n' || pp_utils.link(in_object_code, in_actor_id);
+    v_text := in_text || E'\n\n' || pp_utils.link(in_object_code);
   else
     v_text := in_text;
   end if;
@@ -17206,7 +16981,7 @@ declare
   v_master_group_id integer := data.get_object_id('master');
 
   v_chat_bot_id integer := data.get_object_id('chat_bot');
-  v_chat_bot_title text := json.get_string(data.get_attribute_value(v_chat_bot_id, v_title_attribute_id, v_master_group_id));
+  v_chat_bot_title text := json.get_string(data.get_attribute_value(v_chat_bot_id, v_title_attribute_id));
 
   v_title text := pp_utils.format_date(clock_timestamp()) || E'\n' || v_chat_bot_title;
 
@@ -17216,7 +16991,7 @@ declare
   v_chat_unread_messages_attribute_id integer := data.get_attribute_id('chat_unread_messages');
 begin
   if in_object_code is not null then
-    v_text := in_text || ' ' || pp_utils.link(in_object_code, v_master_group_id);
+    v_text := in_text || ' ' || pp_utils.link(in_object_code);
   else
    v_text := in_text;
   end if;
@@ -17614,7 +17389,7 @@ stable
 as
 $$
 begin
-  return pp_utils.link(json.get_string(in_value), in_actor_id);
+  return pp_utils.link(json.get_string(in_value));
 end;
 $$
 language plpgsql;
@@ -17709,7 +17484,7 @@ begin
   select string_agg(format('[%s](babcom:%s)', title, code), ', ')
   into v_description
   from (
-    select code, json.get_string(data.get_attribute_value(id, v_title_attr_id, in_actor_id)) title
+    select code, json.get_string(data.get_attribute_value(id, v_title_attr_id)) title
     from (
       select value code, data.get_object_id(value) id
       from unnest(v_districts) a(value)) d
@@ -17734,7 +17509,7 @@ begin
   select E'\n' || string_agg(format('[%s](babcom:%s): %s', title, code, influence), E'\n')
   into v_ret_val
   from (
-    select key code, json.get_string(data.get_attribute_value(key, v_title_attr_id, in_actor_id)) title, json.get_integer(value) influence
+    select key code, json.get_string(data.get_attribute_value(key, v_title_attr_id)) title, json.get_integer(value) influence
     from jsonb_each(in_value)
     order by title) a;
 
@@ -17971,10 +17746,11 @@ declare
 begin
   if in_redirect_object is not null then
     v_object_code := data.get_object_code(in_redirect_object);
-    v_notification_title := in_text || E'\n\n' || pp_utils.link(v_object_code, in_actor_id);
+    v_notification_title := in_text || E'\n\n' || pp_utils.link(v_object_code);
   else
     v_notification_title := in_text;
   end if;
+
   -- создаём новый объект для нотификации
   insert into data.objects(class_id) values(data.get_class_id('notification')) returning id, code into v_notification_id, v_notification_code;
 
@@ -18119,30 +17895,30 @@ end;
 $$
 language plpgsql;
 
--- drop function pp_utils.link(integer, integer);
+-- drop function pp_utils.link(integer);
 
-create or replace function pp_utils.link(in_object_id integer, in_actor_id integer)
+create or replace function pp_utils.link(in_object_id integer)
 returns text
 stable
 as
 $$
 declare
-  v_title text := json.get_string_opt(data.get_attribute_value(in_object_id, 'title', in_actor_id), '???');
+  v_title text := json.get_string_opt(data.get_attribute_value(in_object_id, 'title'), '???');
 begin
   return format('[%s](babcom:%s)', v_title, data.get_object_code(in_object_id));
 end;
 $$
 language plpgsql;
 
--- drop function pp_utils.link(text, integer);
+-- drop function pp_utils.link(text);
 
-create or replace function pp_utils.link(in_code text, in_actor_id integer)
+create or replace function pp_utils.link(in_code text)
 returns text
 stable
 as
 $$
 declare
-  v_title text := json.get_string_opt(data.get_attribute_value(data.get_object_id(in_code), 'title', in_actor_id), '???');
+  v_title text := json.get_string_opt(data.get_attribute_value(data.get_object_id(in_code), 'title'), '???');
 begin
   return format('[%s](babcom:%s)', v_title, in_code);
 end;
@@ -18159,18 +17935,18 @@ $$
 declare
   v_content_attribute_id integer := data.get_attribute_id('content');
 
-  v_content text[];
-  v_new_content text[];
+  v_content jsonb;
   v_actor_id integer := coalesce(in_actor_id, in_value_object_id);
 begin
+  assert in_new_object_code is not null;
+
   -- Достаём, меняем, кладём назад
-  v_content := json.get_string_array_opt(data.get_raw_attribute_value_for_update(in_list_id, 'content', in_value_object_id), array[]::text[]);
-  v_new_content := array_prepend(in_new_object_code, v_content);
-  if v_new_content <> v_content then
-    perform data.change_object_and_notify(in_list_id, 
-                                          jsonb_build_array(data.attribute_change2jsonb(v_content_attribute_id, to_jsonb(v_new_content), in_value_object_id)),
-                                          v_actor_id);
-  end if;
+  v_content := coalesce(data.get_raw_attribute_value_for_update(in_list_id, 'content', in_value_object_id), jsonb '[]');
+  v_content := to_jsonb(in_new_object_code) || v_content;
+  perform data.change_object_and_notify(
+    in_list_id, 
+    jsonb '[]' || data.attribute_change2jsonb(v_content_attribute_id, v_content, in_value_object_id),
+    v_actor_id);
 end;
 $$
 language plpgsql;

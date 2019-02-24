@@ -97,7 +97,7 @@ begin
         {"code": "is_visible", "value": true, "value_object_id": %s},
         {"code": "content", "value": []}
       ]',
-      format('История транзакций, %s', json.get_string(data.get_attribute_value(v_org_id, 'title', v_org_id))),
+      format('История транзакций, %s', json.get_string(data.get_attribute_value(v_org_id, 'title'))),
       v_head_group_id,
       v_economist_group_id,
       v_auditor_group_id,

@@ -14,7 +14,7 @@ begin
                             when in_with_sign_info then (case when x.value = 'true' then ' - Есть подпись' else ' - Нет подписи' end) 
                             else '' end) sign
                    from jsonb_each_text(in_document_participants) x) loop
-    v_persons:= v_persons || E'\n' || pp_utils.link(v_record.key, in_actor_id) || v_record.sign;
+    v_persons:= v_persons || E'\n' || pp_utils.link(v_record.key) || v_record.sign;
   end loop;
 
   return v_persons;

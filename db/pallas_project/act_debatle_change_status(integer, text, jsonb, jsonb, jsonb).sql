@@ -25,7 +25,6 @@ declare
   v_debatle_person2_id integer := data.get_object_id_opt(v_debatle_person2);
   v_debatle_judge_id integer := data.get_object_id_opt(v_debatle_judge);
 
-
   v_content_attribute_id integer := data.get_attribute_id('content');
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
 
@@ -149,7 +148,7 @@ begin
     perform pallas_project.create_chat(v_debatle_code || '_chat',
                    jsonb_build_object(
                    'content', jsonb '[]',
-                   'title', 'Обсуждение дебатла ' || json.get_string_opt(data.get_raw_attribute_value_for_share(v_debatle_id, 'title', null), ''),
+                   'title', 'Обсуждение дебатла ' || json.get_string_opt(data.get_raw_attribute_value_for_share(v_debatle_id, 'title'), ''),
                    'system_chat_is_renamed', true,
                    'system_chat_parent_list', 'chats',
                    'system_chat_can_invite', false,
