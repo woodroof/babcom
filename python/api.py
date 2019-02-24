@@ -8,6 +8,7 @@ import uuid
 
 from aiohttp import web, WSMsgType
 from aiojobs.aiohttp import atomic, setup
+from collections import deque
 from pathlib import Path
 from prometheus_client import Counter, Gauge, Histogram, start_http_server
 from prometheus_async import aio
@@ -97,11 +98,14 @@ async def connect(connection, client_code, connection_object, request):
     return ws
 
 async def reconnect(connection, client_code, connection_object, request):
+    #TODO отправлять сообщение определённого формата
     await connection_object['ws'].close()
+    #TODO чтобы не отправлять новому клиенту старые сообщения, нужно из БД получать какой-то id активного подключения, но пока забиваем
     await execute_sql(connection, 'select api.disconnect_client($1)', client_code)
     await execute_sql(connection, 'select api.connect_client($1)', client_code)
     ws = web.WebSocketResponse()
     connection_object['ws'] = ws
+    connection_object['queue'].clear()
     await init_socket(ws, request)
     return ws
 
@@ -132,6 +136,8 @@ async def api(request):
             connection_object = {}
             lock = asyncio.Lock()
             connection_object['lock'] = lock
+            connection_object['processing'] = False
+            connection_object['queue'] = deque()
             connections[client_code] = connection_object
             async with lock:
                 ws = await connect(connection, client_code, connection_object, request)
@@ -182,47 +188,102 @@ async def post_image(request):
     additional_headers = {'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*'}
     return web.Response(status=200, content_type='application/json', text=response_text, headers=additional_headers)
 
-async def async_listener(app, notification_id):
+async def process_client_notifications(app, client_code):
     connections = app.connections
     pool = app.db_pool
 
+    if not client_code in connections:
+        return
+
+    connection_object = connections[client_code]
+
     async with pool.acquire() as connection:
-        result = await process_notification(connection, notification_id)
-        if result is not None:
-            notification_type = result['type']
-            message = result['message']
+        while True:
+            tasks = list(connection_object['queue'])
 
-            if notification_type == 'client_message':
-                client_code = result['client_code']
-                if client_code in connections:
-                    connection_object = connections[client_code]
-                    ws = connection_object['ws']
-                    async with connection_object['lock']:
-                        if connection_object['ws'] is ws:
-                            # TODO обработка исключения при закрытии подключения
-                            await ws.send_str(json.dumps(message, ensure_ascii=False))
-            elif notification_type == 'metric':
-                metric_type = message['type']
-                value = message['value']
+            if len(tasks) == 0:
+                connection_object['processing'] = False
+                return
 
-                if metric_type == 'max_api_time_ms':
-                    DB_MAX_API_TIME.set(value)
-                elif metric_type == 'max_job_time_ms':
-                    DB_MAX_JOB_TIME.set(value)
-                elif metric_type == 'error_count':
-                    DB_ERROR_COUNT.set(value)
-                elif metric_type == 'deadlock_count':
-                    DB_DEADLOCK_COUNT.set(value)
-                else:
-                    print('Unsupported metric type ' + metric_type)
-            elif notification_type == 'job':
-                app.worker.set_timeout(message)
-            else:
-                print('Unsupported notification type ' + notification_type)
+            connection_object['queue'].clear()
+            ws = connection_object['ws']
+            lock = connection_object['lock']
+
+            for task in tasks:
+                result = await process_notification(connection, task)
+                if result is not None:
+                    notification_type = result['type']
+                    message = result['message']
+
+                    if notification_type == 'client_message':
+                        async with lock:
+                            if not client_code in connections or not connections[client_code]['ws'] is ws:
+                                return
+
+                            try:
+                                await ws.send_str(json.dumps(message, ensure_ascii=False))
+                            except RuntimeError:
+                                return
+                    else:
+                        print('Unsupported client notification type ' + notification_type)
+
+async def process_app_notifications(app):
+    pool = app.db_pool
+    queue = app.listener['queue']
+
+    async with pool.acquire() as connection:
+        while True:
+            tasks = list(queue)
+
+            if len(tasks) == 0:
+                app.listener['processing'] = False
+                return
+
+            queue.clear()
+
+            for task in tasks:
+                result = await process_notification(connection, task)
+                if result is not None:
+                    notification_type = result['type']
+                    message = result['message']
+
+                    if notification_type == 'metric':
+                        metric_type = message['type']
+                        value = message['value']
+
+                        if metric_type == 'max_api_time_ms':
+                            DB_MAX_API_TIME.set(value)
+                        elif metric_type == 'max_job_time_ms':
+                            DB_MAX_JOB_TIME.set(value)
+                        elif metric_type == 'error_count':
+                            DB_ERROR_COUNT.set(value)
+                        elif metric_type == 'deadlock_count':
+                            DB_DEADLOCK_COUNT.set(value)
+                        else:
+                            print('Unsupported metric type ' + metric_type)
+                    elif notification_type == 'job':
+                        app.worker.set_timeout(message)
+                    else:
+                        print('Unsupported non-client notification type ' + notification_type)
 
 def listener_creator(app):
     def listener(connection, pid, channel, payload):
-        asyncio.get_event_loop().create_task(async_listener(app, payload))
+        connections = app.connections
+        notification = json.loads(payload)
+        notification_code = notification['notification_code']
+        if 'client_code' in notification:
+            client_code = notification['client_code']
+            if client_code in connections:
+                connection_object = connections[client_code]
+                connection_object['queue'].append(notification_code)
+                if not connection_object['processing']:
+                    connection_object['processing'] = True
+                    asyncio.get_event_loop().create_task(process_client_notifications(app, client_code))
+        else:
+            app.listener['queue'].append(notification_code)
+            if not app.listener['processing']:
+                app.listener['processing'] = True
+                asyncio.get_event_loop().create_task(process_app_notifications(app))
     return listener
 
 def jsonb_encoder(value):
@@ -244,6 +305,11 @@ async def init_app():
         ])
     app.router.add_static('/images/', IMAGES_DIR_PATH)
     app.connections = {}
+
+    app.listener = {}
+    app.listener['queue'] = deque()
+    app.listener['processing'] = False
+
     app.db_pool = await asyncpg.create_pool(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME, init=init_connection)
     async with app.db_pool.acquire() as connection:
         await connection.execute('select api.disconnect_all_clients()')

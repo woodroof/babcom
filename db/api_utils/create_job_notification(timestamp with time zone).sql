@@ -15,7 +15,7 @@ begin
   values('job', to_jsonb(v_timeout_sec))
   returning code into v_notification_code;
 
-  perform pg_notify('api_channel', v_notification_code);
+  perform pg_notify('api_channel', jsonb_build_object('notification_code', v_notification_code)::text);
 end;
 $$
 language plpgsql;

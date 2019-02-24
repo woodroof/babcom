@@ -379,43 +379,25 @@ $$
 declare
   v_type data.notification_type;
   v_message jsonb;
-  v_client_id integer;
-  v_client_code text;
-  v_ret_val jsonb;
 begin
   assert in_notification_code is not null;
 
   delete from data.notifications
   where code = in_notification_code
-  returning type, message, client_id
-  into v_type, v_message, v_client_id;
+  returning type, message
+  into v_type, v_message;
 
   -- Уведомление могло удалиться из-за отключения клиента
   if v_type is null then
     return null;
   end if;
 
-  if v_client_id is not null then
-    select code
-    into v_client_code
-    from data.clients
-    where id = v_client_id;
-
-    assert v_client_code is not null;
-  end if;
-
-  v_ret_val :=
+  return
     jsonb_build_object(
       'type',
       v_type::text,
       'message',
       v_message);
-
-  if v_client_code is not null then
-    v_ret_val := v_ret_val || jsonb_build_object('client_code', v_client_code);
-  end if;
-
-  return v_ret_val;
 end;
 $$
 language plpgsql;
@@ -549,7 +531,7 @@ begin
   values('job', to_jsonb(v_timeout_sec))
   returning code into v_notification_code;
 
-  perform pg_notify('api_channel', v_notification_code);
+  perform pg_notify('api_channel', jsonb_build_object('notification_code', v_notification_code)::text);
 end;
 $$
 language plpgsql;
@@ -571,7 +553,7 @@ begin
   values('metric', jsonb_build_object('type', in_type::text, 'value', in_value))
   returning code into v_notification_code;
 
-  perform pg_notify('api_channel', v_notification_code);
+  perform pg_notify('api_channel', jsonb_build_object('notification_code', v_notification_code)::text);
 end;
 $$
 language plpgsql;
@@ -590,6 +572,7 @@ declare
       'data', json.get_object(in_data)) ||
     (case when in_request_id is not null then jsonb_build_object('request_id', in_request_id) else jsonb '{}' end);
   v_notification_code text;
+  v_client_code text;
 begin
   assert in_client_id is not null;
   assert in_type is not null;
@@ -598,7 +581,12 @@ begin
   values('client_message', v_message, in_client_id)
   returning code into v_notification_code;
 
-  perform pg_notify('api_channel', v_notification_code);
+  select code
+  into v_client_code
+  from data.clients
+  where id = in_client_id;
+
+  perform pg_notify('api_channel', jsonb_build_object('notification_code', v_notification_code, 'client_code', v_client_code)::text);
 end;
 $$
 language plpgsql;

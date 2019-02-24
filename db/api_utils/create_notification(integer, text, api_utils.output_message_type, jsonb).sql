@@ -12,6 +12,7 @@ declare
       'data', json.get_object(in_data)) ||
     (case when in_request_id is not null then jsonb_build_object('request_id', in_request_id) else jsonb '{}' end);
   v_notification_code text;
+  v_client_code text;
 begin
   assert in_client_id is not null;
   assert in_type is not null;
@@ -20,7 +21,12 @@ begin
   values('client_message', v_message, in_client_id)
   returning code into v_notification_code;
 
-  perform pg_notify('api_channel', v_notification_code);
+  select code
+  into v_client_code
+  from data.clients
+  where id = in_client_id;
+
+  perform pg_notify('api_channel', jsonb_build_object('notification_code', v_notification_code, 'client_code', v_client_code)::text);
 end;
 $$
 language plpgsql;
