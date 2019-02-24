@@ -31,6 +31,8 @@ begin
   jsonb '[
     {"code": "title", "value": "Правила"},
     {"code": "is_visible", "value": true},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
     {"code": "content", "value": []},
     {
       "code": "mini_card_template",
@@ -52,6 +54,8 @@ begin
   'my_documents',
   jsonb '[
     {"code": "title", "value": "Мои документы"},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
     {"code": "is_visible", "value": true},
     {"code": "content", "value": []},
     {
@@ -74,6 +78,8 @@ begin
   'official_documents',
   jsonb '[
     {"code": "title", "value": "Официальные документы"},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
     {"code": "is_visible", "value": true},
     {"code": "content", "value": []},
     {
@@ -96,6 +102,8 @@ begin
   'documents',
   jsonb '[
     {"code": "title", "value": "Документы"},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
     {"code": "is_visible", "value": true},
     {"code": "content", "value": ["my_documents", "official_documents", "rules_documents"]},
     {"code": "actions_function", "value": "pallas_project.actgenerator_documents"},
@@ -119,6 +127,7 @@ begin
   'document',
   jsonb '[
     {"code": "type", "value": "document"},
+    {"code": "independent_from_actor_list_elements", "value": true},
     {"code": "is_visible", "value": true, "value_object_code": "master"},
     {"code": "is_visible", "value": true},
     {"code": "priority", "value": 95},
@@ -150,6 +159,8 @@ begin
   jsonb '[
     {"code": "type", "value": "document_temp_share_list"},
     {"code": "temporary_object", "value": true},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
     {"code": "list_element_function", "value": "pallas_project.lef_document_temp_share_list"},
     {"code": "actions_function", "value": "pallas_project.actgenerator_document_temp_share_list"},
     {
@@ -173,6 +184,8 @@ begin
   'document_signers_list',
   jsonb '[
     {"code": "type", "value": "document_signers_list"},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
     {"code": "temporary_object", "value": true},
     {"code": "is_visible", "value": true, "value_object_code": "master"},
     {"code": "list_element_function", "value": "pallas_project.lef_document_signers_list"},

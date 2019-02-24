@@ -7,6 +7,8 @@ as
 $$
 declare
   v_type_attribute_id integer := data.get_attribute_id('type');
+  v_independent_from_actor_list_elements_attribute_id integer := data.get_attribute_id('independent_from_actor_list_elements');
+  v_independent_from_object_list_elements_attribute_id integer := data.get_attribute_id('independent_from_object_list_elements');
   v_title_attribute_id integer := data.get_attribute_id('title');
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
   v_actions_function_attribute_id integer := data.get_attribute_id('actions_function');
@@ -64,6 +66,8 @@ begin
 
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_chats_id, v_type_attribute_id, jsonb '"chats"', null),
+  (v_chats_id, v_independent_from_actor_list_elements_attribute_id, jsonb 'true', null),
+  (v_chats_id, v_independent_from_object_list_elements_attribute_id, jsonb 'true', null),
   (v_chats_id, v_is_visible_attribute_id, jsonb 'true', null),
   (v_chats_id, v_title_attribute_id, jsonb '"Чаты"', null),
   (v_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"', null),
@@ -86,6 +90,8 @@ begin
 
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_chats_id, v_type_attribute_id, jsonb '"chats"', null),
+  (v_chats_id, v_independent_from_actor_list_elements_attribute_id, jsonb 'true', null),
+  (v_chats_id, v_independent_from_object_list_elements_attribute_id, jsonb 'true', null),
   (v_chats_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
   (v_chats_id, v_title_attribute_id, jsonb '"Все игровые чаты"', null),
   (v_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"', null),
@@ -109,6 +115,8 @@ begin
 
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_master_chats_id, v_type_attribute_id, jsonb '"chats"', null),
+  (v_master_chats_id, v_independent_from_actor_list_elements_attribute_id, jsonb 'true', null),
+  (v_master_chats_id, v_independent_from_object_list_elements_attribute_id, jsonb 'true', null),
   (v_master_chats_id, v_is_visible_attribute_id, jsonb 'true', null),
   (v_master_chats_id, v_title_attribute_id, jsonb '"Общение с мастерами"', null),
   (v_master_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"', null),
@@ -132,6 +140,8 @@ begin
 
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_chat_class_id, v_type_attribute_id, jsonb '"chat"', null),
+  (v_chat_class_id, v_independent_from_actor_list_elements_attribute_id, jsonb 'true', null),
+  (v_chat_class_id, v_independent_from_object_list_elements_attribute_id, jsonb 'true', null),
   (v_chat_class_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
   (v_chat_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chat"', null),
   (v_chat_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_do_nothing"', null),
@@ -186,6 +196,8 @@ begin
 
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_chat_person_list_class_id, v_type_attribute_id, jsonb '"chat_person_list"', null),
+  (v_chat_person_list_class_id, v_independent_from_actor_list_elements_attribute_id, jsonb 'true', null),
+  (v_chat_person_list_class_id, v_independent_from_object_list_elements_attribute_id, jsonb 'true', null),
   (v_chat_person_list_class_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
   (v_chat_person_list_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chat_temp_person_list"', null),
   (v_chat_person_list_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chat_temp_person_list"', null),

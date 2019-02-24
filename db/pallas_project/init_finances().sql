@@ -25,6 +25,8 @@ begin
     'transactions',
     jsonb '[
       {"code": "title", "value": "История транзакций"},
+      {"code": "independent_from_actor_list_elements", "value": true},
+      {"code": "independent_from_object_list_elements", "value": true},
       {"code": "is_visible", "value": true, "value_object_code": "master"},
       {
         "code": "template",

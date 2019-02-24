@@ -1,6 +1,6 @@
--- drop function data_internal.save_state(integer[], integer);
+-- drop function data_internal.save_state(integer[], integer, integer);
 
-create or replace function data_internal.save_state(in_subsciptions_ids integer[], in_filtered_list_object_id integer)
+create or replace function data_internal.save_state(in_subsciptions_ids integer[], in_filtered_list_object_id integer, in_ignore_list_elements_attr_id integer)
 returns jsonb
 volatile
 as
@@ -16,6 +16,7 @@ declare
   v_length integer;
   v_id integer;
   v_object_id integer;
+  v_ignore boolean;
 begin
   if in_subsciptions_ids is null then
     return v_state;
@@ -38,41 +39,44 @@ begin
       v_list_objects := jsonb '[]';
       v_id := v_client.client_subscriptions[i][1];
       v_object_id := v_client.client_subscriptions[i][2];
+      v_ignore := json.get_boolean_opt(data.get_attribute_value(v_object_id, in_ignore_list_elements_attr_id), false);
 
-      for v_list in
-      (
-        select
-          id,
-          object_id,
-          is_visible,
-          index
-        from data.client_subscription_objects
-        where
-          client_subscription_id = v_id and
-          (in_filtered_list_object_id is null or object_id != in_filtered_list_object_id)
-      )
-      loop
-        v_list_object :=
-          jsonb_build_object(
-            'id',
-            v_list.id,
-            'object_id',
-            v_list.object_id,
-            'is_visible',
-            v_list.is_visible,
-            'index',
-            v_list.index);
-
-        if v_list.is_visible then
+      if not v_ignore then
+        for v_list in
+        (
+          select
+            id,
+            object_id,
+            is_visible,
+            index
+          from data.client_subscription_objects
+          where
+            client_subscription_id = v_id and
+            (in_filtered_list_object_id is null or object_id != in_filtered_list_object_id)
+        )
+        loop
           v_list_object :=
-            v_list_object ||
-              jsonb_build_object(
-                'data',
-                data.get_object(v_list.object_id, v_actor_id, 'mini', v_object_id));
-        end if;
+            jsonb_build_object(
+              'id',
+              v_list.id,
+              'object_id',
+              v_list.object_id,
+              'is_visible',
+              v_list.is_visible,
+              'index',
+              v_list.index);
 
-        v_list_objects := v_list_objects || v_list_object;
-      end loop;
+          if v_list.is_visible then
+            v_list_object :=
+              v_list_object ||
+                jsonb_build_object(
+                  'data',
+                  data.get_object(v_list.object_id, v_actor_id, 'mini', v_object_id));
+          end if;
+
+          v_list_objects := v_list_objects || v_list_object;
+        end loop;
+      end if;
 
       v_state :=
         v_state ||

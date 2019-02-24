@@ -42,6 +42,8 @@ begin
     {"code": "content", "value": ["debatles_new", "debatles_future", "debatles_current", "debatles_closed", "debatles_all"], "value_object_code": "master"},
     {"code": "content", "value": ["debatles_my", "debatles_future", "debatles_current", "debatles_closed"]},
     {"code": "actions_function", "value": "pallas_project.actgenerator_debatles"},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
     {
       "code": "mini_card_template",
       "value": {
@@ -78,7 +80,8 @@ begin
         "subtitle": "subtitle",
         "groups": []
       }
-    }
+    },
+    {"code": "independent_from_object_list_elements", "value": true}
   ]');
 
   -- Списки дебатлов
@@ -204,6 +207,7 @@ begin
     {"code": "actions_function", "value": "pallas_project.actgenerator_debatle_target_audience"},
     {"code": "list_actions_function", "value": "pallas_project.actgenerator_debatle_target_audience_content"},
     {"code": "list_element_function", "value": "pallas_project.lef_do_nothing"},
+    {"code": "independent_from_actor_list_elements", "value": true},
     {"code": "content", "value": ["all_person", "aster", "opa", "cartel"]},
     {
       "code": "template",
@@ -252,6 +256,8 @@ begin
     {"code": "actions_function", "value": "pallas_project.actgenerator_debatle_temp_person_list"},
     {"code": "list_element_function", "value": "pallas_project.lef_debatle_temp_person_list"},
     {"code": "temporary_object", "value": true},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
     {
       "code": "template",
       "value": {
@@ -278,6 +284,8 @@ begin
     {"code": "content", "value": []},
     {"code": "actions_function", "value": "pallas_project.actgenerator_debatle_temp_bonus_list"},
     {"code": "list_element_function", "value": "pallas_project.lef_debatle_temp_bonus_list"},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
     {"code": "temporary_object", "value": true},
     {
       "code": "template",

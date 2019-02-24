@@ -36,6 +36,8 @@ begin
       {"code": "is_visible", "value": true},
       {"code": "type", "value": "persons"},
       {"code": "template", "value": {"title": "title", "groups": []}},
+      {"code": "independent_from_actor_list_elements", "value": true},
+      {"code": "independent_from_object_list_elements", "value": true},
       {"code": "title", "value": "Люди \"Паллады\""}
     ]' ||
     data.attribute_change2jsonb('content', v_list) ||

@@ -42,7 +42,7 @@ begin
     from data.client_subscriptions
     where object_id = in_object_id;
 
-    v_subscriptions := data_internal.save_state(v_ids, null);
+    v_subscriptions := data_internal.save_state(v_ids, null, data.get_attribute_id('independent_from_object_list_elements'));
   end;
 
   -- Сохраним состояние миникарточек в списках, в которые входит данный объект
@@ -109,7 +109,7 @@ begin
         where actor_id = in_object_id) and
       object_id != in_object_id;
 
-    v_actor_subscriptions := data_internal.save_state(v_ids, in_object_id);
+    v_actor_subscriptions := data_internal.save_state(v_ids, in_object_id, data.get_attribute_id('independent_from_actor_list_elements'));
   end;
 
   -- Меняем состояние объекта

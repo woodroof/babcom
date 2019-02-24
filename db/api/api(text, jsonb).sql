@@ -14,6 +14,7 @@ declare
   v_check_result boolean;
   v_deadlock_count integer := 0;
   v_start_time timestamp with time zone := clock_timestamp();
+  v_ms integer;
 begin
   begin
     v_request_id := json.get_string(in_message, 'request_id');
@@ -93,7 +94,9 @@ begin
     perform data.metric_add('deadlock_count', v_deadlock_count);
   end if;
 
-  perform data.metric_set_max('max_api_time_ms', extract(milliseconds from clock_timestamp() - v_start_time)::integer);
+  v_ms := extract(milliseconds from clock_timestamp() - v_start_time)::integer;
+  perform data.metric_set_max('max_api_time_ms', v_ms);
+  --perform data.log('info', format(E'%s\n%s\n%s', v_ms, in_client_code, in_message));
 end;
 $$
 language plpgsql;

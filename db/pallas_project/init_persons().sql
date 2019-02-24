@@ -114,6 +114,8 @@ begin
     jsonb '{
       "title": "Мои организации",
       "type": "organization_list",
+      "independent_from_actor_list_elements": true,
+      "independent_from_object_list_elements": true,
       "template": {
         "title": "title",
         "groups": []

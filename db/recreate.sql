@@ -175,6 +175,7 @@ declare
   v_check_result boolean;
   v_deadlock_count integer := 0;
   v_start_time timestamp with time zone := clock_timestamp();
+  v_ms integer;
 begin
   begin
     v_request_id := json.get_string(in_message, 'request_id');
@@ -254,7 +255,9 @@ begin
     perform data.metric_add('deadlock_count', v_deadlock_count);
   end if;
 
-  perform data.metric_set_max('max_api_time_ms', extract(milliseconds from clock_timestamp() - v_start_time)::integer);
+  v_ms := extract(milliseconds from clock_timestamp() - v_start_time)::integer;
+  perform data.metric_set_max('max_api_time_ms', v_ms);
+  --perform data.log('info', format(E'%s\n%s\n%s', v_ms, in_client_code, in_message));
 end;
 $$
 language plpgsql;
@@ -1677,7 +1680,7 @@ begin
     from data.client_subscriptions
     where object_id = in_object_id;
 
-    v_subscriptions := data_internal.save_state(v_ids, null);
+    v_subscriptions := data_internal.save_state(v_ids, null, data.get_attribute_id('independent_from_object_list_elements'));
   end;
 
   -- Сохраним состояние миникарточек в списках, в которые входит данный объект
@@ -1744,7 +1747,7 @@ begin
         where actor_id = in_object_id) and
       object_id != in_object_id;
 
-    v_actor_subscriptions := data_internal.save_state(v_ids, in_object_id);
+    v_actor_subscriptions := data_internal.save_state(v_ids, in_object_id, data.get_attribute_id('independent_from_actor_list_elements'));
   end;
 
   -- Меняем состояние объекта
@@ -1919,80 +1922,24 @@ $$
 declare
   v_parent_object_id integer;
   v_actor_subscriptions jsonb := jsonb '[]';
-  v_ret_val jsonb := jsonb '[]';
 begin
   assert coalesce(array_length(in_add, 1), 0) + coalesce(array_length(in_remove, 1), 0) > 0;
 
   -- Сохраняем подписки клиентов актора
   declare
-    v_subscription record;
-    v_list record;
-    v_list_objects jsonb;
-    v_list_object jsonb;
+    v_ids integer[];
   begin
-    for v_subscription in
-    (
-      select
-        id,
-        object_id,
-        client_id
-      from data.client_subscriptions
-      where
-        client_id in (
-          select id
-          from data.clients
-          where actor_id = in_object_id)
-    )
-    loop
-      v_list_objects := jsonb '[]';
+    select array_agg(id)
+    into v_ids
+    from data.client_subscriptions
+    where
+      client_id in (
+        select id
+        from data.clients
+        where actor_id = in_object_id) and
+      object_id != in_object_id;
 
-      for v_list in
-      (
-        select
-          id,
-          object_id,
-          is_visible,
-          index
-        from data.client_subscription_objects
-        where client_subscription_id = v_subscription.id
-      )
-      loop
-        v_list_object :=
-          jsonb_build_object(
-            'id',
-            v_list.id,
-            'object_id',
-            v_list.object_id,
-            'is_visible',
-            v_list.is_visible,
-            'index',
-            v_list.index);
-
-        if v_list.is_visible then
-          v_list_object :=
-            v_list_object ||
-              jsonb_build_object(
-                'data',
-                data.get_object(v_list.object_id, in_object_id, 'mini', v_subscription.object_id));
-        end if;
-
-        v_list_objects := v_list_objects || v_list_object;
-      end loop;
-
-      v_actor_subscriptions :=
-        v_actor_subscriptions ||
-        jsonb_build_object(
-          'id',
-          v_subscription.id,
-          'client_id',
-          v_subscription.client_id,
-          'object_id',
-          v_subscription.object_id,
-          'data',
-          data.get_object(v_subscription.object_id, in_object_id, 'full', v_subscription.object_id),
-          'list_objects',
-          v_list_objects);
-    end loop;
+    v_actor_subscriptions := data_internal.save_state(v_ids, in_object_id, data.get_attribute_id('independent_from_actor_list_elements'));
   end;
 
   -- Меняем группы объектов
@@ -2015,198 +1962,7 @@ begin
   end loop;
 
   -- Обрабатываем изменения подписок клиентов изменённого актора
-  if v_actor_subscriptions != jsonb '[]' then
-    declare
-      v_subscription record;
-      v_full_card_function text;
-      v_subscription_object_code text;
-      v_new_data jsonb;
-      v_object jsonb;
-      v_list_changes jsonb;
-      v_ret_val_element jsonb;
-      v_set_visible integer[];
-      v_set_invisible integer[];
-    begin
-      for v_subscription in
-      (
-        select
-          json.get_integer(value, 'id') as id,
-          json.get_integer(value, 'client_id') as client_id,
-          json.get_integer(value, 'object_id') as object_id,
-          json.get_object(value, 'data') as data,
-          json.get_array(value, 'list_objects') as list_objects
-        from jsonb_array_elements(v_actor_subscriptions)
-      )
-      loop
-        v_full_card_function :=
-          json.get_string_opt(
-            data.get_attribute_value(v_subscription.object_id, 'full_card_function'),
-            null);
-
-        if v_full_card_function is not null then
-          execute format('select %s($1, $2)', v_full_card_function)
-          using v_subscription.object_id, in_object_id;
-        end if;
-
-        v_subscription_object_code := data.get_object_code(v_subscription.object_id);
-
-        -- Объект стал невидимым - отправляем специальный diff и вычищаем подписки
-        if not json.get_boolean_opt(data.get_attribute_value(v_subscription.object_id, 'is_visible', in_object_id), false) then
-          v_ret_val :=
-            v_ret_val ||
-            jsonb_build_object(
-              'object_id',
-              v_subscription_object_code,
-              'client_id',
-              v_subscription.client_id,
-              'object',
-              jsonb 'null');
-
-          delete from data.client_subscription_objects
-          where client_subscription_id = v_subscription.id;
-
-          delete from data.client_subscriptions
-          where id = v_subscription.id;
-
-          continue;
-        end if;
-
-        v_new_data := data.get_object(v_subscription.object_id, in_object_id, 'full', v_subscription.object_id);
-
-        v_object := null;
-        v_list_changes := jsonb '{}';
-
-        -- Сравниваем и при нахождении различий включаем в diff
-        if v_new_data != v_subscription.data then
-          v_object := v_new_data;
-        end if;
-
-        if v_subscription.list_objects != jsonb '[]' then
-          declare
-            v_list record;
-            v_mini_card_function text;
-            v_new_list_data jsonb;
-            v_add jsonb;
-            v_position_object_id integer;
-          begin
-            for v_list in
-            (
-              select
-                json.get_integer(value, 'id') as id,
-                json.get_integer(value, 'object_id') as object_id,
-                json.get_boolean(value, 'is_visible') as is_visible,
-                json.get_integer(value, 'index') as index,
-                json.get_object_opt(value, 'data', null) as data
-              from jsonb_array_elements(v_subscription.list_objects)
-            )
-            loop
-              v_mini_card_function :=
-                json.get_string_opt(
-                  data.get_attribute_value(v_list.object_id, 'mini_card_function'),
-                  null);
-
-              if v_mini_card_function is not null then
-                execute format('select %s($1, $2)', v_mini_card_function)
-                using v_list.object_id, in_object_id;
-              end if;
-
-              if not json.get_boolean_opt(data.get_attribute_value(v_list.object_id, 'is_visible', in_object_id), false) then
-                if v_list.is_visible then
-                  v_set_invisible := array_append(v_set_invisible, v_list.id);
-
-                  v_ret_val :=
-                    v_ret_val ||
-                    jsonb_build_object(
-                      'object_id',
-                      v_subscription_object_code,
-                      'client_id',
-                      v_subscription.client_id,
-                      'list_changes',
-                      jsonb_build_object('remove', jsonb_build_array(data.get_object_code(v_list.object_id))));
-                end if;
-              else
-                v_new_list_data := data.get_object(v_list.object_id, in_object_id, 'mini', v_subscription.object_id);
-
-                if not v_list.is_visible or v_new_list_data != v_list.data then
-                  if not v_list.is_visible then
-                    v_set_visible := array_append(v_set_visible, v_list.id);
-
-                    v_add := jsonb_build_object('object', v_new_list_data);
-
-                    select s.value
-                    into v_position_object_id
-                    from (
-                      select first_value(object_id) over(order by index) as value
-                      from data.client_subscription_objects
-                      where
-                        client_subscription_id = v_subscription.id and
-                        index > v_list.index and
-                        is_visible is true
-                    ) s
-                    limit 1;
-
-                    if v_position_object_id is not null then
-                      v_add := v_add || jsonb_build_object('position', data.get_object_code(v_position_object_id));
-                    end if;
-
-                    v_ret_val :=
-                      v_ret_val ||
-                      jsonb_build_object(
-                        'object_id',
-                        v_subscription_object_code,
-                        'client_id',
-                        v_subscription.client_id,
-                        'list_changes',
-                        jsonb_build_object(
-                          'add',
-                          jsonb_build_array(v_add)));
-                  else
-                    v_ret_val :=
-                      v_ret_val ||
-                      jsonb_build_object(
-                        'object_id',
-                        v_subscription_object_code,
-                        'client_id',
-                        v_subscription.client_id,
-                        'list_changes',
-                        jsonb_build_object('change', jsonb_build_array(v_new_list_data)));
-                  end if;
-                end if;
-              end if;
-            end loop;
-          end;
-        end if;
-
-        if v_object is not null or v_list_changes != jsonb '{}' then
-          v_ret_val_element := jsonb_build_object('object_id', v_subscription_object_code, 'client_id', v_subscription.client_id);
-
-          if v_object is not null then
-            v_ret_val_element := v_ret_val_element || jsonb_build_object('object', v_object);
-          end if;
-
-          if v_list_changes!= jsonb '{}' then
-            v_ret_val_element := v_ret_val_element || jsonb_build_object('list_changes', v_list_changes);
-          end if;
-
-          v_ret_val := v_ret_val || v_ret_val_element;
-        end if;
-      end loop;
-
-      if v_set_visible is not null then
-        update data.client_subscription_objects
-        set is_visible = true
-        where id = any(v_set_visible);
-      end if;
-
-      if v_set_invisible is not null then
-        update data.client_subscription_objects
-        set is_visible = false
-        where id = any(v_set_invisible);
-      end if;
-    end;
-  end if;
-
-  return v_ret_val;
+  return data_internal.process_saved_state(v_actor_subscriptions);
 end;
 $$
 language plpgsql;
@@ -3950,6 +3706,8 @@ begin
     null,
     false
   ),
+  ('independent_from_actor_list_elements', null, 'true, если содержимое элементов данного списка не зависит от актора', 'system', null, null, false),
+  ('independent_from_object_list_elements', null, 'true, если содержимое элементов данного списка не зависит от самого объекта-списка', 'system', null, null, false),
   ('is_visible', null, 'Определяет, доступен ли объект текущему актору, boolean', 'system', null, null, true),
   (
     'list_actions_function',
@@ -5052,9 +4810,9 @@ end;
 $$
 language plpgsql;
 
--- drop function data_internal.save_state(integer[], integer);
+-- drop function data_internal.save_state(integer[], integer, integer);
 
-create or replace function data_internal.save_state(in_subsciptions_ids integer[], in_filtered_list_object_id integer)
+create or replace function data_internal.save_state(in_subsciptions_ids integer[], in_filtered_list_object_id integer, in_ignore_list_elements_attr_id integer)
 returns jsonb
 volatile
 as
@@ -5070,6 +4828,7 @@ declare
   v_length integer;
   v_id integer;
   v_object_id integer;
+  v_ignore boolean;
 begin
   if in_subsciptions_ids is null then
     return v_state;
@@ -5092,41 +4851,44 @@ begin
       v_list_objects := jsonb '[]';
       v_id := v_client.client_subscriptions[i][1];
       v_object_id := v_client.client_subscriptions[i][2];
+      v_ignore := json.get_boolean_opt(data.get_attribute_value(v_object_id, in_ignore_list_elements_attr_id), false);
 
-      for v_list in
-      (
-        select
-          id,
-          object_id,
-          is_visible,
-          index
-        from data.client_subscription_objects
-        where
-          client_subscription_id = v_id and
-          (in_filtered_list_object_id is null or object_id != in_filtered_list_object_id)
-      )
-      loop
-        v_list_object :=
-          jsonb_build_object(
-            'id',
-            v_list.id,
-            'object_id',
-            v_list.object_id,
-            'is_visible',
-            v_list.is_visible,
-            'index',
-            v_list.index);
-
-        if v_list.is_visible then
+      if not v_ignore then
+        for v_list in
+        (
+          select
+            id,
+            object_id,
+            is_visible,
+            index
+          from data.client_subscription_objects
+          where
+            client_subscription_id = v_id and
+            (in_filtered_list_object_id is null or object_id != in_filtered_list_object_id)
+        )
+        loop
           v_list_object :=
-            v_list_object ||
-              jsonb_build_object(
-                'data',
-                data.get_object(v_list.object_id, v_actor_id, 'mini', v_object_id));
-        end if;
+            jsonb_build_object(
+              'id',
+              v_list.id,
+              'object_id',
+              v_list.object_id,
+              'is_visible',
+              v_list.is_visible,
+              'index',
+              v_list.index);
 
-        v_list_objects := v_list_objects || v_list_object;
-      end loop;
+          if v_list.is_visible then
+            v_list_object :=
+              v_list_object ||
+                jsonb_build_object(
+                  'data',
+                  data.get_object(v_list.object_id, v_actor_id, 'mini', v_object_id));
+          end if;
+
+          v_list_objects := v_list_objects || v_list_object;
+        end loop;
+      end if;
 
       v_state :=
         v_state ||
@@ -12846,11 +12608,10 @@ volatile
 as
 $$
 declare
-  v_object_code text := data.get_object_code(in_object_id);
   v_actor_code text := data.get_object_code(in_actor_id);
   v_actions jsonb := '{}';
-  v_is_master boolean := pp_utils.is_in_group(in_actor_id, 'master');
-  v_economy_type text := json.get_string_opt(data.get_attribute_value_for_share(in_actor_id, 'system_person_economy_type'), null);
+  v_is_master boolean;
+  v_economy_type text;
 begin
   assert in_actor_id is not null;
 
@@ -12860,7 +12621,12 @@ begin
     v_actions :=
       v_actions ||
       jsonb '{"login": {"code": "login", "name": "Войти", "disabled": false, "params": {}, "user_params": [{"code": "password", "description": "Введите пароль", "type": "string", "restrictions": {"password": true}}]}}';
-  elsif v_is_master or pp_utils.is_in_group(in_actor_id, 'all_person') then
+  else
+    v_is_master := pp_utils.is_in_group(in_actor_id, 'master');
+    if not v_is_master then
+      v_economy_type := json.get_string_opt(data.get_attribute_value_for_share(in_actor_id, 'system_person_economy_type'), null);
+    end if;
+
     if not v_is_master then
       v_actions :=
         v_actions ||
@@ -12901,7 +12667,7 @@ begin
       v_actions :=
         v_actions ||
         jsonb '{
-          "chats": {"code": "act_open_object", "name": " Отслеживаемые игровые чаты", "disabled": false, "params": {"object_code": "chats"}},
+          "chats": {"code": "act_open_object", "name": "Отслеживаемые игровые чаты", "disabled": false, "params": {"object_code": "chats"}},
           "all_chats": {"code": "act_open_object", "name": "Все игровые чаты", "disabled": false, "params": {"object_code": "all_chats"}},
           "master_chats": {"code": "act_open_object", "name": "Мастерские чаты", "disabled": false, "params": {"object_code": "master_chats"}}
         }';
@@ -14506,7 +14272,9 @@ begin
       "template": {"title": "title", "groups": [{"code": "group", "actions": ["clear_notifications"]}]},
       "actions_function": "pallas_project.actgenerator_notifications",
       "list_actions_function": "pallas_project.actgenerator_notifications_content",
-      "list_element_function": "pallas_project.lef_notifications"
+      "list_element_function": "pallas_project.lef_notifications",
+      "independent_from_actor_list_elements": true,
+      "independent_from_object_list_elements": true
     }');
   perform data.create_object(
     'notifications',
@@ -14613,6 +14381,8 @@ begin
     {"code": "content", "value": ["debatles_new", "debatles_future", "debatles_current", "debatles_closed", "debatles_all"], "value_object_code": "master"},
     {"code": "content", "value": ["debatles_my", "debatles_future", "debatles_current", "debatles_closed"]},
     {"code": "actions_function", "value": "pallas_project.actgenerator_debatles"},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
     {
       "code": "mini_card_template",
       "value": {
@@ -14649,7 +14419,8 @@ begin
         "subtitle": "subtitle",
         "groups": []
       }
-    }
+    },
+    {"code": "independent_from_object_list_elements", "value": true}
   ]');
 
   -- Списки дебатлов
@@ -14775,6 +14546,7 @@ begin
     {"code": "actions_function", "value": "pallas_project.actgenerator_debatle_target_audience"},
     {"code": "list_actions_function", "value": "pallas_project.actgenerator_debatle_target_audience_content"},
     {"code": "list_element_function", "value": "pallas_project.lef_do_nothing"},
+    {"code": "independent_from_actor_list_elements", "value": true},
     {"code": "content", "value": ["all_person", "aster", "opa", "cartel"]},
     {
       "code": "template",
@@ -14823,6 +14595,8 @@ begin
     {"code": "actions_function", "value": "pallas_project.actgenerator_debatle_temp_person_list"},
     {"code": "list_element_function", "value": "pallas_project.lef_debatle_temp_person_list"},
     {"code": "temporary_object", "value": true},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
     {
       "code": "template",
       "value": {
@@ -14849,6 +14623,8 @@ begin
     {"code": "content", "value": []},
     {"code": "actions_function", "value": "pallas_project.actgenerator_debatle_temp_bonus_list"},
     {"code": "list_element_function", "value": "pallas_project.lef_debatle_temp_bonus_list"},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
     {"code": "temporary_object", "value": true},
     {
       "code": "template",
@@ -14985,6 +14761,8 @@ begin
     jsonb '[
       {"code": "is_visible", "value": true},
       {"code": "type", "value": "district"},
+      {"code": "independent_from_actor_list_elements", "value": true},
+      {"code": "independent_from_object_list_elements", "value": true},
       {
         "code": "template",
         "value": {
@@ -15050,6 +14828,8 @@ begin
         {"code": "type", "value": "districts"},
         {"code": "is_visible", "value": true},
         {"code": "title", "value": "Районы"},
+        {"code": "independent_from_actor_list_elements", "value": true},
+        {"code": "independent_from_object_list_elements", "value": true},
         {
           "code": "template",
           "value": {
@@ -15100,6 +14880,8 @@ begin
   jsonb '[
     {"code": "title", "value": "Правила"},
     {"code": "is_visible", "value": true},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
     {"code": "content", "value": []},
     {
       "code": "mini_card_template",
@@ -15121,6 +14903,8 @@ begin
   'my_documents',
   jsonb '[
     {"code": "title", "value": "Мои документы"},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
     {"code": "is_visible", "value": true},
     {"code": "content", "value": []},
     {
@@ -15143,6 +14927,8 @@ begin
   'official_documents',
   jsonb '[
     {"code": "title", "value": "Официальные документы"},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
     {"code": "is_visible", "value": true},
     {"code": "content", "value": []},
     {
@@ -15165,6 +14951,8 @@ begin
   'documents',
   jsonb '[
     {"code": "title", "value": "Документы"},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
     {"code": "is_visible", "value": true},
     {"code": "content", "value": ["my_documents", "official_documents", "rules_documents"]},
     {"code": "actions_function", "value": "pallas_project.actgenerator_documents"},
@@ -15188,6 +14976,7 @@ begin
   'document',
   jsonb '[
     {"code": "type", "value": "document"},
+    {"code": "independent_from_actor_list_elements", "value": true},
     {"code": "is_visible", "value": true, "value_object_code": "master"},
     {"code": "is_visible", "value": true},
     {"code": "priority", "value": 95},
@@ -15219,6 +15008,8 @@ begin
   jsonb '[
     {"code": "type", "value": "document_temp_share_list"},
     {"code": "temporary_object", "value": true},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
     {"code": "list_element_function", "value": "pallas_project.lef_document_temp_share_list"},
     {"code": "actions_function", "value": "pallas_project.actgenerator_document_temp_share_list"},
     {
@@ -15242,6 +15033,8 @@ begin
   'document_signers_list',
   jsonb '[
     {"code": "type", "value": "document_signers_list"},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
     {"code": "temporary_object", "value": true},
     {"code": "is_visible", "value": true, "value_object_code": "master"},
     {"code": "list_element_function", "value": "pallas_project.lef_document_signers_list"},
@@ -15429,6 +15222,8 @@ begin
     jsonb '[
       {"code": "is_visible", "value": true, "value_object_code": "master"},
       {"code": "type", "value": "statuses"},
+      {"code": "independent_from_actor_list_elements", "value": true},
+      {"code": "independent_from_object_list_elements", "value": true},
       {"code": "title", "value": "Статусы"},
       {"code": "template", "value": {"title": "title", "subtitle": "cycle", "groups": []}}
     ]');
@@ -15487,6 +15282,8 @@ begin
     'transactions',
     jsonb '[
       {"code": "title", "value": "История транзакций"},
+      {"code": "independent_from_actor_list_elements", "value": true},
+      {"code": "independent_from_object_list_elements", "value": true},
       {"code": "is_visible", "value": true, "value_object_code": "master"},
       {
         "code": "template",
@@ -15511,8 +15308,9 @@ $$
 begin
   -- Класс для группы
   perform data.create_class('group',
-  jsonb '{"is_visible": true,
-    "template": {
+  jsonb '{
+    "is_visible": true,
+    "mini_card_template": {
       "title": "title",
       "groups": [{"code": "group_group1", "actions": ["debatle_add_audience_group", "debatle_del_audience_group"]}]
       }
@@ -15621,6 +15419,8 @@ as
 $$
 declare
   v_type_attribute_id integer := data.get_attribute_id('type');
+  v_independent_from_actor_list_elements_attribute_id integer := data.get_attribute_id('independent_from_actor_list_elements');
+  v_independent_from_object_list_elements_attribute_id integer := data.get_attribute_id('independent_from_object_list_elements');
   v_title_attribute_id integer := data.get_attribute_id('title');
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
   v_actions_function_attribute_id integer := data.get_attribute_id('actions_function');
@@ -15678,6 +15478,8 @@ begin
 
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_chats_id, v_type_attribute_id, jsonb '"chats"', null),
+  (v_chats_id, v_independent_from_actor_list_elements_attribute_id, jsonb 'true', null),
+  (v_chats_id, v_independent_from_object_list_elements_attribute_id, jsonb 'true', null),
   (v_chats_id, v_is_visible_attribute_id, jsonb 'true', null),
   (v_chats_id, v_title_attribute_id, jsonb '"Чаты"', null),
   (v_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"', null),
@@ -15700,6 +15502,8 @@ begin
 
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_chats_id, v_type_attribute_id, jsonb '"chats"', null),
+  (v_chats_id, v_independent_from_actor_list_elements_attribute_id, jsonb 'true', null),
+  (v_chats_id, v_independent_from_object_list_elements_attribute_id, jsonb 'true', null),
   (v_chats_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
   (v_chats_id, v_title_attribute_id, jsonb '"Все игровые чаты"', null),
   (v_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"', null),
@@ -15723,6 +15527,8 @@ begin
 
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_master_chats_id, v_type_attribute_id, jsonb '"chats"', null),
+  (v_master_chats_id, v_independent_from_actor_list_elements_attribute_id, jsonb 'true', null),
+  (v_master_chats_id, v_independent_from_object_list_elements_attribute_id, jsonb 'true', null),
   (v_master_chats_id, v_is_visible_attribute_id, jsonb 'true', null),
   (v_master_chats_id, v_title_attribute_id, jsonb '"Общение с мастерами"', null),
   (v_master_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"', null),
@@ -15746,6 +15552,8 @@ begin
 
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_chat_class_id, v_type_attribute_id, jsonb '"chat"', null),
+  (v_chat_class_id, v_independent_from_actor_list_elements_attribute_id, jsonb 'true', null),
+  (v_chat_class_id, v_independent_from_object_list_elements_attribute_id, jsonb 'true', null),
   (v_chat_class_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
   (v_chat_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chat"', null),
   (v_chat_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_do_nothing"', null),
@@ -15800,6 +15608,8 @@ begin
 
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_chat_person_list_class_id, v_type_attribute_id, jsonb '"chat_person_list"', null),
+  (v_chat_person_list_class_id, v_independent_from_actor_list_elements_attribute_id, jsonb 'true', null),
+  (v_chat_person_list_class_id, v_independent_from_object_list_elements_attribute_id, jsonb 'true', null),
   (v_chat_person_list_class_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
   (v_chat_person_list_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chat_temp_person_list"', null),
   (v_chat_person_list_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chat_temp_person_list"', null),
@@ -16336,6 +16146,8 @@ begin
       {"code": "is_visible", "value": true},
       {"code": "type", "value": "persons"},
       {"code": "template", "value": {"title": "title", "groups": []}},
+      {"code": "independent_from_actor_list_elements", "value": true},
+      {"code": "independent_from_object_list_elements", "value": true},
       {"code": "title", "value": "Люди \"Паллады\""}
     ]' ||
     data.attribute_change2jsonb('content', v_list) ||
@@ -16460,6 +16272,8 @@ begin
     jsonb '{
       "title": "Мои организации",
       "type": "organization_list",
+      "independent_from_actor_list_elements": true,
+      "independent_from_object_list_elements": true,
       "template": {
         "title": "title",
         "groups": []
@@ -18119,17 +17933,22 @@ as
 $$
 declare
   v_group_id integer := data.get_object_id(in_group_code);
-  v_count integer; 
+  v_exists boolean; 
 begin
-  select count(1) into v_count from data.object_objects oo
-  where oo.object_id = in_object_id
-    and oo.parent_object_id = v_group_id;
+  select true
+  into v_exists
+  where exists(
+    select 1
+    from data.object_objects
+    where
+      object_id = in_object_id and
+      parent_object_id = v_group_id);
 
-  if v_count > 0 then
+  if v_exists then
     return true;
-  else 
-    return false;
   end if;
+
+  return false;
 end;
 $$
 language plpgsql;

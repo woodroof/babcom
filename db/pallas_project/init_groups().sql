@@ -8,8 +8,9 @@ $$
 begin
   -- Класс для группы
   perform data.create_class('group',
-  jsonb '{"is_visible": true,
-    "template": {
+  jsonb '{
+    "is_visible": true,
+    "mini_card_template": {
       "title": "title",
       "groups": [{"code": "group_group1", "actions": ["debatle_add_audience_group", "debatle_del_audience_group"]}]
       }

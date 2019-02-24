@@ -22,6 +22,8 @@ begin
     jsonb '[
       {"code": "is_visible", "value": true},
       {"code": "type", "value": "district"},
+      {"code": "independent_from_actor_list_elements", "value": true},
+      {"code": "independent_from_object_list_elements", "value": true},
       {
         "code": "template",
         "value": {
@@ -87,6 +89,8 @@ begin
         {"code": "type", "value": "districts"},
         {"code": "is_visible", "value": true},
         {"code": "title", "value": "Районы"},
+        {"code": "independent_from_actor_list_elements", "value": true},
+        {"code": "independent_from_object_list_elements", "value": true},
         {
           "code": "template",
           "value": {

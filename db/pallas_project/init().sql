@@ -67,7 +67,9 @@ begin
       "template": {"title": "title", "groups": [{"code": "group", "actions": ["clear_notifications"]}]},
       "actions_function": "pallas_project.actgenerator_notifications",
       "list_actions_function": "pallas_project.actgenerator_notifications_content",
-      "list_element_function": "pallas_project.lef_notifications"
+      "list_element_function": "pallas_project.lef_notifications",
+      "independent_from_actor_list_elements": true,
+      "independent_from_object_list_elements": true
     }');
   perform data.create_object(
     'notifications',

@@ -36,6 +36,8 @@ begin
     null,
     false
   ),
+  ('independent_from_actor_list_elements', null, 'true, если содержимое элементов данного списка не зависит от актора', 'system', null, null, false),
+  ('independent_from_object_list_elements', null, 'true, если содержимое элементов данного списка не зависит от самого объекта-списка', 'system', null, null, false),
   ('is_visible', null, 'Определяет, доступен ли объект текущему актору, boolean', 'system', null, null, true),
   (
     'list_actions_function',

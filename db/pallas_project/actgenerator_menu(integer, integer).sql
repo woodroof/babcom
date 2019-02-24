@@ -6,11 +6,10 @@ volatile
 as
 $$
 declare
-  v_object_code text := data.get_object_code(in_object_id);
   v_actor_code text := data.get_object_code(in_actor_id);
   v_actions jsonb := '{}';
-  v_is_master boolean := pp_utils.is_in_group(in_actor_id, 'master');
-  v_economy_type text := json.get_string_opt(data.get_attribute_value_for_share(in_actor_id, 'system_person_economy_type'), null);
+  v_is_master boolean;
+  v_economy_type text;
 begin
   assert in_actor_id is not null;
 
@@ -20,7 +19,12 @@ begin
     v_actions :=
       v_actions ||
       jsonb '{"login": {"code": "login", "name": "Войти", "disabled": false, "params": {}, "user_params": [{"code": "password", "description": "Введите пароль", "type": "string", "restrictions": {"password": true}}]}}';
-  elsif v_is_master or pp_utils.is_in_group(in_actor_id, 'all_person') then
+  else
+    v_is_master := pp_utils.is_in_group(in_actor_id, 'master');
+    if not v_is_master then
+      v_economy_type := json.get_string_opt(data.get_attribute_value_for_share(in_actor_id, 'system_person_economy_type'), null);
+    end if;
+
     if not v_is_master then
       v_actions :=
         v_actions ||
@@ -61,7 +65,7 @@ begin
       v_actions :=
         v_actions ||
         jsonb '{
-          "chats": {"code": "act_open_object", "name": " Отслеживаемые игровые чаты", "disabled": false, "params": {"object_code": "chats"}},
+          "chats": {"code": "act_open_object", "name": "Отслеживаемые игровые чаты", "disabled": false, "params": {"object_code": "chats"}},
           "all_chats": {"code": "act_open_object", "name": "Все игровые чаты", "disabled": false, "params": {"object_code": "all_chats"}},
           "master_chats": {"code": "act_open_object", "name": "Мастерские чаты", "disabled": false, "params": {"object_code": "master_chats"}}
         }';

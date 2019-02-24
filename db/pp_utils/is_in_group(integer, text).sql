@@ -7,17 +7,22 @@ as
 $$
 declare
   v_group_id integer := data.get_object_id(in_group_code);
-  v_count integer; 
+  v_exists boolean; 
 begin
-  select count(1) into v_count from data.object_objects oo
-  where oo.object_id = in_object_id
-    and oo.parent_object_id = v_group_id;
+  select true
+  into v_exists
+  where exists(
+    select 1
+    from data.object_objects
+    where
+      object_id = in_object_id and
+      parent_object_id = v_group_id);
 
-  if v_count > 0 then
+  if v_exists then
     return true;
-  else 
-    return false;
   end if;
+
+  return false;
 end;
 $$
 language plpgsql;
