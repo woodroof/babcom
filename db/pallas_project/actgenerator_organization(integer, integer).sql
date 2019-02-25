@@ -65,6 +65,35 @@ begin
     end;
   end if;
 
+  if v_master then
+    declare
+      v_tax integer := json.get_integer(data.get_attribute_value(in_object_id, 'system_org_tax'));
+    begin
+      v_actions :=
+        v_actions ||
+        format(
+          '{
+            "change_current_tax": {
+              "code": "change_current_tax",
+              "name": "Изменить налоговую ставку на ТЕКУЩИЙ цикл",
+              "disabled": false,
+              "params": "%s",
+              "user_params": [
+                {
+                  "code": "tax",
+                  "description": "Налог, %%",
+                  "type": "integer",
+                  "restrictions": {"min_value": 0, "max_value": 90},
+                  "default_value": %s
+                }
+              ]
+            }
+          }',
+          v_object_code,
+          v_tax)::jsonb;
+    end;
+  end if;
+
   if v_actor_economy_type in ('asters', 'mcr') then
     v_actor_money := json.get_bigint(data.get_attribute_value_for_share(in_actor_id, 'system_money'));
     if v_actor_money <= 0 then

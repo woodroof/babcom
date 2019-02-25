@@ -9,7 +9,8 @@ declare
   v_district record;
 begin
   insert into data.actions(code, function) values
-  ('change_next_tax', 'pallas_project.act_change_next_tax');
+  ('change_next_tax', 'pallas_project.act_change_next_tax'),
+  ('change_current_tax', 'pallas_project.act_change_current_tax');
 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
   ('system_org_synonym', null, 'Код оригинальной организации, string', 'system', null, null, false),
@@ -44,7 +45,7 @@ begin
           {
             "code": "personal_info",
             "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_tax", "org_next_tax", "org_current_tax_sum", "org_districts_control", "org_districts_influence"],
-            "actions": ["transfer_money", "change_next_tax", "show_transactions"]
+            "actions": ["transfer_money", "change_current_tax", "change_next_tax", "show_transactions"]
           },
           {"code": "info", "attributes": ["description"]}
         ]

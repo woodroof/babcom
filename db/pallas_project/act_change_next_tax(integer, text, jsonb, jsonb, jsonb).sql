@@ -30,7 +30,10 @@ begin
         v_object_code,
         v_tax,
         v_object_code)::jsonb);
-  assert v_notified;
+  -- Та же ставка
+  if not v_notified then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
 end;
 $$
 language plpgsql;

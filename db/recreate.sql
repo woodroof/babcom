@@ -9181,6 +9181,64 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_change_current_tax(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_change_current_tax(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_tax integer := json.get_bigint(in_user_params, 'tax');
+  v_object_code text := json.get_string(in_params);
+  v_object_id integer := data.get_object_id(v_object_code);
+  v_districts jsonb := data.get_attribute_value_for_share(v_object_id, 'system_org_districts_control');
+  v_notified boolean;
+  v_district text;
+begin
+  assert v_tax >= 0 and v_tax < 100;
+
+  v_notified :=
+    data.change_current_object(
+      in_client_id,
+      in_request_id,
+      v_object_id,
+      format(
+        '[
+          {"code": "system_org_tax", "value": %s},
+          {"code": "org_tax", "value": %s, "value_object_code": "master"},
+          {"code": "org_tax", "value": %s, "value_object_code": "%s_head"},
+          {"code": "org_tax", "value": %s, "value_object_code": "%s_economist"}
+        ]',
+        v_tax,
+        v_tax,
+        v_tax,
+        v_object_code,
+        v_tax,
+        v_object_code)::jsonb);
+  -- Та же ставка
+  if not v_notified then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
+
+  for v_district in
+  (
+    select json.get_string(value)
+    from jsonb_array_elements(v_districts)
+  )
+  loop
+    perform data.change_object_and_notify(
+      data.get_object_id(v_district),
+      format(
+        '{
+          "district_tax": %s
+        }',
+        v_tax)::jsonb);
+  end loop;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_change_next_tax(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_change_next_tax(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -9213,7 +9271,10 @@ begin
         v_object_code,
         v_tax,
         v_object_code)::jsonb);
-  assert v_notified;
+  -- Та же ставка
+  if not v_notified then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
 end;
 $$
 language plpgsql;
@@ -13022,6 +13083,35 @@ begin
     end;
   end if;
 
+  if v_master then
+    declare
+      v_tax integer := json.get_integer(data.get_attribute_value(in_object_id, 'system_org_tax'));
+    begin
+      v_actions :=
+        v_actions ||
+        format(
+          '{
+            "change_current_tax": {
+              "code": "change_current_tax",
+              "name": "Изменить налоговую ставку на ТЕКУЩИЙ цикл",
+              "disabled": false,
+              "params": "%s",
+              "user_params": [
+                {
+                  "code": "tax",
+                  "description": "Налог, %%",
+                  "type": "integer",
+                  "restrictions": {"min_value": 0, "max_value": 90},
+                  "default_value": %s
+                }
+              ]
+            }
+          }',
+          v_object_code,
+          v_tax)::jsonb;
+    end;
+  end if;
+
   if v_actor_economy_type in ('asters', 'mcr') then
     v_actor_money := json.get_bigint(data.get_attribute_value_for_share(in_actor_id, 'system_money'));
     if v_actor_money <= 0 then
@@ -15871,7 +15961,8 @@ declare
   v_district record;
 begin
   insert into data.actions(code, function) values
-  ('change_next_tax', 'pallas_project.act_change_next_tax');
+  ('change_next_tax', 'pallas_project.act_change_next_tax'),
+  ('change_current_tax', 'pallas_project.act_change_current_tax');
 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
   ('system_org_synonym', null, 'Код оригинальной организации, string', 'system', null, null, false),
@@ -15906,7 +15997,7 @@ begin
           {
             "code": "personal_info",
             "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_tax", "org_next_tax", "org_current_tax_sum", "org_districts_control", "org_districts_influence"],
-            "actions": ["transfer_money", "change_next_tax", "show_transactions"]
+            "actions": ["transfer_money", "change_current_tax", "change_next_tax", "show_transactions"]
           },
           {"code": "info", "attributes": ["description"]}
         ]
