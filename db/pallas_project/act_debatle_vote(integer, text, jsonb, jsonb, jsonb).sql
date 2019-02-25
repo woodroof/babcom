@@ -105,6 +105,7 @@ begin
         v_diff := pallas_project.change_money(v_actor_id, v_current_sum - v_price, v_actor_id, 'Debatle voiting');
         perform pallas_project.create_transaction(
           v_actor_id,
+          null,
           format(
             'Плата за голосование в дебатле "%s"',
             json.get_string(data.get_raw_attribute_value(v_debatle_id, 'title'))),
@@ -112,7 +113,8 @@ begin
           v_current_sum - v_price,
           null,
           null,
-          v_actor_id);
+          v_actor_id,
+          array[v_actor_id]);
       end if;
       perform data.process_diffs_and_notify(v_diff);
     end if;

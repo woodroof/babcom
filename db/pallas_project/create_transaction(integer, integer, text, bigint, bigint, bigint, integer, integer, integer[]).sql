@@ -1,12 +1,14 @@
--- drop function pallas_project.create_transaction(integer, text, bigint, bigint, bigint, integer, integer, integer[]);
+-- drop function pallas_project.create_transaction(integer, integer, text, bigint, bigint, bigint, integer, integer, integer[]);
 
-create or replace function pallas_project.create_transaction(in_object_id integer, in_comment text, in_value bigint, in_balance bigint, in_tax bigint, in_second_object_id integer, in_actor_id integer, in_visible_object_ids integer[])
+create or replace function pallas_project.create_transaction(in_object_id integer, in_synonym_object_id integer, in_comment text, in_value bigint, in_balance bigint, in_tax bigint, in_second_object_id integer, in_actor_id integer, in_visible_object_ids integer[])
 returns void
 volatile
 as
 $$
 declare
   v_object_code text := data.get_object_code(in_object_id);
+  v_synonym_object_title text;
+  v_synonym_object_code text;
   v_description text;
   v_visible_object_id integer;
   v_attributes jsonb;
@@ -19,6 +21,13 @@ begin
   assert in_balance is not null;
   assert in_tax is null or in_tax >= 0 and in_tax <= abs(in_value);
 
+  if in_synonym_object_id is not null then
+    v_synonym_object_title := json.get_string_opt(data.get_attribute_value(in_synonym_object_id, 'title'), null);
+    if v_synonym_object_title is not null then
+      v_synonym_object_code := data.get_object_code(in_synonym_object_id);
+    end if;
+  end if;
+
   if in_second_object_id is not null then
     v_second_object_title := json.get_string_opt(data.get_attribute_value(in_second_object_id, 'title'), null);
     if v_second_object_title is not null then
@@ -27,6 +36,8 @@ begin
   end if;
 
   if in_value < 0 then
+    assert in_synonym_object_id is null;
+
     v_description :=
       format(
         E'%s\n%s\n%s%s%s\nБаланс: %s',
@@ -39,9 +50,10 @@ begin
   else
     v_description :=
       format(
-        E'%s\n%s\n%s%s%s\nБаланс: %s',
+        E'%s\n%s%s\n%s%s%s\nБаланс: %s',
         pp_utils.format_date(clock_timestamp()),
         '+' || pp_utils.format_money(in_value - coalesce(in_tax, 0)),
+        (case when v_synonym_object_title is not null then format(E'\nНазначение перевода: [%s](babcom:%s)', v_synonym_object_title, v_synonym_object_code) else '' end),
         in_comment,
         (case when v_second_object_title is not null then format(E'\nОтправитель: [%s](babcom:%s)', v_second_object_title, v_second_object_code) else '' end),
         (case when in_tax is not null then format(E'\nНалог: %s\nСумма перевода до налога: %s', pp_utils.format_money(in_tax), pp_utils.format_money(in_value)) else '' end),

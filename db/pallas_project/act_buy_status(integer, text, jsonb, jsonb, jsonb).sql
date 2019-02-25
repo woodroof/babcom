@@ -47,6 +47,7 @@ begin
       pallas_project.change_money(v_actor_id, v_current_sum - v_price, v_actor_id, 'Status purchase'));
     perform pallas_project.create_transaction(
       v_actor_id,
+      null,
       format(
         'Покупка %s статуса "%s"',
         (case when v_status_value = 1 then 'бронзового' when v_status_value = 2 then 'серебряного' else 'золотого' end),
@@ -55,7 +56,8 @@ begin
       v_current_sum - v_price,
       null,
       null,
-      v_actor_id);
+      v_actor_id,
+      array[v_actor_id]);
   end if;
 
   v_notified :=

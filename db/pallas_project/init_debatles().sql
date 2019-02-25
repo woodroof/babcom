@@ -230,7 +230,7 @@ begin
   jsonb '[
     {"code": "type", "value": "debatle_confirm_presence"},
     {"code": "title", "value": "Подтверждение"},
-    {"code": "description", "value": "Спасибо что подтвердили своё присутствие на дебатле"},
+    {"code": "description", "value": "Спасибо, что подтвердили своё присутствие на дебатле"},
     {"code": "is_visible", "value": true},
     {"code": "actions_function", "value": "pallas_project.actgenerator_debatle_confirm_presence"},
     {

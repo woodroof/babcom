@@ -58,51 +58,114 @@ begin
       end if;
     end if;
   else
-    if in_object_id != in_actor_id and v_economy_type in (jsonb '"asters"', jsonb '"mcr"') then
-      v_actor_economy_type := json.get_string_opt(data.get_attribute_value_for_share(in_actor_id, 'system_person_economy_type'), null);
-      if v_actor_economy_type in ('asters', 'mcr') then
-        v_actor_money := json.get_bigint(data.get_attribute_value_for_share(in_actor_id, 'system_money'));
-        if v_actor_money <= 0 then
-          v_actions :=
-            v_actions ||
-            jsonb '{
-              "transfer_money": {
-                "name": "Перевести деньги",
-                "disabled": true
-              }
-            }';
-        else
-          v_tax := pallas_project.get_person_tax_for_share(in_object_id);
-          v_actions :=
-            v_actions ||
-            format(
-              '{
+    if v_economy_type in (jsonb '"asters"', jsonb '"mcr"') then
+      v_tax := pallas_project.get_person_tax_for_share(in_object_id);
+
+      if in_object_id != in_actor_id then
+        v_actor_economy_type := json.get_string_opt(data.get_attribute_value_for_share(in_actor_id, 'system_person_economy_type'), null);
+        if v_actor_economy_type in ('asters', 'mcr') then
+          v_actor_money := json.get_bigint(data.get_attribute_value_for_share(in_actor_id, 'system_money'));
+          if v_actor_money <= 0 then
+            v_actions :=
+              v_actions ||
+              jsonb '{
                 "transfer_money": {
-                  "code": "transfer_money",
                   "name": "Перевести деньги",
-                  "warning": "С суммы перевода будет списан налог в размере %s%% с округлением вверх, продолжить?",
-                  "params": "%s",
-                  "user_params": [
-                    {
-                      "code": "sum",
-                      "description": "Сумма, UN$",
-                      "type": "integer",
-                      "restrictions": {"min_value": 1, "max_value": %s}
-                    },
-                    {
-                      "code": "comment",
-                      "description": "Комментарий",
-                      "type": "string",
-                      "restrictions": {"max_length": 1000, "multiline": true}
-                    }
-                  ]
+                  "disabled": true
                 }
-              }',
-              v_tax,
-              v_object_code,
-              v_actor_money)::jsonb;
+              }';
+          else
+            v_actions :=
+              v_actions ||
+              format(
+                '{
+                  "transfer_money": {
+                    "code": "transfer_money",
+                    "name": "Перевести деньги",
+                    "warning": "С суммы перевода будет списан налог в размере %s%% с округлением вверх, продолжить?",
+                    "params": "%s",
+                    "user_params": [
+                      {
+                        "code": "sum",
+                        "description": "Сумма, UN$",
+                        "type": "integer",
+                        "restrictions": {"min_value": 1, "max_value": %s}
+                      },
+                      {
+                        "code": "comment",
+                        "description": "Комментарий",
+                        "type": "string",
+                        "restrictions": {"max_length": 1000, "multiline": true}
+                      }
+                    ]
+                  }
+                }',
+                v_tax,
+                v_object_code,
+                v_actor_money)::jsonb;
+          end if;
         end if;
       end if;
+
+      declare
+        v_actor_code text := data.get_object_code(in_actor_id);
+        v_my_organizations jsonb := data.get_raw_attribute_value_for_share(data.get_object_id(v_actor_code || '_my_organizations'), 'content');
+        v_title_attr_id integer;
+        v_my_organization record;
+      begin
+        if v_my_organizations != '[]' then
+          v_title_attr_id := data.get_attribute_id('title');
+
+          for v_my_organization in
+          (
+            select row_number() over() as num, code, title
+            from (
+              select o.code, json.get_string(data.get_attribute_value(o.id, v_title_attr_id)) title
+              from jsonb_array_elements(v_my_organizations) m
+              join data.objects o on
+                o.code = json.get_string(m.value) and
+                (pp_utils.is_in_group(in_actor_id, o.code || '_head') or pp_utils.is_in_group(in_actor_id, o.code || '_economist'))
+              order by title
+              limit 5) orgs
+          )
+          loop
+            v_actions :=
+              v_actions ||
+              format(
+                '{
+                  "transfer_org_money%s": {
+                    "code": "transfer_org_money",
+                    "name": "Перевести деньги от лица организации %s",
+                    "warning": "С суммы перевода будет списан налог в размере %s%% с округлением вверх, продолжить?",
+                    "disabled": false,
+                    "params": {
+                      "org_code": "%s",
+                      "receiver_code": "%s"
+                    },
+                    "user_params": [
+                      {
+                        "code": "sum",
+                        "description": "Сумма, UN$",
+                        "type": "integer",
+                        "restrictions": {"min_value": 1}
+                      },
+                      {
+                        "code": "comment",
+                        "description": "Комментарий",
+                        "type": "string",
+                        "restrictions": {"max_length": 1000, "multiline": true}
+                      }
+                    ]
+                  }
+                }',
+                v_my_organization.num,
+                v_my_organization.title,
+                v_tax,
+                v_my_organization.code,
+                v_object_code)::jsonb;
+          end loop;
+        end if;
+      end;
     end if;
   end if;
 
