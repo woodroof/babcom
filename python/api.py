@@ -98,6 +98,10 @@ async def connect(connection, client_code, connection_object, request):
     return ws
 
 async def reconnect(connection, client_code, connection_object, request):
+    try:
+        await connection_object['ws'].send_str('{"type": "disconnected", "data": {}}')
+    except RuntimeError:
+        pass
     #TODO отправлять сообщение определённого формата
     await connection_object['ws'].close()
     #TODO чтобы не отправлять новому клиенту старые сообщения, нужно из БД получать какой-то id активного подключения, но пока забиваем
