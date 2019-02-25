@@ -12594,7 +12594,7 @@ begin
                 '"params": {"blog_message_code": "%s", "like_on_off": "%s", "is_list": true}}',
                 case when v_is_like then
                   '🧡 ' || v_like_count
-                else '🖤 ' || v_like_count end,
+                else '💙 ' || v_like_count end,
                 v_blog_message_code,
                 case when v_is_like then
                   'off'
@@ -12666,7 +12666,7 @@ begin
                 '"params": {"blog_message_code": "%s", "like_on_off": "%s"}}',
                 case when v_is_like then
                   '🧡 ' || v_like_count
-                else '🖤 ' || v_like_count end,
+                else '💙 ' || v_like_count end,
                 v_blog_message_code,
                 case when v_is_like then
                   'off'
@@ -15470,6 +15470,8 @@ begin
     {"code": "is_visible", "value": true},
     {"code": "content", "value": ["blogs_my", "blogs_all"]},
     {"code": "actions_function", "value": "pallas_project.actgenerator_blogs_my"},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
     {
       "code": "template",
       "value": {
@@ -15487,6 +15489,8 @@ begin
     {"code": "title", "value": "Все блоги"},
     {"code": "is_visible", "value": true},
     {"code": "content", "value": []},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
     {
       "code": "mini_card_template",
       "value": {
@@ -15510,6 +15514,8 @@ begin
     {"code": "title", "value": "Мои блоги"},
     {"code": "is_visible", "value": true},
     {"code": "content", "value": []},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
     {"code": "actions_function", "value": "pallas_project.actgenerator_blogs_my"},
     {
       "code": "mini_card_template",
@@ -15538,6 +15544,8 @@ begin
     {"code": "title", "value": "Новости"},
     {"code": "is_visible", "value": true},
     {"code": "content", "value": []},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
     {"code": "list_actions_function", "value": "pallas_project.actgenerator_blog_content"},
     {
       "code": "mini_card_template",
@@ -15565,6 +15573,8 @@ begin
     {"code": "content", "value": []},
     {"code": "is_visible", "value": true},
     {"code": "actions_function", "value": "pallas_project.actgenerator_blog"},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
     {"code": "list_actions_function", "value": "pallas_project.actgenerator_blog_content"},
     {
       "code": "mini_card_template",

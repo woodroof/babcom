@@ -59,7 +59,7 @@ begin
                 '"params": {"blog_message_code": "%s", "like_on_off": "%s", "is_list": true}}',
                 case when v_is_like then
                   '🧡 ' || v_like_count
-                else '🖤 ' || v_like_count end,
+                else '💙 ' || v_like_count end,
                 v_blog_message_code,
                 case when v_is_like then
                   'off'
