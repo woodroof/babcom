@@ -41,8 +41,8 @@ begin
   -- добавляем в группу с рассылкой
     perform data.process_diffs_and_notify(data.change_object_groups(v_actor_id, array[v_chat_id], array[]::integer[], v_actor_id));
 
-    -- Меняем заголовок чата, если зашёл не мастер
-    if not v_is_master or v_chat_parent_list = 'master_chats' then
+    -- Меняем заголовок чата, если зашёл не мастер и это не объектный чат
+    if v_object_code is null and (not v_is_master or v_chat_parent_list = 'master_chats') then
       for v_name in 
         (select x.name from jsonb_to_recordset(pallas_project.get_chat_persons(v_chat_id, v_chat_parent_list <> 'master_chats'))as x(code text, name jsonb) limit 3) loop 
         v_chat_title := v_chat_title || ', '|| json.get_string(v_name);

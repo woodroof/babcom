@@ -38,6 +38,7 @@ declare
 
   v_actor_title text := json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id));
   v_title text := pp_utils.format_date(clock_timestamp()) || E'\n' || v_actor_title;
+  v_notification_text text;
 
   v_chat_unread_messages integer;
   v_chat_unread_messages_attribute_id integer := data.get_attribute_id('chat_unread_messages');
@@ -90,6 +91,7 @@ begin
     end if;
     -- Отправляем нотификацию о новом сообщении всем неподписанным на этот чат
     -- и перекладываем у всех участников этот чат вверх списка
+    v_notification_text := 'Новое сообщение ' || (case when v_chat_title is not null then ' в '|| v_chat_title  || ' ' else '' end) || 'от '|| v_actor_title;
     for v_person_id in 
       (select oo.object_id from data.object_objects oo 
         where oo.parent_object_id = v_chat_id
@@ -113,7 +115,7 @@ begin
       if v_person_id <> v_actor_id 
         and not v_is_actor_subscribed
         and not json.get_boolean_opt(data.get_raw_attribute_value_for_share(v_chat_id, 'chat_is_mute', v_person_id), false) then
-        perform pp_utils.add_notification(v_person_id, 'Новое сообщение ' || (case when v_chat_title is not null then ' в '|| v_chat_title  || ' ' else '' end) || 'от '|| v_actor_title , v_chat_id);
+        perform pp_utils.add_notification(v_person_id, v_notification_text, v_chat_id);
       end if;
     end loop;
   end if;

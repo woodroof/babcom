@@ -157,7 +157,7 @@ begin
       "groups": [
         {
           "code": "debatle_group1",
-          "attributes": ["debatle_theme", "debatle_status", "debatle_person1", "debatle_person2", "debatle_judge", "debatle_target_audience"],
+          "attributes": ["debatle_status", "debatle_person1", "debatle_person2", "debatle_judge", "debatle_target_audience"],
           "actions": [
             "debatle_change_instigator",
             "debatle_change_opponent",

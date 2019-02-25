@@ -156,7 +156,9 @@ begin
                    'system_chat_is_renamed', true,
                    'system_chat_parent_list', 'chats',
                    'system_chat_can_invite', false,
+                   'system_chat_can_leave', false,
                    'system_chat_can_rename', false,
+                   'system_chat_cant_see_members', true,
                    'system_chat_length', 0
                  ));
   elsif v_new_status = 'vote' then

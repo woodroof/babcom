@@ -9005,6 +9005,408 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_blog_create(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_blog_create(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_title text := json.get_string(in_user_params, 'title');
+  v_blog_code text;
+  v_blog_id  integer;
+  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+
+  v_blog_all_id integer := data.get_object_id('blogs_all');
+  v_blog_my_id integer := data.get_object_id('blogs_my');
+
+  v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
+
+begin
+  assert in_request_id is not null;
+
+-- создаём новый блог
+  v_blog_id := data.create_object(
+    null,
+    jsonb_build_array(
+      jsonb_build_object('code', 'title', 'value', v_title),
+      jsonb_build_object('code', 'system_blog_author', 'value', to_jsonb(v_actor_id)),
+      jsonb_build_object('code', 'blog_author', 'value', to_jsonb(data.get_object_code(v_actor_id)), 'value_object_code', 'master')
+    ),
+    'blog');
+
+  v_blog_code := data.get_object_code(v_blog_id);
+
+  -- Добавляем блог в список всех и в список моих для того, кто создаёт
+  perform pp_utils.list_prepend_and_notify(v_blog_all_id, v_blog_code, null, v_actor_id);
+  perform pp_utils.list_prepend_and_notify(v_blog_my_id, v_blog_code, v_actor_id, v_actor_id);
+
+  perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, v_blog_code);
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_blog_message_delete(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_blog_message_delete(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_blog_message_code text := json.get_string(in_params, 'blog_message_code');
+  v_is_list boolean := json.get_boolean_opt(in_params, 'is_list', false);
+  v_blog_message_id integer := data.get_object_id(v_blog_message_code);
+  v_blog_message_chat_id integer := data.get_object_id(v_blog_message_code || '_chat');
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+
+  v_news_id integer := data.get_object_id('news');
+  v_blog_name text := json.get_string(data.get_raw_attribute_value_for_share(v_blog_message_id, 'blog_name'));
+  v_blog_author integer := json.get_integer(data.get_raw_attribute_value_for_share(data.get_object_id(v_blog_name), 'system_blog_author'));
+  v_changes jsonb[];
+begin
+  assert in_request_id is not null;
+  assert v_blog_author = v_actor_id or pp_utils.is_in_group(v_actor_id, 'master');
+
+  v_changes := array[]::jsonb[];
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', jsonb 'false'));
+
+  perform data.change_object_and_notify(v_blog_message_id, 
+                                        to_jsonb(v_changes),
+                                        v_actor_id);
+
+  v_changes := array[]::jsonb[];
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', jsonb 'false', v_blog_message_chat_id));
+
+  perform data.change_object_and_notify(v_blog_message_chat_id, 
+                                        to_jsonb(v_changes),
+                                        v_actor_id);
+
+  if v_is_list then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  else
+    perform api_utils.create_go_back_action_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_blog_message_edit(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_blog_message_edit(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_blog_message_code text := json.get_string(in_params, 'blog_message_code');
+  v_is_list boolean := json.get_boolean_opt(in_params, 'is_list', false);
+  v_title text := json.get_string(in_user_params, 'title');
+  v_text text := json.get_string(in_user_params, 'text');
+  v_blog_message_id integer := data.get_object_id(v_blog_message_code);
+  v_blog_message_chat_id integer := data.get_object_id(v_blog_message_code || '_chat');
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+
+  v_old_title text;
+  v_old_text text;
+  v_blog_name text := json.get_string(data.get_raw_attribute_value_for_share(v_blog_message_id, 'blog_name'));
+  v_blog_author integer := json.get_integer(data.get_raw_attribute_value_for_share(data.get_object_id(v_blog_name), 'system_blog_author'));
+  v_changes jsonb[];
+  v_chat_changes jsonb[];
+
+  v_blog_message_text_attribute_id integer := data.get_attribute_id('blog_message_text');
+  v_title_attribute_id integer := data.get_attribute_id('title');
+  v_message_sent boolean := false;
+begin
+  assert in_request_id is not null;
+  assert v_blog_author = v_actor_id or pp_utils.is_in_group(v_actor_id, 'master');
+
+  v_old_title := json.get_string_opt(data.get_raw_attribute_value_for_update(v_blog_message_id, v_title_attribute_id), '');
+  v_old_text := json.get_string_opt(data.get_raw_attribute_value_for_update(v_blog_message_id, v_blog_message_text_attribute_id), '');
+
+  v_changes := array[]::jsonb[];
+  v_chat_changes := array[]::jsonb[];
+  if v_old_title <> v_title then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, to_jsonb(v_title)));
+    v_chat_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, to_jsonb('Обсуждение новости ' || v_title)));
+  end if;
+  if v_old_text <> v_text then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_blog_message_text_attribute_id, to_jsonb(v_text)));
+  end if;
+  if array_length(v_chat_changes, 1) > 0 then
+    perform data.change_object_and_notify(v_blog_message_chat_id, to_jsonb(v_chat_changes), v_actor_id);
+  end if;
+
+  if array_length(v_changes, 1) > 0 then
+    if v_is_list then
+      perform data.change_object_and_notify(v_blog_message_id, 
+                                            to_jsonb(v_changes),
+                                            v_actor_id);
+
+    else
+      v_message_sent := data.change_current_object(in_client_id, 
+                                                   in_request_id,
+                                                   v_blog_message_id, 
+                                                   to_jsonb(v_changes));
+    end if;
+  end if;
+
+  if not v_message_sent then
+   perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_blog_message_like(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_blog_message_like(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_blog_message_code text := json.get_string(in_params, 'blog_message_code');
+  v_like_on_off text := json.get_string(in_params, 'like_on_off');
+  v_is_list boolean := json.get_boolean_opt(in_params, 'is_list', false);
+  v_blog_message_id integer := data.get_object_id(v_blog_message_code);
+  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+
+  v_system_blog_message_like boolean;
+  v_new_like boolean;
+  v_blog_message_like_count integer;
+  v_new_count integer;
+
+  v_system_blog_message_like_attribute_id integer := data.get_attribute_id('system_blog_message_like');
+  v_blog_message_like_count_attribute_id integer := data.get_attribute_id('blog_message_like_count');
+  v_changes jsonb[];
+  v_message_sent boolean := false;
+begin
+  -- like_on_off: on - нравится, off - больше не нравится
+  assert in_request_id is not null;
+  assert v_like_on_off in ('on', 'off');
+
+  v_system_blog_message_like := json.get_boolean_opt(data.get_raw_attribute_value_for_update(v_blog_message_id, v_system_blog_message_like_attribute_id, v_actor_id), false);
+  v_blog_message_like_count := json.get_integer_opt(data.get_raw_attribute_value_for_update(v_blog_message_id, v_blog_message_like_count_attribute_id), 0);
+
+  if v_like_on_off = 'on' then
+    v_new_like := true;
+  end if;
+
+  if coalesce(v_new_like, false) <> v_system_blog_message_like then
+    v_changes := array[]::jsonb[];
+    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_system_blog_message_like_attribute_id, to_jsonb(v_new_like), v_actor_id));
+    if v_new_like then 
+      v_new_count := v_blog_message_like_count + 1;
+    else 
+      v_new_count := v_blog_message_like_count - 1;
+    end if;
+    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_blog_message_like_count_attribute_id, to_jsonb(v_new_count)));
+    if v_is_list then
+      perform data.change_object_and_notify(v_blog_message_id, 
+                                            to_jsonb(v_changes),
+                                            v_actor_id);
+    else
+      v_message_sent := data.change_current_object(in_client_id, 
+                                                   in_request_id,
+                                                   v_blog_message_id, 
+                                                   to_jsonb(v_changes));
+    end if;
+  end if;
+  if not v_message_sent then
+   perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_blog_mute(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_blog_mute(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_blog_code text := json.get_string(in_params, 'blog_code');
+  v_mute_on_off text := json.get_string(in_params, 'mute_on_off');
+  v_blog_id integer := data.get_object_id(v_blog_code);
+  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+
+  v_blog_is_mute boolean;
+  v_new_blog_is_mute boolean;
+
+  v_is_master boolean := pp_utils.is_in_group(v_actor_id, 'master');
+
+  v_blog_is_mute_attribute_id integer := data.get_attribute_id('blog_is_mute');
+  v_message_sent boolean := false;
+begin
+  -- mute_on_off: on - заглушить уведомления, off - перестать глушить уведомления
+  assert in_request_id is not null;
+  assert v_mute_on_off in ('on', 'off');
+
+  v_blog_is_mute := json.get_boolean_opt(data.get_raw_attribute_value_for_update(v_blog_id, v_blog_is_mute_attribute_id, v_actor_id), false);
+
+  if v_mute_on_off = 'on' then
+    v_new_blog_is_mute := true;
+  end if;
+
+  if coalesce(v_new_blog_is_mute, false) <> v_blog_is_mute then
+    v_message_sent := data.change_current_object(in_client_id, 
+                                                 in_request_id,
+                                                 v_blog_id, 
+                                                 jsonb_build_array(data.attribute_change2jsonb(v_blog_is_mute_attribute_id, to_jsonb(v_new_blog_is_mute), v_actor_id)));
+  end if;
+  if not v_message_sent then
+   perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_blog_rename(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_blog_rename(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_blog_code text := json.get_string(in_params, 'blog_code');
+  v_title text := json.get_string(in_user_params, 'title');
+  v_subtitle text := json.get_string(in_user_params, 'subtitle');
+  v_blog_id integer := data.get_object_id(v_blog_code);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+
+  v_old_title text;
+  v_old_subtitle text;
+  v_changes jsonb[];
+
+  v_subtitle_attribute_id integer := data.get_attribute_id('subtitle');
+  v_title_attribute_id integer := data.get_attribute_id('title');
+  v_message_sent boolean := false;
+begin
+  assert in_request_id is not null;
+
+  v_old_title := json.get_string_opt(data.get_raw_attribute_value_for_update(v_blog_id, v_title_attribute_id), '');
+  v_old_subtitle := json.get_string_opt(data.get_raw_attribute_value_for_update(v_blog_id, v_subtitle_attribute_id), '');
+
+  v_changes := array[]::jsonb[];
+  if v_old_title <> v_title then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, to_jsonb(v_title)));
+  end if;
+  if v_old_subtitle <> v_subtitle then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_subtitle_attribute_id, to_jsonb(v_subtitle)));
+  end if;
+  v_message_sent := data.change_current_object(in_client_id, 
+                                               in_request_id,
+                                               v_blog_id, 
+                                               to_jsonb(v_changes));
+
+  if not v_message_sent then
+   perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_blog_write(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_blog_write(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_blog_code text := json.get_string(in_params, 'blog_code');
+  v_blog_id integer := data.get_object_id(v_blog_code);
+  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+
+  v_person_id integer;
+
+  v_message_title text := json.get_string(in_user_params, 'title');
+  v_message_text text := json.get_string(in_user_params, 'message_text');
+  v_message_id integer;
+  v_message_code text;
+
+  v_content_attribute_id integer := data.get_attribute_id('content');
+
+  v_news_id integer := data.get_object_id('news');
+  v_master_id integer := data.get_object_id('master');
+  v_all_person_id integer := data.get_object_id('all_person');
+  v_notification_text text;
+
+  v_content text[];
+  v_new_content text[];
+  v_message_sent boolean := false;
+
+  v_is_actor_subscribed boolean;
+  v_changes jsonb[];
+begin
+  assert in_request_id is not null;
+
+  -- создаём новое сообщение
+  v_message_id := data.create_object(
+    null,
+    jsonb_build_array(
+      jsonb_build_object('code', 'title', 'value', v_message_title),
+      jsonb_build_object('code', 'blog_name', 'value', to_jsonb(v_blog_code)),
+      jsonb_build_object('code', 'blog_message_text', 'value', to_jsonb(v_message_text)),
+      jsonb_build_object('code', 'blog_message_time', 'value', to_jsonb(pp_utils.format_date(clock_timestamp())))
+    ),
+    'blog_message');
+  v_message_code := data.get_object_code(v_message_id);
+
+  perform pallas_project.create_chat(v_message_code || '_chat',
+                   jsonb_build_object(
+                   'content', jsonb '[]',
+                   'title', 'Обсуждение новости ' || v_message_title,
+                   'system_chat_is_renamed', true,
+                   'system_chat_can_invite', false,
+                   'system_chat_can_leave', false,
+                   'system_chat_can_rename', false,
+                   'system_chat_cant_see_members', true,
+                   'system_chat_length', 0
+                 ));
+
+  -- Добавляем сообщение в блог
+  v_changes := array[]::jsonb[];
+  v_content := json.get_string_array_opt(data.get_raw_attribute_value_for_update(v_blog_id, v_content_attribute_id), array[]::text[]);
+  v_new_content := array_prepend(v_message_code, v_content);
+  if v_new_content <> v_content then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_content_attribute_id, to_jsonb(v_new_content)));
+    v_message_sent := data.change_current_object(in_client_id, 
+                                                 in_request_id,
+                                                 v_blog_id, 
+                                                 to_jsonb(v_changes));
+
+  -- Кладём сообщение в начало ленты новостей
+    perform pp_utils.list_prepend_and_notify(v_news_id, v_message_code, null);
+
+  v_notification_text := 'Новое сообщение ' || v_message_title || ' в блоге '|| pp_utils.link(v_blog_code);
+  -- Отправляем нотификацию о новом сообщении всем неподписанным на этот чат
+  for v_person_id in 
+      (select distinct oo.object_id from data.object_objects oo 
+        where oo.parent_object_id in (v_master_id, v_all_person_id)
+          and oo.parent_object_id <> oo.object_id)
+    loop
+      v_is_actor_subscribed := pp_utils.is_actor_subscribed(v_person_id, v_blog_id) or pp_utils.is_actor_subscribed(v_person_id, v_news_id);
+      if v_person_id <> v_actor_id 
+        and not v_is_actor_subscribed
+        and not json.get_boolean_opt(data.get_raw_attribute_value_for_share(v_blog_id, 'blog_is_mute', v_person_id), false) then
+        perform pp_utils.add_notification(v_person_id, v_notification_text, v_message_id);
+      end if;
+    end loop;
+  end if;
+
+  if not v_message_sent then
+   perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_buy_lottery_ticket(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_buy_lottery_ticket(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -9415,8 +9817,8 @@ begin
   -- добавляем в группу с рассылкой
     perform data.process_diffs_and_notify(data.change_object_groups(v_actor_id, array[v_chat_id], array[]::integer[], v_actor_id));
 
-    -- Меняем заголовок чата, если зашёл не мастер
-    if not v_is_master or v_chat_parent_list = 'master_chats' then
+    -- Меняем заголовок чата, если зашёл не мастер и это не объектный чат
+    if v_object_code is null and (not v_is_master or v_chat_parent_list = 'master_chats') then
       for v_name in 
         (select x.name from jsonb_to_recordset(pallas_project.get_chat_persons(v_chat_id, v_chat_parent_list <> 'master_chats'))as x(code text, name jsonb) limit 3) loop 
         v_chat_title := v_chat_title || ', '|| json.get_string(v_name);
@@ -9747,6 +10149,7 @@ declare
 
   v_actor_title text := json.get_string(data.get_attribute_value(v_actor_id, v_title_attribute_id));
   v_title text := pp_utils.format_date(clock_timestamp()) || E'\n' || v_actor_title;
+  v_notification_text text;
 
   v_chat_unread_messages integer;
   v_chat_unread_messages_attribute_id integer := data.get_attribute_id('chat_unread_messages');
@@ -9799,6 +10202,7 @@ begin
     end if;
     -- Отправляем нотификацию о новом сообщении всем неподписанным на этот чат
     -- и перекладываем у всех участников этот чат вверх списка
+    v_notification_text := 'Новое сообщение ' || (case when v_chat_title is not null then ' в '|| v_chat_title  || ' ' else '' end) || 'от '|| v_actor_title;
     for v_person_id in 
       (select oo.object_id from data.object_objects oo 
         where oo.parent_object_id = v_chat_id
@@ -9822,7 +10226,7 @@ begin
       if v_person_id <> v_actor_id 
         and not v_is_actor_subscribed
         and not json.get_boolean_opt(data.get_raw_attribute_value_for_share(v_chat_id, 'chat_is_mute', v_person_id), false) then
-        perform pp_utils.add_notification(v_person_id, 'Новое сообщение ' || (case when v_chat_title is not null then ' в '|| v_chat_title  || ' ' else '' end) || 'от '|| v_actor_title , v_chat_id);
+        perform pp_utils.add_notification(v_person_id, v_notification_text, v_chat_id);
       end if;
     end loop;
   end if;
@@ -10392,7 +10796,9 @@ begin
                    'system_chat_is_renamed', true,
                    'system_chat_parent_list', 'chats',
                    'system_chat_can_invite', false,
+                   'system_chat_can_leave', false,
                    'system_chat_can_rename', false,
+                   'system_chat_cant_see_members', true,
                    'system_chat_length', 0
                  ));
   elsif v_new_status = 'vote' then
@@ -12073,6 +12479,226 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.actgenerator_blog(integer, integer);
+
+create or replace function pallas_project.actgenerator_blog(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_actions_list text := '';
+  v_is_master boolean;
+  v_blog_code text;
+  v_blog_is_mute boolean;
+  v_blog_author integer := json.get_integer(data.get_attribute_value(in_object_id, 'system_blog_author'));
+begin
+  assert in_actor_id is not null;
+
+  v_is_master := pp_utils.is_in_group(in_actor_id, 'master');
+  v_blog_code := data.get_object_code(in_object_id);
+
+  v_blog_is_mute := json.get_boolean_opt(data.get_raw_attribute_value_for_share(in_object_id, 'blog_is_mute', in_actor_id), false);
+  v_actions_list := v_actions_list || 
+        format(', "blog_mute": {"code": "blog_mute", "name": "%s", "disabled": false,'||
+                '"params": {"blog_code": "%s", "mute_on_off": "%s"}}',
+                case when v_blog_is_mute then
+                  'Включить уведомления'
+                else 'Отключить уведомления' end,
+                v_blog_code,
+                case when v_blog_is_mute then
+                  'off'
+                else 'on' end);
+
+  if v_is_master or v_blog_author = in_actor_id then
+    v_actions_list := v_actions_list || 
+        format(', "blog_rename": {"code": "blog_rename", "name": "Переименовать блог", "disabled": false,'||
+                '"params": {"blog_code": "%s"}, 
+                 "user_params": [{"code": "title", "description": "Введите имя блога", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"},
+                                 {"code": "subtitle", "description": "Введите описание блога", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"}]}',
+                v_blog_code,
+                json.get_string_opt(data.get_raw_attribute_value_for_share(in_object_id, 'title'), null),
+                json.get_string_opt(data.get_raw_attribute_value_for_share(in_object_id, 'subtitle'), null));
+
+    v_actions_list := v_actions_list || 
+        format(', "blog_write": {"code": "blog_write", "name": "Написать", "disabled": false, '||
+                '"params": {"blog_code": "%s"}, 
+                 "user_params": [{"code": "title", "description": "Введите заголовок сообщения", "type": "string", "restrictions": {"min_length": 1}},
+                                 {"code": "message_text", "description": "Введите текст сообщения", "type": "string", "restrictions": {"multiline": true}}]}',
+                v_blog_code);
+  end if;
+
+  return jsonb ('{'||trim(v_actions_list,',')||'}');
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.actgenerator_blog_content(integer, integer, integer);
+
+create or replace function pallas_project.actgenerator_blog_content(in_object_id integer, in_list_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_actions_list text := '';
+  v_is_master boolean;
+  v_blog_message_code text;
+  v_blog_name text := json.get_string(data.get_raw_attribute_value_for_share(in_list_object_id, 'blog_name'));
+  v_blog_author integer := json.get_integer(data.get_attribute_value(data.get_object_id(v_blog_name), 'system_blog_author'));
+  v_chat_id integer;
+  v_chat_length integer;
+  v_chat_unread integer;
+  v_is_like boolean;
+  v_like_count integer;
+begin
+  assert in_actor_id is not null;
+
+  v_is_master := pp_utils.is_in_group(in_actor_id, 'master');
+  v_blog_message_code := data.get_object_code(in_list_object_id);
+
+  if v_is_master or v_blog_author = in_actor_id then
+    v_actions_list := v_actions_list || 
+        format(', "blog_message_edit": {"code": "blog_message_edit", "name": "Редактировать", "disabled": false,'||
+                '"params": {"blog_message_code": "%s", "is_list": true}, 
+                 "user_params": [{"code": "title", "description": "Заголовок", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"},
+                                 {"code": "text", "description": "Текст сообщения", "type": "string", "restrictions": {"min_length": 1, "multiline": true}, "default_value": %s}]}',
+                v_blog_message_code,
+                json.get_string_opt(data.get_raw_attribute_value_for_share(in_list_object_id, 'title'), null),
+                coalesce(data.get_raw_attribute_value_for_share(in_list_object_id, 'blog_message_text')::text, '""'));
+
+    v_actions_list := v_actions_list || 
+        format(', "blog_message_delete": {"code": "blog_message_delete", "name": "Удалить", "disabled": false, "warning": "Сообщение будет удалено вместе со всеми комментариями. Удаляем?", '||
+                '"params": {"blog_message_code": "%s", "is_list": true}}',
+                v_blog_message_code);
+  end if;
+
+  v_chat_id := data.get_object_id(v_blog_message_code || '_chat');
+  if v_chat_id is not null then
+    v_chat_length := json.get_integer_opt(data.get_attribute_value(v_chat_id, 'system_chat_length'), 0);
+    v_chat_unread := json.get_integer_opt(data.get_attribute_value(v_chat_id, 'chat_unread_messages', in_actor_id), null);
+    v_actions_list := v_actions_list || 
+        format(', "blog_message_chat": {"code": "chat_enter", "name": "Обсудить%s", "disabled": false, '||
+                '"params": {"object_code": "%s"}}',
+                case when v_chat_length = 0 then ''
+                when v_chat_length > 0 and v_chat_unread is null then ' (' || v_chat_length || ')'
+                else ' (' || v_chat_length || ', непрочитанных ' || v_chat_unread || ')' 
+                end,
+                v_blog_message_code);
+  end if;
+
+  v_is_like := json.get_boolean_opt(data.get_raw_attribute_value_for_share(in_list_object_id, 'system_blog_message_like', in_actor_id), false);
+  v_like_count := json.get_integer_opt(data.get_raw_attribute_value_for_share(in_list_object_id, 'blog_message_like_count'), 0);
+  v_actions_list := v_actions_list || 
+        format(', "blog_message_like": {"code": "blog_message_like", "name": "%s", "disabled": false,'||
+                '"params": {"blog_message_code": "%s", "like_on_off": "%s", "is_list": true}}',
+                case when v_is_like then
+                  '🧡 ' || v_like_count
+                else '🖤 ' || v_like_count end,
+                v_blog_message_code,
+                case when v_is_like then
+                  'off'
+                else 'on' end);
+
+  return jsonb ('{'||trim(v_actions_list,',')||'}');
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.actgenerator_blog_message(integer, integer);
+
+create or replace function pallas_project.actgenerator_blog_message(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_actions_list text := '';
+  v_is_master boolean;
+  v_blog_message_code text;
+  v_blog_name text := json.get_string(data.get_raw_attribute_value_for_share(in_object_id, 'blog_name'));
+  v_blog_author integer := json.get_integer(data.get_attribute_value(data.get_object_id(v_blog_name), 'system_blog_author'));
+  v_chat_id integer;
+  v_chat_length integer;
+  v_chat_unread integer;
+  v_is_like boolean;
+  v_like_count integer;
+begin
+  assert in_actor_id is not null;
+
+  v_is_master := pp_utils.is_in_group(in_actor_id, 'master');
+  v_blog_message_code := data.get_object_code(in_object_id);
+
+  if v_is_master or v_blog_author = in_actor_id then
+    v_actions_list := v_actions_list || 
+        format(', "blog_message_edit": {"code": "blog_message_edit", "name": "Редактировать", "disabled": false,'||
+                '"params": {"blog_message_code": "%s"}, 
+                 "user_params": [{"code": "title", "description": "Заголовок", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"},
+                                 {"code": "text", "description": "Текст сообщения", "type": "string", "restrictions": {"min_length": 1, "multiline": true}, "default_value": %s}]}',
+                v_blog_message_code,
+                json.get_string_opt(data.get_raw_attribute_value_for_share(in_object_id, 'title'), null),
+                coalesce(data.get_raw_attribute_value_for_share(in_object_id, 'blog_message_text')::text, '""'));
+
+    v_actions_list := v_actions_list || 
+        format(', "blog_message_delete": {"code": "blog_message_delete", "name": "Удалить", "disabled": false, "warning": "Сообщение будет удалено вместе со всеми комментариями. Удаляем?", '||
+                '"params": {"blog_message_code": "%s"}}',
+                v_blog_message_code);
+  end if;
+
+  v_chat_id := data.get_object_id(v_blog_message_code || '_chat');
+  if v_chat_id is not null then
+    v_chat_length := json.get_integer_opt(data.get_attribute_value(v_chat_id, 'system_chat_length'), 0);
+    v_chat_unread := json.get_integer_opt(data.get_attribute_value(v_chat_id, 'chat_unread_messages', in_actor_id), null);
+    v_actions_list := v_actions_list || 
+        format(', "blog_message_chat": {"code": "chat_enter", "name": "Обсудить%s", "disabled": false, '||
+                '"params": {"object_code": "%s"}}',
+                case when v_chat_length = 0 then ''
+                when v_chat_length > 0 and v_chat_unread is null then ' (' || v_chat_length || ')'
+                else ' (' || v_chat_length || ', непрочитанных ' || v_chat_unread || ')' 
+                end,
+                v_blog_message_code);
+  end if;
+
+  v_is_like := json.get_boolean_opt(data.get_raw_attribute_value_for_share(in_object_id, 'system_blog_message_like', in_actor_id), false);
+  v_like_count := json.get_integer_opt(data.get_raw_attribute_value_for_share(in_object_id, 'blog_message_like_count'), 0);
+  v_actions_list := v_actions_list || 
+        format(', "blog_message_like": {"code": "blog_message_like", "name": "%s", "disabled": false,'||
+                '"params": {"blog_message_code": "%s", "like_on_off": "%s"}}',
+                case when v_is_like then
+                  '🧡 ' || v_like_count
+                else '🖤 ' || v_like_count end,
+                v_blog_message_code,
+                case when v_is_like then
+                  'off'
+                else 'on' end);
+
+  return jsonb ('{'||trim(v_actions_list,',')||'}');
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.actgenerator_blogs_my(integer, integer);
+
+create or replace function pallas_project.actgenerator_blogs_my(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_actions_list text := '';
+begin
+  assert in_actor_id is not null;
+
+  if pp_utils.is_in_group(in_actor_id, 'all_person') or pp_utils.is_in_group(in_actor_id, 'master') then
+    v_actions_list := v_actions_list || 
+      ', "blog_create": {"code": "blog_create", "name": "Создать блог", "disabled": false, '||
+      '"params": {}, "user_params": [{"code": "title", "description": "Введите название блога (его можно будет поменять, если захочется)", "type": "string", "restrictions": {"min_length": 1}}]}';
+  end if;
+  return jsonb ('{'||trim(v_actions_list,',')||'}');
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.actgenerator_chat(integer, integer);
 
 create or replace function pallas_project.actgenerator_chat(in_object_id integer, in_actor_id integer)
@@ -13024,6 +13650,8 @@ begin
       jsonb '{
         "debatles": {"code": "act_open_object", "name": "Дебатлы", "disabled": false, "params": {"object_code": "debatles"}},
         "documents": {"code": "act_open_object", "name": "Документы", "disabled": false, "params": {"object_code": "documents"}},
+        "blogs": {"code": "act_open_object", "name": "Блоги", "disabled": false, "params": {"object_code": "blogs"}},
+        "news": {"code": "act_open_object", "name": "Новости", "disabled": false, "params": {"object_code": "news"}},
         "logout": {"code": "logout", "name": "Выход", "disabled": false, "params": {}}
       }';
   end if;
@@ -14729,8 +15357,8 @@ begin
         "groups": [
           {"code": "menu_notifications", "actions": ["notifications"]},
           {"code": "menu_lottery", "actions": ["lottery"]},
-          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "chats", "master_chats", "documents", "my_organizations", "important_notifications"]},
-          {"code": "menu_social", "actions": ["all_chats", "debatles"]},
+          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "chats", "documents", "my_organizations", "blogs", "important_notifications"]},
+          {"code": "menu_social", "actions": ["news", "all_chats", "debatles", "master_chats"]},
           {"code": "menu_info", "actions": ["persons", "districts", "organizations"]},
           {"code": "menu_logout", "actions": ["logout"]}
         ]
@@ -14806,6 +15434,207 @@ begin
   perform pallas_project.init_person_list();
   perform pallas_project.init_documents();
   perform pallas_project.init_lottery();
+  perform pallas_project.init_blogs();
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.init_blogs();
+
+create or replace function pallas_project.init_blogs()
+returns void
+volatile
+as
+$$
+declare
+
+begin
+  -- Атрибуты 
+  insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
+  -- для блогов
+  ('system_blog_author', null, 'Автор блога', 'system', null, null, false),
+  ('blog_author', 'Автор', 'Автор блога', 'normal', 'full', 'pallas_project.vd_link', true),
+  ('blog_is_mute', null, 'Признак отлюченного уведомления о новых сообщениях блога', 'normal', null, 'pallas_project.vd_chat_is_mute', true),
+  ('blog_message_text', null, 'Текст сообщения в блоге', 'normal', 'full', null, false),
+  ('blog_message_time', null, 'Время публикации', 'normal', null, null, false),
+  ('system_blog_message_like', null, 'Признак того, что вы залайкали сообщение', 'system', null, null, true),
+  ('blog_message_like_count', null, 'Количество лайков у сообщения', 'system', null, null, false),
+  ('blog_name', null, 'Название блога', 'normal', null, 'pallas_project.vd_link', false);
+
+
+  -- Объект - страница для работы с блогами
+  perform data.create_object(
+  'blogs',
+  jsonb '[
+    {"code": "title", "value": "Блоги"},
+    {"code": "is_visible", "value": true},
+    {"code": "content", "value": ["blogs_my", "blogs_all"]},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_blogs_my"},
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [{"code": "blog_group", "attributes": ["description"], "actions": ["blog_create"]}]
+      }
+    }
+  ]');
+
+  -- Списки блогов
+  perform data.create_object(
+  'blogs_all',
+  jsonb '[
+    {"code": "title", "value": "Все блоги"},
+    {"code": "is_visible", "value": true},
+    {"code": "content", "value": []},
+    {
+      "code": "mini_card_template",
+      "value": {
+        "title": "title",
+        "groups": []
+      }
+    },
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": []
+      }
+    }
+  ]');
+
+  perform data.create_object(
+  'blogs_my',
+  jsonb '[
+    {"code": "title", "value": "Мои блоги"},
+    {"code": "is_visible", "value": true},
+    {"code": "content", "value": []},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_blogs_my"},
+    {
+      "code": "mini_card_template",
+      "value": {
+        "title": "title",
+        "groups": []
+      }
+    },
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [{
+          "code": "blog_my_group1",
+          "actions": ["blog_create"]
+        }]
+      }
+    }
+  ]');
+
+  -- Объект для ленты новостей
+  perform data.create_object(
+  'news',
+  jsonb '[
+    {"code": "title", "value": "Новости"},
+    {"code": "is_visible", "value": true},
+    {"code": "content", "value": []},
+    {"code": "list_actions_function", "value": "pallas_project.actgenerator_blog_content"},
+    {
+      "code": "mini_card_template",
+      "value": {
+        "title": "title",
+        "groups": []
+      }
+    },
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": []
+      }
+    }
+  ]');
+
+  -- Объект-класс для блога
+  perform data.create_class(
+  'blog',
+  jsonb '[
+    {"code": "type", "value": "blog"},
+    {"code": "priority", "value": 84},
+    {"code": "content", "value": []},
+    {"code": "is_visible", "value": true},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_blog"},
+    {"code": "list_actions_function", "value": "pallas_project.actgenerator_blog_content"},
+    {
+      "code": "mini_card_template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [{
+          "code": "blog_group1",
+          "actions": ["blog_mute"]
+        }]
+      }
+    },
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [
+          {
+            "code": "blog_group1",
+            "attributes": ["blog_author", "blog_is_mute"],
+            "actions": ["blog_rename", "blog_mute", "blog_write"]
+          }
+        ]
+      }
+    }
+  ]');
+
+    -- Объект-класс для сообщения
+  perform data.create_class(
+  'blog_message',
+  jsonb '[
+    {"code": "type", "value": "blog_message"},
+    {"code": "is_visible", "value": true},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_blog_message"},
+    {
+      "code": "mini_card_template",
+      "value": {
+        "groups": [
+          {"code": "blog_message_group1", 
+            "attributes": ["blog_name", "blog_message_time", "title"], 
+            "actions": ["blog_message_like", "blog_message_edit", "blog_message_delete", "blog_message_chat"]
+          }
+        ]
+      }
+    },
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [
+           {"code": "blog_message_group1",
+            "attributes": ["blog_name", "blog_message_time", "blog_message_text"], 
+            "actions": ["blog_message_like", "blog_message_edit", "blog_message_delete", "blog_message_chat"]
+           }
+        ]
+      }
+    }
+  ]');
+
+  insert into data.actions(code, function) values
+  ('blog_create', 'pallas_project.act_blog_create'),
+  ('blog_write', 'pallas_project.act_blog_write'),
+  ('blog_mute','pallas_project.act_blog_mute'),
+  ('blog_rename','pallas_project.act_blog_rename'),
+  ('blog_message_like', 'pallas_project.act_blog_message_like'),
+  ('blog_message_edit', 'pallas_project.act_blog_message_edit'),
+  ('blog_message_delete', 'pallas_project.act_blog_message_delete'),
+  ('blog_message_chat', 'pallas_project.act_blog_message_chat');
 end;
 $$
 language plpgsql;
@@ -14969,7 +15798,7 @@ begin
       "groups": [
         {
           "code": "debatle_group1",
-          "attributes": ["debatle_theme", "debatle_status", "debatle_person1", "debatle_person2", "debatle_judge", "debatle_target_audience"],
+          "attributes": ["debatle_status", "debatle_person1", "debatle_person2", "debatle_judge", "debatle_target_audience"],
           "actions": [
             "debatle_change_instigator",
             "debatle_change_opponent",

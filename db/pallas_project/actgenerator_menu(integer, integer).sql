@@ -130,6 +130,8 @@ begin
       jsonb '{
         "debatles": {"code": "act_open_object", "name": "Дебатлы", "disabled": false, "params": {"object_code": "debatles"}},
         "documents": {"code": "act_open_object", "name": "Документы", "disabled": false, "params": {"object_code": "documents"}},
+        "blogs": {"code": "act_open_object", "name": "Блоги", "disabled": false, "params": {"object_code": "blogs"}},
+        "news": {"code": "act_open_object", "name": "Новости", "disabled": false, "params": {"object_code": "news"}},
         "logout": {"code": "logout", "name": "Выход", "disabled": false, "params": {}}
       }';
   end if;
