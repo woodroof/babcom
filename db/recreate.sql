@@ -9645,6 +9645,118 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_change_district(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_change_district(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_object_code text := json.get_string(in_params);
+  v_object_id integer := data.get_object_id(v_object_code);
+  v_new_district_letter text := upper(json.get_string(in_user_params, 'district_letter'));
+  v_district_code text := json.get_string(data.get_raw_attribute_value_for_update(v_object_id, 'person_district'));
+  v_comment text := json.get_string(in_user_params, 'comment');
+  v_new_district_code text;
+  v_notified boolean;
+  v_is_person boolean;
+  v_master_group_id integer;
+begin
+  if v_new_district_letter not in ('A', 'B', 'C', 'D', 'E', 'F', 'G') then
+    perform api_utils.create_show_message_action_notification(
+      in_client_id,
+      in_request_id,
+      'Ошибка',
+      'Буква сектора должна быть от A до G');
+    return;
+  end if;
+
+  v_new_district_code := 'sector_' || v_new_district_letter;
+
+  if v_new_district_code = v_district_code then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+    return;
+  end if;
+
+  v_notified :=
+    data.change_current_object(
+      in_client_id,
+      in_request_id,
+      v_object_id,
+      format(
+        '{
+          "person_district": "%s"
+        }',
+        v_new_district_code)::jsonb,
+      'Изменение сектора мастером');
+  assert v_notified;
+
+  v_is_person := pp_utils.is_in_group(v_object_id, 'player');
+  v_master_group_id := data.get_object_id('master');
+
+  -- Обновим старый район
+  declare
+    v_district_id integer;
+    v_content jsonb;
+    v_changes jsonb := jsonb '[]';
+  begin
+    v_district_id := data.get_object_id(v_district_code);
+
+    if v_is_person then
+      v_content := to_jsonb(array_remove(json.get_string_array(data.get_raw_attribute_value_for_update(v_district_id, 'content')), v_object_code));
+      v_changes := v_changes || data.attribute_change2jsonb('content', v_content);
+    end if;
+
+    v_content := to_jsonb(array_remove(json.get_string_array(data.get_raw_attribute_value_for_update(v_district_id, 'content', v_master_group_id)), v_object_code));
+    v_changes := v_changes || data.attribute_change2jsonb('content', v_content, v_master_group_id);
+
+    perform data.change_object_and_notify(
+      v_district_id,
+      v_changes);
+  end;
+
+  -- Обновим новый район
+  declare
+    v_district_id integer;
+    v_content jsonb;
+    v_changes jsonb := jsonb '[]';
+  begin
+    v_district_id := data.get_object_id(v_new_district_code);
+
+    if v_is_person then
+      select jsonb_agg(o.code order by data.get_attribute_value(o.id, data.get_attribute_id('title')))
+      into v_content
+      from jsonb_array_elements(data.get_raw_attribute_value(v_district_id, 'content') || to_jsonb(v_object_code)) arr
+      join data.objects o on
+        o.code = json.get_string(arr.value);
+
+      v_changes := v_changes || data.attribute_change2jsonb('content', v_content);
+    end if;
+
+    -- Для мастера видны все персонажи
+    select jsonb_agg(o.code order by data.get_attribute_value(o.id, data.get_attribute_id('title')))
+    into v_content
+    from jsonb_array_elements(data.get_raw_attribute_value(v_district_id, 'content', v_master_group_id) || to_jsonb(v_object_code)) arr
+    join data.objects o on
+      o.code = json.get_string(arr.value);
+
+    v_changes := v_changes || data.attribute_change2jsonb('content', v_content, v_master_group_id);
+
+    perform data.change_object_and_notify(
+      v_district_id,
+      v_changes);
+  end;
+
+  perform pp_utils.add_notification(
+    v_object_id,
+    format(E'Вы были переселены в %s\n', pp_utils.link(v_new_district_code)) || pp_utils.trim(v_comment),
+    v_object_id,
+    true);
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_change_next_tax(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_change_next_tax(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -9681,6 +9793,99 @@ begin
   if not v_notified then
     perform api_utils.create_ok_notification(in_client_id, in_request_id);
   end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_change_opa_rating(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_change_opa_rating(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_object_code text := json.get_string(in_params);
+  v_object_id integer := data.get_object_id(v_object_code);
+  v_opa_rating_diff integer := json.get_integer(in_user_params, 'opa_rating_diff');
+  v_opa_rating integer := json.get_integer(data.get_raw_attribute_value_for_update(v_object_id, 'person_opa_rating'));
+  v_comment text := json.get_string(in_user_params, 'comment');
+  v_notified boolean;
+begin
+  if v_un_rating_diff = 0 then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+    return;
+  end if;
+
+  if v_opa_rating + v_opa_rating_diff <= 0 then
+    perform api_utils.create_show_message_action_notification(
+      in_client_id,
+      in_request_id,
+      'Ошибка',
+      'Рейтинг не может стать меньше единицы');
+    return;
+  end if;
+
+  v_notified :=
+    data.change_current_object(
+      in_client_id,
+      in_request_id,
+      v_object_id,
+      format(
+        '{
+          "person_opa_rating": %s
+        }',
+        v_opa_rating + v_opa_rating_diff)::jsonb,
+      'Изменение рейтинга мастером');
+  assert v_notified;
+
+  perform pp_utils.add_notification(
+    v_object_id,
+    (case when v_opa_rating_diff > 0 then 'Астеры стали больше вас уважать' else 'Астеры стали меньше вас уважать' end) || E'\n' || pp_utils.trim(v_comment),
+    v_object_id,
+    true);
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_change_un_rating(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_change_un_rating(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_object_code text := json.get_string(in_params);
+  v_object_id integer := data.get_object_id(v_object_code);
+  v_un_rating_diff integer := json.get_integer(in_user_params, 'un_rating_diff');
+  v_un_rating integer := json.get_integer(data.get_raw_attribute_value_for_update(v_object_id, 'person_un_rating'));
+  v_comment text := json.get_string(in_user_params, 'comment');
+  v_notified boolean;
+begin
+  if v_un_rating_diff = 0 then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+    return;
+  end if;
+
+  v_notified :=
+    data.change_current_object(
+      in_client_id,
+      in_request_id,
+      v_object_id,
+      format(
+        '{
+          "person_un_rating": %s
+        }',
+        v_un_rating + v_un_rating_diff)::jsonb,
+      'Изменение рейтинга мастером');
+  assert v_notified;
+
+  perform pp_utils.add_notification(
+    v_object_id,
+    (case when v_un_rating_diff > 0 then 'Ваш рейтинг гражданина вырос' else 'Ваш рейтинг гражданина снизился' end) || E'\n' || pp_utils.trim(v_comment),
+    v_object_id,
+    true);
 end;
 $$
 language plpgsql;
@@ -14026,6 +14231,9 @@ declare
   v_object_code text := data.get_object_code(in_object_id);
   v_master boolean := pp_utils.is_in_group(in_actor_id, 'master');
   v_economy_type jsonb := data.get_attribute_value_for_share(in_object_id, 'system_person_economy_type');
+  v_district_code text;
+  v_opa_rating integer;
+  v_un_rating integer;
   v_actor_economy_type text;
   v_actor_money bigint;
   v_tax integer;
@@ -14033,6 +14241,9 @@ declare
 begin
   if v_master then
     if v_economy_type is not null then
+      v_district_code := json.get_string(data.get_attribute_value_for_share(in_object_id, 'person_district'));
+      v_opa_rating := json.get_integer(data.get_attribute_value_for_share(in_object_id, 'person_opa_rating'));
+
       v_actions :=
         v_actions ||
         format('{
@@ -14043,8 +14254,57 @@ begin
             "params": {
               "object_code": "%s_statuses"
             }
+          },
+          "change_opa_rating": {
+            "code": "change_opa_rating",
+            "name": "Изменить рейтинг в СВП",
+            "disabled": false,
+            "params": "%s",
+            "user_params": [
+              {
+                "code": "opa_rating_diff",
+                "description": "Значение изменения рейтинга (сейчас %s)",
+                "type": "integer",
+                "restrictions": {"min_value": %s},
+                "default_value": 1
+              },
+              {
+                "code": "comment",
+                "description": "Причина изменения",
+                "type": "string",
+                "restrictions": {"min_length": 1, "max_length": 1000, "multiline": true}
+              }
+            ]
+          },
+          "change_district": {
+            "code": "change_district",
+            "name": "Изменить сектор проживания",
+            "disabled": false,
+            "params": "%s",
+            "user_params": [
+              {
+                "code": "district_letter",
+                "description": "Буква нового сектора",
+                "type": "string",
+                "restrictions": {"min_length": 1, "max_length": 1},
+                "default_value": "%s"
+              },
+              {
+                "code": "comment",
+                "description": "Причина изменения",
+                "type": "string",
+                "restrictions": {"min_length": 1, "max_length": 1000, "multiline": true}
+              }
+            ]
           }
-        }', v_object_code)::jsonb;
+        }',
+        v_object_code,
+        v_object_code,
+        v_opa_rating,
+        -v_opa_rating + 1,
+        v_object_code,
+        substring(v_district_code from length(v_district_code)))::jsonb;
+
       if v_economy_type != jsonb '"fixed"' then
         v_actions :=
           v_actions ||
@@ -14058,6 +14318,7 @@ begin
               }
             }
           }', v_object_code)::jsonb;
+
         if v_economy_type != jsonb '"un"' then
           v_actions :=
             v_actions ||
@@ -14071,6 +14332,34 @@ begin
                 }
               }
             }', v_object_code)::jsonb;
+        else
+          v_un_rating := json.get_integer(data.get_attribute_value_for_share(in_object_id, 'person_un_rating'));
+
+          v_actions :=
+            v_actions ||
+            format('{
+              "change_un_rating": {
+                "code": "change_un_rating",
+                "name": "Изменить рейтинг гражданина",
+                "disabled": false,
+                "params": "%s",
+                "user_params": [
+                  {
+                    "code": "un_rating_diff",
+                    "description": "Значение изменения рейтинга (сейчас %s)",
+                    "type": "integer"
+                  },
+                  {
+                    "code": "comment",
+                    "description": "Причина изменения",
+                    "type": "string",
+                    "restrictions": {"min_length": 1, "max_length": 1000, "multiline": true}
+                  }
+                ]
+              }
+            }',
+            v_object_code,
+            v_un_rating)::jsonb;
         end if;
       end if;
     end if;
@@ -14126,61 +14415,65 @@ begin
 
       declare
         v_actor_code text := data.get_object_code(in_actor_id);
-        v_my_organizations jsonb := data.get_raw_attribute_value_for_share(data.get_object_id(v_actor_code || '_my_organizations'), 'content');
+        v_my_organizations jsonb;
         v_title_attr_id integer;
         v_my_organization record;
       begin
-        if v_my_organizations != '[]' then
-          v_title_attr_id := data.get_attribute_id('title');
+        if data.is_object_exists(v_actor_code || '_my_organizations') then
+          v_my_organizations := data.get_raw_attribute_value_for_share(data.get_object_id(v_actor_code || '_my_organizations'), 'content');
 
-          for v_my_organization in
-          (
-            select row_number() over() as num, code, title
-            from (
-              select o.code, json.get_string(data.get_attribute_value(o.id, v_title_attr_id)) title
-              from jsonb_array_elements(v_my_organizations) m
-              join data.objects o on
-                o.code = json.get_string(m.value) and
-                (pp_utils.is_in_group(in_actor_id, o.code || '_head') or pp_utils.is_in_group(in_actor_id, o.code || '_economist'))
-              order by title
-              limit 5) orgs
-          )
-          loop
-            v_actions :=
-              v_actions ||
-              format(
-                '{
-                  "transfer_org_money%s": {
-                    "code": "transfer_org_money",
-                    "name": "Перевести деньги от лица организации %s",
-                    "warning": "С суммы перевода будет списан налог в размере %s%% с округлением вверх, продолжить?",
-                    "disabled": false,
-                    "params": {
-                      "org_code": "%s",
-                      "receiver_code": "%s"
-                    },
-                    "user_params": [
-                      {
-                        "code": "sum",
-                        "description": "Сумма, UN$",
-                        "type": "integer",
-                        "restrictions": {"min_value": 1}
+          if v_my_organizations != '[]' then
+            v_title_attr_id := data.get_attribute_id('title');
+
+            for v_my_organization in
+            (
+              select row_number() over() as num, code, title
+              from (
+                select o.code, json.get_string(data.get_attribute_value(o.id, v_title_attr_id)) title
+                from jsonb_array_elements(v_my_organizations) m
+                join data.objects o on
+                  o.code = json.get_string(m.value) and
+                  (pp_utils.is_in_group(in_actor_id, o.code || '_head') or pp_utils.is_in_group(in_actor_id, o.code || '_economist'))
+                order by title
+                limit 5) orgs
+            )
+            loop
+              v_actions :=
+                v_actions ||
+                format(
+                  '{
+                    "transfer_org_money%s": {
+                      "code": "transfer_org_money",
+                      "name": "Перевести деньги от лица организации %s",
+                      "warning": "С суммы перевода будет списан налог в размере %s%% с округлением вверх, продолжить?",
+                      "disabled": false,
+                      "params": {
+                        "org_code": "%s",
+                        "receiver_code": "%s"
                       },
-                      {
-                        "code": "comment",
-                        "description": "Комментарий",
-                        "type": "string",
-                        "restrictions": {"max_length": 1000, "multiline": true}
-                      }
-                    ]
-                  }
-                }',
-                v_my_organization.num,
-                v_my_organization.title,
-                v_tax,
-                v_my_organization.code,
-                v_object_code)::jsonb;
-          end loop;
+                      "user_params": [
+                        {
+                          "code": "sum",
+                          "description": "Сумма, UN$",
+                          "type": "integer",
+                          "restrictions": {"min_value": 1}
+                        },
+                        {
+                          "code": "comment",
+                          "description": "Комментарий",
+                          "type": "string",
+                          "restrictions": {"max_length": 1000, "multiline": true}
+                        }
+                      ]
+                    }
+                  }',
+                  v_my_organization.num,
+                  v_my_organization.title,
+                  v_tax,
+                  v_my_organization.code,
+                  v_object_code)::jsonb;
+            end loop;
+          end if;
         end if;
       end;
     end if;
@@ -16981,7 +17274,7 @@ begin
         'title', 'Важные уведомления',
         'is_visible', true
       ));
-    for v_person_id in (select * from unnest(pallas_project.get_group_members('player')))
+    for v_person_id in (select * from unnest(pallas_project.get_group_members('all_person')))
     loop
     -- чат с мастерами
       v_chat_id := pallas_project.create_chat(
@@ -17498,8 +17791,8 @@ begin
   ('person_deposit_money', 'Остаток средств на инвестиционном счёте', 'normal', 'full', 'pallas_project.vd_money', true),
   ('system_person_coin', null, 'system', null, null, false),
   ('person_coin', 'Нераспределённые коины', 'normal', 'full', null, true),
-  ('person_opa_rating', 'Популярность среди астеров', 'normal', 'full', 'pallas_project.vd_person_opa_rating', true),
-  ('person_un_rating', 'Рейтинг в ООН', 'normal', 'full', null, true),
+  ('person_opa_rating', 'Популярность среди астеров', 'normal', 'full', 'pallas_project.vd_person_opa_rating', false),
+  ('person_un_rating', 'Рейтинг в ООН', 'normal', 'full', null, false),
   ('system_person_economy_type', null, 'system', null, null, false),
   ('person_economy_type', 'Тип экономики', 'normal', 'full', 'pallas_project.vd_person_economy_type', true),
   ('system_person_life_support_status', null, 'system', null, null, false),
@@ -17520,6 +17813,11 @@ begin
   ('system_person_notification_count', null, 'system', null, null, false),
   ('person_district', 'Район проживания', 'normal', 'full', 'pallas_project.vd_link', false);
 
+  insert into data.actions(code, function) values
+  ('change_un_rating', 'pallas_project.act_change_un_rating'),
+  ('change_opa_rating', 'pallas_project.act_change_opa_rating'),
+  ('change_district', 'pallas_project.act_change_district');
+
   -- Объект класса для персон
   perform data.create_class(
     'person',
@@ -17530,6 +17828,7 @@ begin
       "actions_function": "pallas_project.actgenerator_person",
       "mini_card_template": {
         "title": "title",
+        "subtitle": "person_occupation",
         "groups": [
           {
             "code": "person_mini_document",
@@ -17559,7 +17858,10 @@ begin
               "open_next_statuses",
               "open_transactions",
               "transfer_money",
-              "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5"
+              "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5",
+              "change_un_rating",
+              "change_opa_rating",
+              "change_district"
             ]
           },
           {
@@ -17605,6 +17907,8 @@ begin
   perform pallas_project.create_person(null, 'm4', jsonb '{"title": "Нина", "person_occupation": "Мастер"}', array['master']);
   perform pallas_project.create_person(null, 'm5', jsonb '{"title": "Оля", "person_occupation": "Мастер"}', array['master']);
   perform pallas_project.create_person(null, 'm6', jsonb '{"title": "Юра", "person_occupation": "Мастер"}', array['master']);
+
+  -- Для всех с любой экономикой обязательные поля - person_district и person_opa_rating
 
   -- Игроки
   perform pallas_project.create_person(
@@ -17712,6 +18016,7 @@ begin
     jsonb '{
       "title": "Шенг",
       "person_occupation": "Репортёр",
+      "person_opa_rating": 1,
       "system_person_economy_type": "fixed",
       "system_person_life_support_status": 2,
       "system_person_health_care_status": 2,

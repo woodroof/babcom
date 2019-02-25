@@ -257,7 +257,7 @@ begin
         'title', 'Важные уведомления',
         'is_visible', true
       ));
-    for v_person_id in (select * from unnest(pallas_project.get_group_members('player')))
+    for v_person_id in (select * from unnest(pallas_project.get_group_members('all_person')))
     loop
     -- чат с мастерами
       v_chat_id := pallas_project.create_chat(

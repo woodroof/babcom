@@ -23,8 +23,8 @@ begin
   ('person_deposit_money', 'Остаток средств на инвестиционном счёте', 'normal', 'full', 'pallas_project.vd_money', true),
   ('system_person_coin', null, 'system', null, null, false),
   ('person_coin', 'Нераспределённые коины', 'normal', 'full', null, true),
-  ('person_opa_rating', 'Популярность среди астеров', 'normal', 'full', 'pallas_project.vd_person_opa_rating', true),
-  ('person_un_rating', 'Рейтинг в ООН', 'normal', 'full', null, true),
+  ('person_opa_rating', 'Популярность среди астеров', 'normal', 'full', 'pallas_project.vd_person_opa_rating', false),
+  ('person_un_rating', 'Рейтинг в ООН', 'normal', 'full', null, false),
   ('system_person_economy_type', null, 'system', null, null, false),
   ('person_economy_type', 'Тип экономики', 'normal', 'full', 'pallas_project.vd_person_economy_type', true),
   ('system_person_life_support_status', null, 'system', null, null, false),
@@ -45,6 +45,11 @@ begin
   ('system_person_notification_count', null, 'system', null, null, false),
   ('person_district', 'Район проживания', 'normal', 'full', 'pallas_project.vd_link', false);
 
+  insert into data.actions(code, function) values
+  ('change_un_rating', 'pallas_project.act_change_un_rating'),
+  ('change_opa_rating', 'pallas_project.act_change_opa_rating'),
+  ('change_district', 'pallas_project.act_change_district');
+
   -- Объект класса для персон
   perform data.create_class(
     'person',
@@ -55,6 +60,7 @@ begin
       "actions_function": "pallas_project.actgenerator_person",
       "mini_card_template": {
         "title": "title",
+        "subtitle": "person_occupation",
         "groups": [
           {
             "code": "person_mini_document",
@@ -84,7 +90,10 @@ begin
               "open_next_statuses",
               "open_transactions",
               "transfer_money",
-              "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5"
+              "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5",
+              "change_un_rating",
+              "change_opa_rating",
+              "change_district"
             ]
           },
           {
@@ -130,6 +139,8 @@ begin
   perform pallas_project.create_person(null, 'm4', jsonb '{"title": "Нина", "person_occupation": "Мастер"}', array['master']);
   perform pallas_project.create_person(null, 'm5', jsonb '{"title": "Оля", "person_occupation": "Мастер"}', array['master']);
   perform pallas_project.create_person(null, 'm6', jsonb '{"title": "Юра", "person_occupation": "Мастер"}', array['master']);
+
+  -- Для всех с любой экономикой обязательные поля - person_district и person_opa_rating
 
   -- Игроки
   perform pallas_project.create_person(
@@ -237,6 +248,7 @@ begin
     jsonb '{
       "title": "Шенг",
       "person_occupation": "Репортёр",
+      "person_opa_rating": 1,
       "system_person_economy_type": "fixed",
       "system_person_life_support_status": 2,
       "system_person_health_care_status": 2,
