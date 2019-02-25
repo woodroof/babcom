@@ -16,9 +16,6 @@ declare
   v_actions_function text;
   v_actions jsonb;
 begin
-  assert data.is_instance(in_object_id);
-  assert data.is_instance(in_actor_id);
-  assert in_object_id = in_actions_object_id or data.is_instance(in_actions_object_id);
   assert in_card_type is not null;
 
   -- Получаем видимые и hidden-атрибуты для указанной карточки

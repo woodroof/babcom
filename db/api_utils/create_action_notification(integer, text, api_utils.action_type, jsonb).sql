@@ -6,7 +6,7 @@ volatile
 as
 $$
 begin
-  perform json.get_object(in_action_data);
+  assert json.is_object(in_action_data);
 
   perform api_utils.create_notification(
     in_client_id,

@@ -6,8 +6,6 @@ volatile
 as
 $$
 begin
-  assert in_actor_id is null or data.is_instance(in_actor_id);
-
   insert into data.log(severity, message, actor_id)
   values(in_severity, coalesce(in_message, '<null>'), in_actor_id);
 

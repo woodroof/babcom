@@ -16,8 +16,6 @@ declare
   v_list_element_function text;
 begin
   assert in_client_id is not null;
-  assert data.is_instance(v_object_id);
-  assert data.is_instance(v_list_object_id);
 
   select actor_id
   into v_actor_id

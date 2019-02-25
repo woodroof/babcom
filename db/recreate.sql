@@ -489,7 +489,7 @@ volatile
 as
 $$
 begin
-  perform json.get_object(in_action_data);
+  assert json.is_object(in_action_data);
 
   perform api_utils.create_notification(
     in_client_id,
@@ -866,8 +866,6 @@ declare
   v_list_element_function text;
 begin
   assert in_client_id is not null;
-  assert data.is_instance(v_object_id);
-  assert data.is_instance(v_list_object_id);
 
   select actor_id
   into v_actor_id
@@ -3070,9 +3068,6 @@ declare
   v_actions_function text;
   v_actions jsonb;
 begin
-  assert data.is_instance(in_object_id);
-  assert data.is_instance(in_actor_id);
-  assert in_object_id = in_actions_object_id or data.is_instance(in_actions_object_id);
   assert in_card_type is not null;
 
   -- Получаем видимые и hidden-атрибуты для указанной карточки
@@ -3944,8 +3939,6 @@ volatile
 as
 $$
 begin
-  assert in_actor_id is null or data.is_instance(in_actor_id);
-
   insert into data.log(severity, message, actor_id)
   values(in_severity, coalesce(in_message, '<null>'), in_actor_id);
 
@@ -4202,6 +4195,21 @@ begin
   end loop;
 
   return v_message_sent;
+end;
+$$
+language plpgsql;
+
+-- drop function data.profile(text);
+
+create or replace function data.profile(in_message text)
+returns void
+volatile
+as
+$$
+begin
+  assert in_message is not null;
+
+  perform data.log('info', format('Profile: %s %s', clock_timestamp(), in_message));
 end;
 $$
 language plpgsql;
@@ -7359,6 +7367,32 @@ end;
 $$
 language plpgsql;
 
+-- drop function json.is_object(json);
+
+create or replace function json.is_object(in_json json)
+returns boolean
+immutable
+as
+$$
+begin
+  return json_typeof(in_json) = 'object';
+end;
+$$
+language plpgsql;
+
+-- drop function json.is_object(jsonb);
+
+create or replace function json.is_object(in_json jsonb)
+returns boolean
+immutable
+as
+$$
+begin
+  return jsonb_typeof(in_json) = 'object';
+end;
+$$
+language plpgsql;
+
 -- drop function json.is_object_array(json, text);
 
 create or replace function json.is_object_array(in_json json, in_name text default null::text)
@@ -9143,6 +9177,43 @@ begin
   perform api_utils.create_ok_notification(
     in_client_id,
     in_request_id);
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_change_next_tax(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_change_next_tax(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_tax integer := json.get_bigint(in_user_params, 'tax');
+  v_object_code text := json.get_string(in_params);
+  v_notified boolean;
+begin
+  assert v_tax >= 0 and v_tax < 100;
+
+  v_notified :=
+    data.change_current_object(
+      in_client_id,
+      in_request_id,
+      data.get_object_id(v_object_code),
+      format(
+        '[
+          {"code": "system_org_next_tax", "value": %s},
+          {"code": "org_next_tax", "value": %s, "value_object_code": "master"},
+          {"code": "org_next_tax", "value": %s, "value_object_code": "%s_head"},
+          {"code": "org_next_tax", "value": %s, "value_object_code": "%s_economist"}
+        ]',
+        v_tax,
+        v_tax,
+        v_tax,
+        v_object_code,
+        v_tax,
+        v_object_code)::jsonb);
+  assert v_notified;
 end;
 $$
 language plpgsql;
@@ -12896,9 +12967,15 @@ declare
   v_master boolean := pp_utils.is_in_group(in_actor_id, 'master');
   v_actor_economy_type text := json.get_string_opt(data.get_attribute_value_for_share(in_actor_id, 'system_person_economy_type'), null);
   v_actor_money bigint;
-  v_has_read_rights boolean := pallas_project.can_see_organization(in_actor_id, v_object_code);
+  v_is_head boolean;
+  v_has_read_rights boolean;
   v_actions jsonb := jsonb '{}';
 begin
+  if not v_master then
+    v_is_head := pp_utils.is_in_group(in_actor_id, v_object_code || '_head');
+    v_has_read_rights := v_is_head or pallas_project.can_see_organization(in_actor_id, v_object_code);
+  end if;
+
   if v_master or v_has_read_rights then
     v_actions :=
       v_actions ||
@@ -12907,12 +12984,42 @@ begin
           "show_transactions": {
             "code": "act_open_object",
             "name": "Посмотреть историю транзакций",
+            "disabled": false,
             "params": {
               "object_code": "%s_transactions"
             }
           }
         }',
         v_object_code)::jsonb;
+  end if;
+
+  if v_master or v_is_head then
+    declare
+      v_next_tax integer := json.get_integer(data.get_attribute_value(in_object_id, 'system_org_next_tax'));
+    begin
+      v_actions :=
+        v_actions ||
+        format(
+          '{
+            "change_next_tax": {
+              "code": "change_next_tax",
+              "name": "Изменить налоговую ставку на следующий цикл",
+              "disabled": false,
+              "params": "%s",
+              "user_params": [
+                {
+                  "code": "tax",
+                  "description": "Налог, %%",
+                  "type": "integer",
+                  "restrictions": {"min_value": 0, "max_value": 90},
+                  "default_value": %s
+                }
+              ]
+            }
+          }',
+          v_object_code,
+          v_next_tax)::jsonb;
+    end;
   end if;
 
   if v_actor_economy_type in ('asters', 'mcr') then
@@ -12934,6 +13041,7 @@ begin
             "transfer_money": {
               "code": "transfer_money",
               "name": "Перевести деньги",
+              "disabled": false,
               "params": "%s",
               "user_params": [
                 {
@@ -15762,6 +15870,9 @@ $$
 declare
   v_district record;
 begin
+  insert into data.actions(code, function) values
+  ('change_next_tax', 'pallas_project.act_change_next_tax');
+
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
   ('system_org_synonym', null, 'Код оригинальной организации, string', 'system', null, null, false),
   ('org_synonym', 'Синоним', null, 'normal', 'full', 'pallas_project.vd_link', true),
@@ -15795,7 +15906,7 @@ begin
           {
             "code": "personal_info",
             "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_tax", "org_next_tax", "org_current_tax_sum", "org_districts_control", "org_districts_influence"],
-            "actions": ["transfer_money", "show_transactions"]
+            "actions": ["transfer_money", "change_next_tax", "show_transactions"]
           },
           {"code": "info", "attributes": ["description"]}
         ]
