@@ -9,9 +9,11 @@ declare
   v_base_coins integer := data.get_integer_param('base_un_coins');
   v_life_support_prices integer[] := data.get_integer_array_param('life_support_status_prices');
   v_person_economy_type jsonb := data.get_attribute_value_for_update(in_aster_id, 'system_person_economy_type');
+  v_aster_code text := data.get_object_code(in_aster_id);
+  v_contracts text[] := json.get_string_array(data.get_raw_attribute_value_for_share(v_aster_code || '_contracts', 'content'));
   v_reason text := 'Смена гражданства';
   v_un_hints_id integer;
-  v_aster_code text := data.get_object_code(in_aster_id);
+  v_contract_id integer;
 begin
   assert v_person_economy_type = jsonb '"asters"';
 
@@ -49,6 +51,18 @@ begin
       data.get_integer_param('base_un_rating'),
       in_aster_id,
       in_aster_id)::jsonb);
+
+  -- Отмена всех контрактов
+  for v_contract_id in
+    select data.get_object_id(value)
+    from unnest(v_contracts) a(value)
+  loop
+    perform data.change_object_and_notify(
+      v_contract_id,
+      jsonb '{"contract_status": "not_active"}');
+    perform pallas_project.notify_contract(v_contract_id, 'Контракт отменён в связи со сменой гражданства');
+  end loop;
+
   -- Уведомление
   v_un_hints_id :=
     data.create_object(
