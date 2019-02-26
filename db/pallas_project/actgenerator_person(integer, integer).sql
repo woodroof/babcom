@@ -94,8 +94,18 @@ begin
               "params": {
                 "object_code": "%s_next_statuses"
               }
+            },
+            "open_contracts": {
+              "code": "act_open_object",
+              "name": "Посмотреть контракты",
+              "disabled": false,
+              "params": {
+                "object_code": "%s_contracts"
+              }
             }
-          }', v_object_code)::jsonb;
+          }',
+          v_object_code,
+          v_object_code)::jsonb;
 
         if v_economy_type != jsonb '"un"' then
           v_actions :=

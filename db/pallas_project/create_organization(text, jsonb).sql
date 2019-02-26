@@ -119,6 +119,25 @@ begin
       v_head_group_id,
       v_master_group_id)::jsonb,
     'claim_list');
+
+  -- Создадим список контактов
+  perform data.create_object(
+    in_object_code || '_contracts',
+    format(
+      '[
+        {"code": "title", "value": "Контракты, %s"},
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "content", "value": []}
+      ]',
+      json.get_string(data.get_attribute_value(v_org_id, 'title')),
+      v_head_group_id,
+      v_economist_group_id,
+      v_auditor_group_id,
+      v_temporary_auditor_group_id)::jsonb,
+    'contract_list');
 end;
 $$
 language plpgsql;

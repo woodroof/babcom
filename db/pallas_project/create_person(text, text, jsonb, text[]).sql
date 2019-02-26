@@ -192,6 +192,18 @@ begin
               v_person_id)::jsonb,
             'transactions');
         end if;
+
+        -- Создадим список контактов
+        perform data.create_object(
+          v_person_code || '_contracts',
+          format(
+            '[
+              {"code": "title", "value": "Контракты"},
+              {"code": "is_visible", "value": true, "value_object_id": %s},
+              {"code": "content", "value": []}
+            ]',
+            v_person_id)::jsonb,
+          'contract_list');
       end if;
     end;
   end if;

@@ -56,8 +56,17 @@ begin
               "params": {
                 "object_code": "%s_transactions"
               }
+            },
+            "show_contracts": {
+              "code": "act_open_object",
+              "name": "Посмотреть контракты",
+              "disabled": false,
+              "params": {
+                "object_code": "%s_contracts"
+              }
             }
           }',
+          v_object_code,
           v_object_code)::jsonb;
     end if;
 

@@ -60,6 +60,20 @@ begin
               }',
               v_actor_code)::jsonb;
         end if;
+
+        declare
+          v_contracts jsonb := data.get_raw_attribute_value_for_share(v_actor_code || '_contracts', 'content');
+        begin
+          if v_contracts != jsonb '[]' then
+            v_actions :=
+              v_actions ||
+              format(
+                '{
+                  "my_contracts": {"code": "act_open_object", "name": "Контракты", "disabled": false, "params": {"object_code": "%s_contracts"}}
+                }',
+                v_actor_code)::jsonb;
+          end if;
+        end;
       end if;
     else
       v_actions :=
@@ -67,7 +81,8 @@ begin
         jsonb '{
           "chats": {"code": "act_open_object", "name": "Отслеживаемые игровые чаты", "disabled": false, "params": {"object_code": "chats"}},
           "all_chats": {"code": "act_open_object", "name": "Все игровые чаты", "disabled": false, "params": {"object_code": "all_chats"}},
-          "master_chats": {"code": "act_open_object", "name": "Мастерские чаты", "disabled": false, "params": {"object_code": "master_chats"}}
+          "master_chats": {"code": "act_open_object", "name": "Мастерские чаты", "disabled": false, "params": {"object_code": "master_chats"}},
+          "all_contracts": {"code": "act_open_object", "name": "Все контракты", "disabled": false, "params": {"object_code": "contracts"}}
         }';
     end if;
 

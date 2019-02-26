@@ -89,6 +89,7 @@ begin
               "open_current_statuses",
               "open_next_statuses",
               "open_transactions",
+              "open_contracts",
               "transfer_money",
               "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5",
               "change_un_rating",

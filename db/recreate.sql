@@ -2019,18 +2019,20 @@ language plpgsql;
 -- drop function data.create_job(timestamp with time zone, text, jsonb);
 
 create or replace function data.create_job(in_desired_time timestamp with time zone, in_function text, in_params jsonb)
-returns void
+returns integer
 volatile
 as
 $$
 declare
+  v_job_id integer;
   v_min_time timestamp with time zone;
 begin
   assert in_desired_time is not null;
   assert in_function is not null;
 
   insert into data.jobs(desired_time, function, params)
-  values(in_desired_time, in_function, in_params);
+  values(in_desired_time, in_function, in_params)
+  returning id into v_job_id;
 
   select min(desired_time)
   into v_min_time
@@ -2039,6 +2041,8 @@ begin
   if v_min_time = in_desired_time then
     perform api_utils.create_job_notification(in_desired_time);
   end if;
+
+  return v_job_id;
 end;
 $$
 language plpgsql;
@@ -3552,6 +3556,58 @@ end;
 $$
 language plpgsql;
 
+-- drop function data.get_raw_attribute_value_for_share(text, integer);
+
+create or replace function data.get_raw_attribute_value_for_share(in_object_code text, in_attribute_id integer)
+returns jsonb
+volatile
+as
+$$
+begin
+  return data.get_raw_attribute_value_for_share(data.get_object_id(in_object_code), in_attribute_id);
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_raw_attribute_value_for_share(text, integer, integer);
+
+create or replace function data.get_raw_attribute_value_for_share(in_object_code text, in_attribute_id integer, in_value_object_id integer)
+returns jsonb
+volatile
+as
+$$
+begin
+  return data.get_raw_attribute_value_for_share(data.get_object_id(in_object_code), in_attribute_id, in_value_object_id);
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_raw_attribute_value_for_share(text, text);
+
+create or replace function data.get_raw_attribute_value_for_share(in_object_code text, in_attribute_code text)
+returns jsonb
+volatile
+as
+$$
+begin
+  return data.get_raw_attribute_value_for_share(data.get_object_id(in_object_code), data.get_attribute_id(in_attribute_code));
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_raw_attribute_value_for_share(text, text, integer);
+
+create or replace function data.get_raw_attribute_value_for_share(in_object_code text, in_attribute_code text, in_value_object_id integer)
+returns jsonb
+volatile
+as
+$$
+begin
+  return data.get_raw_attribute_value_for_share(data.get_object_id(in_object_code), data.get_attribute_id(in_attribute_code), in_value_object_id);
+end;
+$$
+language plpgsql;
+
 -- drop function data.get_raw_attribute_value_for_update(integer, integer);
 
 create or replace function data.get_raw_attribute_value_for_update(in_object_id integer, in_attribute_id integer)
@@ -3652,6 +3708,58 @@ as
 $$
 begin
   return data.get_raw_attribute_value_for_update(in_object_id, data.get_attribute_id(in_attribute_code), in_value_object_id);
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_raw_attribute_value_for_update(text, integer);
+
+create or replace function data.get_raw_attribute_value_for_update(in_object_code text, in_attribute_id integer)
+returns jsonb
+volatile
+as
+$$
+begin
+  return data.get_raw_attribute_value_for_update(data.get_object_id(in_object_code), in_attribute_id);
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_raw_attribute_value_for_update(text, integer, integer);
+
+create or replace function data.get_raw_attribute_value_for_update(in_object_code text, in_attribute_id integer, in_value_object_id integer)
+returns jsonb
+volatile
+as
+$$
+begin
+  return data.get_raw_attribute_value_for_update(data.get_object_id(in_object_code), in_attribute_id, in_value_object_id);
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_raw_attribute_value_for_update(text, text);
+
+create or replace function data.get_raw_attribute_value_for_update(in_object_code text, in_attribute_code text)
+returns jsonb
+volatile
+as
+$$
+begin
+  return data.get_raw_attribute_value_for_update(data.get_object_id(in_object_code), data.get_attribute_id(in_attribute_code));
+end;
+$$
+language plpgsql;
+
+-- drop function data.get_raw_attribute_value_for_update(text, text, integer);
+
+create or replace function data.get_raw_attribute_value_for_update(in_object_code text, in_attribute_code text, in_value_object_id integer)
+returns jsonb
+volatile
+as
+$$
+begin
+  return data.get_raw_attribute_value_for_update(data.get_object_id(in_object_code), data.get_attribute_id(in_attribute_code), in_value_object_id);
 end;
 $$
 language plpgsql;
@@ -9558,6 +9666,77 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_cancel_contract(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_cancel_contract(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_contract_code text := json.get_string(in_params);
+  v_contract_id integer := data.get_object_id(v_contract_code);
+  v_contract_status text := json.get_string(data.get_attribute_value_for_update(v_contract_id, 'contract_status'));
+  v_new_contract_status text;
+  v_notified boolean;
+begin
+  if v_contract_status not in ('unconfirmed', 'confirmed', 'active', 'suspended') then
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Контракт уже отменён');
+    return;
+  end if;
+
+  if v_contract_status = 'unconfirmed' or v_contract_status = 'confirmed' then
+    v_new_contract_status := 'not_active';
+  elsif v_contract_status = 'active' then
+    v_new_contract_status := 'cancelled';
+  else
+    v_new_contract_status := 'suspended_cancelled';
+  end if;
+
+  v_notified :=
+    data.change_current_object(
+      in_client_id,
+      in_request_id,
+      v_contract_id,
+      jsonb_build_object('contract_status', v_new_contract_status));
+  assert v_notified;
+
+  perform pallas_project.notify_contract(v_contract_id, 'Контракт отменён');
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_cancel_contract_immediate(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_cancel_contract_immediate(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_contract_code text := json.get_string(in_params);
+  v_contract_id integer := data.get_object_id(v_contract_code);
+  v_contract_status text := json.get_string(data.get_attribute_value_for_update(v_contract_id, 'contract_status'));
+  v_notified boolean;
+begin
+  if v_contract_status = 'not_active' then
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Контракт уже отменён');
+    return;
+  end if;
+
+  v_notified :=
+    data.change_current_object(
+      in_client_id,
+      in_request_id,
+      v_contract_id,
+      jsonb_build_object('contract_status', 'not_active'));
+  assert v_notified;
+
+  perform pallas_project.notify_contract(v_contract_id, 'Контракт отменён');
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_cancel_lottery(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_cancel_lottery(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -11077,6 +11256,117 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_confirm_contract(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_confirm_contract(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_contract_code text := json.get_string(in_params);
+  v_contract_id integer := data.get_object_id(v_contract_code);
+  v_contract_status text := json.get_string(data.get_attribute_value_for_update(v_contract_id, 'contract_status'));
+  v_new_contract_status text;
+  v_notified boolean;
+begin
+  if v_contract_status not in ('unconfirmed') then
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Контракт уже не требует подтверждения');
+    return;
+  end if;
+
+  v_new_contract_status := 'confirmed';
+
+  v_notified :=
+    data.change_current_object(
+      in_client_id,
+      in_request_id,
+      v_contract_id,
+      jsonb_build_object('contract_status', v_new_contract_status));
+  assert v_notified;
+
+  perform pallas_project.notify_contract(v_contract_id, 'Контакт подтверждён');
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_contract_draft_cancel(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_contract_draft_cancel(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_contract_code text := json.get_string(in_params);
+  v_contract_id integer := data.get_object_id(v_contract_code);
+  v_org_code text := json.get_string(data.get_attribute_value(v_contract_id, 'contract_org'));
+begin
+  perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, v_org_code);
+  perform data.set_attribute_value(v_contract_id, 'is_visible', jsonb 'false', v_actor_id);
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_contract_draft_confirm(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_contract_draft_confirm(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_contract_code text := json.get_string(in_params);
+  v_contract_id integer := data.get_object_id(v_contract_code);
+  v_org_code text := json.get_string(data.get_attribute_value(v_contract_id, 'contract_org'));
+  v_person_code text := json.get_string(data.get_attribute_value(v_contract_id, 'contract_person'));
+  v_reward bigint := json.get_bigint(data.get_attribute_value(v_contract_id, 'contract_reward'));
+  v_description text := json.get_string(data.get_attribute_value(v_contract_id, 'contract_description'));
+  v_new_contract_id integer;
+begin
+  v_new_contract_id :=
+    pallas_project.create_contract(
+      v_person_code,
+      v_org_code,
+      'unconfirmed',
+      v_reward,
+      v_description);
+  perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, data.get_object_code(v_new_contract_id));
+  perform pallas_project.notify_contract(v_new_contract_id, 'Создан новый контракт');
+  perform data.set_attribute_value(v_contract_id, 'is_visible', jsonb 'false', v_actor_id);
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_contract_draft_edit(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_contract_draft_edit(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_contract_code text := json.get_string(in_params);
+  v_reward bigint := json.get_bigint(in_user_params, 'reward');
+  v_description text := pp_utils.trim(json.get_string(in_user_params, 'description'));
+  v_contract_id integer := data.get_object_id(v_contract_code);
+  v_notified boolean;
+begin
+  v_notified :=
+    data.change_current_object(
+      in_client_id,
+      in_request_id,
+      v_contract_id,
+      jsonb_build_object('contract_reward', v_reward, 'contract_description', v_description));
+  if not v_notified then
+    perform api_utils.create_ok_notification(in_request_id, in_client_id);
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_create_chat(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_create_chat(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -11120,6 +11410,45 @@ begin
   -- Заходим в чат
   perform pallas_project.act_chat_enter(in_client_id, in_request_id, jsonb_build_object('chat_code', v_chat_code, 'goto_chat', true), null, null);
 
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_create_contract(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_create_contract(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_org_code text := json.get_string(in_params);
+  v_content jsonb;
+  v_list_id integer;
+begin
+  select jsonb_agg(code)
+  into v_content
+  from (
+    select o.code
+    from data.object_objects oo
+    join data.objects o on
+      o.id = oo.object_id and
+      json.get_string(data.get_attribute_value(o.id, data.get_attribute_id('system_person_economy_type'))) = 'asters'
+    where
+      oo.parent_object_id = data.get_object_id('player') and
+      oo.object_id != oo.parent_object_id
+    order by json.get_string(data.get_raw_attribute_value(o.id, data.get_attribute_id('title')))) codes;
+
+  v_list_id :=
+    data.create_object(
+      null,
+      jsonb '[]' ||
+      data.attribute_change2jsonb('is_visible', jsonb 'true', v_actor_id) ||
+      data.attribute_change2jsonb('content', v_content) ||
+      data.attribute_change2jsonb('contract_org', to_jsonb(v_org_code)),
+      'contract_person_list');
+  perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, data.get_object_code(v_list_id));
 end;
 $$
 language plpgsql;
@@ -12724,6 +13053,41 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_edit_contract(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_edit_contract(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_contract_code text := json.get_string(in_params);
+  v_reward bigint := json.get_bigint(in_user_params, 'reward');
+  v_description text := pp_utils.trim(json.get_string(in_user_params, 'description'));
+  v_contract_id integer := data.get_object_id(v_contract_code);
+  v_contract_status text := json.get_string(data.get_attribute_value_for_update(v_contract_id, 'contract_status'));
+  v_notified boolean;
+begin
+  if v_contract_status not in ('unconfirmed') then
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Контракт сменил статус и более не может быть отредактирован');
+    return;
+  end if;
+
+  v_notified :=
+    data.change_current_object(
+      in_client_id,
+      in_request_id,
+      v_contract_id,
+      jsonb_build_object('contract_reward', v_reward, 'contract_description', v_description));
+  if v_notified then
+    perform pallas_project.notify_contract(v_contract_id, 'Изменены условия контракта');
+  else
+    perform api_utils.create_ok_notification(in_request_id, in_client_id);
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_finish_lottery(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_finish_lottery(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -12971,6 +13335,44 @@ begin
       jsonb '[]' || data.attribute_change2jsonb('content', to_jsonb(v_content)),
       'Open notification');
   assert v_notified;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_suspend_contract(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_suspend_contract(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_contract_code text := json.get_string(in_params);
+  v_contract_id integer := data.get_object_id(v_contract_code);
+  v_contract_status text := json.get_string(data.get_attribute_value_for_update(v_contract_id, 'contract_status'));
+  v_new_contract_status text;
+  v_notified boolean;
+begin
+  if v_contract_status not in ('active', 'cancelled') then
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Объект изменился, действие более не доступно');
+    return;
+  end if;
+
+  if v_contract_status = 'active' then
+    v_new_contract_status := 'suspended';
+  else
+    v_new_contract_status := 'suspended_cancelled';
+  end if;
+
+  v_notified :=
+    data.change_current_object(
+      in_client_id,
+      in_request_id,
+      v_contract_id,
+      jsonb_build_object('contract_status', v_new_contract_status));
+  assert v_notified;
+
+  perform pallas_project.notify_contract(v_contract_id, 'Выплаты по контракту были приостановлены');
 end;
 $$
 language plpgsql;
@@ -13261,6 +13663,44 @@ begin
     v_org_id,
     v_actor_id,
     v_groups);
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_unsuspend_contract(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_unsuspend_contract(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_contract_code text := json.get_string(in_params);
+  v_contract_id integer := data.get_object_id(v_contract_code);
+  v_contract_status text := json.get_string(data.get_attribute_value_for_update(v_contract_id, 'contract_status'));
+  v_new_contract_status text;
+  v_notified boolean;
+begin
+  if v_contract_status not in ('suspended', 'suspended_cancelled') then
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Объект изменился, действие более не доступно');
+    return;
+  end if;
+
+  if v_contract_status = 'suspended' then
+    v_new_contract_status := 'active';
+  else
+    v_new_contract_status := 'cancelled';
+  end if;
+
+  v_notified :=
+    data.change_current_object(
+      in_client_id,
+      in_request_id,
+      v_contract_id,
+      jsonb_build_object('contract_status', v_new_contract_status));
+  assert v_notified;
+
+  perform pallas_project.notify_contract(v_contract_id, 'Выплаты по контракту были возобновлены');
 end;
 $$
 language plpgsql;
@@ -13834,6 +14274,271 @@ begin
         v_object_code);
   end if;
   return jsonb ('{'||trim(v_actions_list,',')||'}');
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.actgenerator_contract(integer, integer);
+
+create or replace function pallas_project.actgenerator_contract(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_object_code text := data.get_object_code(in_object_id);
+  v_actor_code text := data.get_object_code(in_actor_id);
+  v_contract_status text := json.get_string(data.get_attribute_value_for_share(in_object_id, 'contract_status'));
+  v_contract_person_code text := json.get_string(data.get_attribute_value_for_share(in_object_id, 'contract_person'));
+  v_contract_org_code text := json.get_string(data.get_attribute_value_for_share(in_object_id, 'contract_org'));
+  v_is_head boolean := pp_utils.is_in_group(in_actor_id, v_contract_org_code || '_head');
+  v_is_economist boolean := pp_utils.is_in_group(in_actor_id, v_contract_org_code || '_economist');
+  v_is_master boolean := pp_utils.is_in_group(in_actor_id, 'master');
+  v_actions jsonb := '{}';
+begin
+  if v_contract_status not in ('not_active', 'confirmed') and v_is_master then
+    v_actions :=
+      v_actions ||
+      format(
+        '{
+          "cancel_contract_immediate": {
+            "code": "cancel_contract_immediate",
+            "name": "Отменить контракт с ТЕКУЩЕГО цикла",
+            "disabled": false,
+            "warning": "Уверены? Деньги выплачены не будут, заключить можно только на следующий цикл.",
+            "params": "%s"
+          }
+        }',
+        v_object_code)::jsonb;
+  end if;
+
+  if
+    v_contract_status not in ('cancelled', 'suspended_cancelled', 'not_active', 'unconfirmed') and v_contract_person_code = v_actor_code or
+    v_contract_status not in ('cancelled', 'suspended_cancelled', 'not_active') and (v_is_master or v_is_head or v_is_economist)
+  then
+    v_actions :=
+      v_actions ||
+      format(
+        '{
+          "cancel_contract": {
+            "code": "cancel_contract",
+            "name": "Отменить контракт",
+            "disabled": false,
+            "warning": "%s",
+            "params": "%s"
+          }
+        }',
+        (case when v_contract_status = 'unconfirmed' or v_contract_status = 'confirmed' then 'Отменить контракт?' else 'Контракт будет отменён со следующего цикла. Продолжить?' end),
+        v_object_code)::jsonb;
+  end if;
+
+  if v_contract_status = 'unconfirmed' then
+    if v_contract_person_code = v_actor_code then
+      v_actions :=
+        v_actions ||
+        format(
+          '{
+            "confirm_contract": {
+              "code": "confirm_contract",
+              "name": "Подтвердить",
+              "disabled": false,
+              "warning": "Контракт вступит в действие со следующего цикла. Продолжить?",
+              "params": "%s"
+            }
+          }',
+          v_object_code)::jsonb;
+    elsif v_is_master or v_is_head or v_is_economist then
+      v_actions :=
+        v_actions ||
+        format(
+          '{
+            "edit_contract": {
+              "code": "edit_contract",
+              "name": "Редактировать",
+              "disabled": false,
+              "params": "%s",
+              "user_params": [
+                {
+                  "code": "reward",
+                  "description": "Вознаграждение за цикл, UN$",
+                  "type": "integer",
+                  "restrictions": {"min_value": 1},
+                  "default_value": %s
+                },
+                {
+                  "code": "description",
+                  "description": "Условия",
+                  "type": "string",
+                  "restrictions": {"min_length": 1, "max_length": 1000, "multiline": true},
+                  "default_value": %s
+                }
+              ]
+            }
+          }',
+          v_object_code,
+          json.get_bigint(data.get_attribute_value_for_share(in_object_id, 'contract_reward')),
+          data.get_attribute_value_for_share(in_object_id, 'contract_description')::text)::jsonb;
+    end if;
+  end if;
+
+  if v_is_head or v_is_economist or v_is_master then
+    if v_contract_status in ('active', 'cancelled') then
+      v_actions :=
+        v_actions ||
+        format(
+          '{
+            "suspend_contract": {
+              "code": "suspend_contract",
+              "name": "Приостановить выплаты",
+              "disabled": false,
+              "warning": "Выплаты в конце данного цикла производиться не будут. Продолжить?",
+              "params": "%s"
+            }
+          }',
+          v_object_code)::jsonb;
+    elsif v_contract_status in ('suspended', 'suspended_cancelled') then
+      v_actions :=
+        v_actions ||
+        format(
+          '{
+            "unsuspend_contract": {
+              "code": "unsuspend_contract",
+              "name": "Возобновить выплаты",
+              "disabled": false,
+              "warning": "Вознаграждение по контракту будет выплачено в конце цикла. Продолжить?",
+              "params": "%s"
+            }
+          }',
+          v_object_code)::jsonb;
+    end if;
+  end if;
+
+  return v_actions;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.actgenerator_contract_draft(integer, integer);
+
+create or replace function pallas_project.actgenerator_contract_draft(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_object_code text := data.get_object_code(in_object_id);
+  v_reward bigint := json.get_bigint(data.get_attribute_value_for_share(in_object_id, 'contract_reward'));
+  v_description jsonb := data.get_attribute_value_for_share(in_object_id, 'contract_description');
+  v_actions jsonb := jsonb '{}';
+begin
+  v_actions :=
+    v_actions ||
+    format(
+      '{
+        "contract_draft_edit": {
+          "code": "contract_draft_edit",
+          "name": "Редактировать",
+          "disabled": false,
+          "params": "%s",
+          "user_params": [
+            {
+              "code": "reward",
+              "description": "Вознаграждение за цикл, UN$",
+              "type": "integer",
+              "restrictions": {"min_value": 1},
+              "default_value": %s
+            },
+            {
+              "code": "description",
+              "description": "Условия",
+              "type": "string",
+              "restrictions": {"min_length": 1, "max_length": 1000, "multiline": true},
+              "default_value": %s
+            }
+          ]
+        },
+        "contract_draft_cancel": {
+          "code": "contract_draft_cancel",
+          "name": "Удалить",
+          "warning": "Удалить черновик контракта?",
+          "disabled": false,
+          "params": "%s"
+        }
+      }',
+      v_object_code,
+      v_reward,
+      v_description::text,
+      v_object_code)::jsonb;
+
+  if v_reward > 0 and v_description != '""' then
+    v_actions :=
+      v_actions ||
+      format(
+        '{
+          "contract_draft_confirm": {
+            "code": "contract_draft_confirm",
+            "name": "Создать контракт",
+            "warning": "Исполнитель увидит контракт, редактирование будет доступно до принятия исполнителем контракта. Продолжить?",
+            "disabled": false,
+            "params": "%s"
+          }
+        }',
+        v_object_code)::jsonb;
+  else
+    v_actions :=
+      v_actions ||
+      jsonb '{
+        "contract_draft_confirm": {
+          "code": "contract_draft_confirm",
+          "name": "Создать контракт",
+          "disabled": true
+        }
+      }';
+  end if;
+
+  return v_actions;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.actgenerator_contract_list(integer, integer);
+
+create or replace function pallas_project.actgenerator_contract_list(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_object_code text := data.get_object_code(in_object_id);
+  v_org_code text := substring(v_object_code for length(v_object_code) - length('_contracts'));
+  v_type text := json.get_string(data.get_attribute_value(v_org_code, 'type'));
+  v_is_head boolean;
+  v_is_economist boolean;
+  v_is_master boolean;
+  v_actions jsonb := '{}';
+begin
+  if v_type = 'organization' then
+    v_is_head := pp_utils.is_in_group(in_actor_id, v_org_code || '_head');
+    v_is_economist := pp_utils.is_in_group(in_actor_id, v_org_code || '_economist');
+    v_is_master := pp_utils.is_in_group(in_actor_id, 'master');
+
+    if v_is_master or v_is_head or v_is_economist then
+      v_actions :=
+        v_actions ||
+        format(
+          '{
+            "create_contract": {
+              "code": "create_contract",
+              "name": "Создать контракт",
+              "disabled": false,
+              "params": "%s"
+            }
+          }',
+          v_org_code)::jsonb;
+    end if;
+  end if;
+
+  return v_actions;
 end;
 $$
 language plpgsql;
@@ -14552,6 +15257,20 @@ begin
               }',
               v_actor_code)::jsonb;
         end if;
+
+        declare
+          v_contracts jsonb := data.get_raw_attribute_value_for_share(v_actor_code || '_contracts', 'content');
+        begin
+          if v_contracts != jsonb '[]' then
+            v_actions :=
+              v_actions ||
+              format(
+                '{
+                  "my_contracts": {"code": "act_open_object", "name": "Контракты", "disabled": false, "params": {"object_code": "%s_contracts"}}
+                }',
+                v_actor_code)::jsonb;
+          end if;
+        end;
       end if;
     else
       v_actions :=
@@ -14559,7 +15278,8 @@ begin
         jsonb '{
           "chats": {"code": "act_open_object", "name": "Отслеживаемые игровые чаты", "disabled": false, "params": {"object_code": "chats"}},
           "all_chats": {"code": "act_open_object", "name": "Все игровые чаты", "disabled": false, "params": {"object_code": "all_chats"}},
-          "master_chats": {"code": "act_open_object", "name": "Мастерские чаты", "disabled": false, "params": {"object_code": "master_chats"}}
+          "master_chats": {"code": "act_open_object", "name": "Мастерские чаты", "disabled": false, "params": {"object_code": "master_chats"}},
+          "all_contracts": {"code": "act_open_object", "name": "Все контракты", "disabled": false, "params": {"object_code": "contracts"}}
         }';
     end if;
 
@@ -14835,8 +15555,17 @@ begin
               "params": {
                 "object_code": "%s_transactions"
               }
+            },
+            "show_contracts": {
+              "code": "act_open_object",
+              "name": "Посмотреть контракты",
+              "disabled": false,
+              "params": {
+                "object_code": "%s_contracts"
+              }
             }
           }',
+          v_object_code,
           v_object_code)::jsonb;
     end if;
 
@@ -15101,8 +15830,18 @@ begin
               "params": {
                 "object_code": "%s_next_statuses"
               }
+            },
+            "open_contracts": {
+              "code": "act_open_object",
+              "name": "Посмотреть контракты",
+              "disabled": false,
+              "params": {
+                "object_code": "%s_contracts"
+              }
             }
-          }', v_object_code)::jsonb;
+          }',
+          v_object_code,
+          v_object_code)::jsonb;
 
         if v_economy_type != jsonb '"un"' then
           v_actions :=
@@ -15599,6 +16338,60 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.create_contract(text, text, text, bigint, text);
+
+create or replace function pallas_project.create_contract(in_person_code text, in_org_code text, in_status text, in_reward bigint, in_description text)
+returns integer
+volatile
+as
+$$
+declare
+  v_description text := pp_utils.trim(in_description);
+  v_contract_id integer;
+  v_content jsonb;
+begin
+  assert in_status in ('unconfirmed', 'confirmed', 'active', 'suspended', 'cancelled', 'suspended_cancelled', 'not_active');
+  assert in_reward > 0;
+  assert v_description is not null;
+
+  v_contract_id :=
+    data.create_object(
+      null,
+      format(
+        '[
+          {"code": "is_visible", "value": true, "value_object_code": "%s"},
+          {"code": "is_visible", "value": true, "value_object_code": "%s_head"},
+          {"code": "is_visible", "value": true, "value_object_code": "%s_economist"},
+          {"code": "is_visible", "value": true, "value_object_code": "%s_auditor"},
+          {"code": "is_visible", "value": true, "value_object_code": "%s_temporary_auditor"},
+          {"code": "contract_org", "value": "%s"},
+          {"code": "contract_person", "value": "%s"},
+          {"code": "contract_status", "value": "%s"},
+          {"code": "contract_reward", "value": %s},
+          {"code": "contract_description", "value": %s}
+        ]',
+        in_person_code,
+        in_org_code,
+        in_org_code,
+        in_org_code,
+        in_org_code,
+        in_org_code,
+        in_person_code,
+        in_status,
+        in_reward,
+        to_jsonb(v_description)::text)::jsonb,
+      'contract');
+
+  -- Поместим в списки
+  perform pp_utils.list_prepend_and_notify(data.get_object_id(in_org_code || '_contracts'), v_contract_id, null, null);
+  perform pp_utils.list_prepend_and_notify(data.get_object_id(in_person_code || '_contracts'), v_contract_id, null, null);
+  perform pp_utils.list_prepend_and_notify(data.get_object_id('contracts'), v_contract_id, null, null);
+
+  return v_contract_id;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.create_organization(text, jsonb);
 
 create or replace function pallas_project.create_organization(in_object_code text, in_attributes jsonb)
@@ -15720,6 +16513,25 @@ begin
       v_head_group_id,
       v_master_group_id)::jsonb,
     'claim_list');
+
+  -- Создадим список контактов
+  perform data.create_object(
+    in_object_code || '_contracts',
+    format(
+      '[
+        {"code": "title", "value": "Контракты, %s"},
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "content", "value": []}
+      ]',
+      json.get_string(data.get_attribute_value(v_org_id, 'title')),
+      v_head_group_id,
+      v_economist_group_id,
+      v_auditor_group_id,
+      v_temporary_auditor_group_id)::jsonb,
+    'contract_list');
 end;
 $$
 language plpgsql;
@@ -15918,6 +16730,18 @@ begin
               v_person_id)::jsonb,
             'transactions');
         end if;
+
+        -- Создадим список контактов
+        perform data.create_object(
+          v_person_code || '_contracts',
+          format(
+            '[
+              {"code": "title", "value": "Контракты"},
+              {"code": "is_visible", "value": true, "value_object_id": %s},
+              {"code": "content", "value": []}
+            ]',
+            v_person_id)::jsonb,
+          'contract_list');
       end if;
     end;
   end if;
@@ -16450,9 +17274,9 @@ begin
         "groups": [
           {"code": "menu_notifications", "actions": ["notifications"]},
           {"code": "menu_lottery", "actions": ["lottery"]},
-          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "chats", "documents", "my_organizations", "blogs", "claims", "important_notifications"]},
+          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "chats", "documents", "my_contracts", "my_organizations", "blogs", "claims", "important_notifications"]},
           {"code": "menu_social", "actions": ["news", "all_chats", "debatles", "master_chats"]},
-          {"code": "menu_info", "actions": ["persons", "districts", "organizations"]},
+          {"code": "menu_info", "actions": ["all_contracts", "persons", "districts", "organizations"]},
           {"code": "menu_logout", "actions": ["logout"]}
         ]
       }
@@ -16523,6 +17347,7 @@ begin
   perform pallas_project.init_claims();
   perform pallas_project.init_organizations();
   perform pallas_project.init_organization_roles();
+  perform pallas_project.init_contracts();
   perform pallas_project.init_debatles();
   perform pallas_project.init_messenger();
   perform pallas_project.init_person_list();
@@ -16906,6 +17731,20 @@ begin
   ('claim_result_edit', 'pallas_project.act_claim_result_edit'),
   ('claim_chat', 'pallas_project.act_claim_chat'),
   ('claim_send_to_judge', 'pallas_project.act_claim_send_to_judge');
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.init_contracts();
+
+create or replace function pallas_project.init_contracts()
+returns void
+volatile
+as
+$$
+begin
+  perform pallas_project.create_contract('player2', 'org_de_beers', 'suspended', '100', 'Работай и зарабатывай');
+  perform pallas_project.create_contract('player4', 'org_administration', 'active', '120', 'Работай и зарабатывай');
 end;
 $$
 language plpgsql;
@@ -17679,11 +18518,27 @@ begin
   ('recreation_next_status', null, 'Статус на странице покупки', 'normal', null, 'pallas_project.vd_status', false),
   ('police_next_status', null, 'Статус на странице покупки', 'normal', null, 'pallas_project.vd_status', false),
   ('administrative_services_next_status', null, 'Статус на странице покупки', 'normal', null, 'pallas_project.vd_status', false),
-  ('cycle', null, 'Текущий экономический цикл', 'normal', null, 'pallas_project.vd_cycle', false);
+  ('cycle', null, 'Текущий экономический цикл', 'normal', null, 'pallas_project.vd_cycle', false),
+  ('contract_org', 'Заказчик', null, 'normal', null, 'pallas_project.vd_link', false),
+  ('contract_person', 'Исполнитель', null, 'normal', null, 'pallas_project.vd_link', false),
+  ('contract_status', 'Статус контракта', null, 'normal', null, 'pallas_project.vd_contract_status', false),
+  ('contract_reward', 'Вознаграждение за цикл', null, 'normal', 'full', 'pallas_project.vd_money', false),
+  ('contract_description', 'Условия', null, 'normal', 'full', null, false);
 
   insert into data.actions(code, function) values
-  ('buy_status', 'pallas_project.act_buy_status');
+  ('cancel_contract_immediate', 'pallas_project.act_cancel_contract_immediate'),
+  ('cancel_contract', 'pallas_project.act_cancel_contract'),
+  ('edit_contract', 'pallas_project.act_edit_contract'),
+  ('confirm_contract', 'pallas_project.act_confirm_contract'),
+  ('suspend_contract', 'pallas_project.act_suspend_contract'),
+  ('unsuspend_contract', 'pallas_project.act_unsuspend_contract'),
+  ('buy_status', 'pallas_project.act_buy_status'),
+  ('create_contract', 'pallas_project.act_create_contract'),
+  ('contract_draft_edit', 'pallas_project.act_contract_draft_edit'),
+  ('contract_draft_cancel', 'pallas_project.act_contract_draft_cancel'),
+  ('contract_draft_confirm', 'pallas_project.act_contract_draft_confirm');
 
+  -- Классы для статусов
   perform data.create_class(
     'life_support_status_page',
     jsonb '[
@@ -17820,6 +18675,102 @@ begin
             {"name": "Развлечения", "code": "recreation", "attributes": ["recreation_next_status"], "actions": ["recreation_bronze", "recreation_silver", "recreation_gold"]},
             {"name": "Полиция", "code": "police", "attributes": ["police_next_status"], "actions": ["police_bronze", "police_silver", "police_gold"]},
             {"name": "Административное обслуживание", "code": "administrative_services", "attributes": ["administrative_services_next_status"], "actions": ["administrative_services_bronze", "administrative_services_silver", "administrative_services_gold"]}
+          ]
+        }
+      }
+    ]');
+
+  -- Классы для контрактов
+  perform data.create_class(
+    'contract',
+    jsonb '[
+      {"code": "is_visible", "value": true, "value_object_code": "master"},
+      {"code": "type", "value": "contract"},
+      {"code": "title", "value": "Контракт"},
+      {"code": "actions_function", "value": "pallas_project.actgenerator_contract"},
+      {
+        "code": "mini_card_template",
+        "value": {
+          "groups": [
+            {"code": "group", "attributes": ["contract_org", "contract_person", "contract_status"]}
+          ]
+        }
+      },
+      {
+        "code": "template",
+        "value": {
+          "title": "title",
+          "groups": [
+            {
+              "code": "group",
+              "actions": ["confirm_contract", "edit_contract", "cancel_contract", "suspend_contract", "unsuspend_contract", "cancel_contract_immediate"],
+              "attributes": ["contract_org", "contract_person", "contract_status", "contract_reward", "contract_description"]
+            }
+          ]
+        }
+      }
+    ]');
+  perform data.create_class(
+    'contract_list',
+    jsonb '[
+      {"code": "is_visible", "value": true, "value_object_code": "master"},
+      {"code": "type", "value": "contract_list"},
+      {"code": "actions_function", "value": "pallas_project.actgenerator_contract_list"},
+      {"code": "independent_from_actor_list_elements", "value": true},
+      {"code": "independent_from_object_list_elements", "value": true},
+      {
+        "code": "template",
+        "value": {
+          "title": "title",
+          "groups": [
+            {"code": "group", "actions": ["create_contract"]}
+          ]
+        }
+      }
+    ]');
+  perform data.create_object(
+    'contracts',
+    jsonb '{
+      "title": "Все контакты",
+      "content": []
+    }',
+    'contract_list');
+  perform data.create_class(
+    'contract_draft',
+    jsonb '[
+      {"code": "type", "value": "contract_draft"},
+      {"code": "title", "value": "Создание контракта"},
+      {"code": "temporary_object", "value": true},
+      {"code": "actions_function", "value": "pallas_project.actgenerator_contract_draft"},
+      {
+        "code": "template",
+        "value": {
+          "title": "title",
+          "groups": [
+            {
+              "code": "group",
+              "actions": ["contract_draft_edit", "contract_draft_cancel", "contract_draft_confirm"],
+              "attributes": ["contract_org", "contract_person", "contract_reward", "contract_description"]
+            }
+          ]
+        }
+      }
+    ]');
+  perform data.create_class(
+    'contract_person_list',
+    jsonb '[
+      {"code": "title", "value": "Выбор исполнителя"},
+      {"code": "type", "value": "contract_person_list"},
+      {"code": "list_element_function", "value": "pallas_project.lef_contract_person_list"},
+      {"code": "temporary_object", "value": true},
+      {"code": "independent_from_actor_list_elements", "value": true},
+      {"code": "independent_from_object_list_elements", "value": true},
+      {
+        "code": "template",
+        "value": {
+          "title": "title",
+          "groups": [
+            {"code": "group", "actions": []}
           ]
         }
       }
@@ -18375,7 +19326,7 @@ begin
           {
             "code": "personal_info",
             "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_tax", "org_next_tax", "org_current_tax_sum", "org_districts_control", "org_districts_influence"],
-            "actions": ["transfer_money", "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5", "change_current_tax", "change_next_tax", "show_transactions", "show_claims"]
+            "actions": ["transfer_money", "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5", "change_current_tax", "change_next_tax", "show_transactions", "show_contracts", "show_claims"]
           },
           {"code": "info", "attributes": ["description"]}
         ]
@@ -18827,6 +19778,7 @@ begin
               "open_current_statuses",
               "open_next_statuses",
               "open_transactions",
+              "open_contracts",
               "transfer_money",
               "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5",
               "change_un_rating",
@@ -19138,6 +20090,35 @@ begin
   perform data.change_object_and_notify(v_claim_id, to_jsonb(v_changes), v_actor_id);
 
   perform api_utils.create_go_back_action_notification(in_client_id, in_request_id);
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.lef_contract_person_list(integer, text, integer, integer);
+
+create or replace function pallas_project.lef_contract_person_list(in_client_id integer, in_request_id text, in_object_id integer, in_list_object_id integer)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_org_code text := json.get_string(data.get_attribute_value(in_object_id, 'contract_org'));
+  v_person_code text := data.get_object_code(in_list_object_id);
+  v_draft_id integer;
+begin
+  v_draft_id :=
+    data.create_object(
+      null,
+      jsonb '[]' ||
+      data.attribute_change2jsonb('is_visible', jsonb 'true', v_actor_id) ||
+      data.attribute_change2jsonb('contract_org', to_jsonb(v_org_code)) ||
+      data.attribute_change2jsonb('contract_person', to_jsonb(v_person_code)) ||
+      data.attribute_change2jsonb('contract_reward', jsonb '0') ||
+      data.attribute_change2jsonb('contract_description', jsonb '""'),
+      'contract_draft');
+  perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, data.get_object_code(v_draft_id));
+  perform data.set_attribute_value(in_object_id, 'is_visible', jsonb 'false');
 end;
 $$
 language plpgsql;
@@ -19465,6 +20446,44 @@ begin
     jsonb_build_object('system_person_notification_count', v_notifications_count),
     v_actor_id,
     'Open notification');
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.notify_contract(integer, text);
+
+create or replace function pallas_project.notify_contract(in_contract_id integer, in_message text)
+returns void
+volatile
+as
+$$
+declare
+  v_contract_person_code text := json.get_string(data.get_attribute_value_for_share(in_contract_id, 'contract_person'));
+  v_contract_org_code text := json.get_string(data.get_attribute_value_for_share(in_contract_id, 'contract_org'));
+  v_message text := format(E'%s\nОрганизация: %s\nИсполнитель: %s', in_message, pp_utils.link(v_contract_org_code), pp_utils.link(v_contract_person_code));
+  v_person_id integer;
+begin
+  perform pp_utils.add_notification(
+    v_contract_person_code,
+    v_message,
+    in_contract_id,
+    true);
+
+  for v_person_id in
+  (
+    select distinct object_id
+    from data.object_objects
+    where
+      parent_object_id in (data.get_object_id(v_contract_org_code || '_head'), data.get_object_id(v_contract_org_code || '_economist')) and
+      object_id != parent_object_id
+  )
+  loop
+    perform pp_utils.add_notification(
+      v_person_id,
+      v_message,
+      in_contract_id,
+      true);
+  end loop;
 end;
 $$
 language plpgsql;
@@ -19809,6 +20828,37 @@ begin
   else
     return 'Неизвестно';
   end case;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.vd_contract_status(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_contract_status(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+declare
+  v_status text := json.get_string(in_value);
+begin
+  assert v_status in ('unconfirmed', 'confirmed', 'active', 'suspended', 'cancelled', 'suspended_cancelled', 'not_active');
+
+  if v_status = 'unconfirmed' then
+    return 'Ожидает подтверждения';
+  elsif v_status = 'confirmed' then
+    return 'Активный со следующего цикла';
+  elsif v_status = 'active' then
+    return 'Активный';
+  elsif v_status = 'suspended' then
+    return 'Выплаты по контракту приостановлены';
+  elsif v_status = 'cancelled' then
+    return 'Отменён со следующего цикла';
+  elsif v_status = 'suspended_cancelled' then
+    return 'Отменён со следующего цикла, выплаты по контракту приостановлены';
+  else
+    return 'Отменён';
+  end if;
 end;
 $$
 language plpgsql;
@@ -20424,7 +21474,7 @@ language plpgsql;
 
 -- drop function pp_utils.add_notification(integer, text, integer, boolean);
 
-create or replace function pp_utils.add_notification(in_actor_id integer, in_text text, in_redirect_object integer default null::integer, in_is_important boolean default false)
+create or replace function pp_utils.add_notification(in_object_id integer, in_text text, in_redirect_object_id integer default null::integer, in_is_important boolean default false)
 returns void
 volatile
 as
@@ -20432,7 +21482,7 @@ $$
 declare
   v_notification_code text;
   v_notification_id integer;
-  v_object_code text;
+  v_redirect_object_code text;
   v_notification_title text;
 
   v_title_attribute_id integer := data.get_attribute_id('title');
@@ -20440,13 +21490,13 @@ declare
   v_redirect_attribute_id integer := data.get_attribute_id('redirect');
   v_system_person_notification_count_attribute_id integer := data.get_attribute_id('system_person_notification_count');
 
-  v_notifications_id integer := data.get_object_id(data.get_object_code(in_actor_id) || '_notifications');
+  v_notifications_id integer := data.get_object_id(data.get_object_code(in_object_id) || '_notifications');
   v_notification_count integer :=
-    json.get_integer(data.get_attribute_value_for_update(in_actor_id, v_system_person_notification_count_attribute_id)) + 1;
+    json.get_integer(data.get_attribute_value_for_update(in_object_id, v_system_person_notification_count_attribute_id)) + 1;
 begin
-  if in_redirect_object is not null then
-    v_object_code := data.get_object_code(in_redirect_object);
-    v_notification_title := in_text || E'\n\n' || pp_utils.link(v_object_code);
+  if in_redirect_object_id is not null then
+    v_redirect_object_code := data.get_object_code(in_redirect_object_id);
+    v_notification_title := in_text || E'\n\n' || pp_utils.link(v_redirect_object_code);
   else
     v_notification_title := in_text;
   end if;
@@ -20456,19 +21506,58 @@ begin
 
   insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
   (v_notification_id, v_title_attribute_id, to_jsonb(v_notification_title), null),
-  (v_notification_id, v_is_visible_attribute_id, jsonb 'true', in_actor_id);
-  if in_redirect_object is not null then
+  (v_notification_id, v_is_visible_attribute_id, jsonb 'true', in_object_id);
+  if in_redirect_object_id is not null then
     insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
-    (v_notification_id, v_redirect_attribute_id, to_jsonb(in_redirect_object), null);
+    (v_notification_id, v_redirect_attribute_id, to_jsonb(in_redirect_object_id), null);
   end if;
 
   -- Вставляем в начало списка и рассылаем уведомления
   perform pp_utils.list_prepend_and_notify(v_notifications_id, v_notification_code, null);
-  perform data.change_object_and_notify(in_actor_id, jsonb '[]' || data.attribute_change2jsonb(v_system_person_notification_count_attribute_id, to_jsonb(v_notification_count)));
+  perform data.change_object_and_notify(in_object_id, jsonb '[]' || data.attribute_change2jsonb(v_system_person_notification_count_attribute_id, to_jsonb(v_notification_count)));
 
   if in_is_important then
-    perform pallas_project.send_to_important_notifications(in_actor_id, in_text, v_object_code);
+    perform pallas_project.send_to_important_notifications(in_object_id, in_text, v_redirect_object_code);
   end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pp_utils.add_notification(integer, text, text, boolean);
+
+create or replace function pp_utils.add_notification(in_object_id integer, in_text text, in_redirect_object_code text, in_is_important boolean default false)
+returns void
+volatile
+as
+$$
+begin
+  perform pp_utils.add_notification(in_object_id, in_text, data.get_object_id(in_redirect_object_code), in_is_important);
+end;
+$$
+language plpgsql;
+
+-- drop function pp_utils.add_notification(text, text, integer, boolean);
+
+create or replace function pp_utils.add_notification(in_object_code text, in_text text, in_redirect_object_id integer default null::integer, in_is_important boolean default false)
+returns void
+volatile
+as
+$$
+begin
+  perform pp_utils.add_notification(data.get_object_id(in_object_code), in_text, in_redirect_object_id, in_is_important);
+end;
+$$
+language plpgsql;
+
+-- drop function pp_utils.add_notification(text, text, text, boolean);
+
+create or replace function pp_utils.add_notification(in_object_code text, in_text text, in_redirect_object_code text, in_is_important boolean default false)
+returns void
+volatile
+as
+$$
+begin
+  perform pp_utils.add_notification(data.get_object_id(in_object_code), in_text, data.get_object_id(in_redirect_object_code), in_is_important);
 end;
 $$
 language plpgsql;
@@ -20626,6 +21715,19 @@ declare
   v_title text := json.get_string_opt(data.get_attribute_value(data.get_object_id(in_code), 'title'), '???');
 begin
   return format('[%s](babcom:%s)', v_title, in_code);
+end;
+$$
+language plpgsql;
+
+-- drop function pp_utils.list_prepend_and_notify(integer, integer, integer, integer);
+
+create or replace function pp_utils.list_prepend_and_notify(in_list_id integer, in_new_object_id integer, in_value_object_id integer, in_actor_id integer default null::integer)
+returns void
+volatile
+as
+$$
+begin
+  perform pp_utils.list_prepend_and_notify(in_list_id, data.get_object_code(in_new_object_id), in_value_object_id, in_actor_id);
 end;
 $$
 language plpgsql;
