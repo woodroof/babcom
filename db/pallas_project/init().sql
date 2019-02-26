@@ -51,7 +51,7 @@ begin
         "groups": [
           {"code": "menu_notifications", "actions": ["notifications"]},
           {"code": "menu_lottery", "actions": ["lottery"]},
-          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "chats", "documents", "my_organizations", "blogs", "important_notifications"]},
+          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "chats", "documents", "my_organizations", "blogs", "claims", "important_notifications"]},
           {"code": "menu_social", "actions": ["news", "all_chats", "debatles", "master_chats"]},
           {"code": "menu_info", "actions": ["persons", "districts", "organizations"]},
           {"code": "menu_logout", "actions": ["logout"]}
@@ -121,6 +121,7 @@ begin
   perform pallas_project.init_finances();
   perform pallas_project.init_districts();
   perform pallas_project.init_persons();
+  perform pallas_project.init_claims();
   perform pallas_project.init_organizations();
   perform pallas_project.init_organization_roles();
   perform pallas_project.init_debatles();
@@ -129,6 +130,7 @@ begin
   perform pallas_project.init_documents();
   perform pallas_project.init_lottery();
   perform pallas_project.init_blogs();
+
 end;
 $$
 language plpgsql;

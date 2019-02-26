@@ -104,6 +104,21 @@ begin
       v_temporary_auditor_group_id,
       v_master_group_id)::jsonb,
     'transactions');
+
+  -- Список исков
+  perform data.create_object(
+    in_object_code || '_claims',
+    format(
+      '[
+        {"code": "title", "value": "%s"},
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "content", "value": []}
+      ]',
+      format('Список исков, %s', json.get_string(data.get_attribute_value(v_org_id, 'title'))),
+      v_head_group_id,
+      v_master_group_id)::jsonb,
+    'claim_list');
 end;
 $$
 language plpgsql;

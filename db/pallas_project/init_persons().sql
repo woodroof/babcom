@@ -235,7 +235,7 @@ begin
   -- Сантьяго де ла Крус - большой картель
 
   perform pallas_project.create_person(
-    null,
+    'asj',
     'p10',
     jsonb '{
       "title": "АСС",

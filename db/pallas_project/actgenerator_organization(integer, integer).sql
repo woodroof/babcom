@@ -26,6 +26,23 @@ begin
     end if;
   end if;
 
+  if v_master or v_is_head then
+    v_actions :=
+      v_actions ||
+      format(
+        '{
+          "show_claims": {
+            "code": "act_open_object",
+            "name": "Посмотреть список исков",
+            "disabled": false,
+            "params": {
+              "object_code": "%s_claims"
+            }
+          }
+        }',
+        v_object_code)::jsonb;
+  end if;
+
   if v_is_real_org then
     if v_master or v_is_head or v_is_economist or v_is_auditor then
       v_actions :=

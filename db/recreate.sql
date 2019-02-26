@@ -10455,6 +10455,595 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_claim_change_defendant(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_claim_change_defendant(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_claim_code text := json.get_string(in_params, 'claim_code');
+  v_claim_id integer := data.get_object_id(v_claim_code);
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+
+  v_title_attribute_id integer := data.get_attribute_id('title');
+
+  v_claim_author text := json.get_string(data.get_attribute_value(v_claim_id, 'claim_author'));
+  v_claim_plaintiff text := json.get_string(data.get_attribute_value(v_claim_id, 'claim_plaintiff'));
+  v_claim_defendant text := json.get_string_opt(data.get_attribute_value_for_share(v_claim_id, 'claim_defendant'), null);
+
+  v_claim_title text := json.get_string_opt(data.get_raw_attribute_value_for_share(v_claim_id, v_title_attribute_id), '');
+
+  v_content text[];
+
+  v_temp_object_id integer;
+begin
+  assert in_request_id is not null;
+
+  select array_agg(s.code order by s.ord, s.value) into v_content from
+    (select o.code, 1 ord, av.value
+    from data.object_objects oo
+      left join data.objects o on o.id = oo.object_id
+      left join data.attribute_values av on av.object_id = o.id and av.attribute_id = v_title_attribute_id and av.value_object_id is null
+    where oo.parent_object_id = data.get_object_id('player')
+      and oo.object_id <> oo.parent_object_id
+      and o.code not in (v_claim_author, v_claim_plaintiff , coalesce(v_claim_defendant, '~'))
+    union all 
+    select o.code, 2 ord, av.value
+    from data.objects o
+      left join data.attribute_values av on av.object_id = o.id and av.attribute_id = v_title_attribute_id and av.value_object_id is null
+    where o.class_id = data.get_class_id('organization')
+      and o.code not in (v_claim_author, v_claim_plaintiff , coalesce(v_claim_defendant, '~'))) s;
+
+  if v_content is null then
+    v_content := array[]::text[];
+  end if;
+
+  -- создаём темповый список возможных ответчиков
+  v_temp_object_id := data.create_object(
+  null,
+  jsonb_build_array(
+    jsonb_build_object('code', 'title', 'value', 'Изменение ответчика для иска "' || v_claim_title || '"'),
+    jsonb_build_object('code', 'is_visible', 'value', true, 'value_object_id', v_actor_id),
+    jsonb_build_object('code', 'content', 'value', v_content),
+    jsonb_build_object('code', 'system_claim_id', 'value', v_claim_id)
+  ),
+  'claim_temp_defendant_list');
+
+  perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, data.get_object_code(v_temp_object_id));
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_claim_create(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_claim_create(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_claim_list text := json.get_string(in_params, 'claim_list');
+  v_claim_list_id integer;
+  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+  v_actor_code text := data.get_object_code(v_actor_id);
+
+  v_claim_title text := json.get_string(in_user_params, 'title');
+  v_claim_text text := json.get_string(in_user_params, 'claim_text');
+  v_claim_plaintiff text;
+  v_claim_id integer;
+  v_claim_code text;
+  v_service_status integer := json.get_integer_opt(data.get_attribute_value_for_share(v_actor_id, 'system_person_administrative_services_status'), 0);
+begin
+  assert in_request_id is not null;
+
+  if v_service_status < 1 then
+    perform api_utils.create_show_message_action_notification(
+        in_client_id,
+        in_request_id,
+        'Вы не можете создать иск',
+        'Для этого действия у вас должен быть как минимум бронзовый статус в администранивном обслуживании'); 
+      return;
+  end if;
+
+  if v_claim_list in ('claims_my', 'claims_all', 'claims') then
+    v_claim_plaintiff := v_actor_code;
+    v_claim_list_id := data.get_object_id('claims_my');
+  else
+    v_claim_plaintiff := replace(v_claim_list, '_claims', '');
+    v_claim_list_id := data.get_object_id(v_claim_list);
+  end if;
+  -- создаём новый иск
+  v_claim_id := data.create_object(
+    null,
+    jsonb_build_array(
+      jsonb_build_object('code', 'title', 'value', v_claim_title),
+      jsonb_build_object('code', 'claim_author', 'value', v_actor_code),
+      jsonb_build_object('code', 'claim_plaintiff', 'value', v_claim_plaintiff),
+      jsonb_build_object('code', 'claim_status', 'value', 'draft'),
+      jsonb_build_object('code', 'claim_text', 'value', v_claim_text),
+      jsonb_build_object('code', 'claim_time', 'value', pp_utils.format_date(clock_timestamp()))
+    ),
+    'claim');
+  v_claim_code := data.get_object_code(v_claim_id);
+
+  perform pallas_project.create_chat(v_claim_code || '_chat',
+                   jsonb_build_object(
+                   'content', jsonb '[]',
+                   'title', 'Обсуждение иска ' || v_claim_title,
+                   'system_chat_is_renamed', true,
+                   'system_chat_can_invite', false,
+                   'system_chat_can_leave', false,
+                   'system_chat_can_rename', false,
+                   'system_chat_cant_see_members', true,
+                   'system_chat_length', 0
+                 ));
+
+  -- Кладём иск в начало списка
+  if v_claim_list in ('claims_my', 'claims_all', 'claims') then
+   perform pp_utils.list_prepend_and_notify(v_claim_list_id, v_claim_code, v_actor_id);
+  else
+   perform pp_utils.list_prepend_and_notify(v_claim_list_id, v_claim_code);
+  end if;
+
+
+  perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, v_claim_code);
+ end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_claim_delete(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_claim_delete(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_claim_code text := json.get_string(in_params, 'claim_code');
+  v_claim_id integer := data.get_object_id(v_claim_code);
+  v_claim_chat_id integer := data.get_object_id(v_claim_code || '_chat');
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+
+  v_claim_author text := json.get_string(data.get_raw_attribute_value_for_share(v_claim_id, 'claim_author'));
+  v_claim_status text := json.get_string(data.get_raw_attribute_value_for_share(v_claim_id, 'claim_status'));
+  v_changes jsonb[];
+begin
+  assert in_request_id is not null;
+  assert (v_claim_status = 'draft'and data.get_object_id(v_claim_author) = v_actor_id) or pp_utils.is_in_group(v_actor_id, 'master');
+
+  v_changes := array[]::jsonb[];
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', jsonb 'false'));
+
+  perform data.change_object_and_notify(v_claim_id, 
+                                        to_jsonb(v_changes),
+                                        v_actor_id);
+
+  v_changes := array[]::jsonb[];
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', jsonb 'false', v_claim_chat_id));
+
+  perform data.change_object_and_notify(v_claim_chat_id, 
+                                        to_jsonb(v_changes),
+                                        v_actor_id);
+
+  perform api_utils.create_go_back_action_notification(in_client_id, in_request_id);
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_claim_edit(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_claim_edit(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_claim_code text := json.get_string(in_params, 'claim_code');
+  v_title text := json.get_string(in_user_params, 'title');
+  v_text text := json.get_string(in_user_params, 'text');
+  v_claim_id integer := data.get_object_id(v_claim_code);
+  v_claim_chat_id integer := data.get_object_id(v_claim_code || '_chat');
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+
+  v_old_title text;
+  v_old_text text;
+  v_claim_author text := json.get_string(data.get_raw_attribute_value_for_share(v_claim_id, 'claim_author'));
+  v_claim_status text := json.get_string(data.get_raw_attribute_value_for_share(v_claim_id, 'claim_status'));
+  v_changes jsonb[];
+  v_chat_changes jsonb[];
+
+  v_claim_text_attribute_id integer := data.get_attribute_id('claim_text');
+  v_title_attribute_id integer := data.get_attribute_id('title');
+  v_message_sent boolean := false;
+begin
+  assert in_request_id is not null;
+  assert (v_claim_status = 'draft'and data.get_object_id(v_claim_author) = v_actor_id) or pp_utils.is_in_group(v_actor_id, 'master');
+
+  v_old_title := json.get_string_opt(data.get_raw_attribute_value_for_update(v_claim_id, v_title_attribute_id), '');
+  v_old_text := json.get_string_opt(data.get_raw_attribute_value_for_update(v_claim_id, v_claim_text_attribute_id), '');
+
+  v_changes := array[]::jsonb[];
+  v_chat_changes := array[]::jsonb[];
+  if v_old_title <> v_title then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, to_jsonb(v_title)));
+    v_chat_changes := array_append(v_changes, data.attribute_change2jsonb(v_title_attribute_id, to_jsonb('Обсуждение иска ' || v_title)));
+  end if;
+  if v_old_text <> v_text then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_claim_text_attribute_id, to_jsonb(v_text)));
+  end if;
+  if array_length(v_chat_changes, 1) > 0 then
+    perform data.change_object_and_notify(v_claim_chat_id, to_jsonb(v_chat_changes), v_actor_id);
+  end if;
+
+  if array_length(v_changes, 1) > 0 then
+    v_message_sent := data.change_current_object(in_client_id, 
+                                                 in_request_id,
+                                                 v_claim_id, 
+                                                 to_jsonb(v_changes));
+  end if;
+
+  if not v_message_sent then
+   perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_claim_result(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_claim_result(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_claim_code text := json.get_string(in_params, 'claim_code');
+  v_claim_result text := json.get_string(in_user_params, 'claim_result');
+  v_claim_id integer := data.get_object_id(v_claim_code);
+  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+  v_actor_code text :=data.get_object_code(v_actor_id);
+
+  v_is_master boolean := pp_utils.is_in_group(v_actor_id, 'master');
+  v_is_judge boolean := pp_utils.is_in_group(v_actor_id, 'judge');
+
+  v_claim_status text;
+  v_claim_author text := json.get_string(data.get_attribute_value(v_claim_id, 'claim_author'));
+  v_claim_plaintiff text := json.get_string(data.get_attribute_value(v_claim_id, 'claim_plaintiff'));
+  v_claim_defendant text := json.get_string_opt(data.get_attribute_value_for_share(v_claim_id, 'claim_defendant'), null);
+  v_claim_title text := json.get_string_opt(data.get_raw_attribute_value_for_share(v_claim_id, 'title'), '');
+
+  v_claim_author_id integer := data.get_object_id_opt(v_claim_author);
+  v_claim_plaintiff_id integer := data.get_object_id_opt(v_claim_plaintiff);
+  v_claim_defendant_id integer := data.get_object_id_opt(v_claim_defendant);
+
+  v_claim_plaintiff_type text;
+  v_claim_defendant_type text;
+
+  v_claim_to_asj boolean;
+  v_organization_name text;
+
+  v_content_attribute_id integer := data.get_attribute_id('content');
+  v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
+
+  v_content text[];
+  v_new_content text[];
+  v_claims_my_id integer := data.get_object_id('claims_my');
+  v_claims_all_id integer := data.get_object_id('claims_all');
+
+  v_changes jsonb[];
+  v_message_sent boolean;
+
+  v_person_id integer;
+begin
+  assert in_request_id is not null;
+
+  v_claim_status := json.get_string_opt(data.get_attribute_value_for_update(v_claim_id, 'claim_status'), '~~~');
+  v_claim_plaintiff_type := json.get_string_opt(data.get_attribute_value(v_claim_plaintiff_id, 'type'), null);
+  v_claim_defendant_type := json.get_string_opt(data.get_attribute_value(v_claim_defendant_id, 'type'), null);
+  v_claim_to_asj := json.get_boolean_opt(data.get_attribute_value_for_update(v_claim_id, 'system_claim_to_asj'), false);
+
+  if v_claim_status = 'processing' and (v_is_master or (v_is_judge and not v_claim_to_asj) or (v_actor_code = 'asj' and v_claim_to_asj)) then
+    -- Отправляем мастерам в чат уведомление 
+    perform pallas_project.send_to_master_chat('По иску "' || v_claim_title || '" принято решение' , v_claim_code);
+
+    -- Уведомляем автора
+    perform pp_utils.add_notification(v_claim_author_id, 'По вашему иску "' || v_claim_title || '" принято решение. Зайдите в иск, чтобы с ним ознакомиться', v_claim_id, true);
+    -- Рассылаем уведомления ответчику
+    if v_claim_defendant_type = 'person' then
+      perform pp_utils.add_notification(v_claim_defendant_id, 'По иску "' || v_claim_title || '", для которого вы являетесь ответчиком, принято решение. Зайдите в иск, чтобы с ним ознакомиться', v_claim_id, true);
+      perform pp_utils.list_prepend_and_notify(v_claims_my_id, v_claim_code, v_claim_defendant_id, v_actor_id);
+    elsif v_claim_defendant_type = 'organization' then
+      perform pp_utils.list_prepend_and_notify(data.get_object_id(v_claim_defendant || '_claims'), v_claim_code, null, v_actor_id);
+      if data.is_object_exists(v_claim_defendant || '_head') then
+        v_organization_name := json.get_string(data.get_attribute_value(v_claim_defendant_id, 'title'));
+        for v_person_id in (select * from unnest(pallas_project.get_group_members(v_claim_defendant || '_head'))) loop
+          perform pp_utils.add_notification(v_person_id, 'По иску "' || v_claim_title || '", для которого ваша организация "'|| v_organization_name ||'" является ответчиком, принято решение. Зайдите в иск, чтобы с ним ознакомиться', v_claim_id, true);
+        end loop;
+      end if;
+    end if;
+
+  else
+     perform api_utils.create_show_message_action_notification(
+      in_client_id,
+      in_request_id,
+      'Ошибка',
+      'Некорректное изменение статуса иска'); 
+    return;
+  end if;
+
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('claim_status', jsonb '"done"'));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('claim_result_time', to_jsonb(pp_utils.format_date(clock_timestamp()))));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('claim_result_text', to_jsonb(E'\n' || v_claim_result)));
+  v_message_sent := data.change_current_object(in_client_id,
+                                               in_request_id,
+                                               v_claim_id, 
+                                               to_jsonb(v_changes));
+  if not v_message_sent then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_claim_result_edit(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_claim_result_edit(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_claim_code text := json.get_string(in_params, 'claim_code');
+  v_text text := json.get_string(in_user_params, 'claim_result');
+  v_claim_id integer := data.get_object_id(v_claim_code);
+  v_claim_chat_id integer := data.get_object_id(v_claim_code || '_chat');
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+
+  v_old_text text;
+  v_claim_status text := json.get_string(data.get_raw_attribute_value_for_share(v_claim_id, 'claim_status'));
+  v_changes jsonb[];
+  v_chat_changes jsonb[];
+
+  v_claim_result_text_attribute_id integer := data.get_attribute_id('claim_result_text');
+  v_message_sent boolean := false;
+begin
+  assert in_request_id is not null;
+  assert v_claim_status = 'done' and pp_utils.is_in_group(v_actor_id, 'master');
+
+  v_old_text := json.get_string_opt(data.get_raw_attribute_value_for_update(v_claim_id, v_claim_result_text_attribute_id), '');
+
+  v_changes := array[]::jsonb[];
+  if v_old_text <> v_text then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb(v_claim_result_text_attribute_id, to_jsonb(v_text)));
+  end if;
+
+  if array_length(v_changes, 1) > 0 then
+    v_message_sent := data.change_current_object(in_client_id, 
+                                                 in_request_id,
+                                                 v_claim_id, 
+                                                 to_jsonb(v_changes));
+  end if;
+
+  if not v_message_sent then
+   perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_claim_send(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_claim_send(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_claim_code text := json.get_string(in_params, 'claim_code');
+  v_claim_id integer := data.get_object_id(v_claim_code);
+  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+  v_actor_code text :=data.get_object_code(v_actor_id);
+
+  v_is_master boolean := pp_utils.is_in_group(v_actor_id, 'master');
+
+  v_claim_status text;
+  v_claim_author text := json.get_string(data.get_attribute_value(v_claim_id, 'claim_author'));
+  v_claim_plaintiff text := json.get_string(data.get_attribute_value(v_claim_id, 'claim_plaintiff'));
+  v_claim_defendant text := json.get_string_opt(data.get_attribute_value_for_share(v_claim_id, 'claim_defendant'), null);
+  v_claim_title text := json.get_string_opt(data.get_raw_attribute_value_for_share(v_claim_id, 'title'), '');
+
+  v_claim_author_id integer := data.get_object_id_opt(v_claim_author);
+  v_claim_plaintiff_id integer := data.get_object_id_opt(v_claim_plaintiff);
+  v_claim_defendant_id integer := data.get_object_id_opt(v_claim_defendant);
+
+  v_claim_plaintiff_type text;
+  v_claim_defendant_type text;
+
+  v_service_status integer := json.get_integer_opt(data.get_attribute_value_for_share(v_claim_author_id, 'system_person_administrative_services_status'), 0);
+  v_claim_to_asj boolean;
+  v_organization_name text;
+
+  v_content_attribute_id integer := data.get_attribute_id('content');
+  v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
+
+  v_content text[];
+  v_new_content text[];
+  v_claims_my_id integer := data.get_object_id('claims_my');
+  v_claims_all_id integer := data.get_object_id('claims_all');
+
+  v_changes jsonb[];
+  v_message_sent boolean;
+
+  v_person_id integer;
+begin
+  assert in_request_id is not null;
+
+  if v_claim_defendant is null then
+    perform api_utils.create_show_message_action_notification(
+        in_client_id,
+        in_request_id,
+        'Ошибка',
+        'Сначала нужно выбрать ответчика для иска'); 
+      return;
+  end if;
+
+  v_claim_status := json.get_string_opt(data.get_attribute_value_for_update(v_claim_id, 'claim_status'), '~~~');
+  v_claim_plaintiff_type := json.get_string_opt(data.get_attribute_value(v_claim_plaintiff_id, 'type'), null);
+  v_claim_defendant_type := json.get_string_opt(data.get_attribute_value(v_claim_defendant_id, 'type'), null);
+  if v_service_status <= 1 then
+    v_claim_to_asj := true;
+  end if;
+
+  if v_claim_status = 'draft' and (v_is_master or v_actor_code = v_claim_author) then
+    -- добавляем в общий список исков
+    perform pp_utils.list_prepend_and_notify(v_claims_all_id, v_claim_code, null, v_actor_id);
+    -- Отправляем мастерам в чат уведомление 
+    perform pallas_project.send_to_master_chat('Создан новый иск. ' || case when v_claim_to_asj then 'Направлен АСС (то есть нужно что-то решить, или перенаправить судье).' else 'Направлен судье.' end, v_claim_code);
+
+    -- Уведомляем автора
+    perform pp_utils.add_notification(v_claim_author_id, 'Ваш иск "' || v_claim_title || '" направлен на рассмотрение ' || case when v_claim_to_asj then 'АСС.' else 'судье.' end, v_claim_id, true);
+    -- Рассылаем уведомления ответчику
+    if v_claim_defendant_type = 'person' then
+      perform pp_utils.add_notification(v_claim_defendant_id, 'Вы являетесь ответчиком по иску "' || v_claim_title || '". Иск направлен ' || case when v_claim_to_asj then 'АСС.' else 'судье.' end, v_claim_id, true);
+      perform pp_utils.list_prepend_and_notify(v_claims_my_id, v_claim_code, v_claim_defendant_id, v_actor_id);
+    elsif v_claim_defendant_type = 'organization' then
+      perform pp_utils.list_prepend_and_notify(data.get_object_id(v_claim_defendant || '_claims'), v_claim_code, null, v_actor_id);
+      if data.is_object_exists(v_claim_defendant || '_head') then
+        v_organization_name := json.get_string(data.get_attribute_value(v_claim_defendant_id, 'title'));
+        for v_person_id in (select * from unnest(pallas_project.get_group_members(v_claim_defendant || '_head'))) loop
+          perform pp_utils.add_notification(v_person_id, 'Ваша организация "'|| v_organization_name ||'" является ответчиком по иску "' || v_claim_title || '". Иск направлен ' || case when v_claim_to_asj then 'АСС.' else 'судье.' end, v_claim_id, true);
+        end loop;
+      end if;
+    end if;
+
+    -- Рассылаем уведомление судье
+    if not coalesce(v_claim_to_asj, false) then
+      for v_person_id in (select * from unnest(pallas_project.get_group_members('judge'))) loop
+        perform pp_utils.add_notification(v_person_id, 'Вам на рассмотрение передан иск', v_claim_id, true);
+      end loop;
+    end if;
+  else
+     perform api_utils.create_show_message_action_notification(
+      in_client_id,
+      in_request_id,
+      'Ошибка',
+      'Некорректное изменение статуса иска'); 
+    return;
+  end if;
+
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('claim_status', jsonb '"processing"'));
+  if v_claim_to_asj then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('system_claim_to_asj', jsonb 'true'));
+  end if;
+  v_message_sent := data.change_current_object(in_client_id,
+                                               in_request_id,
+                                               v_claim_id, 
+                                               to_jsonb(v_changes));
+  if not v_message_sent then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_claim_send_to_judge(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_claim_send_to_judge(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_claim_code text := json.get_string(in_params, 'claim_code');
+  v_claim_id integer := data.get_object_id(v_claim_code);
+  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+  v_actor_code text :=data.get_object_code(v_actor_id);
+
+  v_is_master boolean := pp_utils.is_in_group(v_actor_id, 'master');
+
+  v_claim_status text;
+  v_claim_author text := json.get_string(data.get_attribute_value(v_claim_id, 'claim_author'));
+  v_claim_plaintiff text := json.get_string(data.get_attribute_value(v_claim_id, 'claim_plaintiff'));
+  v_claim_defendant text := json.get_string_opt(data.get_attribute_value_for_share(v_claim_id, 'claim_defendant'), null);
+  v_claim_title text := json.get_string_opt(data.get_raw_attribute_value_for_share(v_claim_id, 'title'), '');
+
+  v_claim_author_id integer := data.get_object_id_opt(v_claim_author);
+  v_claim_plaintiff_id integer := data.get_object_id_opt(v_claim_plaintiff);
+  v_claim_defendant_id integer := data.get_object_id_opt(v_claim_defendant);
+
+  v_claim_plaintiff_type text;
+  v_claim_defendant_type text;
+
+  v_claim_to_asj boolean;
+  v_organization_name text;
+
+  v_content_attribute_id integer := data.get_attribute_id('content');
+  v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
+
+  v_content text[];
+  v_new_content text[];
+  v_claims_my_id integer := data.get_object_id('claims_my');
+  v_claims_all_id integer := data.get_object_id('claims_all');
+
+  v_changes jsonb[];
+  v_message_sent boolean;
+
+  v_person_id integer;
+begin
+  assert in_request_id is not null;
+
+  v_claim_status := json.get_string_opt(data.get_attribute_value_for_share(v_claim_id, 'claim_status'), '~~~');
+  v_claim_to_asj := json.get_boolean_opt(data.get_attribute_value_for_update(v_claim_id, 'system_claim_to_asj'), false);
+  v_claim_plaintiff_type := json.get_string_opt(data.get_attribute_value(v_claim_plaintiff_id, 'type'), null);
+  v_claim_defendant_type := json.get_string_opt(data.get_attribute_value(v_claim_defendant_id, 'type'), null);
+
+  if v_claim_status = 'processing' and v_is_master and v_claim_to_asj then
+    -- Отправляем мастерам в чат уведомление 
+    perform pallas_project.send_to_master_chat('Иск "' || v_claim_title || '" перенаправлен на рассмотрение судье', v_claim_code);
+
+    -- Уведомляем автора
+    perform pp_utils.add_notification(v_claim_author_id, 'Ваш иск "' || v_claim_title || '" перенаправлен на рассмотрение судье' , v_claim_id, true);
+    -- Рассылаем уведомления ответчику
+    if v_claim_defendant_type = 'person' then
+      perform pp_utils.add_notification(v_claim_defendant_id, 'Иск "' || v_claim_title || '", по которому вы являетесь ответчиком, перенаправлен на рассмотрение судье', v_claim_id, true);
+      perform pp_utils.list_prepend_and_notify(v_claims_my_id, v_claim_code, v_claim_defendant_id, v_actor_id);
+    elsif v_claim_defendant_type = 'organization' then
+      perform pp_utils.list_prepend_and_notify(data.get_object_id(v_claim_defendant || '_claims'), v_claim_code, null, v_actor_id);
+      if data.is_object_exists(v_claim_defendant || '_head') then
+        v_organization_name := json.get_string(data.get_attribute_value(v_claim_defendant_id, 'title'));
+        for v_person_id in (select * from unnest(pallas_project.get_group_members(v_claim_defendant || '_head'))) loop
+          perform pp_utils.add_notification(v_person_id, 'Иск "' || v_claim_title || '", по которому ваша организация "'|| v_organization_name ||'" является ответчиком, перенаправлен на рассмотрение судье', v_claim_id, true);
+        end loop;
+      end if;
+    end if;
+
+    -- Рассылаем уведомление судье
+    for v_person_id in (select * from unnest(pallas_project.get_group_members('judge'))) loop
+      perform pp_utils.add_notification(v_person_id, 'Вам на рассмотрение передан иск', v_claim_id, true);
+    end loop;
+  else
+     perform api_utils.create_show_message_action_notification(
+      in_client_id,
+      in_request_id,
+      'Ошибка',
+      'Некорректное изменение иска. Скорее всего иск и так уже у судьи'); 
+    return;
+  end if;
+
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('system_claim_to_asj', null));
+  v_message_sent := data.change_current_object(in_client_id,
+                                               in_request_id,
+                                               v_claim_id, 
+                                               to_jsonb(v_changes));
+  if not v_message_sent then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_clear_notifications(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_clear_notifications(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -13083,6 +13672,172 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.actgenerator_claim(integer, integer);
+
+create or replace function pallas_project.actgenerator_claim(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_actions_list text := '';
+  v_actor_code text := data.get_object_code(in_actor_id);
+  v_is_master boolean;
+  v_is_judge boolean;
+  v_claim_code text;
+  v_claim_author text := json.get_string(data.get_attribute_value(in_object_id, 'claim_author'));
+  v_claim_plaintiff text := json.get_string(data.get_attribute_value(in_object_id, 'claim_plaintiff'));
+  v_claim_defendant text := json.get_string_opt(data.get_attribute_value_for_share(in_object_id, 'claim_defendant'), null);
+  v_claim_status text := json.get_string(data.get_attribute_value_for_share(in_object_id, 'claim_status'));
+  v_claim_to_asj boolean := json.get_boolean_opt(data.get_attribute_value_for_share(in_object_id, 'system_claim_to_asj'), false);
+
+  v_claim_plaintiff_type text;
+  v_claim_defendant_type text;
+
+  v_chat_id integer;
+  v_chat_length integer;
+  v_chat_unread integer;
+begin
+  assert in_actor_id is not null;
+
+  v_is_master := pp_utils.is_in_group(in_actor_id, 'master');
+  v_is_judge := pp_utils.is_in_group(in_actor_id, 'judge');
+  v_claim_code := data.get_object_code(in_object_id);
+
+  v_claim_plaintiff_type := json.get_string_opt(data.get_attribute_value(data.get_object_id(v_claim_plaintiff), 'type'), null);
+
+  if v_claim_defendant is not null then 
+    v_claim_defendant_type := json.get_string_opt(data.get_attribute_value(data.get_object_id(v_claim_defendant), 'type'), null);
+  end if;
+
+  if v_is_master or (v_claim_author = v_actor_code and v_claim_status = 'draft') then
+    v_actions_list := v_actions_list || 
+        format(', "claim_edit": {"code": "claim_edit", "name": "Изменить иск", "disabled": false,'||
+                '"params": {"claim_code": "%s"}, 
+                 "user_params": [{"code": "title", "description": "Заголовок", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"},
+                                 {"code": "text", "description": "Текст иска", "type": "string", "restrictions": {"min_length": 1, "multiline": true}, "default_value": %s}]}',
+                v_claim_code,
+                json.get_string_opt(data.get_raw_attribute_value_for_share(in_object_id, 'title'), null),
+                coalesce(data.get_raw_attribute_value_for_share(in_object_id, 'claim_text')::text, '""'));
+
+    v_actions_list := v_actions_list || 
+        format(', "claim_delete": {"code": "claim_delete", "name": "Удалить", "disabled": false, "warning": "Иск будет удалён безвозвратно. Удаляем?", '||
+                '"params": {"claim_code": "%s"}}',
+                v_claim_code);
+
+    v_actions_list := v_actions_list || 
+        format(', "claim_change_defendant": {"code": "claim_change_defendant", "name": "Изменить ответчика", "disabled": false, '||
+                '"params": {"claim_code": "%s"}}',
+                v_claim_code);
+
+    if v_claim_status = 'draft' then
+      v_actions_list := v_actions_list || 
+          format(', "claim_send": {"code": "claim_send", "name": "Отправить на рассмотрение", "disabled": false, "warning": "После отправки вы больше не сможете изменить иск",'||
+                  '"params": {"claim_code": "%s"}}',
+                  v_claim_code);
+    end if;
+  end if;
+
+  if v_claim_status = 'processing' and v_is_master and v_claim_to_asj then
+    v_actions_list := v_actions_list || 
+      format(', "claim_send_to_judge": {"code": "claim_send_to_judge", "name": "Перенаправить судье", "disabled": false,'||
+             '"params": {"claim_code": "%s"}}',
+             v_claim_code);
+  end if;
+
+  if v_claim_status = 'processing' and (v_is_master or (v_is_judge and not v_claim_to_asj) or (v_actor_code = 'asj' and v_claim_to_asj)) then
+    v_actions_list := v_actions_list || 
+      format(', "claim_result": {"code": "claim_result", "name": "Принять решение", "disabled": false,'||
+             '"params": {"claim_code": "%s"}, "user_params": [{"code": "claim_result", "description": "Текст решения", "type": "string", "restrictions": {"min_length": 1, "multiline": true}}]}',
+             v_claim_code);
+  end if;
+
+  if v_claim_status = 'done' and v_is_master then
+    v_actions_list := v_actions_list || 
+      format(', "claim_result_edit": {"code": "claim_result_edit", "name": "Редактировать решение", "disabled": false,'||
+             '"params": {"claim_code": "%s"}, 
+             "user_params": [{"code": "claim_result", "description": "Текст решения", "type": "string", "restrictions": {"min_length": 1, "multiline": true}, "default_value": %s}]}',
+             v_claim_code,
+             coalesce(data.get_raw_attribute_value_for_share(in_object_id, 'claim_result_text')::text, '""'));
+  end if;
+
+  v_chat_id := data.get_object_id(v_claim_code || '_chat');
+  if v_chat_id is not null 
+  and (v_is_master 
+    or v_is_judge
+    or v_claim_author = v_actor_code 
+    or v_actor_code = 'asj' -- автоматическая система судопроизводства
+    or (v_claim_defendant_type = 'person' and v_actor_code = v_claim_defendant)
+    or (v_claim_plaintiff_type = 'organization' and pp_utils.is_in_group(in_actor_id, v_claim_plaintiff || '_head'))
+    or (v_claim_defendant_type = 'organization' and pp_utils.is_in_group(in_actor_id, v_claim_defendant || '_head'))) then
+    v_chat_length := json.get_integer_opt(data.get_attribute_value(v_chat_id, 'system_chat_length'), 0);
+    v_chat_unread := json.get_integer_opt(data.get_attribute_value(v_chat_id, 'chat_unread_messages', in_actor_id), null);
+    v_actions_list := v_actions_list || 
+        format(', "claim_chat": {"code": "chat_enter", "name": "Обсудить%s", "disabled": false, '||
+                '"params": {"object_code": "%s"}}',
+                case when v_chat_length = 0 then ''
+                when v_chat_length > 0 and v_chat_unread is null then ' (' || v_chat_length || ')'
+                else ' (' || v_chat_length || ', непрочитанных ' || v_chat_unread || ')' 
+                end,
+                v_claim_code);
+  end if;
+
+  return jsonb ('{'||trim(v_actions_list,',')||'}');
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.actgenerator_claim_temp_defendant_list(integer, integer);
+
+create or replace function pallas_project.actgenerator_claim_temp_defendant_list(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_actions_list text := '';
+  v_person1_id integer;
+  v_is_master boolean;
+  v_debatle_code text;
+  v_debatle_status text;
+begin
+  assert in_actor_id is not null;
+
+  v_actions_list := v_actions_list || 
+                ', "claim_back": {"code": "go_back", "name": "Отмена", "disabled": false, '||
+                '"params": {}}';
+
+  return jsonb ('{'||trim(v_actions_list,',')||'}');
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.actgenerator_claims_list(integer, integer);
+
+create or replace function pallas_project.actgenerator_claims_list(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_actions_list text := '';
+  v_object_code text := data.get_object_code(in_object_id);
+begin
+  assert in_actor_id is not null;
+
+  if v_object_code <> 'claims_all' 
+  and (pp_utils.is_in_group(in_actor_id, 'all_person') or pp_utils.is_in_group(in_actor_id, 'master')) then
+    v_actions_list := v_actions_list || 
+      format(', "claim_create": {"code": "claim_create", "name": "Создать иск", "disabled": false, '||
+        '"params": {"claim_list": "%s"}, "user_params": [{"code": "title", "description": "Введите заголовок иска", "type": "string", "restrictions": {"min_length": 1}},
+                                                         {"code": "claim_text", "description": "Введите текст иска", "type": "string", "restrictions": {"min_length": 1, "multiline": true}}]}',
+        v_object_code);
+  end if;
+  return jsonb ('{'||trim(v_actions_list,',')||'}');
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.actgenerator_debatle(integer, integer);
 
 create or replace function pallas_project.actgenerator_debatle(in_object_id integer, in_actor_id integer)
@@ -13869,6 +14624,7 @@ begin
         "documents": {"code": "act_open_object", "name": "Документы", "disabled": false, "params": {"object_code": "documents"}},
         "blogs": {"code": "act_open_object", "name": "Блоги", "disabled": false, "params": {"object_code": "blogs"}},
         "news": {"code": "act_open_object", "name": "Новости", "disabled": false, "params": {"object_code": "news"}},
+        "claims": {"code": "act_open_object", "name": "Судебные иски", "disabled": false, "params": {"object_code": "claims"}},
         "logout": {"code": "logout", "name": "Выход", "disabled": false, "params": {}}
       }';
   end if;
@@ -14047,6 +14803,23 @@ begin
         pp_utils.is_in_group(in_actor_id, v_object_code || '_auditor') or
         pp_utils.is_in_group(in_actor_id, v_object_code || '_temporary_auditor');
     end if;
+  end if;
+
+  if v_master or v_is_head then
+    v_actions :=
+      v_actions ||
+      format(
+        '{
+          "show_claims": {
+            "code": "act_open_object",
+            "name": "Посмотреть список исков",
+            "disabled": false,
+            "params": {
+              "object_code": "%s_claims"
+            }
+          }
+        }',
+        v_object_code)::jsonb;
   end if;
 
   if v_is_real_org then
@@ -14932,6 +15705,21 @@ begin
       v_temporary_auditor_group_id,
       v_master_group_id)::jsonb,
     'transactions');
+
+  -- Список исков
+  perform data.create_object(
+    in_object_code || '_claims',
+    format(
+      '[
+        {"code": "title", "value": "%s"},
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "content", "value": []}
+      ]',
+      format('Список исков, %s', json.get_string(data.get_attribute_value(v_org_id, 'title'))),
+      v_head_group_id,
+      v_master_group_id)::jsonb,
+    'claim_list');
 end;
 $$
 language plpgsql;
@@ -15662,7 +16450,7 @@ begin
         "groups": [
           {"code": "menu_notifications", "actions": ["notifications"]},
           {"code": "menu_lottery", "actions": ["lottery"]},
-          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "chats", "documents", "my_organizations", "blogs", "important_notifications"]},
+          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "chats", "documents", "my_organizations", "blogs", "claims", "important_notifications"]},
           {"code": "menu_social", "actions": ["news", "all_chats", "debatles", "master_chats"]},
           {"code": "menu_info", "actions": ["persons", "districts", "organizations"]},
           {"code": "menu_logout", "actions": ["logout"]}
@@ -15732,6 +16520,7 @@ begin
   perform pallas_project.init_finances();
   perform pallas_project.init_districts();
   perform pallas_project.init_persons();
+  perform pallas_project.init_claims();
   perform pallas_project.init_organizations();
   perform pallas_project.init_organization_roles();
   perform pallas_project.init_debatles();
@@ -15740,6 +16529,7 @@ begin
   perform pallas_project.init_documents();
   perform pallas_project.init_lottery();
   perform pallas_project.init_blogs();
+
 end;
 $$
 language plpgsql;
@@ -15950,6 +16740,172 @@ begin
   ('blog_message_edit', 'pallas_project.act_blog_message_edit'),
   ('blog_message_delete', 'pallas_project.act_blog_message_delete'),
   ('blog_message_chat', 'pallas_project.act_blog_message_chat');
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.init_claims();
+
+create or replace function pallas_project.init_claims()
+returns void
+volatile
+as
+$$
+declare
+
+begin
+  -- Атрибуты 
+  insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
+  ('claim_author', 'Автор иска', 'Автор иска', 'normal', 'full', 'pallas_project.vd_link', false),
+  ('claim_plaintiff', 'Истец', 'Истец', 'normal', 'full', 'pallas_project.vd_link', false),
+  ('claim_defendant', 'Ответчик', 'Ответчик', 'normal', 'full', 'pallas_project.vd_link', false),
+  ('claim_text', null, 'Текст иска', 'normal', 'full', null, false),
+  ('claim_result_text', 'Результат рассмотрения иска', 'Результат рассмотрения иска', 'normal', 'full', null, false),
+  ('claim_time', 'Дата создания иска', 'Время создания иска', 'normal', null, null, false),
+  ('claim_result_time', 'Дата принятия решения', 'Дата принятия решения', 'normal', null, null, false),
+  ('claim_status', 'Статус', 'Статус иска', 'normal', null, 'pallas_project.vd_claim_status', false),
+  ('system_claim_id', null, 'Идентификатор иска для списка редактирования ответчика', 'system', null, null, false),
+  ('system_claim_to_asj', null, 'Признак того, что иск направлен в АСС', 'system', null, null, false);
+
+  -- Объект - страница для работы с исками
+  perform data.create_object(
+  'claims',
+  jsonb '[
+    {"code": "title", "value": "Судебные иски"},
+    {"code": "is_visible", "value": true},
+    {"code": "content", "value": ["claims_my", "claims_all"]},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_claims_list"},
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [{"code": "claim_group", "attributes": ["description"], "actions": ["claim_create"]}]
+      }
+    }
+  ]');
+
+  -- Списки исков
+  -- Класс
+  perform data.create_class(
+  'claim_list',
+  jsonb '[
+    {"code": "is_visible", "value": true},
+    {"code": "content", "value": []},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_claims_list"},
+    {
+      "code": "mini_card_template",
+      "value": {
+        "title": "title",
+        "groups": []
+      }
+    },
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [{"code": "claim_list_group", "attributes": ["description"], "actions": ["claim_create"]}]
+      }
+    }
+  ]');
+
+  perform data.create_object(
+  'claims_all',
+  jsonb '[
+    {"code": "title", "value": "Все иски"},
+    {"code": "is_visible", "value": true}
+  ]',
+  'claim_list');
+
+  perform data.create_object(
+  'claims_my',
+  jsonb '[
+    {"code": "title", "value": "Мои иски"},
+    {"code": "is_visible", "value": true}
+  ]',
+  'claim_list');
+
+  -- Объект-класс для иска
+  perform data.create_class(
+  'claim',
+  jsonb '[
+    {"code": "type", "value": "claim"},
+    {"code": "priority", "value": 82},
+    {"code": "is_visible", "value": true},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_claim"},
+    {
+      "code": "mini_card_template",
+      "value": {
+        "title": "title",
+        "subtitle": "claim_status",
+        "groups": []
+      }
+    },
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [
+          {
+            "code": "claim_group1",
+            "attributes": ["claim_status", "claim_time", "claim_author", "claim_plaintiff", "claim_defendant"]
+          },
+          {
+            "code": "claim_group2",
+            "attributes": ["claim_text"],
+            "actions": ["claim_change_defendant", "claim_edit", "claim_delete"]
+          },
+          {
+            "code": "claim_group3",
+            "attributes": ["claim_result_time", "claim_result_text"],
+            "actions": ["claim_send", "claim_send_to_judge", "claim_result", "claim_result_edit", "claim_chat"]
+          }
+        ]
+      }
+    }
+  ]');
+
+  -- Объект-класс для временных списков персон для редактирования иска
+  perform data.create_class(
+  'claim_temp_defendant_list',
+  jsonb '[
+    {"code": "content", "value": []},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_claim_temp_defendant_list"},
+    {"code": "list_element_function", "value": "pallas_project.lef_claim_temp_defendant_list"},
+    {"code": "temporary_object", "value": true},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [
+          {
+            "code": "group1",
+            "actions": ["claim_back"]
+          }
+        ]
+      }
+    }
+  ]');
+
+  insert into data.actions(code, function) values
+  ('claim_create', 'pallas_project.act_claim_create'),
+  ('claim_change_defendant', 'pallas_project.act_claim_change_defendant'),
+  ('claim_edit','pallas_project.act_claim_edit'),
+  ('claim_delete','pallas_project.act_claim_delete'),
+  ('claim_send', 'pallas_project.act_claim_send'),
+  ('claim_result', 'pallas_project.act_claim_result'),
+  ('claim_result_edit', 'pallas_project.act_claim_result_edit'),
+  ('claim_chat', 'pallas_project.act_claim_chat'),
+  ('claim_send_to_judge', 'pallas_project.act_claim_send_to_judge');
 end;
 $$
 language plpgsql;
@@ -16943,6 +17899,8 @@ begin
   perform data.create_object('cartel', jsonb '{"priority": 60, "title": "Картель"}', 'group');
   perform data.create_object('master', jsonb '{"priority": 190, "title": "Мастера"}', 'group');
 
+  perform data.create_object('judge', jsonb '{"priority": 75, "title": "Судьи"}', 'group');
+
 end;
 $$
 language plpgsql;
@@ -17417,7 +18375,7 @@ begin
           {
             "code": "personal_info",
             "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_tax", "org_next_tax", "org_current_tax_sum", "org_districts_control", "org_districts_influence"],
-            "actions": ["transfer_money", "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5", "change_current_tax", "change_next_tax", "show_transactions"]
+            "actions": ["transfer_money", "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5", "change_current_tax", "change_next_tax", "show_transactions", "show_claims"]
           },
           {"code": "info", "attributes": ["description"]}
         ]
@@ -18015,7 +18973,7 @@ begin
   -- Сантьяго де ла Крус - большой картель
 
   perform pallas_project.create_person(
-    null,
+    'asj',
     'p10',
     jsonb '{
       "title": "АСС",
@@ -18149,6 +19107,37 @@ begin
                                         v_actor_id);
 
   perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, v_chat_code);
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.lef_claim_temp_defendant_list(integer, text, integer, integer);
+
+create or replace function pallas_project.lef_claim_temp_defendant_list(in_client_id integer, in_request_id text, in_object_id integer, in_list_object_id integer)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id integer :=data.get_active_actor_id(in_client_id);
+  v_claim_id integer := json.get_integer(data.get_attribute_value_for_share(in_object_id, 'system_claim_id'));
+  v_claim_code text := data.get_object_code(v_claim_id);
+  v_list_code text := data.get_object_code(in_list_object_id);
+
+  v_claim_defendant text := json.get_string_opt(data.get_attribute_value_for_share(v_claim_id, 'claim_defendant'), null);
+
+  v_changes jsonb[];
+begin
+  assert in_request_id is not null;
+  assert in_list_object_id is not null;
+
+  if v_claim_defendant is distinct from v_list_code then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('claim_defendant', to_jsonb(v_list_code)));
+  end if;
+
+  perform data.change_object_and_notify(v_claim_id, to_jsonb(v_changes), v_actor_id);
+
+  perform api_utils.create_go_back_action_notification(in_client_id, in_request_id);
 end;
 $$
 language plpgsql;
@@ -18796,6 +19785,29 @@ begin
     return 'Уведомления отключены';
   else
     return null;
+  end case;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.vd_claim_status(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_claim_status(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+declare
+  v_text_value text := json.get_string(in_value);
+begin
+  case when v_text_value = 'draft' then
+    return 'Черновик';
+  when v_text_value = 'processing' then
+    return 'Рассматривается';
+  when v_text_value = 'done' then
+    return 'Решение принято';
+  else
+    return 'Неизвестно';
   end case;
 end;
 $$

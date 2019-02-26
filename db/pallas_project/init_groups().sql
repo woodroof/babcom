@@ -26,6 +26,8 @@ begin
   perform data.create_object('cartel', jsonb '{"priority": 60, "title": "Картель"}', 'group');
   perform data.create_object('master', jsonb '{"priority": 190, "title": "Мастера"}', 'group');
 
+  perform data.create_object('judge', jsonb '{"priority": 75, "title": "Судьи"}', 'group');
+
 end;
 $$
 language plpgsql;
