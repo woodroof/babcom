@@ -20,9 +20,6 @@ declare
   v_subscription_objects jsonb := jsonb '[]';
   v_actor_subscriptions jsonb := jsonb '[]';
 
-  v_set_visible integer[];
-  v_set_invisible integer[];
-
   v_ret_val jsonb := jsonb '[]';
 begin
   assert in_actor_id is null or data.is_instance(in_actor_id);
@@ -158,6 +155,9 @@ begin
       v_position_object_id integer;
       v_add jsonb;
       v_subscription_object_code text;
+
+      v_set_visible integer[];
+      v_set_invisible integer[];
     begin
       for v_list in
       (
@@ -246,6 +246,18 @@ begin
           end if;
         end if;
       end loop;
+
+      if v_set_visible is not null then
+        update data.client_subscription_objects
+        set is_visible = true
+        where id = any(v_set_visible);
+      end if;
+
+      if v_set_invisible is not null then
+        update data.client_subscription_objects
+        set is_visible = false
+        where id = any(v_set_invisible);
+      end if;
     end;
   end if;
 
