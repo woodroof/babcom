@@ -173,60 +173,63 @@ begin
 
   declare
     v_actor_code text := data.get_object_code(in_actor_id);
-    v_my_organizations jsonb := data.get_raw_attribute_value_for_share(data.get_object_id(v_actor_code || '_my_organizations'), 'content');
+    v_my_organizations jsonb;
     v_title_attr_id integer;
     v_my_organization record;
   begin
-    if v_my_organizations != '[]' then
-      v_title_attr_id := data.get_attribute_id('title');
+    if data.is_object_exists(v_actor_code || '_my_organizations') then
+      v_my_organizations := data.get_raw_attribute_value_for_share(data.get_object_id(v_actor_code || '_my_organizations'), 'content');
+      if v_my_organizations != '[]' then
+        v_title_attr_id := data.get_attribute_id('title');
 
-      for v_my_organization in
-      (
-        select row_number() over() as num, code, title
-        from (
-          select o.code, json.get_string(data.get_attribute_value(o.id, v_title_attr_id)) title
-          from jsonb_array_elements(v_my_organizations) m
-          join data.objects o on
-            o.code = json.get_string(m.value) and
-            o.id != in_object_id and
-            (pp_utils.is_in_group(in_actor_id, o.code || '_head') or pp_utils.is_in_group(in_actor_id, o.code || '_economist'))
-          order by title
-          limit 5) orgs
-      )
-      loop
-        v_actions :=
-          v_actions ||
-          format(
-            '{
-              "transfer_org_money%s": {
-                "code": "transfer_org_money",
-                "name": "Перевести деньги от лица организации %s",
-                "disabled": false,
-                "params": {
-                  "org_code": "%s",
-                  "receiver_code": "%s"
-                },
-                "user_params": [
-                  {
-                    "code": "sum",
-                    "description": "Сумма, UN$",
-                    "type": "integer",
-                    "restrictions": {"min_value": 1}
+        for v_my_organization in
+        (
+          select row_number() over() as num, code, title
+          from (
+            select o.code, json.get_string(data.get_attribute_value(o.id, v_title_attr_id)) title
+            from jsonb_array_elements(v_my_organizations) m
+            join data.objects o on
+              o.code = json.get_string(m.value) and
+              o.id != in_object_id and
+              (pp_utils.is_in_group(in_actor_id, o.code || '_head') or pp_utils.is_in_group(in_actor_id, o.code || '_economist'))
+            order by title
+            limit 5) orgs
+        )
+        loop
+          v_actions :=
+            v_actions ||
+            format(
+              '{
+                "transfer_org_money%s": {
+                  "code": "transfer_org_money",
+                  "name": "Перевести деньги от лица организации %s",
+                  "disabled": false,
+                  "params": {
+                    "org_code": "%s",
+                    "receiver_code": "%s"
                   },
-                  {
-                    "code": "comment",
-                    "description": "Комментарий",
-                    "type": "string",
-                    "restrictions": {"max_length": 1000, "multiline": true}
-                  }
-                ]
-              }
-            }',
-            v_my_organization.num,
-            v_my_organization.title,
-            v_my_organization.code,
-            v_object_code)::jsonb;
-      end loop;
+                  "user_params": [
+                    {
+                      "code": "sum",
+                      "description": "Сумма, UN$",
+                      "type": "integer",
+                      "restrictions": {"min_value": 1}
+                    },
+                    {
+                      "code": "comment",
+                      "description": "Комментарий",
+                      "type": "string",
+                      "restrictions": {"max_length": 1000, "multiline": true}
+                    }
+                  ]
+                }
+              }',
+              v_my_organization.num,
+              v_my_organization.title,
+              v_my_organization.code,
+              v_object_code)::jsonb;
+        end loop;
+      end if;
     end if;
   end;
 

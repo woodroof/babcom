@@ -12378,6 +12378,181 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_district_change_control(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_district_change_control(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_object_code text := json.get_string(in_params, 'object_code');
+  v_control_code text := json.get_string(in_params, 'control_code');
+  v_object_id integer := data.get_object_id(v_object_code);
+  v_current_control jsonb := data.get_attribute_value_for_update(v_object_id, 'district_control');
+  v_old_org_code text :=
+    (case when v_current_control = jsonb 'null' then '' else pallas_project.control_to_org_code(json.get_string(v_current_control)) end);
+  v_old_org_id integer;
+  v_org_code text := pallas_project.control_to_org_code(v_control_code);
+  v_org_id integer := data.get_object_id(v_org_code);
+  v_tax integer := json.get_integer(data.get_attribute_value_for_share(v_org_code, 'system_org_tax'));
+  v_district_influence jsonb := data.get_attribute_value_for_update(v_object_id, 'district_influence');
+  v_notified boolean;
+begin
+  if v_current_control = to_jsonb(v_control_code) then
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Контроль над районом уже изменился');
+    return;
+  end if;
+
+  select jsonb_object_agg(key, case when key = v_control_code then 1 else 0 end)
+  into v_district_influence
+  from jsonb_each(v_district_influence);
+
+  v_notified :=
+    data.change_current_object(
+      in_client_id,
+      in_request_id,
+      v_object_id,
+      format(
+        '{
+          "district_control": "%s",
+          "district_tax": %s,
+          "district_influence": %s
+        }',
+        v_control_code,
+        v_tax,
+        v_district_influence::text)::jsonb,
+      'Изменение контроля мастером');
+  assert v_notified;
+
+  perform pallas_project.notify_district_tax_change(
+    v_object_id,
+    'в связи с изменением организации, контролирующей ваш район проживания');
+
+  if v_old_org_code != '' then
+    v_old_org_id := data.get_object_id(v_old_org_code);
+    perform pallas_project.notify_organization(
+      v_old_org_id,
+      format(
+        E'Организация потеряла контроль над сектором %s',
+        pp_utils.link(v_object_code)),
+      v_object_id);
+    perform pallas_project.update_org_districts_control(v_old_org_id);
+    perform pallas_project.update_org_districts_influence(v_old_org_id);
+  end if;
+
+  perform pallas_project.notify_organization(
+    v_org_id,
+    format(
+      E'Организация получила контроль над сектором %s',
+      pp_utils.link(v_object_code)),
+    v_object_id);
+
+  perform pallas_project.update_org_districts_control(v_org_id);
+  perform pallas_project.update_org_districts_influence(v_org_id);
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_district_change_influence(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_district_change_influence(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_object_code text := json.get_string(in_params, 'object_code');
+  v_control_code text := json.get_string(in_params, 'control_code');
+  v_influence_diff integer := json.get_integer(in_user_params, 'influence_diff');
+  v_description text := pp_utils.trim(json.get_string(in_user_params, 'description'));
+  v_district_influence jsonb := data.get_attribute_value_for_update(v_object_code, 'district_influence');
+  v_control_influence integer := json.get_integer(v_district_influence, v_control_code);
+  v_object_id integer := data.get_object_id(v_object_code);
+  v_org_id integer := data.get_object_id(pallas_project.control_to_org_code(v_control_code));
+  v_notified boolean;
+begin
+  if v_control_influence + v_influence_diff < 0 then
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Значение влияния не может быть меньше нуля');
+    return;
+  end if;
+
+  v_district_influence := jsonb_set(v_district_influence, array[v_control_code], to_jsonb(v_control_influence + v_influence_diff));
+  v_notified :=
+    data.change_current_object(
+      in_client_id,
+      in_request_id,
+      v_object_id,
+      jsonb_build_object('district_influence', v_district_influence),
+      'Изменение влияния мастером');
+  if not v_notified then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  else
+    perform pallas_project.notify_organization(
+      v_org_id,
+      format(
+        E'Влияние организации в секторе %s %s\n%s',
+        pp_utils.link(v_object_code),
+        (case when v_influence_diff > 0 then 'выросло' else 'уменьшилось' end),
+        v_description),
+      v_object_id);
+
+    perform pallas_project.update_org_districts_influence(v_org_id);
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_district_remove_control(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_district_remove_control(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_object_code text := json.get_string(in_params, 'object_code');
+  v_object_id integer := data.get_object_id(v_object_code);
+  v_control_code text := json.get_string(in_params, 'control_code');
+  v_description text := pp_utils.trim(json.get_string(in_user_params, 'description'));
+  v_current_control jsonb := data.get_attribute_value_for_update(v_object_id, 'district_control');
+  v_org_id integer := data.get_object_id(pallas_project.control_to_org_code(v_control_code));
+  v_notified boolean;
+begin
+  if v_current_control != to_jsonb(v_control_code) then
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Контроль над районом уже изменился');
+    return;
+  end if;
+
+  v_notified :=
+    data.change_current_object(
+      in_client_id,
+      in_request_id,
+      v_object_id,
+      jsonb '{
+        "district_control": null,
+        "district_tax": 0
+      }',
+      'Изменение контроля мастером');
+  assert v_notified;
+
+  perform pallas_project.notify_district_tax_change(
+    v_object_id,
+    'в связи с изменением организации, контролирующей ваш район проживания');
+
+  perform pallas_project.notify_organization(
+    v_org_id,
+    format(
+      E'Организация потеряла контроль над сектором %s\n%s',
+      pp_utils.link(v_object_code),
+      v_description),
+    v_object_id);
+
+  perform pallas_project.update_org_districts_control(v_org_id);
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_document_add_to_my(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_document_add_to_my(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -14882,6 +15057,203 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.actgenerator_district(integer, integer);
+
+create or replace function pallas_project.actgenerator_district(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_is_master boolean := pp_utils.is_in_group(in_actor_id, 'master');
+  v_object_code text;
+  v_district_control text;
+  v_district_influence jsonb;
+  v_adm_influence integer;
+  v_opa_influence integer;
+  v_cartel_influence integer;
+  v_control_code text;
+  v_control_org_name_r text;
+  v_control_org_name_d text;
+  v_actions jsonb := jsonb '{}';
+begin
+  if v_is_master then
+    v_object_code := data.get_object_code(in_object_id);
+    v_district_control := json.get_string_opt(data.get_attribute_value_for_share(in_object_id, 'district_control'), '');
+    v_district_influence := data.get_attribute_value_for_share(in_object_id, 'district_influence');
+
+    v_adm_influence := json.get_integer(v_district_influence, 'administration');
+    v_opa_influence := json.get_integer(v_district_influence, 'opa');
+    v_cartel_influence := json.get_integer(v_district_influence, 'cartel');
+
+    v_actions :=
+      v_actions ||
+      format(
+        '{
+          "change_administration_influence": {
+            "code": "district_change_influence",
+            "name": "Изменить влияние администрации",
+            "disabled": false,
+            "params": {
+              "object_code": "%s",
+              "control_code": "administration"
+            },
+            "warning": "Причина будет указана в уведомлении руководству организации. Продолжить?",
+            "user_params": [
+              {
+                "code": "influence_diff",
+                "description": "Значение изменения влияния (текущее значение: %s)",
+                "type": "integer",
+                "restrictions": {"min_value": %s}
+              },
+              {
+                "code": "description",
+                "description": "Причина изменения",
+                "type": "string",
+                "restrictions": {"min_length": 1, "multiline": true}
+              }
+            ]
+          },
+          "change_opa_influence": {
+            "code": "district_change_influence",
+            "name": "Изменить влияние СВП",
+            "disabled": false,
+            "params": {
+              "object_code": "%s",
+              "control_code": "opa"
+            },
+            "warning": "Причина будет указана в уведомлении руководству организации. Продолжить?",
+            "user_params": [
+              {
+                "code": "influence_diff",
+                "description": "Значение изменения влияния (текущее значение: %s)",
+                "type": "integer",
+                "restrictions": {"min_value": %s}
+              },
+              {
+                "code": "description",
+                "description": "Причина изменения",
+                "type": "string",
+                "restrictions": {"min_length": 1, "multiline": true}
+              }
+            ]
+          },
+          "change_cartel_influence": {
+            "code": "district_change_influence",
+            "name": "Изменить влияние картеля",
+            "disabled": false,
+            "params": {
+              "object_code": "%s",
+              "control_code": "cartel"
+            },
+            "warning": "Причина будет указана в уведомлении руководству организации. Продолжить?",
+            "user_params": [
+              {
+                "code": "influence_diff",
+                "description": "Значение изменения влияния (текущее значение: %s)",
+                "type": "integer",
+                "restrictions": {"min_value": %s}
+              },
+              {
+                "code": "description",
+                "description": "Причина изменения",
+                "type": "string",
+                "restrictions": {"min_length": 1, "multiline": true}
+              }
+            ]
+          }
+        }',
+        v_object_code,
+        v_adm_influence,
+        -v_adm_influence,
+        v_object_code,
+        v_opa_influence,
+        -v_opa_influence,
+        v_object_code,
+        v_cartel_influence,
+        -v_cartel_influence)::jsonb;
+
+    for v_control_code in
+    (
+      select value
+      from unnest(array['administration', 'opa', 'cartel']) a(value)
+    )
+    loop
+      v_control_org_name_r := (case when v_control_code = 'administration' then 'администрации' when v_control_code = 'opa' then 'СВП' else 'картеля' end);
+      v_control_org_name_d := (case when v_control_code = 'administration' then 'администрации' when v_control_code = 'opa' then 'СВП' else 'картелю' end);
+
+      if v_district_control = v_control_code then
+        v_actions :=
+          v_actions ||
+          format('
+            {
+              "set_%s_control": {
+                "code": "district_change_control",
+                "name": "Установить контроль %s",
+                "disabled": true
+              }
+            }',
+            v_control_code,
+            v_control_org_name_r)::jsonb;
+      else
+        v_actions :=
+          v_actions ||
+          format('
+            {
+              "set_%s_control": {
+                "code": "district_change_control",
+                "name": "Установить контроль %s",
+                "disabled": false,
+                "warning": "Влияние %s будет установлено в 1, влияние остальных - в 0. Контроль будет передан %s. Продолжить?",
+                "params": {
+                  "object_code": "%s",
+                  "control_code": "%s"
+                }
+              }
+            }',
+            v_control_code,
+            v_control_org_name_r,
+            v_control_org_name_r,
+            v_control_org_name_d,
+            v_object_code,
+            v_control_code)::jsonb;
+      end if;
+    end loop;
+
+    if v_district_control != '' then
+      v_actions :=
+        v_actions ||
+        format(
+          '{
+            "remove_control": {
+              "code": "district_remove_control",
+              "name": "Убрать контроль",
+              "disabled": false,
+              "warning": "Будет только убран контроль, влияние организаций не поменяется. Причина будет указана в уведомлении руководству организации. Продолжить?",
+              "params": {
+                "object_code": "%s",
+                "control_code": "%s"
+              },
+              "user_params": [
+                {
+                  "code": "description",
+                  "description": "Причина изменения",
+                  "type": "string",
+                  "restrictions": {"min_length": 1, "multiline": true}
+                }
+              ]
+            }
+          }',
+          v_object_code,
+          v_district_control)::jsonb;
+    end if;
+  end if;
+
+  return v_actions;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.actgenerator_document(integer, integer);
 
 create or replace function pallas_project.actgenerator_document(in_object_id integer, in_actor_id integer)
@@ -15672,60 +16044,63 @@ begin
 
   declare
     v_actor_code text := data.get_object_code(in_actor_id);
-    v_my_organizations jsonb := data.get_raw_attribute_value_for_share(data.get_object_id(v_actor_code || '_my_organizations'), 'content');
+    v_my_organizations jsonb;
     v_title_attr_id integer;
     v_my_organization record;
   begin
-    if v_my_organizations != '[]' then
-      v_title_attr_id := data.get_attribute_id('title');
+    if data.is_object_exists(v_actor_code || '_my_organizations') then
+      v_my_organizations := data.get_raw_attribute_value_for_share(data.get_object_id(v_actor_code || '_my_organizations'), 'content');
+      if v_my_organizations != '[]' then
+        v_title_attr_id := data.get_attribute_id('title');
 
-      for v_my_organization in
-      (
-        select row_number() over() as num, code, title
-        from (
-          select o.code, json.get_string(data.get_attribute_value(o.id, v_title_attr_id)) title
-          from jsonb_array_elements(v_my_organizations) m
-          join data.objects o on
-            o.code = json.get_string(m.value) and
-            o.id != in_object_id and
-            (pp_utils.is_in_group(in_actor_id, o.code || '_head') or pp_utils.is_in_group(in_actor_id, o.code || '_economist'))
-          order by title
-          limit 5) orgs
-      )
-      loop
-        v_actions :=
-          v_actions ||
-          format(
-            '{
-              "transfer_org_money%s": {
-                "code": "transfer_org_money",
-                "name": "Перевести деньги от лица организации %s",
-                "disabled": false,
-                "params": {
-                  "org_code": "%s",
-                  "receiver_code": "%s"
-                },
-                "user_params": [
-                  {
-                    "code": "sum",
-                    "description": "Сумма, UN$",
-                    "type": "integer",
-                    "restrictions": {"min_value": 1}
+        for v_my_organization in
+        (
+          select row_number() over() as num, code, title
+          from (
+            select o.code, json.get_string(data.get_attribute_value(o.id, v_title_attr_id)) title
+            from jsonb_array_elements(v_my_organizations) m
+            join data.objects o on
+              o.code = json.get_string(m.value) and
+              o.id != in_object_id and
+              (pp_utils.is_in_group(in_actor_id, o.code || '_head') or pp_utils.is_in_group(in_actor_id, o.code || '_economist'))
+            order by title
+            limit 5) orgs
+        )
+        loop
+          v_actions :=
+            v_actions ||
+            format(
+              '{
+                "transfer_org_money%s": {
+                  "code": "transfer_org_money",
+                  "name": "Перевести деньги от лица организации %s",
+                  "disabled": false,
+                  "params": {
+                    "org_code": "%s",
+                    "receiver_code": "%s"
                   },
-                  {
-                    "code": "comment",
-                    "description": "Комментарий",
-                    "type": "string",
-                    "restrictions": {"max_length": 1000, "multiline": true}
-                  }
-                ]
-              }
-            }',
-            v_my_organization.num,
-            v_my_organization.title,
-            v_my_organization.code,
-            v_object_code)::jsonb;
-      end loop;
+                  "user_params": [
+                    {
+                      "code": "sum",
+                      "description": "Сумма, UN$",
+                      "type": "integer",
+                      "restrictions": {"min_value": 1}
+                    },
+                    {
+                      "code": "comment",
+                      "description": "Комментарий",
+                      "type": "string",
+                      "restrictions": {"max_length": 1000, "multiline": true}
+                    }
+                  ]
+                }
+              }',
+              v_my_organization.num,
+              v_my_organization.title,
+              v_my_organization.code,
+              v_object_code)::jsonb;
+        end loop;
+      end if;
     end if;
   end;
 
@@ -16424,8 +16799,6 @@ declare
   v_money jsonb := data.get_attribute_value(v_org_id, 'system_money');
   v_org_tax jsonb := data.get_attribute_value(v_org_id, 'system_org_tax');
   v_org_next_tax jsonb;
-  v_org_districts_control jsonb;
-  v_org_districts_influence jsonb;
   v_org_current_tax_sum jsonb;
   v_org_economics_type jsonb := data.get_attribute_value(v_org_id, 'system_org_economics_type');
   v_value jsonb;
@@ -16442,14 +16815,10 @@ begin
 
   if v_org_tax is not null then
     v_org_next_tax := data.get_attribute_value(v_org_id, 'system_org_next_tax');
-    v_org_districts_control := data.get_attribute_value(v_org_id, 'system_org_districts_control');
-    v_org_districts_influence := data.get_attribute_value(v_org_id, 'system_org_districts_influence');
     v_org_current_tax_sum := data.get_attribute_value(v_org_id, 'system_org_current_tax_sum');
 
     perform json.get_integer(v_org_tax);
     perform json.get_integer(v_org_next_tax);
-    assert json.is_string_array(v_org_districts_control);
-    perform json.get_object(v_org_districts_influence);
     perform json.get_bigint(v_org_current_tax_sum);
 
     -- Заполняем ставки налога
@@ -16462,13 +16831,8 @@ begin
     perform data.set_attribute_value(v_org_id, 'org_next_tax', v_org_next_tax, v_economist_group_id);
 
     -- Заполняем контроль и влияние
-    perform data.set_attribute_value(v_org_id, 'org_districts_control', v_org_districts_control, v_master_group_id);
-    perform data.set_attribute_value(v_org_id, 'org_districts_control', v_org_districts_control, v_head_group_id);
-    perform data.set_attribute_value(v_org_id, 'org_districts_control', v_org_districts_control, v_economist_group_id);
-
-    perform data.set_attribute_value(v_org_id, 'org_districts_influence', v_org_districts_influence, v_master_group_id);
-    perform data.set_attribute_value(v_org_id, 'org_districts_influence', v_org_districts_influence, v_head_group_id);
-    perform data.set_attribute_value(v_org_id, 'org_districts_influence', v_org_districts_influence, v_economist_group_id);
+    perform pallas_project.update_org_districts_control(v_org_id);
+    perform pallas_project.update_org_districts_influence(v_org_id);
 
     -- Заполняем накопленные налоги
     perform data.set_attribute_value(v_org_id, 'org_current_tax_sum', v_org_current_tax_sum, v_master_group_id);
@@ -18181,12 +18545,18 @@ begin
   ('district_tax', 'Налоговая ставка', null, 'normal', null, 'pallas_project.vd_percent', false),
   ('system_district_tax_coeff', null, 'Коэффициент, на который умножаются налоговые поступления', 'system', null, null, false);
 
+  insert into data.actions(code, function) values
+  ('district_change_control', 'pallas_project.act_district_change_control'),
+  ('district_remove_control', 'pallas_project.act_district_remove_control'),
+  ('district_change_influence', 'pallas_project.act_district_change_influence');
+
   -- Класс района
   perform data.create_class(
     'district',
     jsonb '[
       {"code": "is_visible", "value": true},
       {"code": "type", "value": "district"},
+      {"code": "actions_function", "value": "pallas_project.actgenerator_district"},
       {"code": "independent_from_actor_list_elements", "value": true},
       {"code": "independent_from_object_list_elements", "value": true},
       {
@@ -18194,7 +18564,11 @@ begin
         "value": {
           "title": "title",
           "groups": [
-            {"code": "group", "attributes": ["district_tax", "district_control", "district_influence", "district_population"]}
+            {
+              "code": "group",
+              "attributes": ["district_tax", "district_control", "district_influence", "district_population"],
+              "actions": ["change_administration_influence", "change_cartel_influence", "change_opa_influence", "set_administration_control", "set_cartel_control", "set_opa_control", "remove_control"]
+            }
           ]
         }
       }
@@ -19353,8 +19727,6 @@ begin
     'org_administration',
     jsonb '{
       "title": "Администрация",
-      "system_org_districts_control": ["sector_A", "sector_B", "sector_C"],
-      "system_org_districts_influence": {"sector_A": 1, "sector_B": 1, "sector_C": 1, "sector_D": 0, "sector_E": 0, "sector_F": 0, "sector_G": 0},
       "system_org_economics_type": "budget",
       "system_org_budget": 55000,
       "system_money": 55000,
@@ -19366,8 +19738,6 @@ begin
     'org_opa',
     jsonb '{
       "title": "СВП",
-      "system_org_districts_control": ["sector_D", "sector_F"],
-      "system_org_districts_influence": {"sector_A": 0, "sector_B": 0, "sector_C": 0, "sector_D": 1, "sector_E": 0, "sector_F": 1, "sector_G": 0},
       "system_org_economics_type": "normal",
       "system_money": 4000,
       "system_org_tax": 10,
@@ -19378,8 +19748,6 @@ begin
     'org_starbucks',
     jsonb '{
       "title": "Starbucks",
-      "system_org_districts_control": ["sector_G"],
-      "system_org_districts_influence": {"sector_A": 0, "sector_B": 0, "sector_C": 0, "sector_D": 0, "sector_E": 0, "sector_F": 0, "sector_G": 1},
       "system_org_economics_type": "normal",
       "system_money": 2000,
       "system_org_tax": 20,
@@ -20475,7 +20843,6 @@ declare
   v_contract_person_code text := json.get_string(data.get_attribute_value_for_share(in_contract_id, 'contract_person'));
   v_contract_org_code text := json.get_string(data.get_attribute_value_for_share(in_contract_id, 'contract_org'));
   v_message text := format(E'%s\nОрганизация: %s\nИсполнитель: %s', in_message, pp_utils.link(v_contract_org_code), pp_utils.link(v_contract_person_code));
-  v_person_id integer;
 begin
   perform pp_utils.add_notification(
     v_contract_person_code,
@@ -20483,19 +20850,70 @@ begin
     in_contract_id,
     true);
 
+  perform pallas_project.notify_organization(data.get_object_id(v_contract_org_code), v_message, in_contract_id);
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.notify_district_tax_change(integer, text);
+
+create or replace function pallas_project.notify_district_tax_change(in_district_id integer, in_message text)
+returns void
+volatile
+as
+$$
+declare
+  v_district_population jsonb := data.get_raw_attribute_value_for_share(in_district_id, 'content');
+  v_system_person_economy_type_attr_id integer := data.get_attribute_id('system_person_economy_type');
+  v_message text := 'У вас изменилась ставка налога ' || in_message;
+  v_person_id integer;
+begin
   for v_person_id in
   (
-    select distinct object_id
-    from data.object_objects
-    where
-      parent_object_id in (data.get_object_id(v_contract_org_code || '_head'), data.get_object_id(v_contract_org_code || '_economist')) and
-      object_id != parent_object_id
+    select o.id
+    from jsonb_array_elements(v_district_population) e
+    join data.objects o on
+      o.code = json.get_string(e.value)
+    join data.attribute_values av on
+      av.object_id = o.id and
+      av.attribute_id = v_system_person_economy_type_attr_id and
+      av.value in (jsonb '"asters"', jsonb '"mcr"')
   )
   loop
     perform pp_utils.add_notification(
       v_person_id,
       v_message,
-      in_contract_id,
+      in_district_id,
+      true);
+  end loop;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.notify_organization(integer, text, integer);
+
+create or replace function pallas_project.notify_organization(in_org_id integer, in_message text, in_redirect_id integer)
+returns void
+volatile
+as
+$$
+declare
+  v_org_code text := data.get_object_code(in_org_id);
+  v_person_id integer;
+begin
+  for v_person_id in
+  (
+    select distinct object_id
+    from data.object_objects
+    where
+      parent_object_id in (data.get_object_id(v_org_code || '_head'), data.get_object_id(v_org_code || '_economist')) and
+      object_id != parent_object_id
+  )
+  loop
+    perform pp_utils.add_notification(
+      v_person_id,
+      in_message,
+      in_redirect_id,
       true);
   end loop;
 end;
@@ -20602,6 +21020,26 @@ begin
       format('Списана сумма %s', pp_utils.format_money(in_money)),
       v_transactions_id);
   end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.org_code_to_control(text);
+
+create or replace function pallas_project.org_code_to_control(in_org_code text)
+returns text
+immutable
+as
+$$
+begin
+  if in_org_code = 'org_administration' then
+    return 'administration';
+  elsif in_org_code = 'org_opa' then
+    return 'opa';
+  end if;
+
+  assert in_org_code = 'org_starbucks';
+  return 'cartel';
 end;
 $$
 language plpgsql;
@@ -20767,6 +21205,78 @@ begin
     jsonb '[]' || data.attribute_change2jsonb('content', to_jsonb(v_content)),
     in_actor_id,
     'Touch notification');
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.update_org_districts_control(integer);
+
+create or replace function pallas_project.update_org_districts_control(in_org_id integer)
+returns void
+volatile
+as
+$$
+declare
+  v_org_code text := data.get_object_code(in_org_id);
+  v_control_code text := pallas_project.org_code_to_control(v_org_code);
+  v_control_code_jsonb jsonb := to_jsonb(v_control_code);
+  v_district_codes text[] := json.get_string_array(data.get_raw_attribute_value('districts', 'content'));
+  v_district_control_attr_id integer := data.get_attribute_id('district_control');
+  v_org_districts_control_attr_id integer := data.get_attribute_id('org_districts_control');
+  v_org_districts_control jsonb;
+begin
+  select jsonb_agg(o.code)
+  into v_org_districts_control
+  from unnest(v_district_codes) a(value)
+  join data.objects o on
+    o.code = a.value
+  join data.attribute_values av on
+    av.object_id = o.id and
+    av.attribute_id = v_district_control_attr_id and
+    av.value = v_control_code_jsonb;
+
+  perform data.change_object_and_notify(
+    in_org_id,
+    jsonb '[]' ||
+    data.attribute_change2jsonb('system_org_districts_control', v_org_districts_control) ||
+    data.attribute_change2jsonb(v_org_districts_control_attr_id, v_org_districts_control, 'master') ||
+    data.attribute_change2jsonb(v_org_districts_control_attr_id, v_org_districts_control, v_org_code || '_head') ||
+    data.attribute_change2jsonb(v_org_districts_control_attr_id, v_org_districts_control, v_org_code || '_economist'));
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.update_org_districts_influence(integer);
+
+create or replace function pallas_project.update_org_districts_influence(in_org_id integer)
+returns void
+volatile
+as
+$$
+declare
+  v_org_code text := data.get_object_code(in_org_id);
+  v_control_code text := pallas_project.org_code_to_control(v_org_code);
+  v_district_codes text[] := json.get_string_array(data.get_raw_attribute_value('districts', 'content'));
+  v_district_influence_attr_id integer := data.get_attribute_id('district_influence');
+  v_org_districts_influence_attr_id integer := data.get_attribute_id('org_districts_influence');
+  v_org_districts_influence jsonb;
+begin
+  select jsonb_object_agg(o.code, json.get_integer(av.value, v_control_code))
+  into v_org_districts_influence
+  from unnest(v_district_codes) a(value)
+  join data.objects o on
+    o.code = a.value
+  join data.attribute_values av on
+    av.object_id = o.id and
+    av.attribute_id = v_district_influence_attr_id;
+
+  perform data.change_object_and_notify(
+    in_org_id,
+    jsonb '[]' ||
+    data.attribute_change2jsonb('system_org_districts_influence', v_org_districts_influence) ||
+    data.attribute_change2jsonb(v_org_districts_influence_attr_id, v_org_districts_influence, 'master') ||
+    data.attribute_change2jsonb(v_org_districts_influence_attr_id, v_org_districts_influence, v_org_code || '_head') ||
+    data.attribute_change2jsonb(v_org_districts_influence_attr_id, v_org_districts_influence, v_org_code || '_economist'));
 end;
 $$
 language plpgsql;

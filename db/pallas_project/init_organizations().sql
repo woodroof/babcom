@@ -59,8 +59,6 @@ begin
     'org_administration',
     jsonb '{
       "title": "Администрация",
-      "system_org_districts_control": ["sector_A", "sector_B", "sector_C"],
-      "system_org_districts_influence": {"sector_A": 1, "sector_B": 1, "sector_C": 1, "sector_D": 0, "sector_E": 0, "sector_F": 0, "sector_G": 0},
       "system_org_economics_type": "budget",
       "system_org_budget": 55000,
       "system_money": 55000,
@@ -72,8 +70,6 @@ begin
     'org_opa',
     jsonb '{
       "title": "СВП",
-      "system_org_districts_control": ["sector_D", "sector_F"],
-      "system_org_districts_influence": {"sector_A": 0, "sector_B": 0, "sector_C": 0, "sector_D": 1, "sector_E": 0, "sector_F": 1, "sector_G": 0},
       "system_org_economics_type": "normal",
       "system_money": 4000,
       "system_org_tax": 10,
@@ -84,8 +80,6 @@ begin
     'org_starbucks',
     jsonb '{
       "title": "Starbucks",
-      "system_org_districts_control": ["sector_G"],
-      "system_org_districts_influence": {"sector_A": 0, "sector_B": 0, "sector_C": 0, "sector_D": 0, "sector_E": 0, "sector_F": 0, "sector_G": 1},
       "system_org_economics_type": "normal",
       "system_money": 2000,
       "system_org_tax": 20,

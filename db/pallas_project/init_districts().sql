@@ -16,12 +16,18 @@ begin
   ('district_tax', 'Налоговая ставка', null, 'normal', null, 'pallas_project.vd_percent', false),
   ('system_district_tax_coeff', null, 'Коэффициент, на который умножаются налоговые поступления', 'system', null, null, false);
 
+  insert into data.actions(code, function) values
+  ('district_change_control', 'pallas_project.act_district_change_control'),
+  ('district_remove_control', 'pallas_project.act_district_remove_control'),
+  ('district_change_influence', 'pallas_project.act_district_change_influence');
+
   -- Класс района
   perform data.create_class(
     'district',
     jsonb '[
       {"code": "is_visible", "value": true},
       {"code": "type", "value": "district"},
+      {"code": "actions_function", "value": "pallas_project.actgenerator_district"},
       {"code": "independent_from_actor_list_elements", "value": true},
       {"code": "independent_from_object_list_elements", "value": true},
       {
@@ -29,7 +35,11 @@ begin
         "value": {
           "title": "title",
           "groups": [
-            {"code": "group", "attributes": ["district_tax", "district_control", "district_influence", "district_population"]}
+            {
+              "code": "group",
+              "attributes": ["district_tax", "district_control", "district_influence", "district_population"],
+              "actions": ["change_administration_influence", "change_cartel_influence", "change_opa_influence", "set_administration_control", "set_cartel_control", "set_opa_control", "remove_control"]
+            }
           ]
         }
       }
