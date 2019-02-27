@@ -51,7 +51,7 @@ begin
         "groups": [
           {"code": "menu_notifications", "actions": ["notifications"]},
           {"code": "menu_lottery", "actions": ["lottery"]},
-          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "chats", "documents", "my_contracts", "my_organizations", "blogs", "claims", "important_notifications"]},
+          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "med_health", "chats", "documents", "my_contracts", "my_organizations", "blogs", "claims", "important_notifications"]},
           {"code": "menu_social", "actions": ["news", "all_chats", "debatles", "master_chats"]},
           {"code": "menu_info", "actions": ["all_contracts", "persons", "districts", "organizations"]},
           {"code": "menu_logout", "actions": ["logout"]},
@@ -122,6 +122,7 @@ begin
   perform pallas_project.init_economics();
   perform pallas_project.init_finances();
   perform pallas_project.init_districts();
+  perform pallas_project.init_medicine();
   perform pallas_project.init_persons();
   perform pallas_project.init_claims();
   perform pallas_project.init_organizations();

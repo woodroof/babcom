@@ -266,6 +266,17 @@ begin
   begin
     perform data.set_attribute_value(data.get_object_id('notifications'), 'redirect', to_jsonb(v_notifications_id), v_person_id);
   end;
+
+ -- Создадим "Состояние здоровья"
+  perform data.create_object(
+    v_person_code || '_med_health',
+    format(
+      '[
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "med_health", "value": {}}
+      ]',
+      v_person_id)::jsonb,
+    'med_health');
 end;
 $$
 language plpgsql;

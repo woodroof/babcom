@@ -9471,9 +9471,9 @@ begin
     null,
     jsonb_build_array(
       jsonb_build_object('code', 'title', 'value', v_message_title),
-      jsonb_build_object('code', 'blog_name', 'value', to_jsonb(v_blog_code)),
-      jsonb_build_object('code', 'blog_message_text', 'value', to_jsonb(v_message_text)),
-      jsonb_build_object('code', 'blog_message_time', 'value', to_jsonb(pp_utils.format_date(clock_timestamp())))
+      jsonb_build_object('code', 'blog_name', 'value', v_blog_code),
+      jsonb_build_object('code', 'blog_message_text', 'value', v_message_text),
+      jsonb_build_object('code', 'blog_message_time', 'value', pp_utils.format_date(clock_timestamp()))
     ),
     'blog_message');
   v_message_code := data.get_object_code(v_message_id);
@@ -13510,6 +13510,83 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_med_set_disease_level(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_med_set_disease_level(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_person_code text := json.get_string(in_params, 'person_code');
+  v_disease text := json.get_string_opt(in_params, 'disease', null);
+  v_level integer := json.get_integer_opt(in_params, 'level', null);
+  v_diagnosted integer := json.get_integer_opt(coalesce(in_user_params,'{}'::jsonb), 'diagnosted', null);
+
+  v_person_id integer := data.get_object_id(v_person_code);
+
+  v_med_health jsonb := data.get_attribute_value_for_update(v_person_code || '_med_health', 'med_health');
+  v_disease_params jsonb;
+  v_message_text text ;
+
+  v_time_to_next integer;
+  v_next_level integer;
+  v_job_id integer;
+
+  v_message_sent boolean := false;
+  v_changes jsonb[];
+begin
+
+  if v_disease is null or v_level is null then
+    v_disease := json.get_string(in_user_params, 'disease');
+    v_level := json.get_integer(in_user_params, 'level');
+  end if;
+
+  v_message_text := data.get_string_param('med_' || v_disease || '_' || v_level);
+  v_disease_params := data.get_param('med_' || v_disease );
+
+  select x.time, coalesce(x.next_level, v_level + 1) into v_time_to_next, v_next_level
+  from jsonb_to_record(jsonb_extract_path(v_disease_params, 'l'||v_level)) as x(time integer, next_level integer);
+
+  select x.job into v_job_id
+  from jsonb_to_record(jsonb_extract_path(v_med_health, v_disease)) as x(job integer);
+
+  delete from data.jobs where id = v_job_id;
+
+  if v_time_to_next is not null then
+    v_job_id := data.create_job(clock_timestamp() + (v_time_to_next::text || ' minutes')::interval, 
+      'pallas_project.job_med_set_disease_level', 
+      format('{"person_code": "%s", "disease": "%s", "level": %s}', v_person_code, v_disease, v_next_level)::jsonb);
+  end if;
+
+  if coalesce(v_message_text,'') <> '' then
+    perform pp_utils.add_notification(v_person_id, v_message_text);
+  end if;
+
+  v_med_health := jsonb_set(v_med_health, 
+    array[v_disease]::text[], 
+    jsonb_strip_nulls(format('{"level": %s, "start": "%s", "diagnosted": %s, "job": %s}', v_level, pp_utils.format_date(clock_timestamp()), coalesce(v_diagnosted::text,'null'), coalesce(v_job_id::text, 'null'))::jsonb));
+
+  v_changes := array[]::jsonb[];
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('med_health', v_med_health));
+  if in_request_id is not null and in_client_id is not null then
+      v_message_sent := data.change_current_object(in_client_id, 
+                                                   in_request_id,
+                                                   data.get_object_id(v_person_code || '_med_health'), 
+                                                   to_jsonb(v_changes));
+
+    if not v_message_sent then
+     perform api_utils.create_ok_notification(in_client_id, in_request_id);
+    end if;
+  else
+    perform data.change_object_and_notify(data.get_object_id(v_person_code || '_med_health'), 
+                                          to_jsonb(v_changes),
+                                          null);
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_open_object(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_open_object(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -15623,6 +15700,80 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.actgenerator_med_health(integer, integer);
+
+create or replace function pallas_project.actgenerator_med_health(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_actions_list text := '';
+  v_is_master boolean;
+  v_person_code text := replace(data.get_object_code(in_object_id),'_med_health','');
+  v_med_health jsonb := data.get_attribute_value_for_share(in_object_id, 'med_health');
+  v_level integer;
+
+begin
+  assert in_actor_id is not null;
+
+  v_is_master := pp_utils.is_in_group(in_actor_id, 'master');
+
+  select x.level into v_level
+  from jsonb_to_record(jsonb_extract_path(v_med_health, 'wound')) as x(level integer);
+
+  v_actions_list := v_actions_list || 
+        format(', "med_light_wound": {"code": "med_set_disease_level", "name": "Получил лёгкое ранение (конечности)", "disabled": %s,'||
+                '"params": {"person_code": "%s", "disease": "wound", "level": 1}}',
+                case when coalesce(v_level, 0) < 1 then 'false' else 'true' end,
+                v_person_code);
+  v_actions_list := v_actions_list || 
+        format(', "med_heavy_wound": {"code": "med_set_disease_level", "name": "Получил тяжёлое ранение (корпус)", "disabled": %s,'||
+                '"params": {"person_code": "%s", "disease": "wound", "level": 2}}',
+                case when coalesce(v_level, 0) < 2 then 'false' else 'true' end,
+                v_person_code);
+
+  select x.level into v_level
+  from jsonb_to_record(jsonb_extract_path(v_med_health, 'radiation')) as x(level integer);
+
+  v_actions_list := v_actions_list || 
+        format(', "med_irradiated": {"code": "med_set_disease_level", "name": "Получил дозу облучения", "disabled": %s,'||
+                '"params": {"person_code": "%s", "disease": "radiation", "level": 1}}',
+                case when coalesce(v_level, 0) < 1 then 'false' else 'true' end,
+                v_person_code);
+
+  if v_is_master then
+    select x.level into v_level
+    from jsonb_to_record(jsonb_extract_path(v_med_health, 'asthma')) as x(level integer);
+
+    v_actions_list := v_actions_list || 
+          format(', "med_add_asthma": {"code": "med_set_disease_level", "name": "Астма", "disabled": %s,'||
+                  '"params": {"person_code": "%s", "disease": "asthma", "level": 1}}',
+                  case when coalesce(v_level, 0) < 1 then 'false' else 'true' end,
+                  v_person_code);
+
+    select x.level into v_level
+    from jsonb_to_record(jsonb_extract_path(v_med_health, 'rio_miamore')) as x(level integer);
+    v_actions_list := v_actions_list || 
+          format(', "med_add_rio_miamore": {"code": "med_set_disease_level", "name": "Вирус Рио Миаморе", "disabled": %s,'||
+                  '"params": {"person_code": "%s", "disease": "rio_miamore", "level": 1}}',
+                  case when coalesce(v_level, 0) < 1 then 'false' else 'true' end,
+                  v_person_code);
+
+    select x.level into v_level
+    from jsonb_to_record(jsonb_extract_path(v_med_health, 'addiction')) as x(level integer);
+    v_actions_list := v_actions_list || 
+          format(', "med_add_addiction": {"code": "med_set_disease_level", "name": "Зависимость от стимулятора", "disabled": %s,'||
+                  '"params": {"person_code": "%s", "disease": "addiction", "level": 1}}',
+                  case when coalesce(v_level, 0) < 1 then 'false' else 'true' end,
+                  v_person_code);
+  end if;
+
+  return jsonb ('{'||trim(v_actions_list,',')||'}');
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.actgenerator_menu(integer, integer);
 
 create or replace function pallas_project.actgenerator_menu(in_object_id integer, in_actor_id integer)
@@ -15667,6 +15818,13 @@ begin
           "master_chats": {"code": "act_open_object", "name": "Связь с мастерами", "disabled": false, "params": {"object_code": "master_chats"}},
           "important_notifications": {"code": "act_open_object", "name": "Важные уведомления", "disabled": false, "params": {"object_code": "important_notifications"}}
         }';
+      v_actions :=
+          v_actions ||
+          format(
+            '{
+              "med_health": {"code": "act_open_object", "name": "Состояние здоровья", "disabled": false, "params": {"object_code": "%s_med_health"}}
+            }',
+            v_actor_code)::jsonb;
 
       if v_economy_type != 'fixed' then
         v_actions :=
@@ -16332,6 +16490,18 @@ begin
         end if;
       end if;
     end if;
+    v_actions :=
+            v_actions ||
+            format('{
+              "med_health": {
+                "code": "act_open_object",
+                "name": "Добавить болезней",
+                "disabled": false,
+                "params": {
+                  "object_code": "%s_med_health"
+                }
+              }
+            }', v_object_code)::jsonb;
   else
     if v_economy_type in (jsonb '"asters"', jsonb '"mcr"') then
       v_tax := pallas_project.get_person_tax_for_share(in_object_id);
@@ -17252,6 +17422,17 @@ begin
   begin
     perform data.set_attribute_value(data.get_object_id('notifications'), 'redirect', to_jsonb(v_notifications_id), v_person_id);
   end;
+
+ -- Создадим "Состояние здоровья"
+  perform data.create_object(
+    v_person_code || '_med_health',
+    format(
+      '[
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "med_health", "value": {}}
+      ]',
+      v_person_id)::jsonb,
+    'med_health');
 end;
 $$
 language plpgsql;
@@ -17722,7 +17903,7 @@ begin
         "groups": [
           {"code": "menu_notifications", "actions": ["notifications"]},
           {"code": "menu_lottery", "actions": ["lottery"]},
-          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "chats", "documents", "my_contracts", "my_organizations", "blogs", "claims", "important_notifications"]},
+          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "med_health", "chats", "documents", "my_contracts", "my_organizations", "blogs", "claims", "important_notifications"]},
           {"code": "menu_social", "actions": ["news", "all_chats", "debatles", "master_chats"]},
           {"code": "menu_info", "actions": ["all_contracts", "persons", "districts", "organizations"]},
           {"code": "menu_logout", "actions": ["logout"]},
@@ -17793,6 +17974,7 @@ begin
   perform pallas_project.init_economics();
   perform pallas_project.init_finances();
   perform pallas_project.init_districts();
+  perform pallas_project.init_medicine();
   perform pallas_project.init_persons();
   perform pallas_project.init_claims();
   perform pallas_project.init_organizations();
@@ -19365,6 +19547,7 @@ begin
   perform data.create_object('master', jsonb '{"priority": 190, "title": "Мастера"}', 'group');
 
   perform data.create_object('judge', jsonb '{"priority": 75, "title": "Судьи"}', 'group');
+  perform data.create_object('doctor', jsonb '{"priority": 76, "title": "Врачи"}', 'group');
 
 end;
 $$
@@ -19446,6 +19629,119 @@ begin
       end if;
     end loop;
   end;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.init_medicine();
+
+create or replace function pallas_project.init_medicine()
+returns void
+volatile
+as
+$$
+declare
+
+begin
+  -- Атрибуты 
+  insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
+  ('med_health', null, 'Состояние здоровья персонажа', 'hidden', null, null, false);
+-- {"wound": {"level": 3, "start": "20190226235817", "diagnosted": 5, "job": 4837438}, "radiation": {"level": 4, "start": "20190226225817", "diagnosted": 9, "job": 4837489}}
+
+  insert into data.params(code, value, description) values
+  ('med_wound', '{"l0": {}, "l1": {"time": 0}, "l2": {"time": 15}, "l3": {"time": 1}, "l4": {"time": 3}, "l5": {"time": 5}, "l6": {"time": 5}, "l7": {"time": 5}, "l8": {}}'::jsonb, 'Длительность этапов заболевания'),
+  ('med_wound_0', jsonb '"Вы чувствуете себя хорошо, ничего не болит."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_wound_1', jsonb '"Вам больно в месте ранения. Не можете прикасаться к ране и шевелить конечностью."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_wound_2', jsonb '"Вам очень больно, вы теряете много крови."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_wound_3', jsonb '"Вы теряете сознание. При осмотре доктором показываете рану и описываете характер повреждений."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_wound_4', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_wound_5', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_wound_6', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_wound_7', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_wound_8', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_radiation', '{"l0": {}, "l1": {"time": 3}, "l2": {"time": 3}, "l3": {"time": 3}, "l4": {"time": 5}, "l5": {"time": 5}, "l6": {}}'::jsonb, 'Длительность этапов заболевания'),
+  ('med_radiation_0', jsonb '"Вы чувствуете себя хорошо, все симптомы прошли."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_radiation_1', jsonb '"Ваша кожа очень чешется, вам больно к ней прикасаться."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_radiation_2', jsonb '"Кожа горит. Кожа очень болит, прикосновения вызывают сильнейшую боль. Вам очень хочется пить и подташнивает. Запахи еды отвратительны."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_radiation_3', jsonb '"Кожа очень болит, прикосновения вызывают сильнейшую боль. Сильная головная боль. Вы видите галлюцинации. Вспомните самый страшный ваш сон - он стал явью."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_radiation_4', jsonb '"Вам стремительно становится хуже. Вам нечем дышать от боли, вы теряете сознание. Доктору при осмотре не говорите ничего, так как при визуальном осмотре лучевую болезнь не видно."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_radiation_5', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_radiation_6', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_asthma', '{"l0": {}, "l1": {"time": 1}, "l2": {"time": 60}, "l3": {"time": 1}, "l4": {"time": 1}, "l5": {"time": 60}, "l6": {"time": 1}, "l7": {"time": 1}, "l8": {"time": 1, "next_level": 5}}'::jsonb, 'Длительность этапов заболевания'),
+  ('med_asthma_0', jsonb '"Вы чувствуете себя хорошо, все симптомы прошли."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_asthma_1', jsonb '"У вас жуткий приступ кашля. Пройдет через минуту или после того как вы попьёте горячего."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_asthma_2', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_asthma_3', jsonb '"У вас жуткий приступ кашля. Пройдет через минуту или после того как вы попьёте горячего."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_asthma_4', jsonb '"Вам становится трудно дышать. Вы ненадолго теряете сознание. Придёте в себя когда досчитаете до 60 или если вас приведут в чувство."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_asthma_5', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_asthma_6', jsonb '"У вас жуткий приступ кашля. Пройдет через минуту или после того как вы попьёте горячего."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_asthma_7', jsonb '"Вам становится трудно дышать. Вы ненадолго теряете сознание. Придёте в себя когда досчитаете до 60 или если вас приведут в чувство."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_asthma_8', jsonb '"Вы пришли в себя, но вам очень трудно дышать. Не можете стоять, быстро двигаться или говорить. Через минуту пройдет."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_rio_miamore', '{"l0": {}, "l1": {"time": 10}, "l2": {"time": 10}, "l3": {"time": 5}, "l4": {"time": 2}, "l5": {"time": 1}, "l6": {"time": 1}, "l7": {"time": 10}, "l8": {"time": 10}, "l9": {}}'::jsonb, 'Длительность этапов заболевания'),
+  ('med_rio_miamore_0', jsonb '"Вы чувствуете себя хорошо, все симптомы прошли."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_rio_miamore_1', jsonb '"У вас жуткий приступ кашля. Пройдет через минуту или после того как вы попьёте горячего."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_rio_miamore_2', jsonb '"У вас жуткий приступ кашля. Пройдет через минуту или после того как вы попьёте горячего."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_rio_miamore_3', jsonb '"У вас озноб. Вам холодно. Сильная слабость."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_rio_miamore_4', jsonb '"Вас знобит, у вас слабость. Ваша кожа очень чешется, вам больно к ней прикасаться. "', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_rio_miamore_5', jsonb '"Вам становится трудно дышать. Вы ненадолго теряете сознание. Придёте в себя когда досчитаете до 60 или если вас приведут в чувство."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_rio_miamore_6', jsonb '"Вы пришли в себя, но вам очень трудно дышать. Не можете стоять, быстро двигаться или говорить. Через минуту пройдет."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_rio_miamore_7', jsonb '"Вам очень больно. Боль пронизывает всё тело. Боль проходит, если не двигаться и лежать. Трудно дышать."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_rio_miamore_8', jsonb '"Вы парализованы. Можете только дышать и говорить."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_rio_miamore_9', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_addiction', '{"l0": {}, "l1": {"time": 120}, "l2": {"time": 5}, "l3": {"time": 20}, "l4": {"time": 20}, "l5": {"time": 20}, "l6": {"time": 20}, "l7": {"time": 15}, "l8": {"time": 15}, "l9": {"time": 5, "next_level": 0}}'::jsonb, 'Длительность этапов заболевания'),
+  ('med_addiction_0', jsonb '"Вы чувствуете себя хорошо, все симптомы прошли."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_addiction_1', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_addiction_2', jsonb '"Ваша кожа очень чешется. Выберите место на теле и чешите его периодически."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_addiction_3', jsonb '"Вам очень хочется пить. Выпейте не меньше 2-х стаканов. Или имитируйте."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_addiction_4', jsonb '"Руки трясутся, не можете работать и выполнять точные действия руками."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_addiction_5', jsonb '"Сильно кружится голова, не можете стоять. Через минуту всё пройдёт. Всё ещё не можете работать."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_addiction_6', jsonb '"Следующие 5 минут вам больно от яркого света и шума."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_addiction_7', jsonb '"Вы видите галлюцинации. Вспомните самый страшный ваш сон - он стал явью. И все вокруг участники этого кошмара. Приступ продлится 3 минуты."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_addiction_8', jsonb '"Агрессия. Вам хочется рвать и метать. Вы в ярости! Кричите, рвите! Не успокоитесь, пока не ударите человека или не сломаете что-нибудь."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_addiction_9', jsonb '"Вам очень больно. Боль пронизывает всё тело. Боль проходит, если не двигаться и лежать. Трудно дышать. Приступ продлится 5 минут."', 'Сообщение для игрока о состоянии заболевания');
+
+  -- Объект - страница для заявления заболеваний и ранений
+  perform data.create_class(
+  'med_health',
+  jsonb '[
+    {"code": "title", "value": "Состояние здоровья"},
+    {"code": "is_visible", "value": true, "value_object_code": "master"},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_med_health"},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [{"code": "health_group", 
+                    "actions": ["med_light_wound", "med_heavy_wound", "med_irradiated", "med_add_asthma", "med_add_rio_miamore", "med_add_addiction"]}]
+      }
+    }
+  ]');
+
+
+  perform data.create_class(
+  'medicine',
+  jsonb '[
+    {"code": "title", "value": "Медицинское обслуживание"},
+    {"code": "is_visible", "value": true, "value_object_code": "doctor"},
+    {"code": "is_visible", "value": true, "value_object_code": "master"},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_medicine"},
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [{"code": "medicine_group", 
+                    "actions": ["med_start_patient_reception"]}]
+      }
+    }
+  ]');
+
+  insert into data.actions(code, function) values
+  ('med_set_disease_level', 'pallas_project.act_med_set_disease_level'),
+  ('med_start_patient_reception','pallas_project.act_med_start_patient_reception');
 end;
 $$
 language plpgsql;
@@ -20291,7 +20587,8 @@ begin
               "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5",
               "change_un_rating",
               "change_opa_rating",
-              "change_district"
+              "change_district",
+              "med_health"
             ]
           },
           {
@@ -20472,6 +20769,20 @@ begin
   end if;
 
   -- todo
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.job_med_set_disease_level(jsonb);
+
+create or replace function pallas_project.job_med_set_disease_level(in_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+begin
+  perform pallas_project.act_med_set_disease_level(null, null, in_params, null, null);
 end;
 $$
 language plpgsql;

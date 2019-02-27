@@ -38,9 +38,9 @@ begin
     null,
     jsonb_build_array(
       jsonb_build_object('code', 'title', 'value', v_message_title),
-      jsonb_build_object('code', 'blog_name', 'value', to_jsonb(v_blog_code)),
-      jsonb_build_object('code', 'blog_message_text', 'value', to_jsonb(v_message_text)),
-      jsonb_build_object('code', 'blog_message_time', 'value', to_jsonb(pp_utils.format_date(clock_timestamp())))
+      jsonb_build_object('code', 'blog_name', 'value', v_blog_code),
+      jsonb_build_object('code', 'blog_message_text', 'value', v_message_text),
+      jsonb_build_object('code', 'blog_message_time', 'value', pp_utils.format_date(clock_timestamp()))
     ),
     'blog_message');
   v_message_code := data.get_object_code(v_message_id);

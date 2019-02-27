@@ -94,7 +94,8 @@ begin
               "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5",
               "change_un_rating",
               "change_opa_rating",
-              "change_district"
+              "change_district",
+              "med_health"
             ]
           },
           {

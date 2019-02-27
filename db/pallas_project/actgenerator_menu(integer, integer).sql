@@ -42,6 +42,13 @@ begin
           "master_chats": {"code": "act_open_object", "name": "Связь с мастерами", "disabled": false, "params": {"object_code": "master_chats"}},
           "important_notifications": {"code": "act_open_object", "name": "Важные уведомления", "disabled": false, "params": {"object_code": "important_notifications"}}
         }';
+      v_actions :=
+          v_actions ||
+          format(
+            '{
+              "med_health": {"code": "act_open_object", "name": "Состояние здоровья", "disabled": false, "params": {"object_code": "%s_med_health"}}
+            }',
+            v_actor_code)::jsonb;
 
       if v_economy_type != 'fixed' then
         v_actions :=
