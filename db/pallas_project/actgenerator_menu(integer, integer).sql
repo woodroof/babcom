@@ -84,6 +84,20 @@ begin
           "master_chats": {"code": "act_open_object", "name": "Мастерские чаты", "disabled": false, "params": {"object_code": "master_chats"}},
           "all_contracts": {"code": "act_open_object", "name": "Все контракты", "disabled": false, "params": {"object_code": "contracts"}}
         }';
+      if data.get_boolean_param('game_in_progress') then
+        v_actions :=
+          v_actions ||
+          jsonb '{
+            "finish_game": {
+              "code": "finish_game",
+              "name": "☠️ ЗАВЕРШИТЬ ИГРУ ☠️",
+              "warning": "Это действие разошлёт уведомление ВСЕМ ИГРОКАМ и прекратит работу экономики. Продолжить?",
+              "params": null,
+              "user_params": [
+                {"code": "confirm", "description": "Введите сюда \"ДА\"", "type": "string"}
+              ]}
+          }';
+      end if;
     end if;
 
     declare

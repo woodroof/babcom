@@ -54,7 +54,8 @@ begin
           {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "chats", "documents", "my_contracts", "my_organizations", "blogs", "claims", "important_notifications"]},
           {"code": "menu_social", "actions": ["news", "all_chats", "debatles", "master_chats"]},
           {"code": "menu_info", "actions": ["all_contracts", "persons", "districts", "organizations"]},
-          {"code": "menu_logout", "actions": ["logout"]}
+          {"code": "menu_logout", "actions": ["logout"]},
+          {"code": "menu_finish_game", "actions": ["finish_game"]}
         ]
       }
     }');
@@ -105,7 +106,8 @@ begin
   ('go_back', 'pallas_project.act_go_back'),
   ('create_random_person', 'pallas_project.act_create_random_person'),
   ('remove_notification', 'pallas_project.act_remove_notification'),
-  ('clear_notifications', 'pallas_project.act_clear_notifications');
+  ('clear_notifications', 'pallas_project.act_clear_notifications'),
+  ('finish_game', 'pallas_project.act_finish_game');
 
   -- Базовые классы
   perform data.create_class(
@@ -131,7 +133,7 @@ begin
   perform pallas_project.init_documents();
   perform pallas_project.init_lottery();
   perform pallas_project.init_blogs();
-
+  perform pallas_project.init_cycles();
 end;
 $$
 language plpgsql;

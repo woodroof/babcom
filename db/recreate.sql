@@ -13263,6 +13263,62 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_finish_game(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_finish_game(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_confirm text := json.get_string(in_user_params, 'confirm');
+  v_param jsonb;
+  v_person_id integer;
+  v_value integer;
+begin
+  if v_confirm != 'ДА' then
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Не в этот раз', 'Игра продолжается!');
+    return;
+  end if;
+
+  select value
+  into v_param
+  from data.params
+  where code = 'game_in_progress'
+  for update;
+
+  if v_param != jsonb 'true' then
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Игра уже завершена!');
+    return;
+  end if;
+
+  update data.params
+  set value = jsonb 'false'
+  where code = 'game_in_progress';
+
+  for v_person_id in
+  (
+    select object_id
+    from data.object_objects
+    where
+      parent_object_id = data.get_object_id('all_person') and
+      object_id != parent_object_id
+  )
+  loop
+    perform pp_utils.add_notification(v_person_id, E'Игра завершена!\nБазовые функции ещё будут работать некоторое время, но экономические циклы более не меняются.\nВсем спасибо за участие!');
+  end loop;
+
+  -- Перегенерируем меню
+  v_value := json.get_integer(data.get_attribute_value_for_update('menu', 'force_object_diff'));
+  perform data.change_object_and_notify(data.get_object_id('menu'), format('{"force_object_diff": %s}', v_value + 1)::jsonb);
+
+  perform pallas_project.send_to_master_chat('Игра завершена');
+
+  perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Игра завершена', 'Иди отдыхай уже!');
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_finish_lottery(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_finish_lottery(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -15653,6 +15709,20 @@ begin
           "master_chats": {"code": "act_open_object", "name": "Мастерские чаты", "disabled": false, "params": {"object_code": "master_chats"}},
           "all_contracts": {"code": "act_open_object", "name": "Все контракты", "disabled": false, "params": {"object_code": "contracts"}}
         }';
+      if data.get_boolean_param('game_in_progress') then
+        v_actions :=
+          v_actions ||
+          jsonb '{
+            "finish_game": {
+              "code": "finish_game",
+              "name": "☠️ ЗАВЕРШИТЬ ИГРУ ☠️",
+              "warning": "Это действие разошлёт уведомление ВСЕМ ИГРОКАМ и прекратит работу экономики. Продолжить?",
+              "params": null,
+              "user_params": [
+                {"code": "confirm", "description": "Введите сюда \"ДА\"", "type": "string"}
+              ]}
+          }';
+      end if;
     end if;
 
     declare
@@ -17655,7 +17725,8 @@ begin
           {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "chats", "documents", "my_contracts", "my_organizations", "blogs", "claims", "important_notifications"]},
           {"code": "menu_social", "actions": ["news", "all_chats", "debatles", "master_chats"]},
           {"code": "menu_info", "actions": ["all_contracts", "persons", "districts", "organizations"]},
-          {"code": "menu_logout", "actions": ["logout"]}
+          {"code": "menu_logout", "actions": ["logout"]},
+          {"code": "menu_finish_game", "actions": ["finish_game"]}
         ]
       }
     }');
@@ -17706,7 +17777,8 @@ begin
   ('go_back', 'pallas_project.act_go_back'),
   ('create_random_person', 'pallas_project.act_create_random_person'),
   ('remove_notification', 'pallas_project.act_remove_notification'),
-  ('clear_notifications', 'pallas_project.act_clear_notifications');
+  ('clear_notifications', 'pallas_project.act_clear_notifications'),
+  ('finish_game', 'pallas_project.act_finish_game');
 
   -- Базовые классы
   perform data.create_class(
@@ -17732,7 +17804,7 @@ begin
   perform pallas_project.init_documents();
   perform pallas_project.init_lottery();
   perform pallas_project.init_blogs();
-
+  perform pallas_project.init_cycles();
 end;
 $$
 language plpgsql;
@@ -18123,6 +18195,60 @@ $$
 begin
   perform pallas_project.create_contract('player2', 'org_de_beers', 'suspended', '100', 'Работай и зарабатывай');
   perform pallas_project.create_contract('player4', 'org_administration', 'active', '120', 'Работай и зарабатывай');
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.init_cycles();
+
+create or replace function pallas_project.init_cycles()
+returns void
+volatile
+as
+$$
+declare
+  v_time timestamp with time zone;
+  v_cycle_times timestamp with time zone[] :=
+    array[
+      timestamp with time zone '2019-03-08 20:00:00',
+      timestamp with time zone '2019-03-09 02:00:00',
+      timestamp with time zone '2019-03-09 13:00:00',
+      timestamp with time zone '2019-03-09 18:00:00',
+      timestamp with time zone '2019-03-09 22:00:00',
+      timestamp with time zone '2019-03-10 01:00:00'];
+begin
+  insert into data.params(code, value, description) values
+  ('game_in_progress', jsonb 'true', 'Признак того, что игра ещё не закочилась');
+
+  -- Уведомления за час до конца цикла
+  for v_time in
+  (
+    select value - interval '1 hour'
+    from unnest(v_cycle_times) a(value)
+  )
+  loop
+    perform data.create_job(v_time, 'pallas_project.job_notify_players_for_cycle_end', null);
+  end loop;
+
+  -- Уведомление в мастерский чат за 15 минут до конца цикла
+  for v_time in
+  (
+    select value - interval '15 minute'
+    from unnest(v_cycle_times) a(value)
+  )
+  loop
+    perform data.create_job(v_time, 'pallas_project.job_notify_masters_for_cycle_end', null);
+  end loop;
+
+  -- Циклы
+  for v_time in
+  (
+    select value
+    from unnest(v_cycle_times) a(value)
+  )
+  loop
+    perform data.create_job(v_time, 'pallas_project.job_cycle', null);
+  end loop;
 end;
 $$
 language plpgsql;
@@ -20333,6 +20459,65 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.job_cycle(jsonb);
+
+create or replace function pallas_project.job_cycle(in_params jsonb)
+returns void
+volatile
+as
+$$
+begin
+  if not data.get_boolean_param('game_in_progress') then
+    return;
+  end if;
+
+  -- todo
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.job_notify_masters_for_cycle_end(jsonb);
+
+create or replace function pallas_project.job_notify_masters_for_cycle_end(in_params jsonb)
+returns void
+volatile
+as
+$$
+begin
+  if data.get_boolean_param('game_in_progress') then
+    perform pallas_project.send_to_master_chat('До конца цикла осталось 15 минут, пора подводить итоги!');
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.job_notify_players_for_cycle_end(jsonb);
+
+create or replace function pallas_project.job_notify_players_for_cycle_end(in_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_person_id integer;
+begin
+  if data.get_boolean_param('game_in_progress') then
+    for v_person_id in
+    (
+      select object_id
+      from data.object_objects
+      where
+        parent_object_id = data.get_object_id('all_person') and
+        object_id != parent_object_id
+    )
+    loop
+      perform pp_utils.add_notification(v_person_id, 'До конца цикла остался один час!');
+    end loop;
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.lef_chat_temp_person_list(integer, text, integer, integer);
 
 create or replace function pallas_project.lef_chat_temp_person_list(in_client_id integer, in_request_id text, in_object_id integer, in_list_object_id integer)
@@ -20807,7 +20992,7 @@ $$
 declare
   v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_system_person_notification_count_attr_id integer := data.get_attribute_id('system_person_notification_count');
-  v_redirect_object_code text := data.get_object_code(json.get_integer(data.get_raw_attribute_value(in_list_object_id, 'redirect')));
+  v_redirect_object_id integer := json.get_integer_opt(data.get_raw_attribute_value(in_list_object_id, 'redirect'), null);
   v_content_attr_id integer := data.get_attribute_id('content');
   v_notifications_count integer := json.get_integer(data.get_attribute_value_for_update(v_actor_id, v_system_person_notification_count_attr_id)) - 1;
   v_content text[] :=
@@ -20815,7 +21000,11 @@ declare
       json.get_string_array(data.get_raw_attribute_value_for_update(in_object_id, v_content_attr_id)),
       data.get_object_code(in_list_object_id));
 begin
-  perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, v_redirect_object_code);
+  if v_redirect_object_id is not null then
+    perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, data.get_object_code(v_redirect_object_id));
+  else
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
 
   perform data.set_attribute_value(in_list_object_id, 'is_visible', jsonb 'false', v_actor_id);
   perform data.change_object_and_notify(
