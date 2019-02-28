@@ -10,11 +10,7 @@ v_object_code text := json.get_string(in_params, 'object_code');
 begin
   assert in_request_id is not null;
 
-  perform api_utils.create_notification(
-    in_client_id,
-    in_request_id,
-    'action',
-    format('{"action": "open_object", "action_data": {"object_id": "%s"}}', v_object_code)::jsonb);
+  perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, v_object_code);
 end;
 $$
 language plpgsql;

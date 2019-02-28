@@ -13750,24 +13750,34 @@ end;
 $$
 language plpgsql;
 
--- drop function pallas_project.act_med_set_disease_level(integer, text, jsonb, jsonb, jsonb);
+-- drop function pallas_project.act_med_cure(integer, text, jsonb, jsonb, jsonb);
 
-create or replace function pallas_project.act_med_set_disease_level(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+create or replace function pallas_project.act_med_cure(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
 returns void
 volatile
 as
 $$
 declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_med_computer_code text := json.get_string(in_params, 'med_computer_code');
   v_person_code text := json.get_string(in_params, 'person_code');
-  v_disease text := json.get_string_opt(in_params, 'disease', null);
-  v_level integer := json.get_integer_opt(in_params, 'level', null);
-  v_diagnosted integer := json.get_integer_opt(coalesce(in_user_params,'{}'::jsonb), 'diagnosted', null);
+  v_med_health jsonb := to_jsonb(json.get_string(in_user_params, 'med_health'));
+  v_med_clinic_money integer := json.get_integer(in_user_params, 'med_clinic_money');
+  v_disease text;
+  v_level integer;
+  v_diagnosted integer;
 
   v_person_id integer := data.get_object_id(v_person_code);
+  v_child_person_id integer;
 
-  v_med_health jsonb := data.get_attribute_value_for_update(v_person_code || '_med_health', 'med_health');
+  v_old_med_health jsonb;
+  v_old_level integer;
+
   v_disease_params jsonb;
   v_message_text text ;
+
+  v_health_care_status integer;
+  v_orig_health_care_status integer;
 
   v_time_to_next integer;
   v_next_level integer;
@@ -13777,10 +13787,154 @@ declare
   v_changes jsonb[];
 begin
 
+  v_person_id := json.get_integer_opt(data.get_attribute_value(v_person_id, 'system_person_original_id'), v_person_id);
+  v_person_code := data.get_object_code(v_person_id);
+
+  v_old_med_health := coalesce(data.get_attribute_value_for_update(v_person_code || '_med_health', 'med_health'), jsonb '{}');
+
+  for v_disease in (select * from jsonb_object_keys(v_med_health)) loop
+    select x.job, x.level into v_job_id, v_old_level
+    from jsonb_to_record(jsonb_extract_path(v_old_med_health, v_disease)) as x(job integer, level integer);
+    select x.level, x_diagnosted into v_level, v_diagnosted
+    from jsonb_to_record(jsonb_extract_path(v_med_health, v_disease)) as x(level integer, diagnosted integer);
+
+    if v_level is null then 
+      v_level := 0;
+    end if;
+    if coalesce(v_old_level, 0) <> v_level then
+
+      v_message_text := data.get_string_param('med_' || v_disease || '_' || v_level);
+      v_disease_params := data.get_param('med_' || v_disease );
+      select x.time, coalesce(x.next_level, v_level + 1) into v_time_to_next, v_next_level
+      from jsonb_to_record(jsonb_extract_path(v_disease_params, 'l'||v_level)) as x(time integer, next_level integer);
+
+      delete from data.jobs where id = v_job_id;
+
+      if v_time_to_next is not null then
+        v_job_id := data.create_job(clock_timestamp() + (v_time_to_next::text || ' minutes')::interval, 
+          'pallas_project.job_med_set_disease_level', 
+          format('{"person_code": "%s", "disease": "%s", "level": %s}', v_person_code, v_disease, v_next_level)::jsonb);
+      end if;
+
+      if coalesce(v_message_text,'') <> '' then
+        perform pp_utils.add_notification(v_person_id, v_message_text);
+        for v_child_person_id in (select * from unnest(json.get_integer_array_opt(data.get_attribute_value(v_person_id, ''), array[]::integer[]))) loop
+          perform pp_utils.add_notification(v_child_person_id, v_message_text);
+        end loop;
+      end if;
+
+      v_med_health := jsonb_set(v_med_health, 
+                                array[v_disease]::text[], 
+                                jsonb_strip_nulls(format('{"level": %s, "start": "%s", "diagnosted": %s, "job": %s}', 
+                                                          v_level, 
+                                                          pp_utils.format_date(clock_timestamp()), 
+                                                          coalesce(v_diagnosted::text, 'null'), 
+                                                          coalesce(v_job_id::text, 'null')
+                                                        )::jsonb));
+
+    end if;
+  end loop;
+
+  if pp_utils.is_in_group(v_actor_id, 'unofficial_doctor') then
+    v_changes := array[]::jsonb[];
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('system_money', to_jsonb(v_med_clinic_money)));
+    perform data.change_object_and_notify(data.get_object_id('org_clean_asteroid'), 
+                                         to_jsonb(v_changes),
+                                         null);
+  end if;
+
+  v_changes := array[]::jsonb[];
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('med_health', v_med_health));
+  perform data.change_object_and_notify(data.get_object_id(v_person_code || '_med_health'), 
+                                        to_jsonb(v_changes),
+                                        null);
+  if pp_utils.is_in_group(v_actor_id, 'unofficial_doctor') then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('med_clinic_money', to_jsonb(v_med_clinic_money)));
+  end if;
+
+  select coalesce(max(json.get_integer_opt(data.get_attribute_value_for_share(x, 'system_person_health_care_status'), 0)), 0) into v_health_care_status 
+    from unnest(json.get_integer_array_opt(data.get_attribute_value(v_person_id, 'system_person_doubles_id_list'), array[]::integer[])) as x;
+  v_orig_health_care_status := json.get_integer_opt(data.get_attribute_value_for_share(v_person_id, 'system_person_health_care_status'), 0);
+  if v_orig_health_care_status > v_health_care_status then
+    v_health_care_status := v_orig_health_care_status;
+  end if;
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('med_health_care_status', to_jsonb(v_health_care_status)));
+
+  v_message_sent := data.change_current_object(in_client_id, 
+                                               in_request_id,
+                                               data.get_object_id(v_med_computer_code), 
+                                               to_jsonb(v_changes));
+  if not v_message_sent then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
+  end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_med_open_medicine(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_med_open_medicine(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_med_comp_client_ids integer[] := data.get_integer_array(data.get_param('med_comp_client_ids'));
+  v_object_code text;
+begin
+  assert in_request_id is not null;
+  if array_position(v_med_comp_client_ids, coalesce(in_client_id, 0)) is not null then
+    v_object_code := 'medicine';
+  else
+    v_object_code := 'wrong_medicine';
+  end if;
+  perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, v_object_code);
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_med_set_disease_level(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_med_set_disease_level(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_med_computer_code text := json.get_string_opt(in_params, 'med_computer_code', null);
+  v_person_code text := json.get_string(in_params, 'person_code');
+  v_disease text := json.get_string_opt(in_params, 'disease', null);
+  v_level integer := json.get_integer_opt(in_params, 'level', null);
+  v_diagnosted integer := json.get_integer_opt(coalesce(in_user_params,'{}'::jsonb), 'diagnosted', null);
+
+  v_person_id integer := data.get_object_id(v_person_code);
+  v_child_person_id integer;
+
+  v_med_health jsonb;
+  v_disease_params jsonb;
+  v_message_text text ;
+
+  v_time_to_next integer;
+  v_next_level integer;
+  v_job_id integer;
+
+  v_clinic_money bigint;
+  v_health_care_status integer;
+  v_orig_health_care_status integer;
+
+  v_message_sent boolean := false;
+  v_changes jsonb[];
+begin
   if v_disease is null or v_level is null then
     v_disease := json.get_string(in_user_params, 'disease');
     v_level := json.get_integer(in_user_params, 'level');
   end if;
+
+  v_person_id := json.get_integer_opt(data.get_attribute_value(v_person_id, 'system_person_original_id'), v_person_id);
+  v_person_code := data.get_object_code(v_person_id);
+
+  v_med_health := data.get_attribute_value_for_update(v_person_code || '_med_health', 'med_health');
 
   v_message_text := data.get_string_param('med_' || v_disease || '_' || v_level);
   v_disease_params := data.get_param('med_' || v_disease );
@@ -13801,6 +13955,9 @@ begin
 
   if coalesce(v_message_text,'') <> '' then
     perform pp_utils.add_notification(v_person_id, v_message_text);
+    for v_child_person_id in (select * from unnest(json.get_integer_array_opt(data.get_attribute_value(v_person_id, 'system_person_doubles_id_list'), array[]::integer[]))) loop
+      perform pp_utils.add_notification(v_child_person_id, v_message_text);
+    end loop;
   end if;
 
   v_med_health := jsonb_set(v_med_health, 
@@ -13809,7 +13966,7 @@ begin
 
   v_changes := array[]::jsonb[];
     v_changes := array_append(v_changes, data.attribute_change2jsonb('med_health', v_med_health));
-  if in_request_id is not null and in_client_id is not null then
+  if in_request_id is not null and in_client_id is not null and v_med_computer_code is null then
       v_message_sent := data.change_current_object(in_client_id, 
                                                    in_request_id,
                                                    data.get_object_id(v_person_code || '_med_health'), 
@@ -13822,7 +13979,92 @@ begin
     perform data.change_object_and_notify(data.get_object_id(v_person_code || '_med_health'), 
                                           to_jsonb(v_changes),
                                           null);
+    if v_med_computer_code is not null then
+      if pp_utils.is_in_group(v_actor_id, 'unofficial_doctor') then
+        v_clinic_money := json.get_bigint_opt(data.get_attribute_value_for_share('org_clean_asteroid', 'system_money'), null);
+        v_changes := array_append(v_changes, data.attribute_change2jsonb('med_clinic_money', to_jsonb(v_clinic_money)));
+      end if;
+
+      select coalesce(max(json.get_integer_opt(data.get_attribute_value_for_share(x, 'system_person_health_care_status'), 0)), 0) into v_health_care_status 
+        from unnest(json.get_integer_array_opt(data.get_attribute_value(v_person_id, 'system_person_doubles_id_list'), array[]::integer[])) as x;
+      v_orig_health_care_status := json.get_integer_opt(data.get_attribute_value_for_share(v_person_id, 'system_person_health_care_status'), 0);
+      if v_orig_health_care_status > v_health_care_status then
+        v_health_care_status := v_orig_health_care_status;
+      end if;
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('med_health_care_status', to_jsonb(v_health_care_status)));
+
+      v_message_sent := data.change_current_object(in_client_id, 
+                                                   in_request_id,
+                                                   data.get_object_id(v_med_computer_code), 
+                                                   to_jsonb(v_changes));
+      if not v_message_sent then
+       perform api_utils.create_ok_notification(in_client_id, in_request_id);
+      end if;
+    end if;
   end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_med_start_patient_reception(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_med_start_patient_reception(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_patient_login text := json.get_string(in_user_params, 'patient_login');
+  v_med_comp_client_ids integer[] := data.get_integer_array(data.get_param('med_comp_client_ids'));
+  v_object_id integer;
+  v_object_code text;
+  v_person_id integer;
+  v_med_health jsonb;
+  v_clinic_money bigint;
+  v_health_care_status integer;
+  v_orig_health_care_status integer;
+  v_attributes jsonb;
+begin
+  assert in_request_id is not null;
+  if array_position(v_med_comp_client_ids, coalesce(in_client_id, 0)) is null then
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Зайдите со стационарного медицинского компьютера');
+    return;
+  end if;
+  select min(la.actor_id) into v_person_id from data.logins l
+    inner join data.login_actors la on l.id = la.login_id
+  where l.code = v_patient_login;
+
+  v_person_id := json.get_integer_opt(data.get_attribute_value(v_person_id, 'system_person_original_id'), v_person_id);
+
+  v_med_health := coalesce(data.get_attribute_value(data.get_object_code(v_person_id) || '_med_health', 'med_health'), jsonb '{}');
+
+ select coalesce(max(json.get_integer_opt(data.get_attribute_value_for_share(x, 'system_person_health_care_status'), 0)), 0) into v_health_care_status 
+  from unnest(json.get_integer_array_opt(data.get_attribute_value(v_person_id, 'system_person_doubles_id_list'), array[]::integer[])) as x;
+  v_orig_health_care_status := json.get_integer_opt(data.get_attribute_value_for_share(v_person_id, 'system_person_health_care_status'), 0);
+  if v_orig_health_care_status > v_health_care_status then
+    v_health_care_status := v_orig_health_care_status;
+  end if;
+
+  v_attributes :=  jsonb_build_object('med_person_code', data.get_object_code(v_person_id),
+    'med_health', v_med_health,
+    'med_health_care_status', v_health_care_status
+  );
+
+  if pp_utils.is_in_group(v_actor_id, 'unofficial_doctor') then
+    v_clinic_money := json.get_bigint_opt(data.get_attribute_value('org_clean_asteroid', 'system_money'), 0);
+    v_attributes := v_attributes || jsonb_build_object('med_clinic_money', v_clinic_money);
+  end if;
+
+  v_object_id := data.create_object(
+  null,
+  v_attributes,
+  'med_computer');
+
+  v_object_code := data.get_object_code(v_object_id);
+
+
+  perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, v_object_code);
 end;
 $$
 language plpgsql;
@@ -13839,11 +14081,7 @@ v_object_code text := json.get_string(in_params, 'object_code');
 begin
   assert in_request_id is not null;
 
-  perform api_utils.create_notification(
-    in_client_id,
-    in_request_id,
-    'action',
-    format('{"action": "open_object", "action_data": {"object_id": "%s"}}', v_object_code)::jsonb);
+  perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, v_object_code);
 end;
 $$
 language plpgsql;
@@ -15940,6 +16178,62 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.actgenerator_med_computer(integer, integer);
+
+create or replace function pallas_project.actgenerator_med_computer(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_actions_list text := '';
+  v_is_master boolean;
+  v_medcomputer_code text := data.get_object_code(in_object_id);
+  v_person_code text := json.get_string(data.get_attribute_value_for_share(in_object_id, 'med_person_code'));
+  v_med_health jsonb := data.get_attribute_value_for_share(in_object_id, 'med_health');
+  v_level integer;
+  v_disease_params jsonb;
+  v_time_to_next integer;
+  v_next_level integer;
+  v_disease text;
+begin
+  assert in_actor_id is not null;
+
+  for v_disease in (select * from unnest(array['wound', 'radiation', 'asthma', 'rio_miamore', 'addiction'])) loop
+    select x.level into v_level
+    from jsonb_to_record(jsonb_extract_path(v_med_health, v_disease)) as x(level integer);
+    v_disease_params := data.get_param('med_' || v_disease );
+
+    if coalesce(v_level, 0) <> 0 then
+      select x.time, coalesce(x.next_level, v_level + 1) into v_time_to_next, v_next_level
+      from jsonb_to_record(jsonb_extract_path(v_disease_params, 'l' || v_level)) as x(time integer, next_level integer);
+
+      v_actions_list := v_actions_list || 
+            format(', "med_diagnose_%s": {"code": "med_set_disease_level", "name": "%s", "disabled": false,'||
+                    '"params": {"med_computer_code": "%s", "person_code": "%s", "disease": "%s", "level": %s}, 
+                    "user_params": [{"code": "diagnosted", "description": "diagnosted", "type": "integer"}]}',
+                    v_disease,
+                    v_disease,
+                    v_medcomputer_code,
+                    v_person_code,
+                    v_disease,
+                    case when v_time_to_next is not null then v_next_level else v_level end);
+    end if;
+  end loop;
+
+  v_actions_list := v_actions_list || 
+        format(', "med_cure": {"code": "med_cure", "name": "med_cure", "disabled": false,'||
+                '"params": {"med_computer_code": "%s", "person_code": "%s"},
+                "user_params": [{"code": "med_health", "description": "med_health", "type": "jsonb"}, 
+                                {"code": "med_clinic_money", "description": "med_clinic_money", "type": "integer"}]}',
+                v_medcomputer_code,
+                v_person_code);
+
+  return jsonb ('{'||trim(v_actions_list,',')||'}');
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.actgenerator_med_health(integer, integer);
 
 create or replace function pallas_project.actgenerator_med_health(in_object_id integer, in_actor_id integer)
@@ -16014,6 +16308,33 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.actgenerator_medicine(integer, integer);
+
+create or replace function pallas_project.actgenerator_medicine(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_actions jsonb := '{}';
+begin
+  assert in_actor_id is not null;
+    v_actions :=
+      v_actions ||
+      jsonb '{"med_start_patient_reception": 
+                {"code": "med_start_patient_reception", 
+                 "name": "Начать приём пациента", 
+                 "disabled": false, 
+                 "params": {}, 
+                 "user_params": [{"code": "patient_login", 
+                                  "description": "Попросите пациента ввести свой пароль для идентификации", 
+                                  "type": "string", 
+                                  "restrictions": {"password": true}}]}}';
+  return v_actions;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.actgenerator_menu(integer, integer);
 
 create or replace function pallas_project.actgenerator_menu(in_object_id integer, in_actor_id integer)
@@ -16026,8 +16347,14 @@ declare
   v_actions jsonb := '{}';
   v_is_master boolean;
   v_economy_type text;
+  v_original_person_id integer;
+  v_original_person_code text;
+
 begin
   assert in_actor_id is not null;
+
+  v_original_person_id := json.get_integer_opt(data.get_attribute_value(in_actor_id, 'system_person_original_id'), in_actor_id);
+  v_original_person_code := data.get_object_code(v_original_person_id);
 
   -- Тут порядок не важен, т.к. он задаётся в шаблоне
 
@@ -16064,7 +16391,7 @@ begin
             '{
               "med_health": {"code": "act_open_object", "name": "Состояние здоровья", "disabled": false, "params": {"object_code": "%s_med_health"}}
             }',
-            v_actor_code)::jsonb;
+            v_original_person_code)::jsonb;
 
       if v_economy_type != 'fixed' then
         v_actions :=
@@ -16187,6 +16514,14 @@ begin
         "claims": {"code": "act_open_object", "name": "Судебные иски", "disabled": false, "params": {"object_code": "claims"}},
         "logout": {"code": "logout", "name": "Выход", "disabled": false, "params": {}}
       }';
+    if pp_utils.is_in_group(in_actor_id, 'doctor') then
+      v_actions :=
+        v_actions ||
+        jsonb '{
+          "medicine": {"code": "med_open_medicine", "name": "💉Медицина💉", "disabled": false, "params": {}}
+        }';
+    end if;
+
   end if;
 
   v_actions :=
@@ -16730,18 +17065,20 @@ begin
         end if;
       end if;
     end if;
-    v_actions :=
-            v_actions ||
-            format('{
-              "med_health": {
-                "code": "act_open_object",
-                "name": "Добавить болезней",
-                "disabled": false,
-                "params": {
-                  "object_code": "%s_med_health"
+    if pp_utils.is_in_group(in_object_id, 'all_person') then
+      v_actions :=
+              v_actions ||
+              format('{
+                "med_health": {
+                  "code": "act_open_object",
+                  "name": "Добавить болезней",
+                  "disabled": false,
+                  "params": {
+                    "object_code": "%s_med_health"
+                  }
                 }
-              }
-            }', v_object_code)::jsonb;
+              }', v_object_code)::jsonb;
+    end if;
   else
     if v_economy_type in (jsonb '"asters"', jsonb '"mcr"') then
       v_tax := pallas_project.get_person_tax_for_share(in_object_id);
@@ -18136,7 +18473,7 @@ begin
           {"code": "menu_notifications", "actions": ["notifications"]},
           {"code": "menu_lottery", "actions": ["lottery"]},
           {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "med_health", "chats", "documents", "my_contracts", "my_organizations", "blogs", "claims", "important_notifications"]},
-          {"code": "menu_social", "actions": ["news", "all_chats", "debatles", "master_chats"]},
+          {"code": "menu_social", "actions": ["news", "all_chats", "debatles", "master_chats", "medicine"]},
           {"code": "menu_info", "actions": ["all_contracts", "persons", "districts", "organizations"]},
           {"code": "menu_finish_game", "actions": ["finish_game"]},
           {"code": "menu_logout", "actions": ["logout"]}
@@ -19781,6 +20118,7 @@ begin
 
   perform data.create_object('judge', jsonb '{"priority": 75, "title": "Судьи"}', 'group');
   perform data.create_object('doctor', jsonb '{"priority": 76, "title": "Врачи"}', 'group');
+  perform data.create_object('unofficial_doctor', jsonb '{"priority": 74, "title": "Неофициальные рачи"}', 'group');
 
 end;
 $$
@@ -19878,11 +20216,15 @@ declare
 begin
   -- Атрибуты 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
-  ('med_health', null, 'Состояние здоровья персонажа', 'hidden', null, null, false);
--- {"wound": {"level": 3, "start": "20190226235817", "diagnosted": 5, "job": 4837438}, "radiation": {"level": 4, "start": "20190226225817", "diagnosted": 9, "job": 4837489}}
+  ('med_health', null, 'Состояние здоровья персонажа', 'hidden', null, null, false),
+-- *format med_health*{"wound": {"level": 3, "start": "26.02.2019 23:58:17", "diagnosted": 5, "job": 4837438}, "radiation": {"level": 4, "start": "26.02.2019 23:58:30", "diagnosted": 9, "job": 4837489}}
+  ('med_clinic_money', null, 'Остаток на счету клиники', 'hidden', null, null, false),
+  ('med_person_code', null, 'Код пациента', 'hidden', null, null, false),
+  ('med_health_care_status', null, 'Статус обслуживания пациента', 'hidden', null, null, false);
 
   insert into data.params(code, value, description) values
-  ('med_wound', '{"l0": {}, "l1": {"time": 0}, "l2": {"time": 15}, "l3": {"time": 1}, "l4": {"time": 3}, "l5": {"time": 5}, "l6": {"time": 5}, "l7": {"time": 5}, "l8": {}}'::jsonb, 'Длительность этапов заболевания'),
+  ('med_comp_client_ids', jsonb '[1, 2]', 'client_id медицинского компьютера'),
+  ('med_wound', '{"l0": {}, "l1": {"time": 5}, "l2": {"time": 15}, "l3": {"time": 1}, "l4": {"time": 3}, "l5": {"time": 5}, "l6": {"time": 5}, "l7": {"time": 5}, "l8": {}}'::jsonb, 'Длительность этапов заболевания'),
   ('med_wound_0', jsonb '"Вы чувствуете себя хорошо, ничего не болит."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_wound_1', jsonb '"Вам больно в месте ранения. Не можете прикасаться к ране и шевелить конечностью."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_wound_2', jsonb '"Вам очень больно, вы теряете много крови."', 'Сообщение для игрока о состоянии заболевания'),
@@ -19953,13 +20295,11 @@ begin
     }
   ]');
 
-
-  perform data.create_class(
+  perform data.create_object(
   'medicine',
   jsonb '[
     {"code": "title", "value": "Медицинское обслуживание"},
     {"code": "is_visible", "value": true, "value_object_code": "doctor"},
-    {"code": "is_visible", "value": true, "value_object_code": "master"},
     {"code": "actions_function", "value": "pallas_project.actgenerator_medicine"},
     {
       "code": "template",
@@ -19972,9 +20312,53 @@ begin
     }
   ]');
 
+  perform data.create_object(
+  'wrong_medicine',
+  jsonb '[
+    {"code": "title", "value": "Медицинское обслуживание"},
+    {"code": "is_visible", "value": true, "value_object_code": "doctor"},
+    {"code": "description", "value": "Зайдите со стационарного медицинского компьютера"},
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [{"code": "medicine_group", 
+                    "attributes": ["description"]}]
+      }
+    }
+  ]');
+
+  perform data.create_class(
+  'med_computer',
+  jsonb '[
+    {"code": "title", "value": "Медицинский компьютер"},
+    {"code": "type", "value": "med_computer"},
+    {"code": "is_visible", "value": true, "value_object_code": "master"},
+    {"code": "is_visible", "value": true, "value_object_code": "doctor"},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_med_computer"},
+    {"code": "temporary_object", "value": true},
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [{"code": "diagnostics_group", 
+                    "actions": ["med_diagnose_wound", 
+                                "med_diagnose_radiation", 
+                                "med_diagnose_asthma", 
+                                "med_diagnose_rio_miamore", 
+                                "med_diagnose_addiction",
+                                "med_cure"]}]
+      }
+    }
+  ]');
+
   insert into data.actions(code, function) values
   ('med_set_disease_level', 'pallas_project.act_med_set_disease_level'),
-  ('med_start_patient_reception','pallas_project.act_med_start_patient_reception');
+  ('med_start_patient_reception','pallas_project.act_med_start_patient_reception'),
+  ('med_open_medicine', 'pallas_project.act_med_open_medicine'),
+  ('med_cure','pallas_project.act_med_cure');
 end;
 $$
 language plpgsql;
@@ -20769,7 +21153,9 @@ begin
   ('system_person_administrative_services_status', null, 'system', null, null, false),
   ('person_administrative_services_status', 'Административное обслуживание', 'normal', 'full', 'pallas_project.vd_person_status', true),
   ('system_person_notification_count', null, 'system', null, null, false),
-  ('person_district', 'Район проживания', 'normal', 'full', 'pallas_project.vd_link', false);
+  ('person_district', 'Район проживания', 'normal', 'full', 'pallas_project.vd_link', false),
+  ('system_person_original_id', 'Идентификатор основной персоны', 'system', null, null, false),
+  ('system_person_doubles_id_list', 'Список идентификаторов дублей персоны', 'system', null, null, false);
 
   insert into data.actions(code, function) values
   ('change_un_rating', 'pallas_project.act_change_un_rating'),
@@ -20923,7 +21309,7 @@ begin
       "system_person_police_status": 3,
       "system_person_administrative_services_status": 3,
       "person_district": "sector_B"}',
-    array['all_person', 'un', 'player']);
+    array['all_person', 'un', 'player','doctor']);
   perform pallas_project.create_person(
     'player4',
     'p4',

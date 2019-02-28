@@ -10,11 +10,15 @@ declare
 begin
   -- Атрибуты 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
-  ('med_health', null, 'Состояние здоровья персонажа', 'hidden', null, null, false);
--- {"wound": {"level": 3, "start": "20190226235817", "diagnosted": 5, "job": 4837438}, "radiation": {"level": 4, "start": "20190226225817", "diagnosted": 9, "job": 4837489}}
+  ('med_health', null, 'Состояние здоровья персонажа', 'hidden', null, null, false),
+-- *format med_health*{"wound": {"level": 3, "start": "26.02.2019 23:58:17", "diagnosted": 5, "job": 4837438}, "radiation": {"level": 4, "start": "26.02.2019 23:58:30", "diagnosted": 9, "job": 4837489}}
+  ('med_clinic_money', null, 'Остаток на счету клиники', 'hidden', null, null, false),
+  ('med_person_code', null, 'Код пациента', 'hidden', null, null, false),
+  ('med_health_care_status', null, 'Статус обслуживания пациента', 'hidden', null, null, false);
 
   insert into data.params(code, value, description) values
-  ('med_wound', '{"l0": {}, "l1": {"time": 0}, "l2": {"time": 15}, "l3": {"time": 1}, "l4": {"time": 3}, "l5": {"time": 5}, "l6": {"time": 5}, "l7": {"time": 5}, "l8": {}}'::jsonb, 'Длительность этапов заболевания'),
+  ('med_comp_client_ids', jsonb '[1, 2]', 'client_id медицинского компьютера'),
+  ('med_wound', '{"l0": {}, "l1": {"time": 5}, "l2": {"time": 15}, "l3": {"time": 1}, "l4": {"time": 3}, "l5": {"time": 5}, "l6": {"time": 5}, "l7": {"time": 5}, "l8": {}}'::jsonb, 'Длительность этапов заболевания'),
   ('med_wound_0', jsonb '"Вы чувствуете себя хорошо, ничего не болит."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_wound_1', jsonb '"Вам больно в месте ранения. Не можете прикасаться к ране и шевелить конечностью."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_wound_2', jsonb '"Вам очень больно, вы теряете много крови."', 'Сообщение для игрока о состоянии заболевания'),
@@ -85,13 +89,11 @@ begin
     }
   ]');
 
-
-  perform data.create_class(
+  perform data.create_object(
   'medicine',
   jsonb '[
     {"code": "title", "value": "Медицинское обслуживание"},
     {"code": "is_visible", "value": true, "value_object_code": "doctor"},
-    {"code": "is_visible", "value": true, "value_object_code": "master"},
     {"code": "actions_function", "value": "pallas_project.actgenerator_medicine"},
     {
       "code": "template",
@@ -104,9 +106,53 @@ begin
     }
   ]');
 
+  perform data.create_object(
+  'wrong_medicine',
+  jsonb '[
+    {"code": "title", "value": "Медицинское обслуживание"},
+    {"code": "is_visible", "value": true, "value_object_code": "doctor"},
+    {"code": "description", "value": "Зайдите со стационарного медицинского компьютера"},
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [{"code": "medicine_group", 
+                    "attributes": ["description"]}]
+      }
+    }
+  ]');
+
+  perform data.create_class(
+  'med_computer',
+  jsonb '[
+    {"code": "title", "value": "Медицинский компьютер"},
+    {"code": "type", "value": "med_computer"},
+    {"code": "is_visible", "value": true, "value_object_code": "master"},
+    {"code": "is_visible", "value": true, "value_object_code": "doctor"},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_med_computer"},
+    {"code": "temporary_object", "value": true},
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [{"code": "diagnostics_group", 
+                    "actions": ["med_diagnose_wound", 
+                                "med_diagnose_radiation", 
+                                "med_diagnose_asthma", 
+                                "med_diagnose_rio_miamore", 
+                                "med_diagnose_addiction",
+                                "med_cure"]}]
+      }
+    }
+  ]');
+
   insert into data.actions(code, function) values
   ('med_set_disease_level', 'pallas_project.act_med_set_disease_level'),
-  ('med_start_patient_reception','pallas_project.act_med_start_patient_reception');
+  ('med_start_patient_reception','pallas_project.act_med_start_patient_reception'),
+  ('med_open_medicine', 'pallas_project.act_med_open_medicine'),
+  ('med_cure','pallas_project.act_med_cure');
 end;
 $$
 language plpgsql;

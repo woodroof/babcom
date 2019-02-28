@@ -151,18 +151,20 @@ begin
         end if;
       end if;
     end if;
-    v_actions :=
-            v_actions ||
-            format('{
-              "med_health": {
-                "code": "act_open_object",
-                "name": "Добавить болезней",
-                "disabled": false,
-                "params": {
-                  "object_code": "%s_med_health"
+    if pp_utils.is_in_group(in_object_id, 'all_person') then
+      v_actions :=
+              v_actions ||
+              format('{
+                "med_health": {
+                  "code": "act_open_object",
+                  "name": "Добавить болезней",
+                  "disabled": false,
+                  "params": {
+                    "object_code": "%s_med_health"
+                  }
                 }
-              }
-            }', v_object_code)::jsonb;
+              }', v_object_code)::jsonb;
+    end if;
   else
     if v_economy_type in (jsonb '"asters"', jsonb '"mcr"') then
       v_tax := pallas_project.get_person_tax_for_share(in_object_id);

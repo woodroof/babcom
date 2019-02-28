@@ -10,8 +10,14 @@ declare
   v_actions jsonb := '{}';
   v_is_master boolean;
   v_economy_type text;
+  v_original_person_id integer;
+  v_original_person_code text;
+
 begin
   assert in_actor_id is not null;
+
+  v_original_person_id := json.get_integer_opt(data.get_attribute_value(in_actor_id, 'system_person_original_id'), in_actor_id);
+  v_original_person_code := data.get_object_code(v_original_person_id);
 
   -- Тут порядок не важен, т.к. он задаётся в шаблоне
 
@@ -48,7 +54,7 @@ begin
             '{
               "med_health": {"code": "act_open_object", "name": "Состояние здоровья", "disabled": false, "params": {"object_code": "%s_med_health"}}
             }',
-            v_actor_code)::jsonb;
+            v_original_person_code)::jsonb;
 
       if v_economy_type != 'fixed' then
         v_actions :=
@@ -171,6 +177,14 @@ begin
         "claims": {"code": "act_open_object", "name": "Судебные иски", "disabled": false, "params": {"object_code": "claims"}},
         "logout": {"code": "logout", "name": "Выход", "disabled": false, "params": {}}
       }';
+    if pp_utils.is_in_group(in_actor_id, 'doctor') then
+      v_actions :=
+        v_actions ||
+        jsonb '{
+          "medicine": {"code": "med_open_medicine", "name": "💉Медицина💉", "disabled": false, "params": {}}
+        }';
+    end if;
+
   end if;
 
   v_actions :=

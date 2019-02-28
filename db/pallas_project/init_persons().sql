@@ -39,7 +39,9 @@ begin
   ('system_person_administrative_services_status', null, 'system', null, null, false),
   ('person_administrative_services_status', 'Административное обслуживание', 'normal', 'full', 'pallas_project.vd_person_status', true),
   ('system_person_notification_count', null, 'system', null, null, false),
-  ('person_district', 'Район проживания', 'normal', 'full', 'pallas_project.vd_link', false);
+  ('person_district', 'Район проживания', 'normal', 'full', 'pallas_project.vd_link', false),
+  ('system_person_original_id', 'Идентификатор основной персоны', 'system', null, null, false),
+  ('system_person_doubles_id_list', 'Список идентификаторов дублей персоны', 'system', null, null, false);
 
   insert into data.actions(code, function) values
   ('change_un_rating', 'pallas_project.act_change_un_rating'),
@@ -193,7 +195,7 @@ begin
       "system_person_police_status": 3,
       "system_person_administrative_services_status": 3,
       "person_district": "sector_B"}',
-    array['all_person', 'un', 'player']);
+    array['all_person', 'un', 'player','doctor']);
   perform pallas_project.create_person(
     'player4',
     'p4',
