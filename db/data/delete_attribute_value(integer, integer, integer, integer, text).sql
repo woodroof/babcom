@@ -1,6 +1,6 @@
 -- drop function data.delete_attribute_value(integer, integer, integer, integer, text);
 
-create or replace function data.delete_attribute_value(in_object_id integer, in_attribute_id integer, in_value_object_id integer, in_actor_id integer, in_reason text default null::text)
+create or replace function data.delete_attribute_value(in_object_id integer, in_attribute_id integer, in_value_object_id integer, in_actor_id integer default null::integer, in_reason text default null::text)
 returns void
 volatile
 as

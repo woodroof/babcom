@@ -29,6 +29,7 @@ begin
   ('police_next_status', null, 'Статус на странице покупки', 'normal', null, 'pallas_project.vd_status', false),
   ('administrative_services_next_status', null, 'Статус на странице покупки', 'normal', null, 'pallas_project.vd_status', false),
   ('cycle', null, 'Текущий экономический цикл', 'normal', null, 'pallas_project.vd_cycle', false),
+  ('status_shop_cycle', null, null, 'normal', null, 'pallas_project.vd_status_shop_cycle', false),
   ('contract_org', 'Заказчик', null, 'normal', null, 'pallas_project.vd_link', false),
   ('contract_person', 'Исполнитель', null, 'normal', null, 'pallas_project.vd_link', false),
   ('contract_status', 'Статус контракта', null, 'normal', null, 'pallas_project.vd_contract_status', false),
@@ -177,7 +178,7 @@ begin
         "code": "template",
         "value": {
           "title": "title",
-          "subtitle": "cycle",
+          "subtitle": "status_shop_cycle",
           "groups": [
             {"code": "left", "attributes": ["money", "person_coin"]},
             {"name": "Жизнеобеспечение", "code": "life_support", "attributes": ["life_support_next_status"], "actions": ["life_support_silver", "life_support_gold"]},

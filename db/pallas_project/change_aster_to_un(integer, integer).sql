@@ -38,7 +38,8 @@ begin
     format(
       '[
         {"code": "person_state", "value": "un"},
-        {"code": "person_un_rating", "value": %s}, 
+        {"code": "person_un_rating", "value": %s},
+        {"code": "system_person_coin_profit", "value": %s},
         {"code": "system_person_economy_type", "value": "un"},
         {"code": "person_economy_type", "value": "un", "value_object_code": "master"},
         {"code": "system_money"},
@@ -49,6 +50,7 @@ begin
         {"code": "person_deposit_money", "value_object_code": "master"}
       ]',
       data.get_integer_param('base_un_rating'),
+      v_base_coins,
       in_aster_id,
       in_aster_id)::jsonb);
 

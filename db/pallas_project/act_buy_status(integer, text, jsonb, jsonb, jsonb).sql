@@ -9,11 +9,12 @@ declare
   v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_status_name text := json.get_string(in_params, 'status_name');
   v_status_value integer := json.get_integer(in_params, 'value');
-  v_status_attribute_id integer = data.get_attribute_id('system_person_next_' || v_status_name || '_status');
+  v_next_statuses_id integer := data.get_object_id(data.get_object_code(v_actor_id) || '_next_statuses');
+  v_status_attribute_id integer = data.get_attribute_id(v_status_name || '_next_status');
   v_economy_type text := json.get_string(data.get_attribute_value_for_share(v_actor_id, 'system_person_economy_type'));
   v_currency_attribute_id integer = data.get_attribute_id(case when v_economy_type = 'un' then 'system_person_coin' else 'system_money' end);
   v_status_prices integer[] := data.get_integer_array_param(v_status_name || '_status_prices');
-  v_current_status_value integer := json.get_integer(data.get_attribute_value_for_update(v_actor_id, v_status_attribute_id));
+  v_current_status_value integer := json.get_integer(data.get_attribute_value_for_update(v_next_statuses_id, v_status_attribute_id));
   v_current_sum bigint := json.get_bigint(data.get_attribute_value_for_update(v_actor_id, v_currency_attribute_id));
   v_price bigint;
   v_diff jsonb;
@@ -65,7 +66,7 @@ begin
       pallas_project.change_next_status(v_actor_id, v_status_name, v_status_value, v_actor_id, 'Status purchase'),
       in_client_id,
       in_request_id,
-      data.get_object_id(data.get_object_code(v_actor_id) || '_next_statuses'));
+      v_next_statuses_id);
   -- Поменялся статус - уйдут кнопки
   assert v_notified;
 end;

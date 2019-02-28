@@ -1,6 +1,6 @@
--- drop function data_internal.save_state(integer[], integer, integer);
+-- drop function data_internal.save_state(integer[], integer[], integer);
 
-create or replace function data_internal.save_state(in_subsciptions_ids integer[], in_filtered_list_object_id integer, in_ignore_list_elements_attr_id integer)
+create or replace function data_internal.save_state(in_subsciptions_ids integer[], in_filtered_list_object_ids integer[], in_ignore_list_elements_attr_id integer)
 returns jsonb
 volatile
 as
@@ -52,7 +52,9 @@ begin
           from data.client_subscription_objects
           where
             client_subscription_id = v_id and
-            (in_filtered_list_object_id is null or object_id != in_filtered_list_object_id)
+            object_id not in (
+              select value
+              from unnest(in_filtered_list_object_ids) a(value))
         )
         loop
           v_list_object :=

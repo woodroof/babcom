@@ -21,6 +21,7 @@ begin
   ('money', 'Остаток средств на счёте', 'normal', 'full', 'pallas_project.vd_money', true),
   ('system_person_deposit_money', null, 'system', null, null, false),
   ('person_deposit_money', 'Остаток средств на инвестиционном счёте', 'normal', 'full', 'pallas_project.vd_money', true),
+  ('system_person_coin_profit', null, 'system', null, null, false),
   ('system_person_coin', null, 'system', null, null, false),
   ('person_coin', 'Нераспределённые коины', 'normal', 'full', null, true),
   ('person_opa_rating', 'Популярность среди астеров', 'normal', 'full', 'pallas_project.vd_person_opa_rating', false),
@@ -37,11 +38,6 @@ begin
   ('person_police_status', 'Полиция', 'normal', 'full', 'pallas_project.vd_person_status', true),
   ('system_person_administrative_services_status', null, 'system', null, null, false),
   ('person_administrative_services_status', 'Административное обслуживание', 'normal', 'full', 'pallas_project.vd_person_status', true),
-  ('system_person_next_life_support_status', null, 'system', null, null, false),
-  ('system_person_next_health_care_status', null, 'system', null, null, false),
-  ('system_person_next_recreation_status', null, 'system', null, null, false),
-  ('system_person_next_police_status', null, 'system', null, null, false),
-  ('system_person_next_administrative_services_status', null, 'system', null, null, false),
   ('system_person_notification_count', null, 'system', null, null, false),
   ('person_district', 'Район проживания', 'normal', 'full', 'pallas_project.vd_link', false);
 

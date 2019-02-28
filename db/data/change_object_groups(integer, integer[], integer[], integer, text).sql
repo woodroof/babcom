@@ -26,10 +26,9 @@ begin
       client_id in (
         select id
         from data.clients
-        where actor_id = in_object_id) and
-      object_id != in_object_id;
+        where actor_id = in_object_id);
 
-    v_actor_subscriptions := data_internal.save_state(v_ids, in_object_id, data.get_attribute_id('independent_from_actor_list_elements'));
+    v_actor_subscriptions := data_internal.save_state(v_ids, null, data.get_attribute_id('independent_from_actor_list_elements'));
   end;
 
   -- Меняем группы объектов

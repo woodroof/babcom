@@ -59,7 +59,8 @@ begin
       perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Зачинщик и оппонент дебатла должны быть заполнены');
       return;
     end if;
-    if v_audience is null or array_length(v_audience, 1) = 0 then
+
+    if v_audience is null or coalesce(array_length(v_audience, 1), 0) = 0 then
       perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Целевая аудитория должна быть заполнена');
       return;
     end if;

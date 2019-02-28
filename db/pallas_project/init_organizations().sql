@@ -159,6 +159,14 @@ begin
       "system_org_economics_type": "normal",
       "system_money": 1000
     }');
+  perform pallas_project.create_organization(
+    'org_tatu',
+    jsonb '{
+      "title": "Тату-салон",
+      "system_org_economics_type": "profit",
+      "system_org_profit": 120,
+      "system_money": 120
+    }');
 
   -- Мастерская компания
   perform pallas_project.create_organization(
@@ -177,11 +185,6 @@ begin
     jsonb '{
       "title": "Третий глаз",
       "subtitle": "Салон"
-    }');
-  perform pallas_project.create_synonym(
-    'org_opa',
-    jsonb '{
-      "title": "Тату-салон"
     }');
 
   -- Синонимы-поставщики
@@ -346,6 +349,7 @@ begin
   --  org_free_sky: мормон
   --  org_cherry_orchard: Александра Корсак
   --  org_tariel: Валентин Штерн
+  --  org_tatu: Шона Кагари
 
   -- Прочие люди:
   --  Сантьяго Де ла Круз (головной картель)

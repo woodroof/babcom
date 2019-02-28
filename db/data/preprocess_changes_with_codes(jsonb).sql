@@ -15,7 +15,9 @@ declare
   v_elem jsonb;
   v_ret_val jsonb := '[]';
 begin
-  assert in_changes is not null;
+  if in_changes is null or in_changes = jsonb 'null' then
+    return v_ret_val;
+  end if;
 
   if jsonb_typeof(in_changes) = 'object' then
     for v_change in
