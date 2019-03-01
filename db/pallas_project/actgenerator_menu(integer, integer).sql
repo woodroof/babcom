@@ -52,7 +52,7 @@ begin
           v_actions ||
           format(
             '{
-              "med_health": {"code": "act_open_object", "name": "Состояние здоровья", "disabled": false, "params": {"object_code": "%s_med_health"}}
+              "med_health": {"code": "act_open_object", "name": "💔 Состояние здоровья 💔", "disabled": false, "params": {"object_code": "%s_med_health"}}
             }',
             v_original_person_code)::jsonb;
 
@@ -69,7 +69,7 @@ begin
             v_actions ||
             format(
               '{
-                "transactions": {"code": "act_open_object", "name": "История транзакций", "disabled": false, "params": {"object_code": "%s_transactions"}}
+                "transactions": {"code": "act_open_object", "name": "🏦 История транзакций 🏦", "disabled": false, "params": {"object_code": "%s_transactions"}}
               }',
               v_actor_code)::jsonb;
         end if;
@@ -161,7 +161,7 @@ begin
           v_actions ||
           format(
             '{
-              "my_organizations": {"code": "act_open_object", "name": "Мои организации", "disabled": false, "params": {"object_code": "%s"}}
+              "my_organizations": {"code": "act_open_object", "name": "🏛 Мои организации 🏛", "disabled": false, "params": {"object_code": "%s"}}
             }',
             v_actor_code || '_my_organizations')::jsonb;
       end if;
@@ -181,7 +181,7 @@ begin
       v_actions :=
         v_actions ||
         jsonb '{
-          "medicine": {"code": "med_open_medicine", "name": "💉Медицина💉", "disabled": false, "params": {}}
+          "medicine": {"code": "med_open_medicine", "name": "💉 Медицина 💉", "disabled": false, "params": {}}
         }';
     end if;
 

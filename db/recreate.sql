@@ -16390,7 +16390,7 @@ begin
           v_actions ||
           format(
             '{
-              "med_health": {"code": "act_open_object", "name": "Состояние здоровья", "disabled": false, "params": {"object_code": "%s_med_health"}}
+              "med_health": {"code": "act_open_object", "name": "💔 Состояние здоровья 💔", "disabled": false, "params": {"object_code": "%s_med_health"}}
             }',
             v_original_person_code)::jsonb;
 
@@ -16407,7 +16407,7 @@ begin
             v_actions ||
             format(
               '{
-                "transactions": {"code": "act_open_object", "name": "История транзакций", "disabled": false, "params": {"object_code": "%s_transactions"}}
+                "transactions": {"code": "act_open_object", "name": "🏦 История транзакций 🏦", "disabled": false, "params": {"object_code": "%s_transactions"}}
               }',
               v_actor_code)::jsonb;
         end if;
@@ -16499,7 +16499,7 @@ begin
           v_actions ||
           format(
             '{
-              "my_organizations": {"code": "act_open_object", "name": "Мои организации", "disabled": false, "params": {"object_code": "%s"}}
+              "my_organizations": {"code": "act_open_object", "name": "🏛 Мои организации 🏛", "disabled": false, "params": {"object_code": "%s"}}
             }',
             v_actor_code || '_my_organizations')::jsonb;
       end if;
@@ -16519,7 +16519,7 @@ begin
       v_actions :=
         v_actions ||
         jsonb '{
-          "medicine": {"code": "med_open_medicine", "name": "💉Медицина💉", "disabled": false, "params": {}}
+          "medicine": {"code": "med_open_medicine", "name": "💉 Медицина 💉", "disabled": false, "params": {}}
         }';
     end if;
 
@@ -18473,8 +18473,8 @@ begin
         "groups": [
           {"code": "menu_notifications", "actions": ["notifications"]},
           {"code": "menu_lottery", "actions": ["lottery"]},
-          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "med_health", "chats", "documents", "my_contracts", "my_organizations", "blogs", "claims", "important_notifications"]},
-          {"code": "menu_social", "actions": ["news", "all_chats", "debatles", "master_chats", "medicine"]},
+          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "med_health", "chats", "documents", "medicine", "my_contracts", "my_organizations", "blogs", "claims", "important_notifications"]},
+          {"code": "menu_social", "actions": ["news", "all_chats", "debatles", "master_chats"]},
           {"code": "menu_info", "actions": ["all_contracts", "persons", "districts", "organizations"]},
           {"code": "menu_finish_game", "actions": ["finish_game"]},
           {"code": "menu_logout", "actions": ["logout"]}
@@ -22264,7 +22264,7 @@ begin
         object_id != parent_object_id
     )
     loop
-      perform pp_utils.add_notification(v_person_id, 'До конца цикла остался один час!');
+      perform pp_utils.add_notification(v_person_id, 'До конца цикла остался один час! Не забудьте купить статусы обслуживания.');
     end loop;
   end if;
 end;

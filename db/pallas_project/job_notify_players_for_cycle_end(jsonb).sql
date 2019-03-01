@@ -18,7 +18,7 @@ begin
         object_id != parent_object_id
     )
     loop
-      perform pp_utils.add_notification(v_person_id, 'До конца цикла остался один час!');
+      perform pp_utils.add_notification(v_person_id, 'До конца цикла остался один час! Не забудьте купить статусы обслуживания.');
     end loop;
   end if;
 end;
