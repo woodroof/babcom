@@ -28,7 +28,9 @@ begin
 
   perform data.create_object('judge', jsonb '{"priority": 75, "title": "Судьи"}', 'group');
   perform data.create_object('doctor', jsonb '{"priority": 76, "title": "Врачи"}', 'group');
-  perform data.create_object('unofficial_doctor', jsonb '{"priority": 74, "title": "Неофициальные рачи"}', 'group');
+  perform data.create_object('unofficial_doctor', jsonb '{"priority": 74, "title": "Неофициальные врачи"}', 'group');
+  perform data.create_object('customs_officer', jsonb '{"priority": 72, "title": "Таможенники"}', 'group');
+
 
 end;
 $$

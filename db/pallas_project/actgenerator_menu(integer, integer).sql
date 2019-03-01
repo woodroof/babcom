@@ -185,6 +185,13 @@ begin
           "medicine": {"code": "med_open_medicine", "name": "💉 Медицина 💉", "disabled": false, "params": {}}
         }';
     end if;
+    if v_is_master or pp_utils.is_in_group(in_actor_id, 'customs_officer') then
+      v_actions :=
+        v_actions ||
+        jsonb '{
+          "customs": {"code": "act_open_object", "name": "Таможня", "disabled": false, "params": {"object_code": "customs"}}
+        }';
+    end if;
 
   end if;
 

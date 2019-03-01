@@ -15437,6 +15437,32 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.actgenerator_customs(integer, integer);
+
+create or replace function pallas_project.actgenerator_customs(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_actions_list text := '';
+  v_object_code text := data.get_object_code(in_object_id);
+begin
+  assert in_actor_id is not null;
+
+  if pp_utils.is_in_group(in_actor_id, 'master') then
+    v_actions_list := v_actions_list || 
+      ', "customs_ship_arrival": {"code": "customs_ship_arrival", "name": "Прилёт корабля", "disabled": false, '||
+      '"params": {}, "user_params": [{"code": "ship", "description": "Название корабля", "type": "string", "restrictions": {"min_length": 1}}]}';
+    v_actions_list := v_actions_list || 
+      ', "customs_future_packages": {"code": "act_open_object", "name": "Будущие грузы", "disabled": false, "params": {"object_code": "customs_future_packages"}}';
+
+  end if;
+  return jsonb ('{'||trim(v_actions_list,',')||'}');
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.actgenerator_debatle(integer, integer);
 
 create or replace function pallas_project.actgenerator_debatle(in_object_id integer, in_actor_id integer)
@@ -16682,6 +16708,13 @@ begin
         v_actions ||
         jsonb '{
           "medicine": {"code": "med_open_medicine", "name": "💉 Медицина 💉", "disabled": false, "params": {}}
+        }';
+    end if;
+    if v_is_master or pp_utils.is_in_group(in_actor_id, 'customs_officer') then
+      v_actions :=
+        v_actions ||
+        jsonb '{
+          "customs": {"code": "act_open_object", "name": "Таможня", "disabled": false, "params": {"object_code": "customs"}}
         }';
     end if;
 
@@ -18635,7 +18668,7 @@ begin
         "groups": [
           {"code": "menu_notifications", "actions": ["notifications"]},
           {"code": "menu_lottery", "actions": ["lottery"]},
-          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "med_health", "chats", "documents", "medicine", "my_contracts", "my_organizations", "blogs", "claims", "important_notifications", "med_drugs"]},
+          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "med_health", "chats", "documents", "medicine", "customs", "my_contracts", "my_organizations", "blogs", "claims", "important_notifications", "med_drugs"]},
           {"code": "menu_social", "actions": ["news", "all_chats", "debatles", "master_chats"]},
           {"code": "menu_info", "actions": ["all_contracts", "persons", "districts", "organizations"]},
           {"code": "menu_finish_game", "actions": ["finish_game"]},
@@ -18719,6 +18752,7 @@ begin
   perform pallas_project.init_lottery();
   perform pallas_project.init_blogs();
   perform pallas_project.init_cycles();
+  perform pallas_project.init_customs();
 end;
 $$
 language plpgsql;
@@ -19109,6 +19143,156 @@ $$
 begin
   perform pallas_project.create_contract('player2', 'org_de_beers', 'suspended', '100', 'Работай и зарабатывай');
   perform pallas_project.create_contract('player4', 'org_administration', 'active', '120', 'Работай и зарабатывай');
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.init_customs();
+
+create or replace function pallas_project.init_customs()
+returns void
+volatile
+as
+$$
+declare
+
+begin
+  -- Атрибуты 
+  insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
+  ('package_from', 'Откуда', 'Откуда посылка', 'normal', 'full', null, false),
+  ('package_ship', 'Корабль', 'Корабль, на котором прибыла посылка', 'normal', 'full', null, false),
+  ('package_what', 'Описание груза', 'Описание посылки', 'normal', 'full', null, false),
+  ('package_receiver_status', 'Статус получателя', 'Статус получателя', 'normal', 'full', null, false),
+  ('system_package_to', null, 'Адресат', 'system', null, null, false),
+  ('system_package_receiver_code', null, 'Код для получения', 'system', null, null, false),
+  ('package_receiver_code', 'Код для получения', 'Код для получения', 'normal', null, null, true),
+  ('system_package_box_code', null, 'Код коробки', 'system', null, null, false),
+  ('package_box_code', 'Код коробки', 'Код коробки', 'normal', null, null, true),
+  ('package_to', 'Адресат', 'Адресат', 'system', null, null, true),
+  ('package_weight', 'Вес, кг.', 'Вес посылки', 'normal', 'full', null, false),
+  ('package_arrival_time', 'Дата прибытия', 'Дата прибытия', 'normal', null, null, false),
+  ('package_status', 'Статус', 'Статус посылки', 'normal', null, 'pallas_project.vd_package_status', false),
+  ('system_package_reactions', null, 'Список проверок, на которые положительно реагирует', 'system', null, null, false),
+  ('package_reactions', null, 'Список проверок, на которые положительно реагирует', 'normal', null, null, true),
+  ('system_package_ships_before_come', null, 'Количество кораблей до прибытия груза', 'system', null, null, false),
+  ('system_package_id', null, 'Идентификатор посылки для проверок', 'system', null, null, false),
+  ('system_customs_cheking', null, 'Признак, что таможня проверяет какой-то груз', 'system', null, null, false);
+
+  -- Объект - страница для таможни
+  perform data.create_object(
+  'customs',
+  jsonb '[
+    {"code": "title", "value": "Таможня"},
+    {"code": "is_visible", "value": true, "value_object_code": "master"},
+    {"code": "is_visible", "value": true, "value_object_code": "customs_officer"},
+    {"code": "content", "value": []},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_customs"},
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [{"code": "customs_group", "attributes": ["description"], "actions": ["customs_ship_arrival", "customs_future_packages"]}]
+      }
+    }
+  ]');
+
+  -- Списки посылок
+  -- Класс
+  perform data.create_class(
+  'customs_package_list',
+  jsonb '[
+    {"code": "is_visible", "value": true, "value_object_code": "master"},
+    {"code": "is_visible", "value": true, "value_object_code": "customs_officer"},
+    {"code": "content", "value": []},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_customs_package_list"},
+    {"code": "temporary_object", "value": true},
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [{"code": "package_list_group1", "attributes": ["description"], "actions": ["customs_package_list_go_back"]}]
+      }
+    }
+  ]');
+
+  -- Мастерский список будущих посылок
+  perform data.create_object(
+  'customs_future_packages',
+  jsonb '[
+    {"code": "title", "value": "Будущие посылки"},
+    {"code": "is_visible", "value": true, "value_object_code": "master"},
+    {"code": "content", "value": []},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_customs_future_packages"},
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [{"code": "package_list_group1", "attributes": ["description"]},
+                   {"code": "package_list_group2", "actions": ["customs_create_future_package"]}]
+      }
+    }
+  ]');
+
+  -- Объект-класс для посылки
+  perform data.create_class(
+  'package',
+  jsonb '[
+    {"code": "type", "value": "package"},
+    {"code": "is_visible", "value": true, "value_object_code": "master"},
+    {"code": "is_visible", "value": true, "value_object_code": "customs_officer"},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_customs_package"},
+    {
+      "code": "mini_card_template",
+      "value": {
+        "title": "title",
+        "subtitle": "package_status",
+        "groups": []
+      }
+    },
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [
+          {
+            "code": "package_group1",
+            "attributes": ["package_status","package_arrival_time", "package_from", "package_ship", "package_what", "package_weight"]
+          },
+          {
+            "code": "package_group1",
+            "attributes": ["package_receiver_code", "package_to"]
+          },
+          {
+            "code": "package_group2",
+            "actions": ["customs_package_check_spectrometer", "customs_package_check_radiation", "customs_package_chack_x_ray"]
+          },
+          {
+            "code": "package_group3",
+            "actions": ["customs_package_set_checked", "customs_package_set_arrested", "customs_package_receive"]
+          }
+        ]
+      }
+    }
+  ]');
+
+
+  insert into data.actions(code, function) values
+  ('customs_package_list_go_back', 'pallas_project.act_customs_package_list_go_back'),
+  ('customs_ship_arrival', 'pallas_project.act_customs_ship_arrival'),
+  ('customs_create_future_package', 'pallas_project.act_customs_create_future_package'),
+  ('customs_package_check','pallas_project.act_customs_package_check'),
+  ('customs_package_set_checked','pallas_project.act_customs_package_set_checked'),
+  ('customs_package_set_arrested', 'pallas_project.act_customs_package_set_arrested'),
+  ('customs_package_receive', 'pallas_project.act_customs_package_receive');
 end;
 $$
 language plpgsql;
@@ -20285,7 +20469,9 @@ begin
 
   perform data.create_object('judge', jsonb '{"priority": 75, "title": "Судьи"}', 'group');
   perform data.create_object('doctor', jsonb '{"priority": 76, "title": "Врачи"}', 'group');
-  perform data.create_object('unofficial_doctor', jsonb '{"priority": 74, "title": "Неофициальные рачи"}', 'group');
+  perform data.create_object('unofficial_doctor', jsonb '{"priority": 74, "title": "Неофициальные врачи"}', 'group');
+  perform data.create_object('customs_officer', jsonb '{"priority": 72, "title": "Таможенники"}', 'group');
+
 
 end;
 $$
