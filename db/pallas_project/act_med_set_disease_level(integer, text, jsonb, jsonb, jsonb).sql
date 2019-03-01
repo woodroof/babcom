@@ -6,7 +6,7 @@ volatile
 as
 $$
 declare
-  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_actor_id integer;
   v_med_computer_code text := json.get_string_opt(in_params, 'med_computer_code', null);
   v_person_code text := json.get_string(in_params, 'person_code');
   v_disease text := json.get_string_opt(in_params, 'disease', null);
@@ -34,6 +34,10 @@ begin
   if v_disease is null or v_level is null then
     v_disease := json.get_string(in_user_params, 'disease');
     v_level := json.get_integer(in_user_params, 'level');
+  end if;
+
+  if in_client_id is not null then
+    v_actor_id := data.get_active_actor_id(in_client_id);
   end if;
 
   v_person_id := json.get_integer_opt(data.get_attribute_value(v_person_id, 'system_person_original_id'), v_person_id);
@@ -84,7 +88,7 @@ begin
     perform data.change_object_and_notify(data.get_object_id(v_person_code || '_med_health'), 
                                           to_jsonb(v_changes),
                                           null);
-    if v_med_computer_code is not null then
+    if v_med_computer_code is not null and v_actor_id is not null then
       if pp_utils.is_in_group(v_actor_id, 'unofficial_doctor') then
         v_clinic_money := json.get_bigint_opt(data.get_attribute_value_for_share('org_clean_asteroid', 'system_money'), null);
         v_changes := array_append(v_changes, data.attribute_change2jsonb('med_clinic_money', to_jsonb(v_clinic_money)));

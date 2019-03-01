@@ -13871,6 +13871,109 @@ begin
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_med_drug_use(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_med_drug_use(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_med_drug_code text := json.get_string(in_params, 'med_drug_code');
+  v_med_drug_id integer := data.get_object_id(v_med_drug_code);
+  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+  v_actor_code text :=data.get_object_code(v_actor_id);
+
+  v_med_drug_status text := json.get_string_opt(data.get_attribute_value_for_update(v_med_drug_id, 'med_drug_status'), '~~~');
+  v_med_drug_category text := json.get_string(data.get_attribute_value(v_med_drug_id, 'med_drug_category'));
+
+  v_changes jsonb[];
+  v_message_sent boolean;
+begin
+  assert in_request_id is not null;
+
+  if v_med_drug_status = 'used' then
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Нельзя использовать наркотик повторно');
+    return;
+  end if;
+
+  case v_med_drug_category 
+    when 'stimulant' then 
+      perform pallas_project.use_stimulant(v_actor_id);
+    when 'superbuff' then
+      perform pallas_project.use_superbuff(v_actor_id);
+    else 
+      null;
+  end case;
+
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('med_drug_status', jsonb '"used"'));
+  v_message_sent := data.change_current_object(in_client_id,
+                                               in_request_id,
+                                               v_med_drug_id, 
+                                               to_jsonb(v_changes));
+  if not v_message_sent then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_med_drugs_add_drug(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_med_drugs_add_drug(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_category text := json.get_string(in_params, 'category');
+  v_med_drug_code text;
+  v_med_drug_id  integer;
+  v_actor_id  integer :=data.get_active_actor_id(in_client_id);
+
+  v_med_drugs_id integer := data.get_object_id('med_drugs');
+
+  v_master_group_id integer := data.get_object_id('master');
+  v_med_drug_qr_link_attribute_id integer := data.get_attribute_id('med_drug_qr_link');
+  v_content_attribute_id integer := data.get_attribute_id('content');
+
+  v_changes jsonb[];
+  v_message_sent boolean;
+  v_content text[];
+begin
+  assert in_request_id is not null;
+  -- создаём новый наркотик
+
+  v_med_drug_id := data.create_object(
+    null,
+    jsonb_build_array(
+      jsonb_build_object('code', 'med_drug_category', 'value', v_category),
+      jsonb_build_object('code', 'med_drug_effect', 'value', v_category),
+      jsonb_build_object('code', 'med_drug_status', 'value', 'not_used')
+    ),
+    'med_drug');
+
+  v_med_drug_code := data.get_object_code(v_med_drug_id);
+
+  insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
+  (v_med_drug_id, v_med_drug_qr_link_attribute_id, to_jsonb(data.get_string_param('objects_url') || v_med_drug_code), null);
+
+  -- Добавляем наркотик в список 
+  v_changes := array[]::jsonb[];
+  v_content := json.get_string_array_opt(data.get_raw_attribute_value_for_update(v_med_drugs_id, v_content_attribute_id), array[]::text[]);
+  v_content := array_prepend(v_med_drug_code, v_content);
+  v_changes := array_append(v_changes, data.attribute_change2jsonb(v_content_attribute_id, to_jsonb(v_content)));
+  v_message_sent := data.change_current_object(in_client_id, 
+                                               in_request_id,
+                                               v_med_drugs_id, 
+                                               to_jsonb(v_changes));
+  if not v_message_sent then
+   perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_med_open_medicine(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_med_open_medicine(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -13879,7 +13982,7 @@ volatile
 as
 $$
 declare
-  v_med_comp_client_ids integer[] := data.get_integer_array(data.get_param('med_comp_client_ids'));
+  v_med_comp_client_ids integer[] := json.get_integer_array(data.get_param('med_comp_client_ids'));
   v_object_code text;
 begin
   assert in_request_id is not null;
@@ -13901,7 +14004,7 @@ volatile
 as
 $$
 declare
-  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_actor_id integer;
   v_med_computer_code text := json.get_string_opt(in_params, 'med_computer_code', null);
   v_person_code text := json.get_string(in_params, 'person_code');
   v_disease text := json.get_string_opt(in_params, 'disease', null);
@@ -13929,6 +14032,10 @@ begin
   if v_disease is null or v_level is null then
     v_disease := json.get_string(in_user_params, 'disease');
     v_level := json.get_integer(in_user_params, 'level');
+  end if;
+
+  if in_client_id is not null then
+    v_actor_id := data.get_active_actor_id(in_client_id);
   end if;
 
   v_person_id := json.get_integer_opt(data.get_attribute_value(v_person_id, 'system_person_original_id'), v_person_id);
@@ -13979,7 +14086,7 @@ begin
     perform data.change_object_and_notify(data.get_object_id(v_person_code || '_med_health'), 
                                           to_jsonb(v_changes),
                                           null);
-    if v_med_computer_code is not null then
+    if v_med_computer_code is not null and v_actor_id is not null then
       if pp_utils.is_in_group(v_actor_id, 'unofficial_doctor') then
         v_clinic_money := json.get_bigint_opt(data.get_attribute_value_for_share('org_clean_asteroid', 'system_money'), null);
         v_changes := array_append(v_changes, data.attribute_change2jsonb('med_clinic_money', to_jsonb(v_clinic_money)));
@@ -14016,7 +14123,7 @@ $$
 declare
   v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_patient_login text := json.get_string(in_user_params, 'patient_login');
-  v_med_comp_client_ids integer[] := data.get_integer_array(data.get_param('med_comp_client_ids'));
+  v_med_comp_client_ids integer[] := json.get_integer_array(data.get_param('med_comp_client_ids'));
   v_object_id integer;
   v_object_code text;
   v_person_id integer;
@@ -16235,6 +16342,60 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.actgenerator_med_drug(integer, integer);
+
+create or replace function pallas_project.actgenerator_med_drug(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_actions_list text := '';
+  v_drug_code text := data.get_object_code(in_object_id);
+  v_med_drug_status text := json.get_string(data.get_attribute_value_for_share(in_object_id, 'med_drug_status'));
+begin
+  assert in_actor_id is not null;
+
+  if not pp_utils.is_in_group(in_actor_id, 'master') then
+    v_actions_list := v_actions_list || 
+        format(', "med_drug_use": {"code": "med_drug_use", "name": "Использовать", "disabled": %s, '||
+                '"params": {"med_drug_code": "%s"}}',
+                case when v_med_drug_status = 'not_used' then 'false' else 'true' end,
+                v_drug_code);
+  end if;
+
+  return jsonb ('{'||trim(v_actions_list,',')||'}');
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.actgenerator_med_drugs(integer, integer);
+
+create or replace function pallas_project.actgenerator_med_drugs(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_actions_list text := '';
+  v_drug_code text;
+begin
+  assert in_actor_id is not null;
+
+  for v_drug_code in (select * from unnest(array['stimulant', 'superbuff', 'sleg'])) loop
+  v_actions_list := v_actions_list || 
+        format(', "med_drugs_add_%s": {"code": "med_drugs_add_drug", "name": "%s", "disabled": false, '||
+                '"params": {"category": "%s"}}',
+                v_drug_code,
+                pallas_project.vd_med_drug_category(null, to_jsonb(v_drug_code), null, null), 
+                v_drug_code);
+  end loop;
+
+  return jsonb ('{'||trim(v_actions_list,',')||'}');
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.actgenerator_med_health(integer, integer);
 
 create or replace function pallas_project.actgenerator_med_health(in_object_id integer, in_actor_id integer)
@@ -16433,7 +16594,8 @@ begin
           "chats": {"code": "act_open_object", "name": "Отслеживаемые игровые чаты", "disabled": false, "params": {"object_code": "chats"}},
           "all_chats": {"code": "act_open_object", "name": "Все игровые чаты", "disabled": false, "params": {"object_code": "all_chats"}},
           "master_chats": {"code": "act_open_object", "name": "Мастерские чаты", "disabled": false, "params": {"object_code": "master_chats"}},
-          "all_contracts": {"code": "act_open_object", "name": "Все контракты", "disabled": false, "params": {"object_code": "contracts"}}
+          "all_contracts": {"code": "act_open_object", "name": "Все контракты", "disabled": false, "params": {"object_code": "contracts"}},
+          "med_drugs": {"code": "act_open_object", "name": "Наркотики", "disabled": false, "params": {"object_code": "med_drugs"}}
         }';
       if data.get_boolean_param('game_in_progress') then
         v_actions :=
@@ -18473,7 +18635,7 @@ begin
         "groups": [
           {"code": "menu_notifications", "actions": ["notifications"]},
           {"code": "menu_lottery", "actions": ["lottery"]},
-          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "med_health", "chats", "documents", "medicine", "my_contracts", "my_organizations", "blogs", "claims", "important_notifications"]},
+          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "med_health", "chats", "documents", "medicine", "my_contracts", "my_organizations", "blogs", "claims", "important_notifications", "med_drugs"]},
           {"code": "menu_social", "actions": ["news", "all_chats", "debatles", "master_chats"]},
           {"code": "menu_info", "actions": ["all_contracts", "persons", "districts", "organizations"]},
           {"code": "menu_finish_game", "actions": ["finish_game"]},
@@ -20223,9 +20385,15 @@ begin
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
   ('med_health', null, 'Состояние здоровья персонажа', 'hidden', null, null, false),
 -- *format med_health*{"wound": {"level": 3, "start": "26.02.2019 23:58:17", "diagnosted": 5, "job": 4837438}, "radiation": {"level": 4, "start": "26.02.2019 23:58:30", "diagnosted": 9, "job": 4837489}}
+  ('med_stimulant', null, 'Данные о приёме стимулятора', 'hidden', null, null, false),
+-- *format med_stimulant*{"last": {"job": 4837438}, "cycle1": 1, "cycle2": 3}
   ('med_clinic_money', null, 'Остаток на счету клиники', 'hidden', null, null, false),
   ('med_person_code', null, 'Код пациента', 'hidden', null, null, false),
-  ('med_health_care_status', null, 'Статус обслуживания пациента', 'hidden', null, null, false);
+  ('med_health_care_status', null, 'Статус обслуживания пациента', 'hidden', null, null, false),
+  ('med_drug_qr_link',null, 'Ссылка для QR-кода', 'normal', 'mini', null, false),
+  ('med_drug_status', null, 'Статус наркотика', 'normal', null, 'pallas_project.vd_med_drug_status', false),
+  ('med_drug_category', null, 'Тип наркотика', 'normal', null, 'pallas_project.vd_med_drug_category', false),
+  ('med_drug_effect', 'Эффект', 'Эффект наркотипа', 'normal', 'full', 'pallas_project.vd_med_drug_effect', false);
 
   insert into data.params(code, value, description) values
   ('med_comp_client_ids', jsonb '[1, 2]', 'client_id медицинского компьютера'),
@@ -20359,11 +20527,69 @@ begin
     }
   ]');
 
+-- Объект - страница для работы с наркотиками
+  perform data.create_object(
+  'med_drugs',
+  jsonb '[
+    {"code": "title", "value": "Наркотики"},
+    {"code": "is_visible", "value": true, "value_object_code": "master"},
+    {"code": "description", "value": "Нажми кнопку с нужным наркотиком, и он создастся верхним в списке. Из ссылки нужно сгенерить QR."},
+    {"code": "content", "value": []},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_med_drugs"},
+    {"code": "list_element_function", "value": "pallas_project.lef_do_nothing"},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [{"code": "med_drugs_group", 
+                    "attributes": ["description"], 
+                    "actions": ["med_drugs_add_stimulant", "med_drugs_add_superbuff", "med_drugs_add_sleg"]}]
+      }
+    }
+  ]');
+
+  -- Объект-класс для наркотипа
+  perform data.create_class(
+  'med_drug',
+  jsonb '[
+    {"code": "title", "value": "Наркотик"},
+    {"code": "type", "value": "med_drug"},
+    {"code": "is_visible", "value": true},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_med_drug"},
+    {
+      "code": "mini_card_template",
+      "value": {
+        "title": "med_drug_category",
+        "subtitle": "med_drug_status",
+        "groups": [{"code": "med_drug_group", "attributes": ["med_drug_qr_link"]}]
+      }
+    },
+    {
+      "code": "template",
+      "value": {
+        "title": "med_drug_category",
+        "subtitle": "subtitle",
+        "groups": [
+          {
+            "code": "med_drug_group1",
+            "attributes": ["med_drug_status", "med_drug_effect"],
+            "actions": ["med_drug_use"]
+          }
+        ]
+      }
+    }
+  ]');
+
   insert into data.actions(code, function) values
   ('med_set_disease_level', 'pallas_project.act_med_set_disease_level'),
   ('med_start_patient_reception','pallas_project.act_med_start_patient_reception'),
   ('med_open_medicine', 'pallas_project.act_med_open_medicine'),
-  ('med_cure','pallas_project.act_med_cure');
+  ('med_cure','pallas_project.act_med_cure'),
+  ('med_drugs_add_drug', 'pallas_project.act_med_drugs_add_drug'),
+  ('med_drug_use', 'pallas_project.act_med_drug_use');
 end;
 $$
 language plpgsql;
@@ -21160,7 +21386,8 @@ begin
   ('system_person_notification_count', null, 'system', null, null, false),
   ('person_district', 'Район проживания', 'normal', 'full', 'pallas_project.vd_link', false),
   ('system_person_original_id', 'Идентификатор основной персоны', 'system', null, null, false),
-  ('system_person_doubles_id_list', 'Список идентификаторов дублей персоны', 'system', null, null, false);
+  ('system_person_doubles_id_list', 'Список идентификаторов дублей персоны', 'system', null, null, false),
+  ('system_person_is_stimulant_used', 'Признак, что принят стимулятор', 'system', null, null, false);
 
   insert into data.actions(code, function) values
   ('change_un_rating', 'pallas_project.act_change_un_rating'),
@@ -22271,6 +22498,40 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.job_unuse_stimulant(jsonb);
+
+create or replace function pallas_project.job_unuse_stimulant(in_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id integer := json.get_integer(in_params, 'actor_id');
+  v_person_id integer; 
+
+  v_message_text text := 'Мир снова ускорился и как будто посерел. Ваш энергетический подъём закончился.';
+
+  v_system_person_is_stimulant_used boolean := json.get_boolean_opt(data.get_attribute_value_for_update(v_actor_id, 'system_person_is_stimulant_used'), false);
+  v_changes jsonb[];
+begin
+  if v_system_person_is_stimulant_used then
+    perform pp_utils.add_notification(v_actor_id, v_message_text);
+    v_changes := array[]::jsonb[];
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('system_person_is_stimulant_used', null));
+    perform data.change_object_and_notify(v_actor_id, 
+                                          to_jsonb(v_changes),
+                                          null);
+    for v_person_id in (select * from unnest(json.get_integer_array_opt(data.get_attribute_value(v_actor_id, 'system_person_doubles_id_list'), array[]::integer[]))) loop
+      perform pp_utils.add_notification(v_person_id, v_message_text);
+      perform data.change_object_and_notify(v_person_id,
+                                            to_jsonb(v_changes),
+                                            null);
+    end loop;
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.lef_chat_temp_person_list(integer, text, integer, integer);
 
 create or replace function pallas_project.lef_chat_temp_person_list(in_client_id integer, in_request_id text, in_object_id integer, in_list_object_id integer)
@@ -23223,6 +23484,137 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.use_stimulant(integer);
+
+create or replace function pallas_project.use_stimulant(in_actor_id integer)
+returns void
+volatile
+as
+$$
+declare
+  v_orig_person_id integer := json.get_integer_opt(data.get_attribute_value(in_actor_id, 'system_person_original_id'), in_actor_id);
+  v_orig_person_code text := data.get_object_code(v_orig_person_id);
+  v_person_id integer; 
+
+  v_message_text text := 'Мир как будто замедлился. Вы чувствуете необычайный подьём энергии и безграничность собственных возможностей.';
+
+  v_med_stimulant jsonb := coalesce(data.get_attribute_value_for_update(v_orig_person_code || '_med_health', 'med_stimulant'), jsonb '{}');
+  v_last_stimulant_job integer := json.get_integer_opt(json.get_object_opt(v_med_stimulant, 'last', jsonb '{}'), 'job', null);
+
+  v_med_health jsonb := coalesce(data.get_attribute_value_for_update(v_orig_person_code || '_med_health', 'med_health'), jsonb '{}');
+  v_addiction_level integer := json.get_integer_opt(json.get_object_opt(v_med_health, 'addiction', jsonb '{}'), 'level', 0);
+
+  v_economic_cycle_number integer := data.get_integer_param('economic_cycle_number');
+  v_stimulant_in_this_cycle integer := json.get_integer_opt(v_med_stimulant, 'cycle' || v_economic_cycle_number, 0);
+  v_changes jsonb[];
+begin
+  -- Если стимулятор уже принят, то удаляем джоб его окончания
+  if v_last_stimulant_job is not null then 
+    delete from data.jobs where id = v_last_stimulant_job;
+  end if;
+
+-- Ставим, что принят стимулятор на персоны, отправляем уведомление всем дублям
+  perform pp_utils.add_notification(v_orig_person_id, v_message_text);
+   v_changes := array[]::jsonb[];
+   v_changes := array_append(v_changes, data.attribute_change2jsonb('system_person_is_stimulant_used', jsonb 'true'));
+  perform data.change_object_and_notify(v_orig_person_id, 
+                                        to_jsonb(v_changes),
+                                        null);
+  for v_person_id in (select * from unnest(json.get_integer_array_opt(data.get_attribute_value(v_orig_person_id, 'system_person_doubles_id_list'), array[]::integer[]))) loop
+    perform pp_utils.add_notification(v_person_id, v_message_text);
+    perform data.change_object_and_notify(v_person_id,
+                                          to_jsonb(v_changes),
+                                          null);
+  end loop;
+
+  -- Вешаем джоб на полчаса, чтобы отменить действие
+  v_last_stimulant_job := data.create_job(clock_timestamp() + '30 minutes'::interval, 
+      'pallas_project.job_unuse_stimulant', 
+      format('{"actor_id": %s}', v_orig_person_id)::jsonb);
+
+  -- Если уже есть зависимость, то сдвигаем её на начало
+  -- Если в этом цикле уже принимал, то начинаем зависимость
+  if v_addiction_level > 0 or v_stimulant_in_this_cycle > 0 then
+      perform pallas_project.act_med_set_disease_level(
+        null, 
+        null, 
+        format('{"person_code": "%s", "disease": "%s", "level": %s}', v_orig_person_code, 'addiction', 1)::jsonb, 
+        null, 
+        null);
+  end if;
+
+  -- Сохраняем инфу о приёме стимулятора
+  v_med_stimulant := jsonb_set(
+    v_med_stimulant,
+    array['last']::text[], 
+    jsonb_strip_nulls(format('{"job": %s}', coalesce(v_last_stimulant_job::text, 'null'))::jsonb));
+  v_med_stimulant := jsonb_set(
+    v_med_stimulant,
+    array['cycle' || v_economic_cycle_number]::text[], 
+    format('%s', v_stimulant_in_this_cycle + 1)::jsonb);
+
+  v_changes := array[]::jsonb[];
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('med_stimulant', v_med_stimulant));
+  perform data.change_object_and_notify(data.get_object_id(v_orig_person_code || '_med_health'), 
+                                        to_jsonb(v_changes),
+                                        null);
+
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.use_superbuff(integer);
+
+create or replace function pallas_project.use_superbuff(in_actor_id integer)
+returns void
+volatile
+as
+$$
+declare
+  v_orig_person_id integer := json.get_integer_opt(data.get_attribute_value(in_actor_id, 'system_person_original_id'), in_actor_id);
+  v_orig_person_code text := data.get_object_code(v_orig_person_id);
+  v_person_id integer; 
+
+  v_message_text text;
+
+  v_med_health jsonb := coalesce(data.get_attribute_value_for_update(v_orig_person_code || '_med_health', 'med_health'), jsonb '{}');
+  v_wound jsonb := json.get_object_opt(v_med_health, 'wound', jsonb '{}');
+  v_wound_level integer := json.get_integer_opt(v_wound, 'level', 0);
+  v_wound_job integer := json.get_integer_opt(v_wound, 'job', null);
+  v_changes jsonb[];
+begin
+
+  if v_wound_level in (1, 2) then
+    if v_wound_job is not null then 
+      delete from data.jobs where id = v_wound_job;
+    end if;
+    if v_wound_level= 1 then 
+      v_message_text := 'Вы можете двигать раненой конечностью. Ничего не болит.';
+    else
+      v_message_text := 'Вы можете медленно передвигаться и разговаривать, не чувствуете боли.';
+    end if;
+
+    -- Отправляем уведомление всем дублям
+    perform pp_utils.add_notification(v_orig_person_id, v_message_text);
+    for v_person_id in (select * from unnest(json.get_integer_array_opt(data.get_attribute_value(v_orig_person_id, 'system_person_doubles_id_list'), array[]::integer[]))) loop
+      perform pp_utils.add_notification(v_person_id, v_message_text);
+    end loop;
+
+    v_wound_job := data.create_job(clock_timestamp() + '5 minutes'::interval, 
+       'pallas_project.job_med_set_disease_level', 
+        format('{"person_code": "%s", "disease": "%s", "level": %s}', v_orig_person_code, 'wound', case when v_wound_level = 1 then 3 else 7 end  )::jsonb);
+
+    v_med_health := jsonb_set(v_med_health, array['wound','job']::text[], to_jsonb(v_wound_job));
+    v_changes := array[]::jsonb[];
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('med_health', v_med_health));
+    perform data.change_object_and_notify(data.get_object_id(v_orig_person_code || '_med_health'), 
+                                          to_jsonb(v_changes),
+                                          null);
+    end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.vd_administrative_services_status(integer, jsonb, data.card_type, integer);
 
 create or replace function pallas_project.vd_administrative_services_status(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
@@ -23625,6 +24017,75 @@ begin
   else
     return 'завершена';
   end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.vd_med_drug_category(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_med_drug_category(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+declare
+  v_text_value text := json.get_string(in_value);
+begin
+  case when v_text_value = 'stimulant' then
+    return 'Стимулятор';
+  when v_text_value = 'superbuff' then
+    return 'Супер-баф';
+  when v_text_value = 'sleg' then
+    return 'Слег';
+  else
+    return 'Неизвестно';
+  end case;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.vd_med_drug_effect(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_med_drug_effect(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+declare
+  v_text_value text := json.get_string(in_value);
+begin
+  case when v_text_value = 'stimulant' then
+    return 'Позволяет работать более эффективно — повышает уровень квалификации на 1. Время действия — 30 минут. Позволяет астерам игнорировать повышенную силу тяжести.
+Вызывает привыкание со 2-5 дозы — зависит от особенностей организма и не прогнозируется.';
+  when v_text_value = 'superbuff' then
+    return 'В случае лёгкого ранения: позволяет использовать конечность и не чувствовать боли. Работает 5 минут. Затем вам станет сильно хуже, чем могло бы быть при обычном течении болезни.
+В случае тяжелого ранения: позволяет не терять сознание после ранения. Вы можете медленно передвигаться и разговаривать, не чувствуете боли. Работает 5 минут. После того, как супер-баф закончит действовать, вы впадёте в кому.';
+  when v_text_value = 'sleg' then
+    return 'Слег';
+  else
+    return 'Неизвестно';
+  end case;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.vd_med_drug_status(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_med_drug_status(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+declare
+  v_text_value text := json.get_string(in_value);
+begin
+  case when v_text_value = 'not_used' then
+    return 'Не использован';
+  when v_text_value = 'used' then
+    return 'Использован';
+  else
+    return 'Неизвестно';
+  end case;
 end;
 $$
 language plpgsql;

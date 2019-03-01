@@ -12,9 +12,15 @@ begin
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
   ('med_health', null, 'Состояние здоровья персонажа', 'hidden', null, null, false),
 -- *format med_health*{"wound": {"level": 3, "start": "26.02.2019 23:58:17", "diagnosted": 5, "job": 4837438}, "radiation": {"level": 4, "start": "26.02.2019 23:58:30", "diagnosted": 9, "job": 4837489}}
+  ('med_stimulant', null, 'Данные о приёме стимулятора', 'hidden', null, null, false),
+-- *format med_stimulant*{"last": {"job": 4837438}, "cycle1": 1, "cycle2": 3}
   ('med_clinic_money', null, 'Остаток на счету клиники', 'hidden', null, null, false),
   ('med_person_code', null, 'Код пациента', 'hidden', null, null, false),
-  ('med_health_care_status', null, 'Статус обслуживания пациента', 'hidden', null, null, false);
+  ('med_health_care_status', null, 'Статус обслуживания пациента', 'hidden', null, null, false),
+  ('med_drug_qr_link',null, 'Ссылка для QR-кода', 'normal', 'mini', null, false),
+  ('med_drug_status', null, 'Статус наркотика', 'normal', null, 'pallas_project.vd_med_drug_status', false),
+  ('med_drug_category', null, 'Тип наркотика', 'normal', null, 'pallas_project.vd_med_drug_category', false),
+  ('med_drug_effect', 'Эффект', 'Эффект наркотипа', 'normal', 'full', 'pallas_project.vd_med_drug_effect', false);
 
   insert into data.params(code, value, description) values
   ('med_comp_client_ids', jsonb '[1, 2]', 'client_id медицинского компьютера'),
@@ -148,11 +154,69 @@ begin
     }
   ]');
 
+-- Объект - страница для работы с наркотиками
+  perform data.create_object(
+  'med_drugs',
+  jsonb '[
+    {"code": "title", "value": "Наркотики"},
+    {"code": "is_visible", "value": true, "value_object_code": "master"},
+    {"code": "description", "value": "Нажми кнопку с нужным наркотиком, и он создастся верхним в списке. Из ссылки нужно сгенерить QR."},
+    {"code": "content", "value": []},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_med_drugs"},
+    {"code": "list_element_function", "value": "pallas_project.lef_do_nothing"},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [{"code": "med_drugs_group", 
+                    "attributes": ["description"], 
+                    "actions": ["med_drugs_add_stimulant", "med_drugs_add_superbuff", "med_drugs_add_sleg"]}]
+      }
+    }
+  ]');
+
+  -- Объект-класс для наркотипа
+  perform data.create_class(
+  'med_drug',
+  jsonb '[
+    {"code": "title", "value": "Наркотик"},
+    {"code": "type", "value": "med_drug"},
+    {"code": "is_visible", "value": true},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_med_drug"},
+    {
+      "code": "mini_card_template",
+      "value": {
+        "title": "med_drug_category",
+        "subtitle": "med_drug_status",
+        "groups": [{"code": "med_drug_group", "attributes": ["med_drug_qr_link"]}]
+      }
+    },
+    {
+      "code": "template",
+      "value": {
+        "title": "med_drug_category",
+        "subtitle": "subtitle",
+        "groups": [
+          {
+            "code": "med_drug_group1",
+            "attributes": ["med_drug_status", "med_drug_effect"],
+            "actions": ["med_drug_use"]
+          }
+        ]
+      }
+    }
+  ]');
+
   insert into data.actions(code, function) values
   ('med_set_disease_level', 'pallas_project.act_med_set_disease_level'),
   ('med_start_patient_reception','pallas_project.act_med_start_patient_reception'),
   ('med_open_medicine', 'pallas_project.act_med_open_medicine'),
-  ('med_cure','pallas_project.act_med_cure');
+  ('med_cure','pallas_project.act_med_cure'),
+  ('med_drugs_add_drug', 'pallas_project.act_med_drugs_add_drug'),
+  ('med_drug_use', 'pallas_project.act_med_drug_use');
 end;
 $$
 language plpgsql;

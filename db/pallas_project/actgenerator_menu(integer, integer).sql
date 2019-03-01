@@ -95,7 +95,8 @@ begin
           "chats": {"code": "act_open_object", "name": "Отслеживаемые игровые чаты", "disabled": false, "params": {"object_code": "chats"}},
           "all_chats": {"code": "act_open_object", "name": "Все игровые чаты", "disabled": false, "params": {"object_code": "all_chats"}},
           "master_chats": {"code": "act_open_object", "name": "Мастерские чаты", "disabled": false, "params": {"object_code": "master_chats"}},
-          "all_contracts": {"code": "act_open_object", "name": "Все контракты", "disabled": false, "params": {"object_code": "contracts"}}
+          "all_contracts": {"code": "act_open_object", "name": "Все контракты", "disabled": false, "params": {"object_code": "contracts"}},
+          "med_drugs": {"code": "act_open_object", "name": "Наркотики", "disabled": false, "params": {"object_code": "med_drugs"}}
         }';
       if data.get_boolean_param('game_in_progress') then
         v_actions :=

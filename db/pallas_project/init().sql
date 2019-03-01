@@ -51,7 +51,7 @@ begin
         "groups": [
           {"code": "menu_notifications", "actions": ["notifications"]},
           {"code": "menu_lottery", "actions": ["lottery"]},
-          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "med_health", "chats", "documents", "medicine", "my_contracts", "my_organizations", "blogs", "claims", "important_notifications"]},
+          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "med_health", "chats", "documents", "medicine", "my_contracts", "my_organizations", "blogs", "claims", "important_notifications", "med_drugs"]},
           {"code": "menu_social", "actions": ["news", "all_chats", "debatles", "master_chats"]},
           {"code": "menu_info", "actions": ["all_contracts", "persons", "districts", "organizations"]},
           {"code": "menu_finish_game", "actions": ["finish_game"]},

@@ -41,7 +41,8 @@ begin
   ('system_person_notification_count', null, 'system', null, null, false),
   ('person_district', 'Район проживания', 'normal', 'full', 'pallas_project.vd_link', false),
   ('system_person_original_id', 'Идентификатор основной персоны', 'system', null, null, false),
-  ('system_person_doubles_id_list', 'Список идентификаторов дублей персоны', 'system', null, null, false);
+  ('system_person_doubles_id_list', 'Список идентификаторов дублей персоны', 'system', null, null, false),
+  ('system_person_is_stimulant_used', 'Признак, что принят стимулятор', 'system', null, null, false);
 
   insert into data.actions(code, function) values
   ('change_un_rating', 'pallas_project.act_change_un_rating'),

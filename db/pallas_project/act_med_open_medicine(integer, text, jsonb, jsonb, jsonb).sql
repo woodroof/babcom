@@ -6,7 +6,7 @@ volatile
 as
 $$
 declare
-  v_med_comp_client_ids integer[] := data.get_integer_array(data.get_param('med_comp_client_ids'));
+  v_med_comp_client_ids integer[] := json.get_integer_array(data.get_param('med_comp_client_ids'));
   v_object_code text;
 begin
   assert in_request_id is not null;

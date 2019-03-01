@@ -8,7 +8,7 @@ $$
 declare
   v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_patient_login text := json.get_string(in_user_params, 'patient_login');
-  v_med_comp_client_ids integer[] := data.get_integer_array(data.get_param('med_comp_client_ids'));
+  v_med_comp_client_ids integer[] := json.get_integer_array(data.get_param('med_comp_client_ids'));
   v_object_id integer;
   v_object_code text;
   v_person_id integer;
