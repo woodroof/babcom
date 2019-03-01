@@ -260,8 +260,12 @@ begin
           "groups": [
             {
               "code": "group",
-              "actions": ["contract_draft_edit", "contract_draft_cancel", "contract_draft_confirm"],
+              "actions": ["contract_draft_edit"],
               "attributes": ["contract_org", "contract_person", "contract_reward", "contract_description"]
+            },
+            {
+              "code": "apply",
+              "actions": ["contract_draft_confirm", "contract_draft_cancel"]
             }
           ]
         }

@@ -24,7 +24,7 @@ begin
     from data.client_subscription_objects cso
     join data.client_subscriptions cs
       on cs.id = cso.client_subscription_id
-      and cs.id not in (select value from unnest(in_filtered_parent_object_ids) a(value))
+      and cs.object_id not in (select value from unnest(in_filtered_parent_object_ids) a(value))
     where cso.object_id = in_object_id
   )
   loop

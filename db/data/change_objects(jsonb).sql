@@ -70,14 +70,14 @@ begin
   loop
     -- Сохраним атрибуты и действия для всех клиентов, подписанных на получение изменений объектов
     declare
-      v_ids integer[];
+      v_subscription_ids integer[];
     begin
       select array_agg(id)
-      into v_ids
+      into v_subscription_ids
       from data.client_subscriptions
       where object_id = v_object_id;
 
-      v_subscriptions := v_subscriptions || data_internal.save_state(v_ids, null, data.get_attribute_id('independent_from_object_list_elements'));
+      v_subscriptions := v_subscriptions || data_internal.save_state(v_subscription_ids, null, data.get_attribute_id('independent_from_object_list_elements'));
     end;
 
     -- Сохраним состояние миникарточек в списках, в которые входит данный объект
@@ -92,10 +92,10 @@ begin
 
     -- Если изменяется актор, то сохраняем подписки его клиентов
     declare
-      v_ids integer[];
+      v_subscription_ids integer[];
     begin
       select array_agg(id)
-      into v_ids
+      into v_subscription_ids
       from data.client_subscriptions
       where
         client_id in (
@@ -106,7 +106,7 @@ begin
           select value
           from unnest(v_ids) a(value));
 
-      v_actor_subscriptions := v_actor_subscriptions || data_internal.save_state(v_ids, v_ids, data.get_attribute_id('independent_from_actor_list_elements'));
+      v_actor_subscriptions := v_actor_subscriptions || data_internal.save_state(v_subscription_ids, v_ids, data.get_attribute_id('independent_from_actor_list_elements'));
     end;
   end loop;
 

@@ -23,6 +23,13 @@ declare
   v_person_economy_type_attr_id integer := data.get_attribute_id('person_deposit_money');
   v_person_district_attr_id integer := data.get_attribute_id('person_district');
   v_person_coin_attr_id integer := data.get_attribute_id('person_coin');
+  v_system_org_economics_type_attr_id integer := data.get_attribute_id('system_org_economics_type');
+  v_system_org_districts_control_attr_id integer := data.get_attribute_id('system_org_districts_control');
+  v_system_org_budget_attr_id integer := data.get_attribute_id('system_org_budget');
+  v_system_org_profit_attr_id integer := data.get_attribute_id('system_org_profit');
+  v_system_org_tax_attr_id integer := data.get_attribute_id('system_org_tax');
+  v_system_org_next_tax_attr_id integer := data.get_attribute_id('system_org_next_tax');
+  v_org_tax_attr_id integer := data.get_attribute_id('org_tax');
   v_cycle_attr_id integer := data.get_attribute_id('cycle');
   v_status_shop_cycle_attr_id integer := data.get_attribute_id('status_shop_cycle');
   v_contract_status_attr_id integer := data.get_attribute_id('contract_status');
@@ -31,6 +38,7 @@ declare
   v_content_attr_id integer := data.get_attribute_id('content');
   v_district_tax_attr_id integer := data.get_attribute_id('district_tax');
   v_district_control_attr_id integer := data.get_attribute_id('district_control');
+  v_system_district_tax_coeff_attr_id integer := data.get_attribute_id('system_district_tax_coeff');
 
   v_system_person_life_support_status_attr_id integer := data.get_attribute_id('system_person_life_support_status');
   v_system_person_health_care_status_attr_id integer := data.get_attribute_id('system_person_health_care_status');
@@ -59,8 +67,11 @@ declare
   v_district_taxes jsonb;
   v_district_ids jsonb;
   v_district_controls jsonb;
+  v_district_tax_coeff jsonb;
+  v_district_tax_total jsonb;
 
   v_person_id integer;
+  v_org record;
 
   v_master_notifications jsonb := jsonb '[]';
   v_object_changes jsonb := jsonb '[]';
@@ -85,8 +96,10 @@ begin
   select
     jsonb_object_agg(o.code, data.get_raw_attribute_value_for_update(o.id, v_district_tax_attr_id)) tax_info,
     jsonb_object_agg(o.code, o.id) ids,
-    jsonb_object_agg(o.code, data.get_raw_attribute_value_for_share(o.id, v_district_control_attr_id)) control
-  into v_district_taxes, v_district_ids, v_district_controls
+    jsonb_object_agg(o.code, data.get_raw_attribute_value_for_share(o.id, v_district_control_attr_id)) control,
+    jsonb_object_agg(o.code, data.get_raw_attribute_value_for_share(o.id, v_system_district_tax_coeff_attr_id)) coeff,
+    jsonb_object_agg(o.code, jsonb '0') tax_total
+  into v_district_taxes, v_district_ids, v_district_controls, v_district_tax_coeff, v_district_tax_total
   from jsonb_array_elements(data.get_raw_attribute_value(data.get_object_id('districts'), v_content_attr_id)) d
   join data.objects o on
     o.code = json.get_string(d.value);
@@ -117,7 +130,10 @@ begin
 
       v_person_district_code text;
       v_tax bigint;
+      v_tax_coeff numeric;
+      v_district_tax bigint;
       v_tax_sum bigint;
+      v_org_tax_sum bigint;
       v_contract record;
 
       v_transactions_id integer;
@@ -159,6 +175,8 @@ begin
           -- Получаем налог района проживания
           v_person_district_code := json.get_string(data.get_raw_attribute_value_for_share(v_person_id, v_person_district_attr_id));
           v_tax := json.get_integer(v_district_taxes, v_person_district_code);
+          v_tax_coeff := json.get_number(v_district_tax_coeff, v_person_district_code);
+          v_district_tax := json.get_bigint(v_district_tax_total, v_person_district_code);
 
           -- Начисляем зарплату по действующим контрактам
           for v_contract in
@@ -178,6 +196,8 @@ begin
           )
           loop
             v_tax_sum := ceil(v_tax * 0.01 * v_contract.reward);
+            v_org_tax_sum := (v_tax_sum * v_tax_coeff)::bigint;
+            v_district_tax := v_district_tax + v_org_tax_sum;
             v_system_money := v_system_money + v_contract.reward - v_tax_sum;
 
             v_transactions :=
@@ -195,6 +215,8 @@ begin
                 (case when v_district_controls->v_person_district_code = jsonb 'null' then '' else format('"tax": %s,', v_tax_sum) end),
                 v_contract.org)::jsonb;
           end loop;
+
+          v_district_tax_total := jsonb_set(v_district_tax_total, array[v_person_district_code], to_jsonb(v_district_tax));
         end if;
 
         -- Покупаем статус жизнеобеспечения на следующий цикл
@@ -222,11 +244,12 @@ begin
                 v_person_code));
         end if;
 
-        v_changes := v_changes || data.attribute_change2jsonb(v_system_money_attr_id, to_jsonb(v_system_money));
-
-        -- Заменяем видимые значения для мастеров и самого игрока
-        v_changes := v_changes || data.attribute_change2jsonb(v_money_attr_id, to_jsonb(v_system_money), v_master_group_id);
-        v_changes := v_changes || data.attribute_change2jsonb(v_money_attr_id, to_jsonb(v_system_money), v_person_id);
+        -- Обновляем значение и заменяем видимые значения для мастеров и самого игрока
+        v_changes :=
+          v_changes ||
+          data.attribute_change2jsonb(v_system_money_attr_id, to_jsonb(v_system_money)) ||
+          data.attribute_change2jsonb(v_money_attr_id, to_jsonb(v_system_money), v_master_group_id) ||
+          data.attribute_change2jsonb(v_money_attr_id, to_jsonb(v_system_money), v_person_id);
 
         v_transactions_id := data.get_object_id(v_person_code || '_transactions');
         v_transactions_content := data.get_raw_attribute_value_for_update(v_transactions_id, v_content_attr_id);
@@ -333,11 +356,12 @@ begin
                 v_person_code));
         end if;
 
-        v_changes := v_changes || data.attribute_change2jsonb(v_system_person_coin_attr_id, to_jsonb(v_system_person_coin));
-
-        -- Заменяем видимые значения для мастеров и самого игрока
-        v_changes := v_changes || data.attribute_change2jsonb(v_person_coin_attr_id, to_jsonb(v_system_person_coin), v_master_group_id);
-        v_changes := v_changes || data.attribute_change2jsonb(v_person_coin_attr_id, to_jsonb(v_system_person_coin), v_person_id);
+        -- Обновляем значение и заменяем видимые значения для мастеров и самого игрока
+        v_changes :=
+          v_changes ||
+          data.attribute_change2jsonb(v_system_person_coin_attr_id, to_jsonb(v_system_person_coin)) ||
+          data.attribute_change2jsonb(v_person_coin_attr_id, to_jsonb(v_system_person_coin), v_master_group_id) ||
+          data.attribute_change2jsonb(v_person_coin_attr_id, to_jsonb(v_system_person_coin), v_person_id);
       end if;
 
       if v_economy_type in ('un', 'fixed') then
@@ -519,7 +543,270 @@ begin
     end;
   end loop;
 
-  -- todo организации
+  -- Экономика для организаций
+  for v_org in
+  (
+    select o.id, o.code, json.get_string(av.value) economics_type
+    from jsonb_array_elements(data.get_raw_attribute_value(data.get_object_id('organizations'), v_content_attr_id)) d
+    join data.objects o on
+      o.code = json.get_string(d.value)
+    -- Пропускаем синонимы
+    join data.attribute_values av on
+      av.object_id = o.id and
+      av.attribute_id = v_system_org_economics_type_attr_id and
+      av.value_object_id is null
+  )
+  loop
+    declare
+      v_transactions jsonb := jsonb '[]';
+
+      v_system_money bigint := data.get_raw_attribute_value_for_update(v_org.id, v_system_money_attr_id);
+      v_control jsonb := data.get_raw_attribute_value_for_share(v_org.id, v_system_org_districts_control_attr_id);
+      v_system_org_budget bigint;
+      v_system_org_profit bigint;
+
+      v_contracts_sum bigint := 0;
+      v_contract record;
+
+      v_transactions_id integer;
+      v_transactions_content jsonb;
+      v_transaction record;
+
+      v_head_group_id integer := data.get_object_id(v_org.code || '_head');
+      v_economist_group_id integer := data.get_object_id(v_org.code || '_economist');
+      v_auditor_group_id integer := data.get_object_id(v_org.code || '_auditor');
+      v_temporary_auditor_group_id integer := data.get_object_id(v_org.code || '_temporary_auditor');
+
+      v_changes jsonb := jsonb '[]';
+    begin
+      -- Платим по действующим контрактам и меняем статус контрактов
+      for v_contract in
+      (
+        select
+          o.id id,
+          o.code code,
+          json.get_bigint(data.get_raw_attribute_value(o.id, v_contract_reward_attr_id)) reward,
+          json.get_string(data.get_raw_attribute_value_for_update(o.id, v_contract_status_attr_id)) status
+        from jsonb_array_elements(data.get_raw_attribute_value_for_share(v_org.code || '_contracts', v_content_attr_id)) c
+        join data.objects o on
+          o.code = json.get_string(c.value)
+      )
+      loop
+        if v_contract.status in ('active', 'cancelled') then
+          v_contracts_sum := v_contracts_sum + v_contract.reward;
+        end if;
+
+        if v_contract.status in ('confirmed', 'cancelled', 'suspended_cancelled') then
+          v_object_changes :=
+            v_object_changes ||
+            jsonb_build_object(
+              'id',
+              v_contract.id,
+              'changes',
+              format(
+                '{
+                  "contract_status": "%s"
+                }',
+                (case when v_contract.status = 'confirmed' then 'active' else 'not_active' end))::jsonb);
+        end if;
+      end loop;
+
+      if v_contracts_sum != 0 then
+        v_system_money := v_system_money - v_contracts_sum;
+
+        v_transactions :=
+          v_transactions ||
+          format(
+            '{
+              "comment": "Выплаты по контрактам",
+              "value": %s,
+              "balance": %s
+            }',
+            -v_contracts_sum,
+            v_system_money)::jsonb;
+      end if;
+
+      -- Начисляем налоги и меняем налоговую ставку
+      if v_control is not null then
+        declare
+          v_district text;
+          v_system_org_next_tax integer := json.get_integer(data.get_raw_attribute_value_for_share(v_org.id, v_system_org_next_tax_attr_id));
+          v_tax_sum bigint := 0;
+        begin
+          v_changes :=
+            v_changes ||
+            data.attribute_change2jsonb(v_system_org_tax_attr_id, to_jsonb(v_system_org_next_tax)) ||
+            data.attribute_change2jsonb(v_org_tax_attr_id, to_jsonb(v_system_org_next_tax), v_master_group_id) ||
+            data.attribute_change2jsonb(v_org_tax_attr_id, to_jsonb(v_system_org_next_tax), v_head_group_id) ||
+            data.attribute_change2jsonb(v_org_tax_attr_id, to_jsonb(v_system_org_next_tax), v_economist_group_id);
+
+          for v_district in
+          (
+            select json.get_string(value)
+            from jsonb_array_elements(v_control)
+          )
+          loop
+            v_tax_sum := v_tax_sum + json.get_bigint(v_district_tax_total, v_district);
+
+            v_object_changes :=
+              v_object_changes ||
+              jsonb_build_object('id', json.get_integer(v_district_ids, v_district), 'changes', jsonb '[]' || data.attribute_change2jsonb(v_district_tax_attr_id, to_jsonb(v_system_org_next_tax)));
+          end loop;
+
+          if v_tax_sum != 0 then
+            v_system_money := v_system_money + v_tax_sum;
+
+            v_transactions :=
+              v_transactions ||
+              format(
+                '{
+                  "comment": "Начисление налогов",
+                  "value": %s,
+                  "balance": %s
+                }',
+                v_tax_sum,
+                v_system_money)::jsonb;
+          end if;
+        end;
+      end if;
+
+      -- Безусловный доход
+      if v_org.economics_type = 'profit' then
+        v_system_org_profit := json.get_bigint(data.get_raw_attribute_value_for_share(v_org.id, v_system_org_profit_attr_id));
+
+        v_system_money := v_system_money + v_system_org_profit;
+
+        v_transactions :=
+          v_transactions ||
+          format(
+            '{
+              "comment": "Внешние поступления",
+              "value": %s,
+              "balance": %s
+            }',
+            v_system_org_profit,
+            v_system_money)::jsonb;
+      elsif v_org.economics_type = 'budget' then
+        v_system_org_budget := json.get_bigint(data.get_raw_attribute_value_for_share(v_org.id, v_system_org_budget_attr_id));
+
+        if v_system_money >= v_system_org_budget then
+          v_master_notifications :=
+            v_master_notifications ||
+            to_jsonb(
+              format(
+                'У организации [%s](babcom:%s) на начало цикла денег больше бюджета, внешних поступлений нет!',
+                json.get_string(data.get_raw_attribute_value(v_org.id, v_title_attr_id)),
+                v_org.code));
+        else
+          if v_system_money < 0 then
+            v_master_notifications :=
+              v_master_notifications ||
+              to_jsonb(
+                format(
+                  'Организация [%s](babcom:%s) на начало цикла после подсчёта расходов и доходов в минусе, бюджет на этот цикл увеличен!',
+                  json.get_string(data.get_raw_attribute_value(v_org.id, v_title_attr_id)),
+                  v_org.code));
+          end if;
+
+          v_system_org_budget := v_system_org_budget - v_system_money;
+
+          v_system_money := v_system_money + v_system_org_budget;
+
+          v_transactions :=
+            v_transactions ||
+            format(
+              '{
+                "comment": "Внешние поступления",
+                "value": %s,
+                "balance": %s
+              }',
+              v_system_org_budget,
+              v_system_money)::jsonb;
+        end if;
+      end if;
+
+      if v_system_money < 0 then
+        v_master_notifications :=
+          v_master_notifications ||
+          to_jsonb(
+            format(
+              'Организация [%s](babcom:%s) на начало цикла после подсчёта расходов и доходов в минусе',
+              json.get_string(data.get_raw_attribute_value(v_org.id, v_title_attr_id)),
+              v_org.code));
+      end if;
+
+      -- Обновляем значение и заменяем видимые значения для мастеров и членов организации
+      v_changes :=
+        v_changes ||
+        data.attribute_change2jsonb(v_system_money_attr_id, to_jsonb(v_system_money)) ||
+        data.attribute_change2jsonb(v_money_attr_id, to_jsonb(v_system_money), v_master_group_id) ||
+        data.attribute_change2jsonb(v_money_attr_id, to_jsonb(v_system_money), v_head_group_id) ||
+        data.attribute_change2jsonb(v_money_attr_id, to_jsonb(v_system_money), v_economist_group_id) ||
+        data.attribute_change2jsonb(v_money_attr_id, to_jsonb(v_system_money), v_auditor_group_id) ||
+        data.attribute_change2jsonb(v_money_attr_id, to_jsonb(v_system_money), v_temporary_auditor_group_id);
+
+      if v_transactions != jsonb '[]' then
+        v_transactions_id := data.get_object_id(v_org.code || '_transactions');
+        v_transactions_content := data.get_raw_attribute_value_for_update(v_transactions_id, v_content_attr_id);
+
+        for v_transaction in
+        (
+          select
+            json.get_bigint(value, 'value') as value,
+            json.get_bigint(value, 'balance') balance,
+            json.get_string(value, 'comment') as comment
+          from jsonb_array_elements(v_transactions)
+        )
+        loop
+          declare
+            v_transaction_id integer;
+            v_description text;
+          begin
+            v_description :=
+              format(
+                E'%s\n%s\n%s\nБаланс: %s',
+                pp_utils.format_date(v_time),
+                (case when v_transaction.value < 0 then '' else '+' end) || pp_utils.format_money(v_transaction.value),
+                v_transaction.comment,
+                pp_utils.format_money(v_transaction.balance));
+
+            v_transaction_id :=
+              data.create_object(
+                null,
+                format(
+                  '[
+                    {"id": %s, "value": %s},
+                    {"id": %s, "value": true, "value_object_id": %s},
+                    {"id": %s, "value": true, "value_object_id": %s},
+                    {"id": %s, "value": true, "value_object_id": %s},
+                    {"id": %s, "value": true, "value_object_id": %s}
+                  ]',
+                  v_mini_description_attr_id,
+                  to_jsonb(v_description)::text,
+                  v_is_visible_attr_id,
+                  v_head_group_id,
+                  v_is_visible_attr_id,
+                  v_economist_group_id,
+                  v_is_visible_attr_id,
+                  v_auditor_group_id,
+                  v_is_visible_attr_id,
+                  v_temporary_auditor_group_id)::jsonb,
+                'transaction');
+
+            v_transactions_content := to_jsonb(data.get_object_code(v_transaction_id)) || v_transactions_content;
+          end;
+        end loop;
+
+        v_object_changes :=
+          v_object_changes ||
+          jsonb_build_object('id', v_transactions_id, 'changes', jsonb '[]' || data.attribute_change2jsonb(v_content_attr_id, v_transactions_content));
+      end if;
+
+      if v_changes != jsonb '[]' then
+        v_object_changes := v_object_changes || jsonb_build_object('id', v_org.id, 'changes', v_changes);
+      end if;
+    end;
+  end loop;
 
   perform data.process_diffs_and_notify(data.change_objects(v_object_changes));
 
