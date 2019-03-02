@@ -65,6 +65,14 @@ begin
                   '"params": {"person_code": "%s", "disease": "addiction", "level": 1}}',
                   case when coalesce(v_level, 0) < 1 then 'false' else 'true' end,
                   v_person_code);
+
+    select x.level into v_level
+    from jsonb_to_record(jsonb_extract_path(v_med_health, 'genetic')) as x(level integer);
+    v_actions_list := v_actions_list || 
+          format(', "med_add_genetic": {"code": "med_set_disease_level", "name": "Генетическое заболевание", "disabled": %s,'||
+                  '"params": {"person_code": "%s", "disease": "genetic", "level": 1}}',
+                  case when coalesce(v_level, 0) < 1 then 'false' else 'true' end,
+                  v_person_code);
   end if;
 
   return jsonb ('{'||trim(v_actions_list,',')||'}');

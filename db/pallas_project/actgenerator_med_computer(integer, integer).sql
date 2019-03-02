@@ -19,7 +19,7 @@ declare
 begin
   assert in_actor_id is not null;
 
-  for v_disease in (select * from unnest(array['wound', 'radiation', 'asthma', 'rio_miamore', 'addiction'])) loop
+  for v_disease in (select * from unnest(array['wound', 'radiation', 'asthma', 'rio_miamore', 'addiction', 'genetic'])) loop
     select x.level into v_level
     from jsonb_to_record(jsonb_extract_path(v_med_health, v_disease)) as x(level integer);
     v_disease_params := data.get_param('med_' || v_disease );

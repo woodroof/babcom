@@ -16369,7 +16369,7 @@ declare
 begin
   assert in_actor_id is not null;
 
-  for v_disease in (select * from unnest(array['wound', 'radiation', 'asthma', 'rio_miamore', 'addiction'])) loop
+  for v_disease in (select * from unnest(array['wound', 'radiation', 'asthma', 'rio_miamore', 'addiction', 'genetic'])) loop
     select x.level into v_level
     from jsonb_to_record(jsonb_extract_path(v_med_health, v_disease)) as x(level integer);
     v_disease_params := data.get_param('med_' || v_disease );
@@ -16523,6 +16523,14 @@ begin
     v_actions_list := v_actions_list || 
           format(', "med_add_addiction": {"code": "med_set_disease_level", "name": "Зависимость от стимулятора", "disabled": %s,'||
                   '"params": {"person_code": "%s", "disease": "addiction", "level": 1}}',
+                  case when coalesce(v_level, 0) < 1 then 'false' else 'true' end,
+                  v_person_code);
+
+    select x.level into v_level
+    from jsonb_to_record(jsonb_extract_path(v_med_health, 'genetic')) as x(level integer);
+    v_actions_list := v_actions_list || 
+          format(', "med_add_genetic": {"code": "med_set_disease_level", "name": "Генетическое заболевание", "disabled": %s,'||
+                  '"params": {"person_code": "%s", "disease": "genetic", "level": 1}}',
                   case when coalesce(v_level, 0) < 1 then 'false' else 'true' end,
                   v_person_code);
   end if;
@@ -20879,7 +20887,13 @@ begin
   ('med_addiction_6', jsonb '"Следующие 5 минут вам больно от яркого света и шума."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_addiction_7', jsonb '"Вы видите галлюцинации. Вспомните самый страшный ваш сон - он стал явью. И все вокруг участники этого кошмара. Приступ продлится 3 минуты."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_addiction_8', jsonb '"Агрессия. Вам хочется рвать и метать. Вы в ярости! Кричите, рвите! Не успокоитесь, пока не ударите человека или не сломаете что-нибудь."', 'Сообщение для игрока о состоянии заболевания'),
-  ('med_addiction_9', jsonb '"Вам очень больно. Боль пронизывает всё тело. Боль проходит, если не двигаться и лежать. Трудно дышать. Приступ продлится 5 минут."', 'Сообщение для игрока о состоянии заболевания');
+  ('med_addiction_9', jsonb '"Вам очень больно. Боль пронизывает всё тело. Боль проходит, если не двигаться и лежать. Трудно дышать. Приступ продлится 5 минут."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_genetic', '{"l0": {}, "l1": {"time": 10}, "l2": {"time": 5}, "l3": {"time": 20}, "l4": {"time": 20}}'::jsonb, 'Длительность этапов заболевания'),
+  ('med_genetic_0', jsonb '"Вы чувствуете себя хорошо, все симптомы прошли."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_genetic_1', jsonb '"У вас жуткий приступ кашля. Пройдет через минуту или после того как вы попьёте горячего."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_genetic_2', jsonb '"У вас озноб. Вам холодно. Сильная слабость."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_genetic_3', jsonb '"Сильно кружится голова, не можете стоять. Через минуту всё пройдёт. Всё ещё не можете работать."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_genetic_4', jsonb '"Следующие 5 минут вам больно от яркого света и шума."', 'Сообщение для игрока о состоянии заболевания');
 
   -- Объект - страница для заявления заболеваний и ранений
   perform data.create_class(
@@ -20896,7 +20910,7 @@ begin
         "title": "title",
         "subtitle": "subtitle",
         "groups": [{"code": "health_group", 
-                    "actions": ["med_light_wound", "med_heavy_wound", "med_irradiated", "med_add_asthma", "med_add_rio_miamore", "med_add_addiction"]}]
+                    "actions": ["med_light_wound", "med_heavy_wound", "med_irradiated", "med_add_asthma", "med_add_rio_miamore", "med_add_addiction", "med_add_genetic"]}]
       }
     }
   ]');
@@ -20955,6 +20969,7 @@ begin
                                 "med_diagnose_asthma", 
                                 "med_diagnose_rio_miamore", 
                                 "med_diagnose_addiction",
+                                "med_diagnose_genetic",
                                 "med_cure"]}]
       }
     }
