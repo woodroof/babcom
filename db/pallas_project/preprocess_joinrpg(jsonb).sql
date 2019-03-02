@@ -28,8 +28,8 @@ declare
       "4638": "system_person_recreation_status",
       "4639": "system_person_police_status",
       "4640": "system_person_administrative_services_status",
-      "4641": "__code",
-      "4643": "__login_code",
+      "4641": "__object_code",
+      "4643": "__password",
       "4718": "person_district"
     }';
   v_object_properties integer[] := array[4744, 4715, 4737, 4717, 4716, 4714, 4641, 4643];
@@ -79,7 +79,7 @@ declare
 
   v_field record;
   v_value jsonb;
-  v_code jsonb;
+  v_code text;
   v_attributes jsonb;
 begin
   for v_player in
@@ -88,7 +88,7 @@ begin
     from jsonb_array_elements(in_value)
   )
   loop
-    v_attributes := jsonb '[]' || jsonb_build_object('code', 'title', 'value', json.get_string(v_player, 'CharacterName'));
+    v_attributes := jsonb_build_object('title', json.get_string(v_player, 'CharacterName'));
     v_element := jsonb '{}';
 
     for v_field in
@@ -101,18 +101,22 @@ begin
     loop
       if array_position(v_process_values, v_field.id) is not null then
         v_value := v_value_map->(v_field.value);
+
+        if v_value = jsonb 'null' then
+          continue;
+        end if;
       elsif array_position(v_to_int_values, v_field.id) is not null then
         v_value := v_field.value::integer;
       else
         v_value := to_jsonb(v_field.value);
       end if;
 
-      v_code := v_map->(v_field.id::text);
+      v_code := json.get_string(v_map, v_field.id::text);
 
       if array_position(v_object_properties, v_field.id) is null then
-        v_attributes := v_attributes || jsonb_build_object('code', v_code, 'value', v_value);
+        v_attributes := v_attributes || jsonb_build_object(v_code, v_value);
       else
-        v_element := v_element || jsonb_build_object(json.get_string(v_code), v_value);
+        v_element := v_element || jsonb_build_object(v_code, v_value);
       end if;
     end loop;
 

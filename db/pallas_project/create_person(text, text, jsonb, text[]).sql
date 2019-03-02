@@ -26,7 +26,7 @@ begin
       v_cycle integer;
       v_money jsonb;
       v_deposit_money jsonb;
-      v_coin jsonb;
+      v_coin integer;
     begin
       perform data.set_attribute_value(v_person_id, 'person_economy_type', v_economy_type, v_master_group_id);
 
@@ -50,17 +50,48 @@ begin
       end if;
 
       if v_economy_type = jsonb '"un"' then
-        v_coin := data.get_attribute_value(v_person_id, 'system_person_coin');
+        -- Считаем доход в коинах
+        v_coin := 0;
+
+        declare
+          v_status text;
+          v_current_status integer;
+          v_prices integer[];
+        begin
+          for v_status in
+          (
+            select value
+            from unnest(array['life_support', 'health_care', 'recreation', 'police', 'administrative_services']) a(value)
+          )
+          loop
+            v_prices := data.get_integer_array_param(v_status || '_status_prices');
+            v_current_status := json.get_integer(data.get_attribute_value(v_person_id, 'system_person_' || v_status || '_status'));
+
+            if v_current_status > 0 then
+              v_coin := v_coin + v_prices[1];
+
+              if v_current_status > 1 then
+                v_coin := v_coin + v_prices[2];
+
+                if v_current_status > 2 then
+                  v_coin := v_coin + v_prices[3];
+                end if;
+              end if;
+            end if;
+          end loop;
+        end;
+
+        perform data.set_attribute_value(v_person_id, 'system_person_coin_profit', to_jsonb(v_coin));
 
         declare
           v_life_support_prices integer[] := data.get_integer_array_param('life_support_status_prices');
           v_life_support_price integer := v_life_support_prices[1];
         begin
-          perform data.set_attribute_value(v_person_id, 'system_person_coin_profit', to_jsonb(json.get_integer(v_coin) + v_life_support_price));
+          v_coin := v_coin - v_life_support_price;
+          perform data.set_attribute_value(v_person_id, 'system_person_coin', to_jsonb(v_coin));
+          perform data.set_attribute_value(v_person_id, 'person_coin', to_jsonb(v_coin), v_person_id);
+          perform data.set_attribute_value(v_person_id, 'person_coin', to_jsonb(v_coin), v_master_group_id);
         end;
-
-        perform data.set_attribute_value(v_person_id, 'person_coin', v_coin, v_person_id);
-        perform data.set_attribute_value(v_person_id, 'person_coin', v_coin, v_master_group_id);
       end if;
 
       -- Создадим страницу для статусов

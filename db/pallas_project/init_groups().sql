@@ -24,13 +24,13 @@ begin
   perform data.create_object('mcr', jsonb '{"priority": 40, "title": "Марсиане"}', 'group');
   perform data.create_object('opa', jsonb '{"priority": 50, "title": "СВП"}', 'group');
   perform data.create_object('cartel', jsonb '{"priority": 60, "title": "Картель"}', 'group');
+  perform data.create_object('rider', jsonb '{"priority": 70, "title": "Ридеры"}', 'group');
   perform data.create_object('master', jsonb '{"priority": 190, "title": "Мастера"}', 'group');
 
   perform data.create_object('judge', jsonb '{"priority": 75, "title": "Судьи"}', 'group');
   perform data.create_object('doctor', jsonb '{"priority": 76, "title": "Врачи"}', 'group');
   perform data.create_object('unofficial_doctor', jsonb '{"priority": 74, "title": "Неофициальные врачи"}', 'group');
   perform data.create_object('customs_officer', jsonb '{"priority": 72, "title": "Таможенники"}', 'group');
-
 
 end;
 $$

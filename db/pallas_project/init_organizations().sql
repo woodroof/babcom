@@ -167,8 +167,25 @@ begin
       "system_org_profit": 120,
       "system_money": 120
     }');
+  perform pallas_project.create_organization(
+    'org_cavern',
+    jsonb '{
+      "title": "Каверна",
+      "subtitle": "Бар",
+      "system_org_economics_type": "profit",
+      "system_org_profit": 500,
+      "system_money": 500
+    }');
 
-  -- Мастерская компания
+  -- Мастерские компании
+  perform pallas_project.create_organization(
+    'org_riders_digest',
+    jsonb '{
+      "title": "Riders Digest",
+      "subtitle": "Информационное агенство",
+      "system_org_economics_type": "normal",
+      "system_money": 50000
+    }');
   perform pallas_project.create_organization(
     'org_white_star',
     jsonb '{
@@ -185,6 +202,16 @@ begin
     jsonb '{
       "title": "Третий глаз",
       "subtitle": "Салон"
+    }');
+  perform pallas_project.create_synonym(
+    'org_white_star',
+    jsonb '{
+      "title": "Белый свет"
+    }');
+  perform pallas_project.create_synonym(
+    'org_white_star',
+    jsonb '{
+      "title": "Сакура"
     }');
 
   -- Синонимы-поставщики

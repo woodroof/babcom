@@ -12,10 +12,9 @@ begin
     return 'Гражданин ООН';
   when v_text_value = 'un_base' then
     return 'Догражданин ООН';
-  when v_text_value = 'mcr' then
-    return 'Гражданин МРК';
   else
-    return '';
+    assert v_text_value = 'mcr';
+    return 'Гражданин МРК';
   end case;
 end;
 $$

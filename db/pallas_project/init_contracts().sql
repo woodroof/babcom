@@ -6,8 +6,7 @@ volatile
 as
 $$
 begin
-  perform pallas_project.create_contract('player2', 'org_de_beers', 'suspended', '100', 'Работай и зарабатывай');
-  perform pallas_project.create_contract('player4', 'org_administration', 'active', '120', 'Работай и зарабатывай');
+  -- todo
 end;
 $$
 language plpgsql;
