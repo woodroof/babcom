@@ -54,7 +54,8 @@ begin
     select
       o.id id,
       o.code as code,
-      json.get_object_opt(data.get_attribute_value(la.actor_id, 'template'), null) as template
+      json.get_object_opt(data.get_attribute_value(la.actor_id, 'template'), null) as template,
+      la.is_main
     from data.login_actors la
     join data.objects o
       on o.id = la.actor_id
@@ -94,7 +95,7 @@ begin
     v_actors :=
       v_actors ||
       (
-        jsonb_build_object('id', v_actor.code) ||
+        jsonb_build_object('id', v_actor.code, 'is_main', v_actor.is_main) ||
         case when v_title is not null then jsonb_build_object('title', v_title) else jsonb '{}' end ||
         case when v_subtitle is not null then jsonb_build_object('subtitle', v_subtitle) else jsonb '{}' end
       );
@@ -102,13 +103,13 @@ begin
 
   assert v_actors is not null;
 
-  -- Сортируем по имени
+  -- Сортируем по важности, затем по имени
   select jsonb_agg(a.value)
   into v_actors
   from (
     select value
     from jsonb_array_elements(v_actors)
-    order by value->'title', value->'subtitle') a;
+    order by json.get_boolean(value, 'is_main') desc, value->'title', value->'subtitle') a;
 
   perform api_utils.create_notification(in_client_id, in_request_id, 'actors', jsonb_build_object('actors', v_actors));
 end;

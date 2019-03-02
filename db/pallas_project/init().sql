@@ -54,13 +54,14 @@ begin
           {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "med_health", "chats", "documents", "medicine", "customs", "my_contracts", "my_organizations", "blogs", "claims", "important_notifications", "med_drugs"]},
           {"code": "menu_social", "actions": ["news", "all_chats", "debatles", "master_chats"]},
           {"code": "menu_info", "actions": ["all_contracts", "persons", "districts", "organizations"]},
+          {"code": "menu_cycle", "actions": ["cycle_checklist"]},
           {"code": "menu_finish_game", "actions": ["finish_game"]},
           {"code": "menu_logout", "actions": ["logout"]}
         ]
       }
     }');
 
-  -- И пустой список уведомлений
+  -- И пустой список уведомлений для анонимного персонажа
   perform data.create_class(
     'notification_list',
     jsonb '{
@@ -73,8 +74,12 @@ begin
       "independent_from_object_list_elements": true
     }');
   perform data.create_object(
-    'notifications',
-    jsonb '{}');
+    'anonymous_notifications',
+    jsonb '[
+      {"code": "is_visible", "value": true, "value_object_code": "anonymous"},
+      {"code": "content", "value": []}
+    ]',
+    'notification_list');
 
   -- Создадим объект для страницы 404
   declare
@@ -108,6 +113,17 @@ begin
   ('remove_notification', 'pallas_project.act_remove_notification'),
   ('clear_notifications', 'pallas_project.act_clear_notifications'),
   ('finish_game', 'pallas_project.act_finish_game');
+
+  -- Объект для завершения цикла
+  perform data.create_object(
+    'cycle_checklist',
+    jsonb '[
+      {"code": "type", "value": "cycle_checklist"},
+      {"code": "title", "value": "Чеклист перед сменой цикла"},
+      {"code": "is_visible", "value": true, "group_object_code": "master"},
+      {"code": "full_card_function", "value": "pallas_project.fcard_cycle_checklist"},
+      {"code": "template", "value": {"title": "title", "groups": [{"code": "group", "attributes": ["description"]}]}}
+    ]');
 
   -- Базовые классы
   perform data.create_class(

@@ -7,7 +7,7 @@ as
 $$
 begin
   if data.get_boolean_param('game_in_progress') then
-    perform pallas_project.send_to_master_chat('До конца цикла осталось 15 минут, пора подводить итоги!');
+    perform pallas_project.send_to_master_chat('До конца цикла осталось 15 минут, пора [подводить итоги](babcom:cycle_checklist)!');
   end if;
 end;
 $$

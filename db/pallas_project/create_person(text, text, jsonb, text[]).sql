@@ -1,7 +1,7 @@
 -- drop function pallas_project.create_person(text, text, jsonb, text[]);
 
 create or replace function pallas_project.create_person(in_person_code text, in_login_code text, in_attributes jsonb, in_groups text[])
-returns void
+returns integer
 volatile
 as
 $$
@@ -14,8 +14,10 @@ declare
   v_economy_type jsonb := data.get_attribute_value(v_person_id, 'system_person_economy_type');
   v_attributes jsonb;
 begin
-  insert into data.logins(code) values(in_login_code) returning id into v_login_id;
-  insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
+  if in_login_code is not null then
+    insert into data.logins(code) values(in_login_code) returning id into v_login_id;
+    insert into data.login_actors(login_id, actor_id, is_main) values(v_login_id, v_person_id, true);
+  end if;
 
   perform data.set_attribute_value(v_person_id, 'system_person_notification_count', jsonb '0');
 
@@ -249,20 +251,15 @@ begin
     'my_organizations');
 
   -- Уведомления
-  declare
-    v_notifications_id integer :=
-      data.create_object(
-        v_person_code || '_notifications',
-        format(
-          '[
-            {"code": "is_visible", "value": true, "value_object_id": %s},
-            {"code": "content", "value": []}
-          ]',
-          v_person_id)::jsonb,
-        'notification_list');
-  begin
-    perform data.set_attribute_value(data.get_object_id('notifications'), 'redirect', to_jsonb(v_notifications_id), v_person_id);
-  end;
+  perform data.create_object(
+    v_person_code || '_notifications',
+    format(
+      '[
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "content", "value": []}
+      ]',
+      v_person_id)::jsonb,
+    'notification_list');
 
  -- Создадим "Состояние здоровья"
   perform data.create_object(
@@ -274,6 +271,8 @@ begin
       ]',
       v_person_id)::jsonb,
     'med_health');
+
+  return v_person_id;
 end;
 $$
 language plpgsql;

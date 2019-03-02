@@ -711,7 +711,8 @@ begin
     select
       o.id id,
       o.code as code,
-      json.get_object_opt(data.get_attribute_value(la.actor_id, 'template'), null) as template
+      json.get_object_opt(data.get_attribute_value(la.actor_id, 'template'), null) as template,
+      la.is_main
     from data.login_actors la
     join data.objects o
       on o.id = la.actor_id
@@ -751,7 +752,7 @@ begin
     v_actors :=
       v_actors ||
       (
-        jsonb_build_object('id', v_actor.code) ||
+        jsonb_build_object('id', v_actor.code, 'is_main', v_actor.is_main) ||
         case when v_title is not null then jsonb_build_object('title', v_title) else jsonb '{}' end ||
         case when v_subtitle is not null then jsonb_build_object('subtitle', v_subtitle) else jsonb '{}' end
       );
@@ -759,13 +760,13 @@ begin
 
   assert v_actors is not null;
 
-  -- Сортируем по имени
+  -- Сортируем по важности, затем по имени
   select jsonb_agg(a.value)
   into v_actors
   from (
     select value
     from jsonb_array_elements(v_actors)
-    order by value->'title', value->'subtitle') a;
+    order by json.get_boolean(value, 'is_main') desc, value->'title', value->'subtitle') a;
 
   perform api_utils.create_notification(in_client_id, in_request_id, 'actors', jsonb_build_object('actors', v_actors));
 end;
@@ -16634,6 +16635,7 @@ begin
           "all_chats": {"code": "act_open_object", "name": "Все игровые чаты", "disabled": false, "params": {"object_code": "all_chats"}},
           "master_chats": {"code": "act_open_object", "name": "Мастерские чаты", "disabled": false, "params": {"object_code": "master_chats"}},
           "all_contracts": {"code": "act_open_object", "name": "Все контракты", "disabled": false, "params": {"object_code": "contracts"}},
+          "cycle_checklist": {"code": "act_open_object", "name": "Чеклист", "disabled": false, "params": {"object_code": "cycle_checklist"}},
           "med_drugs": {"code": "act_open_object", "name": "Наркотики", "disabled": false, "params": {"object_code": "med_drugs"}}
         }';
       if data.get_boolean_param('game_in_progress') then
@@ -16660,9 +16662,10 @@ begin
           v_actions ||
           format(
             '{
-              "notifications": {"code": "act_open_object", "name": "🔥 Уведомления 🔥 (%s)", "disabled": false, "params": {"object_code": "notifications"}}
+              "notifications": {"code": "act_open_object", "name": "🔥 Уведомления 🔥 (%s)", "disabled": false, "params": {"object_code": "%s_notifications"}}
             }',
-            v_notification_count)::jsonb;
+            v_notification_count,
+            v_actor_code)::jsonb;
       end if;
     end;
 
@@ -17938,7 +17941,7 @@ language plpgsql;
 -- drop function pallas_project.create_person(text, text, jsonb, text[]);
 
 create or replace function pallas_project.create_person(in_person_code text, in_login_code text, in_attributes jsonb, in_groups text[])
-returns void
+returns integer
 volatile
 as
 $$
@@ -17951,8 +17954,10 @@ declare
   v_economy_type jsonb := data.get_attribute_value(v_person_id, 'system_person_economy_type');
   v_attributes jsonb;
 begin
-  insert into data.logins(code) values(in_login_code) returning id into v_login_id;
-  insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
+  if in_login_code is not null then
+    insert into data.logins(code) values(in_login_code) returning id into v_login_id;
+    insert into data.login_actors(login_id, actor_id, is_main) values(v_login_id, v_person_id, true);
+  end if;
 
   perform data.set_attribute_value(v_person_id, 'system_person_notification_count', jsonb '0');
 
@@ -18186,20 +18191,15 @@ begin
     'my_organizations');
 
   -- Уведомления
-  declare
-    v_notifications_id integer :=
-      data.create_object(
-        v_person_code || '_notifications',
-        format(
-          '[
-            {"code": "is_visible", "value": true, "value_object_id": %s},
-            {"code": "content", "value": []}
-          ]',
-          v_person_id)::jsonb,
-        'notification_list');
-  begin
-    perform data.set_attribute_value(data.get_object_id('notifications'), 'redirect', to_jsonb(v_notifications_id), v_person_id);
-  end;
+  perform data.create_object(
+    v_person_code || '_notifications',
+    format(
+      '[
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "content", "value": []}
+      ]',
+      v_person_id)::jsonb,
+    'notification_list');
 
  -- Создадим "Состояние здоровья"
   perform data.create_object(
@@ -18211,6 +18211,8 @@ begin
       ]',
       v_person_id)::jsonb,
     'med_health');
+
+  return v_person_id;
 end;
 $$
 language plpgsql;
@@ -18340,6 +18342,45 @@ begin
     data.get_object_code(v_transaction_id),
     null,
     in_actor_id);
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.fcard_cycle_checklist(integer, integer);
+
+create or replace function pallas_project.fcard_cycle_checklist(object_id integer, actor_id integer)
+returns void
+volatile
+as
+$$
+declare
+  v_description text :=
+'Уведомление в мастерский чат приходит за 15 минут до наступления цикла. Это время даётся на то, чтобы:
+1. Изменить, если нужно, стоимость коина и стоимости в коинах статусов.
+2. Пройтись по гражданам ООН (кроме экономиста) и вручную изменить им рейтинг и количество коинов дохода.
+3. Пройтись по организациям с бюджетом и, если нужно, изменить им бюджет.
+4. Пройтись по организациям с безусловным доходом и, если нужно, изменить им доход.
+5. Начиная с конца второго цикла - списать UN$500 с организации [Тариель](babcom:org_tariel).
+
+Граждане ООН:
+%s
+
+Организации с бюджетом:
+%s
+
+Организации с безусловным доходом:
+%s
+
+После наступления нового цикла:
+1. Отреагировать на сообщение в мастерский чат про успехи администрации и поменять рейтинг, количество коинов дохода и количество доступных коинов [экономиста](babcom:0d07f15b-2952-409b-b22e-4042cf70acc6).
+2. Как-то отреагировать на сообщения в мастерский чат о том, что кто-то в минусе.
+3. Гражданам ООН, у которых заметно изменился рейтинг, от лица мастерских персонажей написать какое-то сообщение.
+4. Проверить, что картель перечислял нужную сумму в головную организацию. Написать им о планах на новый цикл.
+5. Написать СВП о новых закупочных ценах на алмазы.
+6. Посмотреть, отреагировал ли [мормон](babcom:ac1b23d0-ba5f-4042-85d5-880a66254803) на запросы о помощи, изменить его влияние. Написать новые запросы, если нужно.
+7. В начале пятого цикла - проверить, купила ли в прошлом цикле организация [Тариель](babcom:org_tariel) лицензию у администрации за UN$1000.';
+begin
+  -- Генерируем description
 end;
 $$
 language plpgsql;
@@ -18684,13 +18725,14 @@ begin
           {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "med_health", "chats", "documents", "medicine", "customs", "my_contracts", "my_organizations", "blogs", "claims", "important_notifications", "med_drugs"]},
           {"code": "menu_social", "actions": ["news", "all_chats", "debatles", "master_chats"]},
           {"code": "menu_info", "actions": ["all_contracts", "persons", "districts", "organizations"]},
+          {"code": "menu_cycle", "actions": ["cycle_checklist"]},
           {"code": "menu_finish_game", "actions": ["finish_game"]},
           {"code": "menu_logout", "actions": ["logout"]}
         ]
       }
     }');
 
-  -- И пустой список уведомлений
+  -- И пустой список уведомлений для анонимного персонажа
   perform data.create_class(
     'notification_list',
     jsonb '{
@@ -18703,8 +18745,12 @@ begin
       "independent_from_object_list_elements": true
     }');
   perform data.create_object(
-    'notifications',
-    jsonb '{}');
+    'anonymous_notifications',
+    jsonb '[
+      {"code": "is_visible", "value": true, "value_object_code": "anonymous"},
+      {"code": "content", "value": []}
+    ]',
+    'notification_list');
 
   -- Создадим объект для страницы 404
   declare
@@ -18738,6 +18784,17 @@ begin
   ('remove_notification', 'pallas_project.act_remove_notification'),
   ('clear_notifications', 'pallas_project.act_clear_notifications'),
   ('finish_game', 'pallas_project.act_finish_game');
+
+  -- Объект для завершения цикла
+  perform data.create_object(
+    'cycle_checklist',
+    jsonb '[
+      {"code": "type", "value": "cycle_checklist"},
+      {"code": "title", "value": "Чеклист перед сменой цикла"},
+      {"code": "is_visible", "value": true, "group_object_code": "master"},
+      {"code": "full_card_function", "value": "pallas_project.fcard_cycle_checklist"},
+      {"code": "template", "value": {"title": "title", "groups": [{"code": "group", "attributes": ["description"]}]}}
+    ]');
 
   -- Базовые классы
   perform data.create_class(
@@ -20570,6 +20627,47 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.init_master_characters();
+
+create or replace function pallas_project.init_master_characters()
+returns void
+volatile
+as
+$$
+declare
+  v_master_characters integer[] := array[]::integer[];
+  v_master_login_id integer;
+  v_char_id integer;
+begin
+  v_char_id :=
+    pallas_project.create_person(
+      'asj',
+      null,
+      jsonb '{
+        "title": "АСС",
+        "person_occupation": "Автоматическая система судопроизводства"
+      }',
+      array['all_person']);
+  v_master_characters := array_append(v_master_characters, v_char_id);
+
+  -- Сантьяго де ла Крус - большой картель
+  -- todo
+
+  -- Привязываем эти персонажи ко всем мастерам
+  insert into data.login_actors(login_id, actor_id, is_main)
+  select login_id, new_actor_id, false
+  from data.login_actors la
+  join unnest(v_master_characters) a(new_actor_id) on true
+  where la.actor_id in (
+    select object_id
+    from data.object_objects
+    where
+      parent_object_id = data.get_object_id('master') and
+      parent_object_id != object_id);
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.init_medicine();
 
 create or replace function pallas_project.init_medicine()
@@ -21683,11 +21781,24 @@ begin
   perform pallas_project.create_person(null, 'm3', jsonb '{"title": "Данил", "person_occupation": "Мастер"}', array['master']);
   perform pallas_project.create_person(null, 'm4', jsonb '{"title": "Нина", "person_occupation": "Мастер"}', array['master']);
   perform pallas_project.create_person(null, 'm5', jsonb '{"title": "Оля", "person_occupation": "Мастер"}', array['master']);
-  perform pallas_project.create_person(null, 'm6', jsonb '{"title": "Юра", "person_occupation": "Мастер"}', array['master']);
 
-  -- Для всех с любой экономикой обязательные поля - person_district и person_opa_rating
+  -- Мастерские персонажи
+  perform pallas_project.init_master_characters();
 
   -- Игроки
+  perform pallas_project.init_players();
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.init_players();
+
+create or replace function pallas_project.init_players()
+returns void
+volatile
+as
+$$
+begin
   perform pallas_project.create_person(
     'player1',
     'p1',
@@ -21759,7 +21870,7 @@ begin
       "person_district": "sector_D"}',
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
-    null,
+    'player5',
     'p5',
     jsonb '{
       "title": "Амели Сноу",
@@ -21775,33 +21886,6 @@ begin
       "system_person_administrative_services_status": 1,
       "person_district": "sector_G"}',
     array['all_person', 'player', 'aster']);
-
-  -- Игротехнические персонажи и тайные личности
-  -- Сантьяго де ла Крус - большой картель
-
-  perform pallas_project.create_person(
-    'asj',
-    'p10',
-    jsonb '{
-      "title": "АСС",
-      "person_occupation": "Автоматическая система судопроизводства"}',
-    array['all_person']);
-
-  perform pallas_project.create_person(
-    null,
-    'p11',
-    jsonb '{
-      "title": "Шенг",
-      "person_occupation": "Репортёр",
-      "person_opa_rating": 1,
-      "system_person_economy_type": "fixed",
-      "system_person_life_support_status": 2,
-      "system_person_health_care_status": 2,
-      "system_person_recreation_status": 2,
-      "system_person_police_status": 2,
-      "system_person_administrative_services_status": 2,
-      "person_district": "sector_D"}',
-    array['all_person']);
 end;
 $$
 language plpgsql;
@@ -22664,7 +22748,7 @@ as
 $$
 begin
   if data.get_boolean_param('game_in_progress') then
-    perform pallas_project.send_to_master_chat('До конца цикла осталось 15 минут, пора подводить итоги!');
+    perform pallas_project.send_to_master_chat('До конца цикла осталось 15 минут, пора [подводить итоги](babcom:cycle_checklist)!');
   end if;
 end;
 $$
@@ -22692,6 +22776,8 @@ begin
     loop
       perform pp_utils.add_notification(v_person_id, 'До конца цикла остался один час! Не забудьте купить статусы обслуживания.');
     end loop;
+
+    perform pallas_project.send_to_master_chat('До конца цикла остался один час, можно начинать [подводить итоги](babcom:cycle_checklist).');
   end if;
 end;
 $$
@@ -23442,6 +23528,134 @@ begin
 
   assert in_org_code = 'org_starbucks';
   return 'cartel';
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.preprocess_joinrpg(jsonb);
+
+create or replace function pallas_project.preprocess_joinrpg(in_value jsonb)
+returns jsonb
+immutable
+as
+$$
+declare
+  v_ret_val jsonb := jsonb '[]';
+  v_map jsonb :=
+    '{
+      "4744": "__comment",
+      "4715": "__orgs",
+      "4737": "__contracts",
+      "4717": "__documents",
+      "4716": "__outer_contacts",
+      "4714": "__additional_persons",
+      "4654": "person_occupation",
+      "4652": "description",
+      "4628": "system_person_economy_type",
+      "4629": "person_state",
+      "4633": "person_un_rating",
+      "4634": "person_opa_rating",
+      "4630": "system_person_deposit_money",
+      "4632": "system_money",
+      "4635": "system_person_life_support_status",
+      "4636": "system_person_health_care_status",
+      "4638": "system_person_recreation_status",
+      "4639": "system_person_police_status",
+      "4640": "system_person_administrative_services_status",
+      "4641": "__code",
+      "4643": "__login_code",
+      "4718": "person_district"
+    }';
+  v_object_properties integer[] := array[4744, 4715, 4737, 4717, 4716, 4714, 4641, 4643];
+  v_process_values integer[] := array[4628, 4629, 4635, 4636, 4638, 4639, 4640, 4718];
+  v_to_int_values integer[] := array[4633, 4634, 4630, 4632];
+  v_value_map jsonb :=
+    jsonb '{
+      "4554": "un",
+      "4555": "mcr",
+      "4556": "asters",
+      "4558": "fixed",
+      "4559": null,
+      "4560": "un_base",
+      "4561": "un",
+      "4562": "mcr",
+      "4563": 0,
+      "4564": 1,
+      "4565": 2,
+      "4566": 3,
+      "4567": 0,
+      "4568": 1,
+      "4569": 2,
+      "4570": 3,
+      "4571": 0,
+      "4572": 1,
+      "4573": 2,
+      "4574": 3,
+      "4575": 0,
+      "4576": 1,
+      "4577": 2,
+      "4578": 3,
+      "4579": 0,
+      "4580": 1,
+      "4581": 2,
+      "4582": 3,
+      "4635": "sector_A",
+      "4636": "sector_B",
+      "4637": "sector_C",
+      "4638": "sector_D",
+      "4639": "sector_E",
+      "4640": "sector_F",
+      "4641": "sector_G"
+    }';
+  v_player jsonb;
+
+  v_element jsonb;
+
+  v_field record;
+  v_value jsonb;
+  v_code jsonb;
+  v_attributes jsonb;
+begin
+  for v_player in
+  (
+    select value
+    from jsonb_array_elements(in_value)
+  )
+  loop
+    v_attributes := jsonb '[]' || jsonb_build_object('code', 'title', 'value', json.get_string(v_player, 'CharacterName'));
+    v_element := jsonb '{}';
+
+    for v_field in
+    (
+      select
+        json.get_integer(value, 'ProjectFieldId') id,
+        json.get_string(value, 'Value') as value
+      from jsonb_array_elements(v_player->'Fields')
+    )
+    loop
+      if array_position(v_process_values, v_field.id) is not null then
+        v_value := v_value_map->(v_field.value);
+      elsif array_position(v_to_int_values, v_field.id) is not null then
+        v_value := v_field.value::integer;
+      else
+        v_value := to_jsonb(v_field.value);
+      end if;
+
+      v_code := v_map->(v_field.id::text);
+
+      if array_position(v_object_properties, v_field.id) is null then
+        v_attributes := v_attributes || jsonb_build_object('code', v_code, 'value', v_value);
+      else
+        v_element := v_element || jsonb_build_object(json.get_string(v_code), v_value);
+      end if;
+    end loop;
+
+    v_element := v_element || jsonb_build_object('attributes', v_attributes);
+
+    v_ret_val := v_ret_val || v_element;
+  end loop;
+
+  return v_ret_val;
 end;
 $$
 language plpgsql;
@@ -28273,6 +28487,7 @@ create table data.login_actors(
   id integer not null generated always as identity,
   login_id integer not null,
   actor_id integer not null,
+  is_main boolean not null default false,
   constraint login_actors_actor_check check(data.is_instance(actor_id)),
   constraint login_actors_pk primary key(id),
   constraint login_actors_unique_login_actor unique(login_id, actor_id)

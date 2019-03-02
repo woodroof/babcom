@@ -96,6 +96,7 @@ begin
           "all_chats": {"code": "act_open_object", "name": "Все игровые чаты", "disabled": false, "params": {"object_code": "all_chats"}},
           "master_chats": {"code": "act_open_object", "name": "Мастерские чаты", "disabled": false, "params": {"object_code": "master_chats"}},
           "all_contracts": {"code": "act_open_object", "name": "Все контракты", "disabled": false, "params": {"object_code": "contracts"}},
+          "cycle_checklist": {"code": "act_open_object", "name": "Чеклист", "disabled": false, "params": {"object_code": "cycle_checklist"}},
           "med_drugs": {"code": "act_open_object", "name": "Наркотики", "disabled": false, "params": {"object_code": "med_drugs"}}
         }';
       if data.get_boolean_param('game_in_progress') then
@@ -122,9 +123,10 @@ begin
           v_actions ||
           format(
             '{
-              "notifications": {"code": "act_open_object", "name": "🔥 Уведомления 🔥 (%s)", "disabled": false, "params": {"object_code": "notifications"}}
+              "notifications": {"code": "act_open_object", "name": "🔥 Уведомления 🔥 (%s)", "disabled": false, "params": {"object_code": "%s_notifications"}}
             }',
-            v_notification_count)::jsonb;
+            v_notification_count,
+            v_actor_code)::jsonb;
       end if;
     end;
 

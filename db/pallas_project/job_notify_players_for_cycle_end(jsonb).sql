@@ -20,6 +20,8 @@ begin
     loop
       perform pp_utils.add_notification(v_person_id, 'До конца цикла остался один час! Не забудьте купить статусы обслуживания.');
     end loop;
+
+    perform pallas_project.send_to_master_chat('До конца цикла остался один час, можно начинать [подводить итоги](babcom:cycle_checklist).');
   end if;
 end;
 $$
