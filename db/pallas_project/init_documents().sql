@@ -56,6 +56,7 @@ begin
     {"code": "title", "value": "Мои документы"},
     {"code": "independent_from_actor_list_elements", "value": true},
     {"code": "independent_from_object_list_elements", "value": true},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_documents"},
     {"code": "is_visible", "value": true},
     {"code": "content", "value": []},
     {
@@ -69,7 +70,7 @@ begin
       "code": "template",
       "value": {
         "title": "title",
-        "groups": []
+        "groups": [{"code": "documents_group", "actions": ["document_create"]}]
       }
     }
   ]');

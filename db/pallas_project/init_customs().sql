@@ -29,6 +29,58 @@ begin
   ('system_package_id', null, 'Идентификатор посылки для проверок', 'system', null, null, false),
   ('system_customs_cheking', null, 'Признак, что таможня проверяет какой-то груз', 'system', null, null, false);
 
+  insert into data.params(code, value, description) values
+  ('customs_goods', 
+  jsonb_build_object(
+    'кефир', jsonb '{"live": 1}',
+    'мяч', jsonb '{}',
+    'одежда синтетическая', jsonb '{}',
+    'лабораторные мыши', jsonb '{"live": 1}',
+    'кабель электрический', jsonb '{"metal": 1}',
+    'набор мебели IKEA', jsonb '{"metal": 1}',
+    'кофеварка', jsonb '{"metal": 1}',
+    'аптечка \"Здоровый астер\"', jsonb '{"live": 1, "metal": 1}',
+    'лампы осветительные', jsonb '{"metal": 1}',
+    'коммуникатор NOD300', jsonb '{"metal": 1}',
+    'шляпа', jsonb '{}',
+    'кресло офисное', jsonb '{"metal": 1}',
+    'горшок цветочный', jsonb '{}',
+    'косметика', jsonb '{}',
+    'бижутерия', jsonb '{"metal": 1}',
+    'подушки', jsonb '{}',
+    'сухари', jsonb '{}',
+    'консервированное мясо', jsonb '{}',
+    'соевый соус', jsonb '{}',
+    'клубничный джем', jsonb '{}',
+    'вата', jsonb '{}',
+    'молоко сухое', jsonb '{}',
+    'кофе', jsonb '{}',
+    'чай', jsonb '{}',
+    'сахар', jsonb '{}',
+    'соль', jsonb '{}',
+    'посуда', jsonb '{}',
+    'датчики освещения', jsonb '{"metal": 1}',
+    'перья птичьи', jsonb '{}',
+    'уксус', jsonb '{}',
+    'картина', jsonb '{}',
+    'модель корабля', jsonb '{}',
+    'тапочки', jsonb '{}',
+    'туфли', jsonb '{}',
+    'перчатки', jsonb '{}',
+    'гуталин', jsonb '{}',
+    'крекеры', jsonb '{}',
+    'клетка', jsonb '{"metal": 1}',
+    'галстук', jsonb '{}',
+    'рюкзак', jsonb '{"metal": 1}',
+    'мыло', jsonb '{}',
+    'карамель', jsonb '{}',
+    'краска', jsonb '{}',
+    'кот', jsonb '{"live": 1}',
+    'гантели', jsonb '{}',
+    'растение в горшке', jsonb '{"live": 1}'
+    ), 'Товары для таможни');
+
+
   -- Объект - страница для таможни
   perform data.create_object(
   'customs',

@@ -7,7 +7,6 @@ as
 $$
 declare
   v_actions_list text := '';
-  v_object_code text := data.get_object_code(in_object_id);
 begin
   assert in_actor_id is not null;
 

@@ -1064,7 +1064,7 @@ language plpgsql;
 
 -- drop function api_utils.process_touch_message(integer, text, jsonb);
 
-create or replace function api_utils.process_touch_message(in_client_id integer, in_request text, in_message jsonb)
+create or replace function api_utils.process_touch_message(in_client_id integer, in_request_id text, in_message jsonb)
 returns void
 volatile
 as
@@ -11738,6 +11738,49 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_customs_ship_arrival(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_customs_ship_arrival(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_title text;
+
+  v_person_id integer;
+  v_login_id integer;
+
+  v_first_names text[] := json.get_string_array(data.get_param('first_names'));
+  v_last_names text[] := json.get_string_array(data.get_param('last_names'));
+
+  v_title_attribute_id integer := data.get_attribute_id('title');
+
+  v_goods jsonb := data.get_param('customs_goods');
+
+begin
+  assert in_request_id is not null;
+
+  v_title := v_first_names[random.random_integer(1, array_length(v_first_names, 1))] || ' '|| v_last_names[random.random_integer(1, array_length(v_last_names, 1))];
+  insert into data.objects(class_id) values(v_person_class_id) returning id into v_person_id;
+    -- Логин
+  insert into data.logins default values returning id into v_login_id;
+  insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
+  insert into data.attribute_values(object_id, attribute_id, value) values
+  (v_person_id, v_title_attribute_id, to_jsonb(v_title));
+
+  insert into data.object_objects(parent_object_id, object_id) values
+  (v_all_person_group_id, v_person_id),
+  (v_player_group_id, v_person_id);
+
+  -- Заменим логин
+  perform data.set_login(in_client_id, v_login_id);
+  -- И отправим новый список акторов
+  perform api_utils.process_get_actors_message(in_client_id, in_request_id);
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_debatle_change_audience_group(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_debatle_change_audience_group(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -16238,7 +16281,6 @@ as
 $$
 declare
   v_actions_list text := '';
-  v_object_code text := data.get_object_code(in_object_id);
 begin
   assert in_actor_id is not null;
 
@@ -19317,6 +19359,58 @@ begin
   ('system_package_id', null, 'Идентификатор посылки для проверок', 'system', null, null, false),
   ('system_customs_cheking', null, 'Признак, что таможня проверяет какой-то груз', 'system', null, null, false);
 
+  insert into data.params(code, value, description) values
+  ('customs_goods', 
+  jsonb_build_object(
+    'кефир', jsonb '{"live": 1}',
+    'мяч', jsonb '{}',
+    'одежда синтетическая', jsonb '{}',
+    'лабораторные мыши', jsonb '{"live": 1}',
+    'кабель электрический', jsonb '{"metal": 1}',
+    'набор мебели IKEA', jsonb '{"metal": 1}',
+    'кофеварка', jsonb '{"metal": 1}',
+    'аптечка \"Здоровый астер\"', jsonb '{"live": 1, "metal": 1}',
+    'лампы осветительные', jsonb '{"metal": 1}',
+    'коммуникатор NOD300', jsonb '{"metal": 1}',
+    'шляпа', jsonb '{}',
+    'кресло офисное', jsonb '{"metal": 1}',
+    'горшок цветочный', jsonb '{}',
+    'косметика', jsonb '{}',
+    'бижутерия', jsonb '{"metal": 1}',
+    'подушки', jsonb '{}',
+    'сухари', jsonb '{}',
+    'консервированное мясо', jsonb '{}',
+    'соевый соус', jsonb '{}',
+    'клубничный джем', jsonb '{}',
+    'вата', jsonb '{}',
+    'молоко сухое', jsonb '{}',
+    'кофе', jsonb '{}',
+    'чай', jsonb '{}',
+    'сахар', jsonb '{}',
+    'соль', jsonb '{}',
+    'посуда', jsonb '{}',
+    'датчики освещения', jsonb '{"metal": 1}',
+    'перья птичьи', jsonb '{}',
+    'уксус', jsonb '{}',
+    'картина', jsonb '{}',
+    'модель корабля', jsonb '{}',
+    'тапочки', jsonb '{}',
+    'туфли', jsonb '{}',
+    'перчатки', jsonb '{}',
+    'гуталин', jsonb '{}',
+    'крекеры', jsonb '{}',
+    'клетка', jsonb '{"metal": 1}',
+    'галстук', jsonb '{}',
+    'рюкзак', jsonb '{"metal": 1}',
+    'мыло', jsonb '{}',
+    'карамель', jsonb '{}',
+    'краска', jsonb '{}',
+    'кот', jsonb '{"live": 1}',
+    'гантели', jsonb '{}',
+    'растение в горшке', jsonb '{"live": 1}'
+    ), 'Товары для таможни');
+
+
   -- Объект - страница для таможни
   perform data.create_object(
   'customs',
@@ -20068,6 +20162,7 @@ begin
     {"code": "title", "value": "Мои документы"},
     {"code": "independent_from_actor_list_elements", "value": true},
     {"code": "independent_from_object_list_elements", "value": true},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_documents"},
     {"code": "is_visible", "value": true},
     {"code": "content", "value": []},
     {
@@ -20081,7 +20176,7 @@ begin
       "code": "template",
       "value": {
         "title": "title",
-        "groups": []
+        "groups": [{"code": "documents_group", "actions": ["document_create"]}]
       }
     }
   ]');
@@ -25206,7 +25301,7 @@ language plpgsql;
 -- drop function pallas_project.touch_notification(integer, integer);
 
 create or replace function pallas_project.touch_notification(in_object_id integer, in_actor_id integer)
-returns jsonb
+returns void
 volatile
 as
 $$
@@ -25214,7 +25309,7 @@ declare
   v_notification_code text := data.get_object_code(in_object_id);
   v_system_person_notification_count_attr_id integer := data.get_attribute_id('system_person_notification_count');
   v_content_attr_id integer := data.get_attribute_id('content');
-  v_notifications_id integer := data.get_object_id(data.get_object_code(v_actor_id) || '_notifications');
+  v_notifications_id integer := data.get_object_id(data.get_object_code(in_actor_id) || '_notifications');
   v_notifications_count integer := json.get_integer(data.get_attribute_value_for_update(in_actor_id, v_system_person_notification_count_attr_id)) - 1;
   v_content text[] :=
     array_remove(
@@ -25227,7 +25322,7 @@ begin
     jsonb_build_object('system_person_notification_count', v_notifications_count),
     in_actor_id,
     'Touch notification');
-  perform data.change_current_object(
+  perform data.change_object_and_notify(
     v_notifications_id,
     jsonb '[]' || data.attribute_change2jsonb('content', to_jsonb(v_content)),
     in_actor_id,
