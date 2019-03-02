@@ -152,6 +152,11 @@ begin
   perform pallas_project.init_blogs();
   perform pallas_project.init_cycles();
   perform pallas_project.init_customs();
+  perform pallas_project.init_chains();
+  perform pallas_project.init_claim_list();
+  perform pallas_project.init_routes();
+  perform pallas_project.init_statuses();
+  perform pallas_project.init_document_list();
 end;
 $$
 language plpgsql;
