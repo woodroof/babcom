@@ -9,8 +9,10 @@ declare
   v_chat_code text := json.get_string(in_params, 'chat_code');
   v_chat_id integer := data.get_object_id(v_chat_code);
   v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_actor_code text := data.get_object_code(v_actor_id);
 
   v_person_id integer;
+  v_person_code text;
 
   v_message_id integer;
   v_message_code text;
@@ -24,8 +26,8 @@ declare
   v_system_message_time_attribute_id integer := data.get_attribute_id('system_message_time');
 
   v_all_chats_id integer := data.get_object_id('all_chats');
-  v_chats_id integer := data.get_object_id('chats');
-  v_master_chats_id integer := data.get_object_id('master_chats');
+  v_chats_id integer := data.get_object_id(v_actor_code || '_chats');
+  v_master_chats_id integer := data.get_object_id(v_actor_code || '_master_chats');
 
   v_master_group_id integer := data.get_object_id('master');
 
@@ -56,11 +58,9 @@ begin
 
   -- Удаляем чат из своего списка чатов
   if v_chat_parent_list = 'master_chats' then
-    if not v_is_master then
-      perform pp_utils.list_remove_and_notify(v_master_chats_id, v_chat_code, v_actor_id);
-    end if;
+    perform pp_utils.list_remove_and_notify(v_master_chats_id, v_chat_code, null);
   else
-    perform pp_utils.list_remove_and_notify(v_chats_id, v_chat_code, v_actor_id);
+    perform pp_utils.list_remove_and_notify(v_chats_id, v_chat_code, null);
   end if;
 
   -- Мастера в чате не видно, поэтому светить его выход не надо
@@ -101,10 +101,8 @@ begin
     perform pp_utils.list_prepend_and_notify(v_chat_id, v_message_code, null, v_chat_id);
 
     -- Перекладываем этот чат в начало в мастерском списке чатов
-    if v_chat_parent_list = 'master_chats' then
-      perform pp_utils.list_replace_to_head_and_notify(v_master_chats_id, v_chat_code, v_master_group_id);
-    elsif v_chat_parent_list = 'chats' then
-      perform pp_utils.list_replace_to_head_and_notify(v_all_chats_id, v_chat_code, v_master_group_id);
+    if v_chat_parent_list = 'chats' then
+      perform pp_utils.list_replace_to_head_and_notify(v_all_chats_id, v_chat_code, null);
     end if;
 
     -- Отправляем нотификацию о новом сообщении всем неподписанным на этот чат
@@ -114,12 +112,11 @@ begin
        where oo.parent_object_id = v_chat_id
          and oo.parent_object_id <> oo.object_id)
     loop
+      v_person_code := data.get_object_code(v_person_id);
       if v_chat_parent_list = 'master_chats' then
-        if not v_is_master then
-          perform pp_utils.list_replace_to_head_and_notify(v_master_chats_id, v_chat_code, v_person_id);
-        end if;
+        perform pp_utils.list_replace_to_head_and_notify(data.get_object_id(v_person_code || '_master_chats'), v_chat_code, null);
       elsif v_chat_parent_list = 'chats' then
-        perform pp_utils.list_replace_to_head_and_notify(v_chats_id, v_chat_code, v_person_id);
+        perform pp_utils.list_replace_to_head_and_notify(data.get_object_id(v_person_code || '_chats'), v_chat_code, v_person_id);
       end if;
       if v_person_id <> v_actor_id 
         and not json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'chat_is_mute', v_person_id), false) then
@@ -129,7 +126,7 @@ begin
   end if;
 
   -- Переходим к списку чатов
-  perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, 'chats');
+  perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, v_actor_code || '_chats');
 end;
 $$
 language plpgsql;

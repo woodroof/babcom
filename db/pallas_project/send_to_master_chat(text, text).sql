@@ -17,7 +17,6 @@ declare
   v_system_message_sender_attribute_id integer := data.get_attribute_id('system_message_sender');
   v_system_message_time_attribute_id integer := data.get_attribute_id('system_message_time');
 
-  v_master_chats_id integer := data.get_object_id('master_chats');
   v_master_chat_id integer := data.get_object_id('master_chat');
 
   v_master_group_id integer := data.get_object_id('master');
@@ -49,15 +48,11 @@ begin
   -- Добавляем сообщение в чат
   perform pp_utils.list_prepend_and_notify(v_master_chat_id, v_message_code, null, v_master_group_id);
 
-  -- Перекладываем этот чат в начало в мастерском списке чатов
-  perform pp_utils.list_replace_to_head_and_notify(v_master_chats_id, 'master_chat', v_master_group_id);
-
   -- Отправляем нотификацию о новом сообщении всем неподписанным на этот чат
-  for v_person_id in 
-    (select oo.object_id from data.object_objects oo 
-     where oo.parent_object_id = v_master_chat_id
-       and oo.parent_object_id <> oo.object_id)
+  for v_person_id in (select * from unnest(pallas_project.get_group_members('master')))
   loop
+    -- Перекладываем этот чат в начало в мастерском списке чатов
+    perform pp_utils.list_replace_to_head_and_notify(data.get_object_id(data.get_object_code(v_person_id) || '_master_chats'), 'master_chat', null);
     if not pp_utils.is_actor_subscribed(v_person_id, v_master_chat_id) then
       v_chat_unread_messages := json.get_integer_opt(data.get_raw_attribute_value_for_update(v_master_chat_id, v_chat_unread_messages_attribute_id, v_person_id), 0);
       perform data.change_object_and_notify(v_master_chat_id, 

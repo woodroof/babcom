@@ -51,11 +51,14 @@ begin
           v_actor_code)::jsonb;
       v_actions :=
         v_actions ||
-        jsonb '{
-          "chats": {"code": "act_open_object", "name": "Чаты", "disabled": false, "params": {"object_code": "chats"}},
-          "master_chats": {"code": "act_open_object", "name": "Связь с мастерами", "disabled": false, "params": {"object_code": "master_chats"}},
-          "important_notifications": {"code": "act_open_object", "name": "Важные уведомления", "disabled": false, "params": {"object_code": "important_notifications"}}
-        }';
+        format('{
+          "chats": {"code": "act_open_object", "name": "Чаты", "disabled": false, "params": {"object_code": "%s_chats"}},
+          "master_chats": {"code": "act_open_object", "name": "Связь с мастерами", "disabled": false, "params": {"object_code": "%s_master_chats"}},
+          "important_notifications": {"code": "act_open_object", "name": "Важные уведомления", "disabled": false, "params": {"object_code": "%s_important_chat"}}
+          }',
+          v_actor_code,
+          v_actor_code,
+          v_actor_code)::jsonb;
       v_actions :=
           v_actions ||
           format(
@@ -99,14 +102,16 @@ begin
     else
       v_actions :=
         v_actions ||
-        jsonb '{
-          "chats": {"code": "act_open_object", "name": "Отслеживаемые игровые чаты", "disabled": false, "params": {"object_code": "chats"}},
+       format('{
+          "chats": {"code": "act_open_object", "name": "Отслеживаемые игровые чаты", "disabled": false, "params": {"object_code": "%s_chats"}},
           "all_chats": {"code": "act_open_object", "name": "Все игровые чаты", "disabled": false, "params": {"object_code": "all_chats"}},
-          "master_chats": {"code": "act_open_object", "name": "Мастерские чаты", "disabled": false, "params": {"object_code": "master_chats"}},
+          "master_chats": {"code": "act_open_object", "name": "Мастерские чаты", "disabled": false, "params": {"object_code": "%s_master_chats"}},
           "all_contracts": {"code": "act_open_object", "name": "Все контракты", "disabled": false, "params": {"object_code": "contracts"}},
           "cycle_checklist": {"code": "act_open_object", "name": "Чеклист", "disabled": false, "params": {"object_code": "cycle_checklist"}},
           "med_drugs": {"code": "act_open_object", "name": "Наркотики", "disabled": false, "params": {"object_code": "med_drugs"}}
-        }';
+        }',
+        v_actor_code,
+        v_actor_code)::jsonb;
       if data.get_boolean_param('game_in_progress') then
         v_actions :=
           v_actions ||

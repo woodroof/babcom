@@ -11,6 +11,7 @@ declare
   v_actor_id  integer :=data.get_active_actor_id(in_client_id);
 
   v_person_id integer;
+  v_person_code text;
 
   v_message_text text := json.get_string(in_user_params, 'message_text');
 
@@ -27,8 +28,6 @@ declare
   v_system_chat_length_attribute_id integer := data.get_attribute_id('system_chat_length');
 
   v_all_chats_id integer := data.get_object_id('all_chats');
-  v_chats_id integer := data.get_object_id('chats');
-  v_master_chats_id integer := data.get_object_id('master_chats');
 
   v_master_group_id integer := data.get_object_id('master');
 
@@ -77,17 +76,11 @@ begin
       v_changes := array_append(v_changes, data.attribute_change2jsonb(v_system_chat_length_attribute_id, to_jsonb(v_chat_length + 1)));
     end if;
     v_changes := array_append(v_changes, data.attribute_change2jsonb(v_content_attribute_id, to_jsonb(v_new_content)));
-    v_message_sent := data.change_current_object(in_client_id, 
-                                                 in_request_id,
-                                                 v_chat_id, 
-                                                 to_jsonb(v_changes));
 
-    if v_chat_parent_list = 'master_chats' then
-    -- Перекладываем этот чат в начало в списке мастерских чатов
-      perform pp_utils.list_replace_to_head_and_notify(v_master_chats_id, v_chat_code, v_master_group_id);
-    elsif v_chat_parent_list = 'chats' then
+
+    if v_chat_parent_list = 'chats' then
     -- Перекладываем этот чат в начало в списке всех игровых чатов
-      perform pp_utils.list_replace_to_head_and_notify(v_all_chats_id, v_chat_code, v_master_group_id);
+      perform pp_utils.list_replace_to_head_and_notify(v_all_chats_id, v_chat_code, null);
     end if;
     -- Отправляем нотификацию о новом сообщении всем неподписанным на этот чат
     -- и перекладываем у всех участников этот чат вверх списка
@@ -97,20 +90,17 @@ begin
         where oo.parent_object_id = v_chat_id
           and oo.parent_object_id <> oo.object_id)
     loop
+      v_person_code := data.get_object_code(v_person_id);
       if v_chat_parent_list = 'master_chats' then
-        if pp_utils.is_in_group(v_person_id, 'master') then
-          perform pp_utils.list_replace_to_head_and_notify(v_master_chats_id, v_chat_code, v_person_id);
-        end if;
+        perform pp_utils.list_replace_to_head_and_notify(data.get_object_id(v_person_code || '_master_chats'), v_chat_code, null);
       elsif v_chat_parent_list = 'chats' then
-        perform pp_utils.list_replace_to_head_and_notify(v_chats_id, v_chat_code, v_person_id);
+        perform pp_utils.list_replace_to_head_and_notify(data.get_object_id(v_person_code || '_chats'), v_chat_code, null);
       end if;
       v_is_actor_subscribed := pp_utils.is_actor_subscribed(v_person_id, v_chat_id);
       if v_person_id <> v_actor_id
         and not v_is_actor_subscribed then
         v_chat_unread_messages := json.get_integer_opt(data.get_raw_attribute_value_for_update(v_chat_id, v_chat_unread_messages_attribute_id, v_person_id), 0);
-        perform data.change_object_and_notify(v_chat_id, 
-                                              jsonb_build_array(data.attribute_change2jsonb(v_chat_unread_messages_attribute_id, to_jsonb(v_chat_unread_messages + 1), v_person_id)),
-                                              v_actor_id);
+        v_changes := array_append(v_changes, data.attribute_change2jsonb(v_chat_unread_messages_attribute_id, to_jsonb(v_chat_unread_messages + 1), v_person_id));
       end if;
       if v_person_id <> v_actor_id 
         and not v_is_actor_subscribed
@@ -118,6 +108,10 @@ begin
         perform pp_utils.add_notification(v_person_id, v_notification_text, v_chat_id);
       end if;
     end loop;
+    v_message_sent := data.change_current_object(in_client_id, 
+                                                 in_request_id,
+                                                 v_chat_id, 
+                                                 to_jsonb(v_changes));
   end if;
 
   if not v_message_sent then

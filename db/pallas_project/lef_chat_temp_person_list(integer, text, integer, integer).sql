@@ -10,8 +10,10 @@ declare
   v_chat_code text := replace(data.get_object_code(in_object_id), '_person_list', '');
   v_chat_id integer := data.get_object_id(v_chat_code);
 
-  v_chats_id integer := data.get_object_id('chats');
-  v_master_chats_id integer := data.get_object_id('master_chats');
+  v_list_object_code text := data.get_object_code(in_list_object_id);
+
+  v_chats_id integer := data.get_object_id(v_list_object_code || '_chats');
+  v_master_chats_id integer := data.get_object_id(v_list_object_code || '_master_chats');
 
   v_title_attribute_id integer := data.get_attribute_id('title');
 
@@ -56,11 +58,9 @@ begin
 
 -- Добавляем чат в список чатов в начало
   if v_chat_parent_list = 'master_chats' then
-    if not pp_utils.is_in_group(in_list_object_id, 'master') then
-      perform pp_utils.list_prepend_and_notify(v_master_chats_id, v_chat_code, in_list_object_id);
-    end if;
+    perform pp_utils.list_prepend_and_notify(v_master_chats_id, v_chat_code, null);
   elsif v_chat_parent_list = 'chats' then
-    perform pp_utils.list_prepend_and_notify(v_chats_id, v_chat_code, in_list_object_id);
+    perform pp_utils.list_prepend_and_notify(v_chats_id, v_chat_code, null);
   end if;
 
   -- отправляем нотификацию, что был добавлен в чат

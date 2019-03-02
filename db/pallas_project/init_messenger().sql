@@ -13,17 +13,13 @@ declare
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
   v_actions_function_attribute_id integer := data.get_attribute_id('actions_function');
   v_template_attribute_id integer := data.get_attribute_id('template');
-  v_full_card_function_attribute_id integer := data.get_attribute_id('full_card_function');
-  v_mini_card_function_attribute_id integer := data.get_attribute_id('mini_card_function');
   v_list_element_function_attribute_id integer := data.get_attribute_id('list_element_function');
-  v_temporary_object_attribute_id integer := data.get_attribute_id('temporary_object');
   v_content_attribute_id integer := data.get_attribute_id('content');
   v_priority_attribute_id integer := data.get_attribute_id('priority');
 
   v_master_group_id integer := data.get_object_id('master');
 
   v_chats_id integer;
-  v_master_chats_id integer;
   v_chat_class_id integer;
   v_message_class_id integer;
   v_chat_person_list_class_id integer;
@@ -32,7 +28,6 @@ declare
   v_system_chat_can_leave_attribute_id integer;
   v_system_chat_can_mute_attribute_id integer;
   v_system_chat_can_rename_attribute_id integer;
-  v_chat_id integer;
 begin
   -- Атрибуты 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
@@ -61,29 +56,27 @@ begin
   v_system_chat_can_mute_attribute_id := data.get_attribute_id('system_chat_can_mute');
   v_system_chat_can_rename_attribute_id := data.get_attribute_id('system_chat_can_rename');
 
-  -- Объект со списком чатов
-  insert into data.objects(code) values('chats') returning id into v_chats_id;
-
-  insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
-  (v_chats_id, v_type_attribute_id, jsonb '"chats"', null),
-  (v_chats_id, v_independent_from_actor_list_elements_attribute_id, jsonb 'true', null),
-  (v_chats_id, v_independent_from_object_list_elements_attribute_id, jsonb 'true', null),
-  (v_chats_id, v_is_visible_attribute_id, jsonb 'true', null),
-  (v_chats_id, v_title_attribute_id, jsonb '"Чаты"', null),
-  (v_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"', null),
-  (v_chats_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chats"', null),
-  (v_chats_id, v_content_attribute_id, jsonb '[]', null),
-  (
-    v_chats_id,
-    v_template_attribute_id,
-    jsonb '{
-      "title": "title",
-      "subtitle": "subtitle",
-      "groups": [
-        {"code": "chats_group1", "attributes": ["description"], "actions": ["create_chat"]}
-      ]
-    }',
-  null);
+  -- Класс со списком чатов
+  perform data.create_class(
+  'chats',
+  jsonb '[
+    {"code": "type", "value": "chats"},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
+    {"code": "is_visible", "value": true},
+    {"code": "title", "value": "Чаты"},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_chats"},
+    {"code": "list_element_function", "value": "pallas_project.lef_chats"},
+    {"code": "content", "value": []},
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [{"code": "chats_group1", "attributes": ["description"], "actions": ["create_chat"]}]
+      }
+    }
+  ]');
 
   -- Объект со списком всех чатов (для мастеров)
   insert into data.objects(code) values('all_chats') returning id into v_chats_id;
@@ -110,30 +103,27 @@ begin
     null
   );
 
-  -- Объект со списком мастерских чатов
-  insert into data.objects(code) values('master_chats') returning id into v_master_chats_id;
-
-  insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
-  (v_master_chats_id, v_type_attribute_id, jsonb '"chats"', null),
-  (v_master_chats_id, v_independent_from_actor_list_elements_attribute_id, jsonb 'true', null),
-  (v_master_chats_id, v_independent_from_object_list_elements_attribute_id, jsonb 'true', null),
-  (v_master_chats_id, v_is_visible_attribute_id, jsonb 'true', null),
-  (v_master_chats_id, v_title_attribute_id, jsonb '"Общение с мастерами"', null),
-  (v_master_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"', null),
-  (v_master_chats_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chats"', null),
-  (v_master_chats_id, v_content_attribute_id, jsonb '[]', null),
-  (
-    v_master_chats_id,
-    v_template_attribute_id,
-    jsonb '{
-      "title": "title",
-      "subtitle": "subtitle",
-      "groups": [
-        {"code": "chats_group1", "attributes": ["description"], "actions": ["create_chat"]}
-      ]
-    }',
-    null
-  );
+  -- Класс со списком мастерских чатов
+  perform data.create_class(
+  'master_chats',
+  jsonb '[
+    {"code": "type", "value": "chats"},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "independent_from_object_list_elements", "value": true},
+    {"code": "is_visible", "value": true},
+    {"code": "title", "value": "Общение с мастерами"},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_chats"},
+    {"code": "list_element_function", "value": "pallas_project.lef_chats"},
+    {"code": "content", "value": []},
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [{"code": "chats_group1", "attributes": ["description"], "actions": ["create_chat"]}]
+      }
+    }
+  ]');
 
   -- Объект-класс для чата
   insert into data.objects(code, type) values('chat', 'class') returning id into v_chat_class_id;
@@ -219,92 +209,18 @@ begin
   'chat_bot',
   jsonb '{"title": "Чат-бот"}');
 
-  -- Мастерские чаты
-  declare
-    v_person_id integer;
-    v_master_person_id integer;
-    v_masters integer[] := pallas_project.get_group_members('master');
-    v_important integer;
-    v_important_chat_id integer;
-    v_redirect_attribute_id integer := data.get_attribute_id('redirect');
-  begin
-    -- Чат для мастеров и уведомлений
-    v_chat_id := pallas_project.create_chat(
-    'master_chat',
-    jsonb '{
-      "content": [],
-      "title": "Мастера и уведомления",
-      "system_chat_is_renamed": true,
-      "system_chat_can_invite": false,
-      "system_chat_can_leave": false,
-      "system_chat_can_mute": false,
-      "system_chat_parent_list": "master_chats"
-    }');
-
-    for v_master_person_id in (select * from unnest(v_masters))
-    loop
-      perform data.add_object_to_object(v_master_person_id, v_chat_id);
-    end loop;
-    perform pallas_project.change_chat_person_list_on_person(v_chat_id, null, true);
-
-    perform pp_utils.list_prepend_and_notify(v_master_chats_id, data.get_object_code(v_chat_id), v_master_group_id, v_master_group_id);
-
-    -- Чаты для каждого игрового персонажа
-    -- Объект для меню "Важные уведомления"
-    v_important := data.create_object(
-      'important_notifications',
-      jsonb_build_object(
-        'title', 'Важные уведомления',
-        'is_visible', true
-      ));
-    for v_person_id in (select * from unnest(pallas_project.get_group_members('all_person')))
-    loop
-    -- чат с мастерами
-      v_chat_id := pallas_project.create_chat(
-      null,
-      jsonb_build_object(
-        'content', jsonb '[]',
-        'title', 'Мастерский для ' || json.get_string(data.get_attribute_value(v_person_id, v_title_attribute_id)),
-        'system_chat_is_renamed', true,
-        'system_chat_can_invite', false,
-        'system_chat_can_leave', false,
-        'system_chat_can_mute', false,
-        'system_chat_can_rename', false,
-        'system_chat_parent_list', 'master_chats'
-      ));
-
-      perform data.add_object_to_object(v_person_id, v_chat_id);
-      for v_master_person_id in (select * from unnest(v_masters))
-      loop
-        perform data.add_object_to_object(v_master_person_id, v_chat_id);
-      end loop;
-      perform pallas_project.change_chat_person_list_on_person(v_chat_id, null, true);
-
-      perform pp_utils.list_prepend_and_notify(v_master_chats_id, data.get_object_code(v_chat_id), v_master_group_id, v_master_group_id);
-      perform pp_utils.list_prepend_and_notify(v_master_chats_id, data.get_object_code(v_chat_id), v_person_id, v_person_id);
-
-      -- чат для важных уведомлений
-      v_important_chat_id := pallas_project.create_chat(
-      null,
-      jsonb_build_object(
-        'content', jsonb '[]',
-        'title', 'Важные уведомления',
-        'system_chat_is_renamed', true,
-        'system_chat_can_invite', false,
-        'system_chat_can_leave', false,
-        'system_chat_can_mute', false,
-        'system_chat_can_rename', false,
-        'system_chat_cant_write', true,
-        'system_chat_cant_see_members', true
-      ));
-
-      insert into data.attribute_values(object_id, attribute_id, value, value_object_id) values
-      (v_important, v_redirect_attribute_id, to_jsonb(v_important_chat_id), v_person_id);
-
-      perform data.add_object_to_object(v_person_id, v_important_chat_id);
-      perform pallas_project.change_chat_person_list_on_person(v_important_chat_id, null, false);
-    end loop;
-  end;
+  -- Чат для мастеров и уведомлений
+  perform pallas_project.create_chat(
+  'master_chat',
+  jsonb '{
+    "content": [],
+    "title": "Мастера и уведомления",
+    "system_chat_is_renamed": true,
+    "system_chat_can_invite": false,
+    "system_chat_can_leave": false,
+    "system_chat_can_mute": false,
+    "system_chat_parent_list": "master_chats"
+  }');
 
   insert into data.actions(code, function) values
   ('create_chat', 'pallas_project.act_create_chat'),

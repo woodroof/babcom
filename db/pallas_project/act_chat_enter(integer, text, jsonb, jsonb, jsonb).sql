@@ -10,6 +10,7 @@ declare
   v_chat_code text := json.get_string_opt(in_params, 'chat_code', null);
   v_goto_chat boolean := json.get_boolean_opt(in_params, 'goto_chat', false);
   v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_actor_code text := data.get_object_code(v_actor_id);
   v_chat_id integer;
   v_chat_parent_list text;
 
@@ -18,8 +19,8 @@ declare
   v_chat_is_renamed boolean;
   v_chat_unread_messages_attribute_id integer := data.get_attribute_id('chat_unread_messages');
 
-  v_chats_id integer := data.get_object_id('chats');
-  v_master_chats_id integer := data.get_object_id('master_chats');
+  v_chats_id integer := data.get_object_id(v_actor_code || '_chats');
+  v_master_chats_id integer := data.get_object_id(v_actor_code || '_master_chats');
 
   v_is_master boolean := pp_utils.is_in_group(v_actor_id, 'master');
   v_changes jsonb[];
@@ -75,10 +76,10 @@ begin
 
     if v_chat_parent_list = 'master_chats' then
       if not v_is_master then
-        perform pp_utils.list_prepend_and_notify(v_master_chats_id, v_chat_code, v_actor_id);
+        perform pp_utils.list_prepend_and_notify(v_master_chats_id, v_chat_code, null);
       end if;
     elsif v_chat_parent_list = 'chats' then
-      perform pp_utils.list_prepend_and_notify(v_chats_id, v_chat_code, v_actor_id);
+      perform pp_utils.list_prepend_and_notify(v_chats_id, v_chat_code, null);
     end if;
   end if;
 

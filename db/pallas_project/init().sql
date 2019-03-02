@@ -139,13 +139,13 @@ begin
   perform pallas_project.init_finances();
   perform pallas_project.init_districts();
   perform pallas_project.init_medicine();
+  perform pallas_project.init_messenger();
   perform pallas_project.init_persons();
   perform pallas_project.init_claims();
   perform pallas_project.init_organizations();
   perform pallas_project.init_organization_roles();
   perform pallas_project.init_contracts();
   perform pallas_project.init_debatles();
-  perform pallas_project.init_messenger();
   perform pallas_project.init_person_list();
   perform pallas_project.init_documents();
   perform pallas_project.init_lottery();

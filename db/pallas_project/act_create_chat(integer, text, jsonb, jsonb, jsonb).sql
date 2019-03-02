@@ -6,14 +6,17 @@ volatile
 as
 $$
 declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_chat_title text := json.get_string_opt(in_params, 'title', null);
   v_chat_is_master boolean := json.get_boolean_opt(in_params, 'chat_is_master', false);
   v_chat_code text;
   v_chat_id integer;
   v_chat_class_id integer := data.get_class_id('chat');
 
+  v_actor_code text := data.get_object_code(v_actor_id);
+
   v_all_chats_id integer := data.get_object_id('all_chats');
-  v_master_chats_id integer := data.get_object_id('master_chats');
+  v_master_chats_id integer := data.get_object_id(v_actor_code || '_master_chats');
   v_master_group_id integer := data.get_object_id('master');
 
   v_attributes jsonb;
@@ -33,9 +36,9 @@ begin
   v_chat_code := data.get_object_code(v_chat_id);
 
   if v_chat_is_master then
-    perform pp_utils.list_prepend_and_notify(v_master_chats_id, v_chat_code, v_master_group_id);
+    perform pp_utils.list_prepend_and_notify(v_master_chats_id, v_chat_code, null);
   else
-    perform pp_utils.list_prepend_and_notify(v_all_chats_id, v_chat_code, v_master_group_id);
+    perform pp_utils.list_prepend_and_notify(v_all_chats_id, v_chat_code, null);
   end if;
 
   -- Заходим в чат

@@ -12,7 +12,12 @@ declare
   v_login_id integer;
   v_master_group_id integer := data.get_object_id('master');
   v_economy_type jsonb := data.get_attribute_value(v_person_id, 'system_person_economy_type');
+  v_important_chat_id integer;
   v_attributes jsonb;
+  v_is_master boolean := pp_utils.is_in_group(v_person_id, 'master');
+  v_master_chats_id integer;
+  v_master_chat_id integer := data.get_object_id('master_chat');
+  v_master_person_id integer;
 begin
   if in_login_code is not null then
     insert into data.logins(code) values(in_login_code) returning id into v_login_id;
@@ -302,6 +307,69 @@ begin
       ]',
       v_person_id)::jsonb,
     'med_health');
+
+  -- Создадим "Мастерские чаты"
+  v_master_chats_id := data.create_object(
+    v_person_code || '_master_chats',
+    format('[
+        {"code": "is_visible", "value": true, "value_object_id": %s},
+        {"code": "title", "value": "Общение с мастерами"}
+      ]',
+      v_person_id)::jsonb,
+      'chats');
+
+   -- Создадим "Чаты"
+  perform data.create_object(
+    v_person_code || '_chats',
+    format('[
+        {"code": "is_visible", "value": true, "value_object_id": %s}
+      ]',
+      v_person_id)::jsonb,
+      'chats');
+
+  -- чат для важных уведомлений
+  v_important_chat_id := pallas_project.create_chat(
+    v_person_code || '_important_chat',
+    jsonb_build_object(
+      'content', jsonb '[]',
+      'title', 'Важные уведомления',
+      'system_chat_is_renamed', true,
+      'system_chat_can_invite', false,
+      'system_chat_can_leave', false,
+      'system_chat_can_mute', false,
+      'system_chat_can_rename', false,
+      'system_chat_cant_write', true,
+      'system_chat_cant_see_members', true
+  ));
+  perform data.add_object_to_object(v_person_id, v_important_chat_id);
+
+  -- Добавление всех мастеров в мастерский чат и создание мастерского чата для каждого персонажа
+  if v_is_master then
+    perform data.add_object_to_object(v_person_id, v_master_chat_id);
+    perform pp_utils.list_prepend_and_notify(v_master_chats_id, v_master_chat_id, null);
+  else
+    v_master_chat_id := pallas_project.create_chat(
+      null,
+      jsonb_build_object(
+        'content', jsonb '[]',
+        'title', 'Мастерский для ' || json.get_string(data.get_attribute_value(v_person_id, 'title')),
+        'system_chat_is_renamed', true,
+        'system_chat_can_invite', false,
+        'system_chat_can_leave', false,
+        'system_chat_can_mute', false,
+        'system_chat_can_rename', false,
+        'system_chat_parent_list', 'master_chats'
+      ));
+    perform data.add_object_to_object(v_person_id, v_master_chat_id);
+    for v_master_person_id in (select * from unnest(pallas_project.get_group_members('master')))
+    loop
+      perform data.add_object_to_object(v_master_person_id, v_master_chat_id);
+      perform pp_utils.list_prepend_and_notify(data.get_object_id(data.get_object_code(v_master_person_id) ||'_master_chats'), v_master_chat_id, null);
+    end loop;
+    perform pallas_project.change_chat_person_list_on_person(v_master_chat_id, null, true);
+    perform pp_utils.list_prepend_and_notify(v_master_chats_id, v_master_chat_id, null);
+
+  end if;
 
   return v_person_id;
 end;

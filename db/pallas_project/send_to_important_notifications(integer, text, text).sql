@@ -10,6 +10,7 @@ declare
   v_message_code text;
   v_message_class_id integer := data.get_class_id('message');
 
+  v_actor_code text := data.get_object_code(in_actor_id);
   v_text text;
 
   v_title_attribute_id integer := data.get_attribute_id('title');
@@ -17,8 +18,7 @@ declare
   v_system_message_sender_attribute_id integer := data.get_attribute_id('system_message_sender');
   v_system_message_time_attribute_id integer := data.get_attribute_id('system_message_time');
   v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
-  v_important_notifications_id integer := data.get_object_id('important_notifications');
-  v_chat_id integer := json.get_integer_opt(data.get_attribute_value(v_important_notifications_id, 'redirect', in_actor_id), null);
+  v_chat_id integer := data.get_object_id(v_actor_code ||'_important_chat');
 
   v_chat_bot_id integer := data.get_object_id('chat_bot');
   v_chat_bot_title text := json.get_string(data.get_attribute_value(v_chat_bot_id, v_title_attribute_id));
