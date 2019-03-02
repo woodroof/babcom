@@ -32,14 +32,22 @@ begin
     end if;
 
     if not v_is_master then
+      if v_economy_type is not null then
+        v_actions :=
+          v_actions ||
+          format(
+            '{
+              "statuses": {"code": "act_open_object", "name": "Статусы", "disabled": false, "params": {"object_code": "%s_statuses"}}
+            }',
+          v_actor_code)::jsonb;
+      end if;
+
       v_actions :=
         v_actions ||
         format(
           '{
-            "profile": {"code": "act_open_object", "name": "Профиль", "disabled": false, "params": {"object_code": "%s"}},
-            "statuses": {"code": "act_open_object", "name": "Статусы", "disabled": false, "params": {"object_code": "%s_statuses"}}
+            "profile": {"code": "act_open_object", "name": "Профиль", "disabled": false, "params": {"object_code": "%s"}}
           }',
-          v_actor_code,
           v_actor_code)::jsonb;
       v_actions :=
         v_actions ||
