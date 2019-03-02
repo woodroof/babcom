@@ -18,28 +18,8 @@ begin
   ('blog_message_time', null, 'Время публикации', 'normal', null, null, false),
   ('system_blog_message_like', null, 'Признак того, что вы залайкали сообщение', 'system', null, null, true),
   ('blog_message_like_count', null, 'Количество лайков у сообщения', 'system', null, null, false),
-  ('blog_name', null, 'Название блога', 'normal', null, 'pallas_project.vd_link', false);
-
-
-  -- Объект - страница для работы с блогами
-  perform data.create_object(
-  'blogs',
-  jsonb '[
-    {"code": "title", "value": "Блоги"},
-    {"code": "is_visible", "value": true},
-    {"code": "content", "value": ["blogs_my", "blogs_all"]},
-    {"code": "actions_function", "value": "pallas_project.actgenerator_blogs_my"},
-    {"code": "independent_from_actor_list_elements", "value": true},
-    {"code": "independent_from_object_list_elements", "value": true},
-    {
-      "code": "template",
-      "value": {
-        "title": "title",
-        "subtitle": "subtitle",
-        "groups": [{"code": "blog_group", "attributes": ["description"], "actions": ["blog_create"]}]
-      }
-    }
-  ]');
+  ('blog_name', null, 'Название блога', 'normal', null, 'pallas_project.vd_link', false),
+  ('blog_is_confirmed', null, 'Признак, что блог подтверждён', 'normal', null, 'pallas_project.vd_blog_is_confirmed', false);
 
   -- Списки блогов
   perform data.create_object(
@@ -103,22 +83,21 @@ begin
     {"code": "title", "value": "Новости"},
     {"code": "is_visible", "value": true},
     {"code": "content", "value": []},
+    {"code": "description", "value": "Хотите опубликовать свою новость? Это просто! Нажимайте \"Мои блоги\", создавайте блог, пишите в него, и все увидят вашу версию событий."},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_blogs_news"},
     {"code": "independent_from_actor_list_elements", "value": true},
     {"code": "independent_from_object_list_elements", "value": true},
     {"code": "list_actions_function", "value": "pallas_project.actgenerator_blog_content"},
-    {
-      "code": "mini_card_template",
-      "value": {
-        "title": "title",
-        "groups": []
-      }
-    },
     {
       "code": "template",
       "value": {
         "title": "title",
         "subtitle": "subtitle",
-        "groups": []
+        "groups": [{
+            "code": "blog_group1",
+            "attributes": ["description"],
+            "actions": ["blogs_my", "blogs_all"]
+          }]
       }
     }
   ]');
@@ -154,8 +133,8 @@ begin
         "groups": [
           {
             "code": "blog_group1",
-            "attributes": ["blog_author", "blog_is_mute"],
-            "actions": ["blog_rename", "blog_mute", "blog_write"]
+            "attributes": ["blog_is_confirmed", "blog_author", "blog_is_mute"],
+            "actions": ["blog_write", "blog_mute", "blog_rename"]
           }
         ]
       }

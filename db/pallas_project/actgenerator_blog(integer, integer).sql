@@ -17,24 +17,26 @@ begin
   v_is_master := pp_utils.is_in_group(in_actor_id, 'master');
   v_blog_code := data.get_object_code(in_object_id);
 
-  v_blog_is_mute := json.get_boolean_opt(data.get_raw_attribute_value_for_share(in_object_id, 'blog_is_mute', in_actor_id), false);
-  v_actions_list := v_actions_list || 
-        format(', "blog_mute": {"code": "blog_mute", "name": "%s", "disabled": false,'||
-                '"params": {"blog_code": "%s", "mute_on_off": "%s"}}',
-                case when v_blog_is_mute then
-                  'Включить уведомления'
-                else 'Отключить уведомления' end,
-                v_blog_code,
-                case when v_blog_is_mute then
-                  'off'
-                else 'on' end);
+  if v_blog_author <> in_actor_id then
+    v_blog_is_mute := json.get_boolean_opt(data.get_raw_attribute_value_for_share(in_object_id, 'blog_is_mute', in_actor_id), false);
+    v_actions_list := v_actions_list || 
+          format(', "blog_mute": {"code": "blog_mute", "name": "%s", "disabled": false,'||
+                  '"params": {"blog_code": "%s", "mute_on_off": "%s"}}',
+                  case when v_blog_is_mute then
+                    'Включить уведомления'
+                  else 'Отключить уведомления' end,
+                  v_blog_code,
+                  case when v_blog_is_mute then
+                    'off'
+                  else 'on' end);
+  end if;
 
   if v_is_master or v_blog_author = in_actor_id then
     v_actions_list := v_actions_list || 
         format(', "blog_rename": {"code": "blog_rename", "name": "Переименовать блог", "disabled": false,'||
                 '"params": {"blog_code": "%s"}, 
                  "user_params": [{"code": "title", "description": "Введите имя блога", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"},
-                                 {"code": "subtitle", "description": "Введите описание блога", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"}]}',
+                                 {"code": "subtitle", "description": "Введите описание блога", "type": "string", "default_value": "%s"}]}',
                 v_blog_code,
                 json.get_string_opt(data.get_raw_attribute_value_for_share(in_object_id, 'title'), null),
                 json.get_string_opt(data.get_raw_attribute_value_for_share(in_object_id, 'subtitle'), null));

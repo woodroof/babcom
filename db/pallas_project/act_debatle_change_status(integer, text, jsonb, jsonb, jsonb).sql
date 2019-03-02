@@ -98,8 +98,6 @@ begin
     -- удаляем из текущих, добавляем в завершённые
     perform pp_utils.list_remove_and_notify(v_debatles_current_id, v_debatle_code, null);
     perform pp_utils.list_prepend_and_notify(v_debatles_closed_id, v_debatle_code, null, v_actor_id);
-  -- TODO тут возможно надо ещё менять какие-то статусы участникам дебатла
-
   elsif v_new_status = 'deleted' and (v_is_master or v_debatle_person1 = v_actor_code and v_debatle_status = 'draft') then
     -- удаляем
     -- из неподтверждённых

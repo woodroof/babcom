@@ -12113,8 +12113,6 @@ begin
     -- удаляем из текущих, добавляем в завершённые
     perform pp_utils.list_remove_and_notify(v_debatles_current_id, v_debatle_code, null);
     perform pp_utils.list_prepend_and_notify(v_debatles_closed_id, v_debatle_code, null, v_actor_id);
-  -- TODO тут возможно надо ещё менять какие-то статусы участникам дебатла
-
   elsif v_new_status = 'deleted' and (v_is_master or v_debatle_person1 = v_actor_code and v_debatle_status = 'draft') then
     -- удаляем
     -- из неподтверждённых
@@ -14651,24 +14649,26 @@ begin
   v_is_master := pp_utils.is_in_group(in_actor_id, 'master');
   v_blog_code := data.get_object_code(in_object_id);
 
-  v_blog_is_mute := json.get_boolean_opt(data.get_raw_attribute_value_for_share(in_object_id, 'blog_is_mute', in_actor_id), false);
-  v_actions_list := v_actions_list || 
-        format(', "blog_mute": {"code": "blog_mute", "name": "%s", "disabled": false,'||
-                '"params": {"blog_code": "%s", "mute_on_off": "%s"}}',
-                case when v_blog_is_mute then
-                  'Включить уведомления'
-                else 'Отключить уведомления' end,
-                v_blog_code,
-                case when v_blog_is_mute then
-                  'off'
-                else 'on' end);
+  if v_blog_author <> in_actor_id then
+    v_blog_is_mute := json.get_boolean_opt(data.get_raw_attribute_value_for_share(in_object_id, 'blog_is_mute', in_actor_id), false);
+    v_actions_list := v_actions_list || 
+          format(', "blog_mute": {"code": "blog_mute", "name": "%s", "disabled": false,'||
+                  '"params": {"blog_code": "%s", "mute_on_off": "%s"}}',
+                  case when v_blog_is_mute then
+                    'Включить уведомления'
+                  else 'Отключить уведомления' end,
+                  v_blog_code,
+                  case when v_blog_is_mute then
+                    'off'
+                  else 'on' end);
+  end if;
 
   if v_is_master or v_blog_author = in_actor_id then
     v_actions_list := v_actions_list || 
         format(', "blog_rename": {"code": "blog_rename", "name": "Переименовать блог", "disabled": false,'||
                 '"params": {"blog_code": "%s"}, 
                  "user_params": [{"code": "title", "description": "Введите имя блога", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"},
-                                 {"code": "subtitle", "description": "Введите описание блога", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"}]}',
+                                 {"code": "subtitle", "description": "Введите описание блога", "type": "string", "default_value": "%s"}]}',
                 v_blog_code,
                 json.get_string_opt(data.get_raw_attribute_value_for_share(in_object_id, 'title'), null),
                 json.get_string_opt(data.get_raw_attribute_value_for_share(in_object_id, 'subtitle'), null));
@@ -14847,6 +14847,28 @@ begin
       ', "blog_create": {"code": "blog_create", "name": "Создать блог", "disabled": false, '||
       '"params": {}, "user_params": [{"code": "title", "description": "Введите название блога (его можно будет поменять, если захочется)", "type": "string", "restrictions": {"min_length": 1}}]}';
   end if;
+  return jsonb ('{'||trim(v_actions_list,',')||'}');
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.actgenerator_blogs_news(integer, integer);
+
+create or replace function pallas_project.actgenerator_blogs_news(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_actions_list text := '';
+begin
+  assert in_actor_id is not null;
+
+    v_actions_list := v_actions_list || 
+      ', "blogs_my": {"code": "act_open_object", "name": "Мои блоги", "disabled": false, "params": {"object_code": "blogs_my"}}';
+    v_actions_list := v_actions_list || 
+      ', "blogs_all": {"code": "act_open_object", "name": "Все блоги", "disabled": false, "params": {"object_code": "blogs_all"}}';
+
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;
 $$
@@ -16714,7 +16736,6 @@ begin
       jsonb '{
         "debatles": {"code": "act_open_object", "name": "Дебатлы", "disabled": false, "params": {"object_code": "debatles"}},
         "documents": {"code": "act_open_object", "name": "Документы", "disabled": false, "params": {"object_code": "documents"}},
-        "blogs": {"code": "act_open_object", "name": "Блоги", "disabled": false, "params": {"object_code": "blogs"}},
         "news": {"code": "act_open_object", "name": "Новости", "disabled": false, "params": {"object_code": "news"}},
         "claims": {"code": "act_open_object", "name": "Судебные иски", "disabled": false, "params": {"object_code": "claims"}},
         "logout": {"code": "logout", "name": "Выход", "disabled": false, "params": {}}
@@ -18753,7 +18774,7 @@ begin
         "groups": [
           {"code": "menu_notifications", "actions": ["notifications"]},
           {"code": "menu_lottery", "actions": ["lottery"]},
-          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "med_health", "chats", "documents", "medicine", "customs", "my_contracts", "my_organizations", "blogs", "claims", "important_notifications", "med_drugs"]},
+          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "med_health", "chats", "documents", "medicine", "customs", "my_contracts", "my_organizations", "claims", "important_notifications", "med_drugs"]},
           {"code": "menu_social", "actions": ["news", "all_chats", "debatles", "master_chats"]},
           {"code": "menu_info", "actions": ["all_contracts", "persons", "districts", "organizations"]},
           {"code": "menu_cycle", "actions": ["cycle_checklist"]},
@@ -18878,28 +18899,8 @@ begin
   ('blog_message_time', null, 'Время публикации', 'normal', null, null, false),
   ('system_blog_message_like', null, 'Признак того, что вы залайкали сообщение', 'system', null, null, true),
   ('blog_message_like_count', null, 'Количество лайков у сообщения', 'system', null, null, false),
-  ('blog_name', null, 'Название блога', 'normal', null, 'pallas_project.vd_link', false);
-
-
-  -- Объект - страница для работы с блогами
-  perform data.create_object(
-  'blogs',
-  jsonb '[
-    {"code": "title", "value": "Блоги"},
-    {"code": "is_visible", "value": true},
-    {"code": "content", "value": ["blogs_my", "blogs_all"]},
-    {"code": "actions_function", "value": "pallas_project.actgenerator_blogs_my"},
-    {"code": "independent_from_actor_list_elements", "value": true},
-    {"code": "independent_from_object_list_elements", "value": true},
-    {
-      "code": "template",
-      "value": {
-        "title": "title",
-        "subtitle": "subtitle",
-        "groups": [{"code": "blog_group", "attributes": ["description"], "actions": ["blog_create"]}]
-      }
-    }
-  ]');
+  ('blog_name', null, 'Название блога', 'normal', null, 'pallas_project.vd_link', false),
+  ('blog_is_confirmed', null, 'Признак, что блог подтверждён', 'normal', null, 'pallas_project.vd_blog_is_confirmed', false);
 
   -- Списки блогов
   perform data.create_object(
@@ -18963,22 +18964,21 @@ begin
     {"code": "title", "value": "Новости"},
     {"code": "is_visible", "value": true},
     {"code": "content", "value": []},
+    {"code": "description", "value": "Хотите опубликовать свою новость? Это просто! Нажимайте \"Мои блоги\", создавайте блог, пишите в него, и все увидят вашу версию событий."},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_blogs_news"},
     {"code": "independent_from_actor_list_elements", "value": true},
     {"code": "independent_from_object_list_elements", "value": true},
     {"code": "list_actions_function", "value": "pallas_project.actgenerator_blog_content"},
-    {
-      "code": "mini_card_template",
-      "value": {
-        "title": "title",
-        "groups": []
-      }
-    },
     {
       "code": "template",
       "value": {
         "title": "title",
         "subtitle": "subtitle",
-        "groups": []
+        "groups": [{
+            "code": "blog_group1",
+            "attributes": ["description"],
+            "actions": ["blogs_my", "blogs_all"]
+          }]
       }
     }
   ]');
@@ -19014,8 +19014,8 @@ begin
         "groups": [
           {
             "code": "blog_group1",
-            "attributes": ["blog_author", "blog_is_mute"],
-            "actions": ["blog_rename", "blog_mute", "blog_write"]
+            "attributes": ["blog_is_confirmed", "blog_author", "blog_is_mute"],
+            "actions": ["blog_write", "blog_mute", "blog_rename"]
           }
         ]
       }
@@ -25453,6 +25453,25 @@ begin
 
     return '![](' || data.get_string_param('images_url') || 'adm_' || (case when v_status = 1 then 'bronze' when v_status = 2 then 'silver' else 'gold' end) || '.svg)';
   end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.vd_blog_is_confirmed(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_blog_is_confirmed(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+declare
+  v_bool_value boolean := json.get_boolean_opt(in_value, false);
+begin
+  case when v_bool_value then
+    return '✔ Подтверждённый блог';
+  else
+    return null;
+  end case;
 end;
 $$
 language plpgsql;
