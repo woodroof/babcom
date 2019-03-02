@@ -30,7 +30,7 @@ declare
   v_person_opa_rating integer := json.get_integer_opt(data.get_raw_attribute_value_for_share(v_actor_id, 'person_opa_rating'), 0);
   v_economy_type text := json.get_string(data.get_attribute_value_for_share(v_actor_id, 'system_person_economy_type'));
   v_currency_attribute_id integer = data.get_attribute_id(case when v_economy_type = 'un' then 'system_person_coin' else 'system_money' end);
-  v_current_sum bigint := json.get_bigint(data.get_attribute_value_for_update(v_actor_id, v_currency_attribute_id));
+  v_current_sum bigint := json.get_bigint_opt(data.get_attribute_value_for_update(v_actor_id, v_currency_attribute_id), null);
   v_price bigint;
   v_diff jsonb;
 
@@ -96,7 +96,9 @@ begin
     end if;
 
     -- Возьмём плату за голосование
-    if v_system_debatle_person1_my_vote + v_system_debatle_person2_my_vote = 0 and v_person1_my_vote_new + v_person2_my_vote_new>0 then
+    if v_current_sum is not null
+      and v_system_debatle_person1_my_vote + v_system_debatle_person2_my_vote = 0 
+      and v_person1_my_vote_new + v_person2_my_vote_new > 0 then
       v_price := 1;
       if v_economy_type = 'un' then
         v_diff := pallas_project.change_coins(v_actor_id, (v_current_sum - v_price)::integer, v_actor_id, 'Debatle voiting');

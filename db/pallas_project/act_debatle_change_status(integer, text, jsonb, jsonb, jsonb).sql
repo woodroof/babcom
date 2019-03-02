@@ -165,7 +165,9 @@ begin
   elsif v_new_status = 'vote' then
   -- Если стaтус поменялся на vote надо добавить всем инфу о ходе голосования
     for v_person_id in (select * from unnest(pallas_project.get_debatle_spectators(v_debatle_id))) loop
-      if json.get_boolean_opt(data.get_raw_attribute_value_for_share(v_debatle_id, v_system_debatle_is_confirmed_presence_attribute_id, v_person_id), false) then
+      if json.get_integer_opt(data.get_attribute_value(v_person_id, 'system_person_original_id'), null) is not null then
+        v_debatle_my_vote := 'Зайдите в основную личность, чтобы голосовать';
+      elsif json.get_boolean_opt(data.get_raw_attribute_value_for_share(v_debatle_id, v_system_debatle_is_confirmed_presence_attribute_id, v_person_id), false) then
         v_debatle_my_vote := 'Вы не голосовали';
       else
         v_debatle_my_vote := 'Отсканируйте QR-код на месте дебатла, чтобы голосовать';

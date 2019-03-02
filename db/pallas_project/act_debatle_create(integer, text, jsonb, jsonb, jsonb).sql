@@ -22,6 +22,14 @@ v_debatle_confirm_presence_id integer;
 begin
   assert in_request_id is not null;
   -- создаём новый дебатл
+  -- только из основной личности
+  if json.get_integer_opt(data.get_attribute_value(v_actor_id, 'system_person_original_id'), null) is not null then
+    perform api_utils.create_show_message_action_notification(
+      in_client_id,
+      in_request_id,
+      'Ошибка',
+      'Создавайте дебатл из основной личности');
+  end if;
 
   v_debatle_id := data.create_object(
     null,

@@ -12179,7 +12179,9 @@ begin
   elsif v_new_status = 'vote' then
   -- Если стaтус поменялся на vote надо добавить всем инфу о ходе голосования
     for v_person_id in (select * from unnest(pallas_project.get_debatle_spectators(v_debatle_id))) loop
-      if json.get_boolean_opt(data.get_raw_attribute_value_for_share(v_debatle_id, v_system_debatle_is_confirmed_presence_attribute_id, v_person_id), false) then
+      if json.get_integer_opt(data.get_attribute_value(v_person_id, 'system_person_original_id'), null) is not null then
+        v_debatle_my_vote := 'Зайдите в основную личность, чтобы голосовать';
+      elsif json.get_boolean_opt(data.get_raw_attribute_value_for_share(v_debatle_id, v_system_debatle_is_confirmed_presence_attribute_id, v_person_id), false) then
         v_debatle_my_vote := 'Вы не голосовали';
       else
         v_debatle_my_vote := 'Отсканируйте QR-код на месте дебатла, чтобы голосовать';
@@ -12351,8 +12353,9 @@ begin
     perform data.add_object_to_object(v_actor_id, v_debatle_id);
   end if;
 
-  v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_is_confirmed_presence', jsonb 'true', v_actor_id));
-  if data.get_object_code(v_actor_id) not in (v_debatle_person1, v_debatle_person2, v_debatle_judge) then
+  if data.get_object_code(v_actor_id) not in (v_debatle_person1, v_debatle_person2, v_debatle_judge) 
+    and json.get_integer_opt(data.get_attribute_value(v_actor_id, 'system_person_original_id'), null) is null then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_is_confirmed_presence', jsonb 'true', v_actor_id));
     v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_my_vote', jsonb '"Вы не голосовали"', v_actor_id));
   end if;
 
@@ -12390,6 +12393,14 @@ v_debatle_confirm_presence_id integer;
 begin
   assert in_request_id is not null;
   -- создаём новый дебатл
+  -- только из основной личности
+  if json.get_integer_opt(data.get_attribute_value(v_actor_id, 'system_person_original_id'), null) is not null then
+    perform api_utils.create_show_message_action_notification(
+      in_client_id,
+      in_request_id,
+      'Ошибка',
+      'Создавайте дебатл из основной личности');
+  end if;
 
   v_debatle_id := data.create_object(
     null,
@@ -12501,7 +12512,7 @@ declare
   v_person_opa_rating integer := json.get_integer_opt(data.get_raw_attribute_value_for_share(v_actor_id, 'person_opa_rating'), 0);
   v_economy_type text := json.get_string(data.get_attribute_value_for_share(v_actor_id, 'system_person_economy_type'));
   v_currency_attribute_id integer = data.get_attribute_id(case when v_economy_type = 'un' then 'system_person_coin' else 'system_money' end);
-  v_current_sum bigint := json.get_bigint(data.get_attribute_value_for_update(v_actor_id, v_currency_attribute_id));
+  v_current_sum bigint := json.get_bigint_opt(data.get_attribute_value_for_update(v_actor_id, v_currency_attribute_id), null);
   v_price bigint;
   v_diff jsonb;
 
@@ -12567,7 +12578,9 @@ begin
     end if;
 
     -- Возьмём плату за голосование
-    if v_system_debatle_person1_my_vote + v_system_debatle_person2_my_vote = 0 and v_person1_my_vote_new + v_person2_my_vote_new>0 then
+    if v_current_sum is not null
+      and v_system_debatle_person1_my_vote + v_system_debatle_person2_my_vote = 0 
+      and v_person1_my_vote_new + v_person2_my_vote_new > 0 then
       v_price := 1;
       if v_economy_type = 'un' then
         v_diff := pallas_project.change_coins(v_actor_id, (v_current_sum - v_price)::integer, v_actor_id, 'Debatle voiting');

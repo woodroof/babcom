@@ -26,8 +26,9 @@ begin
     perform data.add_object_to_object(v_actor_id, v_debatle_id);
   end if;
 
-  v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_is_confirmed_presence', jsonb 'true', v_actor_id));
-  if data.get_object_code(v_actor_id) not in (v_debatle_person1, v_debatle_person2, v_debatle_judge) then
+  if data.get_object_code(v_actor_id) not in (v_debatle_person1, v_debatle_person2, v_debatle_judge) 
+    and json.get_integer_opt(data.get_attribute_value(v_actor_id, 'system_person_original_id'), null) is null then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('system_debatle_is_confirmed_presence', jsonb 'true', v_actor_id));
     v_changes := array_append(v_changes, data.attribute_change2jsonb('debatle_my_vote', jsonb '"Вы не голосовали"', v_actor_id));
   end if;
 
