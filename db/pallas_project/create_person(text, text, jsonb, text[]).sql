@@ -372,10 +372,10 @@ begin
 
   -- Перекладываем навых шахтёра, если есть
   declare
-    v_skill integer := json.get_opt_integer(data.get_attribute_value(v_person_id, 'system_person_miner_skill'), null);
+    v_skill integer := json.get_integer_opt(data.get_attribute_value(v_person_id, 'system_person_miner_skill'), null);
   begin
     if v_skill is not null then
-      perform data.set_attribute_value(data.get_object_id('mine_person'), 'miner_skill', to_jsonb(v_skill));
+      perform data.set_attribute_value(data.get_object_id('mine_person'), 'miner_skill', to_jsonb(v_skill), v_person_id);
     end if;
   end;
 

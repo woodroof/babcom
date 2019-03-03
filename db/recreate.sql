@@ -18949,14 +18949,55 @@ begin
 
   -- Перекладываем навых шахтёра, если есть
   declare
-    v_skill integer := json.get_opt_integer(data.get_attribute_value(v_person_id, 'system_person_miner_skill'), null);
+    v_skill integer := json.get_integer_opt(data.get_attribute_value(v_person_id, 'system_person_miner_skill'), null);
   begin
     if v_skill is not null then
-      perform data.set_attribute_value(data.get_object_id('mine_person'), 'miner_skill', to_jsonb(v_skill));
+      perform data.set_attribute_value(data.get_object_id('mine_person'), 'miner_skill', to_jsonb(v_skill), v_person_id);
     end if;
   end;
 
   return v_person_id;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.create_route(text, text, text, jsonb, text[]);
+
+create or replace function pallas_project.create_route(in_title text, in_subtitle text, in_description text, in_route_points jsonb, in_actors text[])
+returns void
+volatile
+as
+$$
+-- Не для использования на игре, т.к. обновляет атрибуты напрямую, без уведомлений и блокировок!
+declare
+  v_my_documents_id integer := data.get_object_id('my_documents');
+  v_route_code text := substring((pgcrypto.gen_random_uuid())::text for 6);
+  v_route_document_id integer;
+  v_route_document_code text;
+  v_actor text;
+  v_actor_id integer;
+begin
+  perform data.create_object(
+    v_route_code,
+    jsonb_build_object('route_points', in_route_points),
+    'route');
+  v_route_document_id :=
+    data.create_object(
+      null,
+      jsonb_build_object('title', in_title, 'subtitle', in_subtitle, 'description', in_description, 'route_code', v_route_code),
+      'route_document');
+  v_route_document_code := data.get_object_code(v_route_document_id);
+
+  for v_actor in
+  (
+    select value
+    from unnest(in_actors) a(value)
+  )
+  loop
+    perform pp_utils.list_prepend_and_notify(v_my_documents_id, v_route_document_code, data.get_object_id(v_actor));
+  end loop;
+
+  perform pp_utils.list_prepend_and_notify(v_my_documents_id, v_route_document_code, data.get_object_id('master'));
 end;
 $$
 language plpgsql;
@@ -22912,8 +22953,8 @@ begin
       {"code": "is_visible", "value": true},
       {"code": "type", "value": "mine_person"},
       {"code": "miner_skill", "value": 0},
-      {"code": "miner_skill", "value": 1, "value_group_code": "master"},
-      {"code": "is_stimulant_used", "value": true, "value_group_code": "master"},
+      {"code": "miner_skill", "value": 1, "value_object_code": "master"},
+      {"code": "is_stimulant_used", "value": true, "value_object_code": "master"},
       {"code": "is_stimulant_used", "value": false},
       {"code": "template", "value": {"groups": []}}
     ]');
@@ -24242,10 +24283,50 @@ volatile
 as
 $$
 begin
-  -- todo
-  -- маршрут до алмазной жилы 2ce20542-04f1-418f-99eb-3c9d2665f733
-  -- Карта со складами Теко Марс (два маршрута) 1fbcf296-e9ad-43b0-9064-1da3ff6d326d 8f7b1cc6-28cd-4fb1-8c81-e0ab1c0df5c9 ea68988b-b540-4685-aefb-cbd999f4c9ba
-  -- путь к складу картеля 0a0dc809-7bf1-41ee-bfe7-700fd26c1c0a 1fbcf296-e9ad-43b0-9064-1da3ff6d326d
+  insert into data.attributes(code, name, type, card_type, can_be_overridden) values
+  ('route_code', 'Код маршрута', 'normal', 'full', false),
+  ('route_points', null, 'hidden', 'full', false);
+
+  -- Классы для маршрутов
+  perform data.create_class(
+    'route_document',
+    jsonb '{
+      "type": "route_document",
+      "is_visible": true,
+      "template": {"title": "title", "subtitle": "subtitle", "groups": [{"code": "group", "attributes": ["description", "route_code"]}]}
+    }');
+  perform data.create_class(
+    'route',
+    jsonb '{
+      "type": "route",
+      "is_visible": true,
+      "template": {"groups": []}
+    }');
+
+  perform pallas_project.create_route(
+    'Маршрут',
+    'TODO — Алмазная жила',
+    'TODO описание',
+    jsonb '[[1,1], [1,2], [2,2]]',
+    array['2ce20542-04f1-418f-99eb-3c9d2665f733']);
+  perform pallas_project.create_route(
+    'Маршрут',
+    'TODO — Теко Марс, склад 1',
+    'TODO описание',
+    jsonb '[[1,1], [1,2], [2,2]]',
+    array['1fbcf296-e9ad-43b0-9064-1da3ff6d326d', '8f7b1cc6-28cd-4fb1-8c81-e0ab1c0df5c9', 'ea68988b-b540-4685-aefb-cbd999f4c9ba']);
+  perform pallas_project.create_route(
+    'Маршрут',
+    'TODO — Теко Марс, склад 2',
+    'TODO описание',
+    jsonb '[[1,1], [1,2], [2,2]]',
+    array['1fbcf296-e9ad-43b0-9064-1da3ff6d326d', '8f7b1cc6-28cd-4fb1-8c81-e0ab1c0df5c9', 'ea68988b-b540-4685-aefb-cbd999f4c9ba']);
+  perform pallas_project.create_route(
+    'Маршрут',
+    'TODO — Картель, склад',
+    'TODO описание',
+    jsonb '[[1,1], [1,2], [2,2]]',
+    array['0a0dc809-7bf1-41ee-bfe7-700fd26c1c0a', '1fbcf296-e9ad-43b0-9064-1da3ff6d326d']);
 end;
 $$
 language plpgsql;

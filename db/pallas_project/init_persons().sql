@@ -143,8 +143,8 @@ begin
       {"code": "is_visible", "value": true},
       {"code": "type", "value": "mine_person"},
       {"code": "miner_skill", "value": 0},
-      {"code": "miner_skill", "value": 1, "value_group_code": "master"},
-      {"code": "is_stimulant_used", "value": true, "value_group_code": "master"},
+      {"code": "miner_skill", "value": 1, "value_object_code": "master"},
+      {"code": "is_stimulant_used", "value": true, "value_object_code": "master"},
       {"code": "is_stimulant_used", "value": false},
       {"code": "template", "value": {"groups": []}}
     ]');
