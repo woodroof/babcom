@@ -64,11 +64,10 @@ begin
 
   -- Кладём иск в начало списка
   if v_claim_list in ('claims_my', 'claims_all', 'claims') then
-   perform pp_utils.list_prepend_and_notify(v_claim_list_id, v_claim_code, v_actor_id);
+    perform pp_utils.list_prepend_and_notify(v_claim_list_id, v_claim_code, v_actor_id);
   else
-   perform pp_utils.list_prepend_and_notify(v_claim_list_id, v_claim_code);
+    perform pp_utils.list_prepend_and_notify(v_claim_list_id, v_claim_code, null);
   end if;
-
 
   perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, v_claim_code);
  end;

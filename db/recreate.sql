@@ -10993,11 +10993,10 @@ begin
 
   -- Кладём иск в начало списка
   if v_claim_list in ('claims_my', 'claims_all', 'claims') then
-   perform pp_utils.list_prepend_and_notify(v_claim_list_id, v_claim_code, v_actor_id);
+    perform pp_utils.list_prepend_and_notify(v_claim_list_id, v_claim_code, v_actor_id);
   else
-   perform pp_utils.list_prepend_and_notify(v_claim_list_id, v_claim_code);
+    perform pp_utils.list_prepend_and_notify(v_claim_list_id, v_claim_code, null);
   end if;
-
 
   perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, v_claim_code);
  end;
@@ -17831,6 +17830,80 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.create_claim(jsonb, text);
+
+create or replace function pallas_project.create_claim(in_attributes jsonb, in_claim_list text)
+returns void
+volatile
+as
+$$
+declare
+  v_claim_list_id integer := data.get_object_id(in_claim_list);
+  v_actor_id integer := data.get_object_id(json.get_string(in_attributes, 'claim_author'));
+  v_claim_defendant text := json.get_string(in_attributes, 'claim_defendant');
+  v_claim_defendant_id integer := data.get_object_id(v_claim_defendant);
+
+  v_claim_title text := json.get_string(in_attributes, 'title');
+  v_claim_id integer;
+  v_claim_code text;
+
+  v_claims_all_id integer := data.get_object_id('claims_all');
+  v_claims_my_id integer := data.get_object_id('claims_my');
+  v_claim_defendant_type text := json.get_string_opt(data.get_attribute_value(v_claim_defendant_id, 'type'), null);
+  v_organization_name text;
+  v_person_id integer;
+begin
+  -- создаём новый иск
+  v_claim_id := data.create_object(
+    null,
+    in_attributes,
+    'claim');
+  v_claim_code := data.get_object_code(v_claim_id);
+
+  perform pallas_project.create_chat(v_claim_code || '_chat',
+                   jsonb_build_object(
+                   'content', jsonb '[]',
+                   'title', 'Обсуждение иска ' || v_claim_title,
+                   'system_chat_is_renamed', true,
+                   'system_chat_can_invite', false,
+                   'system_chat_can_leave', false,
+                   'system_chat_can_rename', false,
+                   'system_chat_cant_see_members', true,
+                   'system_chat_length', 0
+                 ));
+
+  -- Кладём иск в начало списка
+  if in_claim_list in ('claims_my') then
+   perform pp_utils.list_prepend_and_notify(v_claims_my_id, v_claim_code, v_actor_id);
+  else
+   perform pp_utils.list_prepend_and_notify(v_claim_list_id, v_claim_code, null);
+  end if;
+  perform pp_utils.list_prepend_and_notify(v_claims_all_id, v_claim_code, null);
+
+  --Уведомления 
+  perform pallas_project.send_to_master_chat('Создан новый иск. Направлен судье.', v_claim_code);
+  perform pp_utils.add_notification(v_actor_id, 'Ваш иск "' || v_claim_title || '" направлен на рассмотрение судье.', v_claim_id, true);
+
+  if v_claim_defendant_type = 'person' then
+    perform pp_utils.add_notification(v_claim_defendant_id, 'Вы являетесь ответчиком по иску "' || v_claim_title || '". Иск направлен судье.', v_claim_id, true);
+    perform pp_utils.list_prepend_and_notify(v_claims_my_id, v_claim_code, v_claim_defendant_id, v_actor_id);
+  elsif v_claim_defendant_type = 'organization' then
+    perform pp_utils.list_prepend_and_notify(data.get_object_id(v_claim_defendant || '_claims'), v_claim_code, null, v_actor_id);
+    if data.is_object_exists(v_claim_defendant || '_head') then
+      v_organization_name := json.get_string(data.get_attribute_value(v_claim_defendant_id, 'title'));
+      for v_person_id in (select * from unnest(pallas_project.get_group_members(v_claim_defendant || '_head'))) loop
+        perform pp_utils.add_notification(v_person_id, 'Ваша организация "'|| v_organization_name ||'" является ответчиком по иску "' || v_claim_title || '". Иск направлен судье.', v_claim_id, true);
+      end loop;
+    end if;
+  end if;
+  for v_person_id in (select * from unnest(pallas_project.get_group_members('judge'))) loop
+    perform pp_utils.add_notification(v_person_id, 'Вам на рассмотрение передан иск', v_claim_id, true);
+  end loop;
+
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.create_contract(text, text, text, bigint, text);
 
 create or replace function pallas_project.create_contract(in_person_code text, in_org_code text, in_status text, in_reward bigint, in_description text)
@@ -19283,8 +19356,19 @@ volatile
 as
 $$
 begin
-  -- todo
   -- a11d2240-3dce-4d75-bc52-46e98b07ff27 Дело о нападении, Феликс Рыбкин
+  perform pallas_project.create_claim(
+    jsonb_build_object(
+      'title', 'Нападение Сьюзан Сидоровой на Феликса Рыбкина',
+      'claim_author', 'aebb6773-8651-4afc-851a-83a79a2bcbec',
+      'claim_plaintiff', 'aebb6773-8651-4afc-851a-83a79a2bcbec',
+      'claim_defendant', 'a11d2240-3dce-4d75-bc52-46e98b07ff27',
+      'claim_status', 'processing',
+      'claim_text', 'Сообщаю о том, что 04.03.2340 около 16 часов в коридоре сектора B Сьюзан Сидорова напала на меня Феликса Рыбкина. Ранее она обвиняла меня в некачественно проведённой очистке шахты от радиации, и сейчас выкрикнув несколько выкрикнув тоже обвинение, принялась меня избивать.
+      Я заверял её, что всё сделал все работы как нужно, и просил прекратить меня бить. Но она никак не реагировала на мои слова и продолжала.
+      В результате мне были нанесены тяжкие телесные повреждения.',
+      'claim_time', pp_utils.format_date((timestamp with time zone '2019-03-08 14:00:00') - '3 days'::interval)), 
+    'claims_my');
 end;
 $$
 language plpgsql;
@@ -23574,8 +23658,11 @@ volatile
 as
 $$
 begin
-  -- todo
   -- Зависимость от стимуляторов a9e4bc61-4e10-4c9e-a7de-d8f61536f657
+  perform data.create_job(timestamp with time zone '2019-03-08 14:00:00', 
+    'pallas_project.job_med_set_disease_level', 
+    jsonb '{"person_code": "a9e4bc61-4e10-4c9e-a7de-d8f61536f657", "disease": "addiction", "level": 1}');
+
 end;
 $$
 language plpgsql;
