@@ -138,7 +138,7 @@ begin
       "system_person_life_support_status":3,
       "system_person_administrative_services_status":3
     }',
-    array['all_person', 'player', 'un']);
+    array['all_person', 'player', 'un', 'opa']);
   perform pallas_project.create_person(
     '5f7c2dc0-0cb4-4fc5-870c-c0776272a02e',
     '5f7c',
@@ -254,7 +254,7 @@ begin
       "system_person_life_support_status":2,
       "system_person_administrative_services_status":0
     }',
-    array['all_person', 'player', 'aster']);
+    array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
     'a11d2240-3dce-4d75-bc52-46e98b07ff27',
     'a11d',
@@ -273,7 +273,7 @@ begin
       "system_person_life_support_status":2,
       "system_person_administrative_services_status":0
     }',
-    array['all_person', 'player', 'aster']);
+    array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
     '3beea660-35a3-431e-b9ae-e2e88e6ac064',
     '3bee',
@@ -350,7 +350,7 @@ begin
       "system_person_administrative_services_status":1,
       "system_person_miner_skill":1
     }',
-    array['all_person', 'player', 'aster']);
+    array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
     '18ce44b8-5df9-4c84-8af4-b58b3f5e7b21',
     '18ce',
@@ -464,7 +464,7 @@ begin
       "system_person_life_support_status":3,
       "system_person_administrative_services_status":1
     }',
-    array['all_person', 'player', 'aster']);
+    array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
     '81491084-b02a-471f-9293-b20497e0054a',
     '8149',
@@ -483,7 +483,7 @@ begin
       "system_person_life_support_status":2,
       "system_person_administrative_services_status":0
     }',
-    array['all_person', 'player', 'aster']);
+    array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
     'b9309ed3-d19f-4d2d-855a-a9a3ffdf8e9c',
     'b930',
@@ -540,7 +540,7 @@ begin
       "system_person_life_support_status":2,
       "system_person_administrative_services_status":0
     }',
-    array['all_person', 'player', 'aster', 'cartel']);
+    array['all_person', 'player', 'aster', 'cartel', 'opa']);
   perform pallas_project.create_person(
     '3a83fb3c-b954-4a04-aa6c-7a46d7bf9b8e',
     '3a83',
@@ -559,7 +559,7 @@ begin
       "system_person_life_support_status":1,
       "system_person_administrative_services_status":0
     }',
-    array['all_person', 'player', 'aster']);
+    array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
     'a9e4bc61-4e10-4c9e-a7de-d8f61536f657',
     'a9e4',
@@ -578,7 +578,7 @@ begin
       "system_person_life_support_status":1,
       "system_person_administrative_services_status":0
     }',
-    array['all_person', 'player', 'aster']);
+    array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
     '70e5db08-df47-4395-9f4a-15eef99b2b89',
     '70e5',
@@ -654,7 +654,7 @@ begin
       "system_person_life_support_status":1,
       "system_person_administrative_services_status":0
     }',
-    array['all_person', 'player', 'aster', 'cartel']);
+    array['all_person', 'player', 'aster', 'cartel', 'opa']);
   perform pallas_project.create_person(
     '54e94c45-ce2a-459a-8613-9b75e23d9b68',
     '54e9',
@@ -692,7 +692,7 @@ begin
       "system_person_life_support_status":1,
       "system_person_administrative_services_status":0
     }',
-    array['all_person', 'player', 'aster']);
+    array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
     '21670857-6be0-4f77-8756-79636950bc36',
     '2167',
@@ -730,7 +730,7 @@ begin
       "system_person_life_support_status":1,
       "system_person_administrative_services_status":0
     }',
-    array['all_person', 'player', 'aster']);
+    array['all_person', 'player', 'aster', 'cartel']);
   perform pallas_project.create_person(
     'e0c49e51-779f-4f21-bb94-bbbad33bc6e2',
     'e0c4',
@@ -749,7 +749,7 @@ begin
       "system_person_life_support_status":1,
       "system_person_administrative_services_status":1
     }',
-    array['all_person', 'player', 'un']);
+    array['all_person', 'player', 'un', 'opa']);
   perform pallas_project.create_person(
     '8f7b1cc6-28cd-4fb1-8c81-e0ab1c0df5c9',
     '8f7b',
@@ -1049,7 +1049,7 @@ begin
       "system_person_life_support_status":1,
       "system_person_administrative_services_status":0
     }',
-    array['all_person', 'player', 'aster']);
+    array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
     '74bc1a0f-72d9-4271-b358-0ef464f3cbf9',
     '74bc',
@@ -1068,7 +1068,7 @@ begin
       "system_person_life_support_status":1,
       "system_person_administrative_services_status":0
     }',
-    array['all_person', 'player', 'aster']);
+    array['all_person', 'player', 'aster', 'cartel']);
   perform pallas_project.create_person(
     '36cef6aa-aefc-479d-8cef-55534e8cd159',
     '36ce',
@@ -1161,7 +1161,7 @@ begin
       "system_person_life_support_status":3,
       "system_person_administrative_services_status":0
     }',
-    array['all_person', 'player', 'aster']);
+    array['all_person', 'player', 'aster', 'opa', 'cartel']);
   perform pallas_project.create_person(
     '555e076c-ff8d-4dbb-a6c6-9d935314ff59',
     '555e',
@@ -1197,7 +1197,7 @@ begin
       "system_person_life_support_status":3,
       "system_person_administrative_services_status":0
     }',
-    array['all_person', 'player', 'aster']);
+    array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
     'dc2505e8-9f8e-4a41-b42f-f1f348db8c99',
     'dc25',
@@ -1270,7 +1270,16 @@ begin
     }',
     array['all_person', 'player', 'aster', 'rider']);
 
-  -- todo проставить астеры/картель/свп медик/таможня
+  -- Группы
+  perform data.add_object_to_object('9b956c40-7978-4b0a-993e-8373fe581761', 'judge');
+
+  perform data.add_object_to_object('54e94c45-ce2a-459a-8613-9b75e23d9b68', 'doctor');
+  perform data.add_object_to_object('21670857-6be0-4f77-8756-79636950bc36', 'doctor');
+  perform data.add_object_to_object('523e8589-f948-4c42-a32b-fe39648488f2', 'doctor');
+
+  perform data.add_object_to_object('e0c49e51-779f-4f21-bb94-bbbad33bc6e2', 'unofficial_doctor');
+  perform data.add_object_to_object('7051afe2-3430-44a7-92e3-ad299aae62e1', 'unofficial_doctor');
+
   -- todo доп. персонажи
   -- 0d07f15b-2952-409b-b22e-4042cf70acc6 Одна мёртвая душа, с которой заключён контракт\r\nЭлтон Спирс
   -- c9e08512-e729-430a-b2fd-df8e7c94a5e7 Чарльз Эшфорд, астер, фикс серый, UN$2000
