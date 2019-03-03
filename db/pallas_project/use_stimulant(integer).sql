@@ -25,6 +25,10 @@ begin
   -- Если стимулятор уже принят, то удаляем джоб его окончания
   if v_last_stimulant_job is not null then 
     delete from data.jobs where id = v_last_stimulant_job;
+  else
+    perform data.change_object_and_notify(
+      data.get_object_id('mine_person'),
+      jsonb '[]' || data.attribute_change2jsonb('is_stimulant_used', jsonb 'true', v_orig_person_id));
   end if;
 
 -- Ставим, что принят стимулятор на персоны, отправляем уведомление всем дублям

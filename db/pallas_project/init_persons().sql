@@ -42,7 +42,10 @@ begin
   ('person_district', 'Район проживания', 'normal', 'full', 'pallas_project.vd_link', false),
   ('system_person_original_id', 'Идентификатор основной персоны', 'system', null, null, false),
   ('system_person_doubles_id_list', 'Список идентификаторов дублей персоны', 'system', null, null, false),
-  ('system_person_is_stimulant_used', 'Признак, что принят стимулятор', 'system', null, null, false);
+  ('system_person_is_stimulant_used', 'Признак, что принят стимулятор', 'system', null, null, false),
+  ('system_person_miner_skill', 'Навык шахтёра', 'system', null, null, false),
+  ('miner_skill', null, 'hidden', null, null, true),
+  ('is_stimulant_used', null, 'hidden', null, null, true);
 
   insert into data.actions(code, function) values
   ('change_un_rating', 'pallas_project.act_change_un_rating'),
@@ -132,6 +135,19 @@ begin
         "groups": []
       }
     }');
+
+  -- Доп. объект для шахты
+  perform data.create_object(
+    'mine_person',
+    jsonb '[
+      {"code": "is_visible", "value": true},
+      {"code": "type", "value": "mine_person"},
+      {"code": "miner_skill", "value": 0},
+      {"code": "miner_skill", "value": 1, "value_group_code": "master"},
+      {"code": "is_stimulant_used", "value": true, "value_group_code": "master"},
+      {"code": "is_stimulant_used", "value": false},
+      {"code": "template", "value": {"groups": []}}
+    ]');
 
   -- Мастера
   perform pallas_project.create_person(null, 'm1', jsonb '{"title": "Саша", "person_occupation": "Мастер"}', array['master']);

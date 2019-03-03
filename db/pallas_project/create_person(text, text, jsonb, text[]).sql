@@ -368,8 +368,16 @@ begin
     end loop;
     perform pallas_project.change_chat_person_list_on_person(v_master_chat_id, null, true);
     perform pp_utils.list_prepend_and_notify(v_master_chats_id, v_master_chat_id, null);
-
   end if;
+
+  -- Перекладываем навых шахтёра, если есть
+  declare
+    v_skill integer := json.get_opt_integer(data.get_attribute_value(v_person_id, 'system_person_miner_skill'), null);
+  begin
+    if v_skill is not null then
+      perform data.set_attribute_value(data.get_object_id('mine_person'), 'miner_skill', to_jsonb(v_skill));
+    end if;
+  end;
 
   return v_person_id;
 end;

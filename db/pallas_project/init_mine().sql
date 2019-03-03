@@ -9,9 +9,17 @@ begin
   insert into data.attributes(code, type, card_type, can_be_overridden) values
   ('mine_available_equipment', 'hidden', 'full', true),
   ('mine_available_companies', 'hidden', 'full', true),
-  ('mine_client_ids', 'hidden', 'full', false),
   ('mine_map', 'hidden', null, false),
   ('mine_equipment', 'hidden', null, false);
+
+  insert into data.actions(code, function) values
+  ('save_map', 'pallas_project.act_save_map'),
+  ('add_content', 'pallas_project.act_add_content'),
+  ('remove_content', 'pallas_project.act_remove_content'),
+  ('take_equipment', 'pallas_project.act_take_equipment'),
+  ('free_equipment', 'pallas_project.act_free_equipment'),
+  ('move_equipment', 'pallas_project.act_move_equipment'),
+  ('add_equipment', 'pallas_project.act_add_equipment');
 
   -- train (CM) все
   -- buksir (AC) чамберс онил
@@ -40,7 +48,6 @@ begin
       {"code": "type", "value": "mine"},
       {"code": "title", "value": "Карта"},
       {"code": "description", "value": "Управление оборудованием доступно только со специально оборудованных мест"},
-      {"code": "mine_client_ids", "value": []},
       {"code": "is_visible", "value": true},
       {"code": "is_master", "value": false},
       {"code": "is_master", "value": true, "value_object_code": "master"},
@@ -76,8 +83,8 @@ begin
         "value": ["train", "driller", "box", "brill", "buksir", "digger", "dron", "iron", "loader", "stealer", "stone", "ship", "barge", "brillmine", "stonemine", "ironmine"],
         "value_object_code": "master"
       },
-      {"code": "mine_available_companies", "value": ["CM", "TM", "DB", "SH", "TO", "AC", "AD", "OP", "CT", "TA"], "value_object_code": "master"},
-      {"code": "content", "value": ["mine_map", "mine_equipment"]},
+      {"code": "mine_available_companies", "value": ["CM", "TM", "DB", "AC", "AD", "OP", "CT", "TA"], "value_object_code": "master"},
+      {"code": "content", "value": ["mine_map", "mine_equipment", "mine_person"]},
       {
         "code": "template",
         "value": {
@@ -98,27 +105,27 @@ begin
   perform data.create_object(
     'mine_equipment',
     jsonb '{
-      "type": "mine_map",
+      "type": "mine_equipment",
       "is_visible": true,
       "template": {"groups": []},
-      "mine_equipment": [
-        {"id": "1", "x":11, "y":11, "type":"driller", "actor_id": false, "fueled": true, "broken":true, "firm":"TM", "content":[]},
-        {"id": "2", "x":11, "y":12, "type":"box", "actor_id": false, "fueled": true, "broken":false, "firm":"TM", "content":[]},
-        {"id": "3", "x":11, "y":13, "type":"brill", "actor_id": false, "fueled": true, "broken":false, "firm":"DB", "content":[]},
-        {"id": "4", "x":11, "y":14, "type":"buksir", "actor_id": false, "fueled": true, "broken":false, "firm":"DB", "content":[]},
-        {"id": "5", "x":11, "y":15, "type":"digger", "actor_id": false, "fueled": true, "broken":false, "firm":"SH", "content":[]},
-        {"id": "6", "x":11, "y":16, "type":"dron", "actor_id": false, "fueled": true, "broken":false, "firm":"AD", "content":[]},
-        {"id": "7", "x":11, "y":17, "type":"iron", "actor_id": false, "fueled": true, "broken":false, "firm":"TO", "content":[]},
-        {"id": "8", "x":11, "y":19, "type":"loader", "actor_id": false, "fueled": true, "broken":false, "firm":"TO", "content":[]},
-        {"id": "9", "x":11, "y":20, "type":"stealer", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
-        {"id": "10", "x":11, "y":21, "type":"stone", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
-        {"id": "11", "x":11, "y":22, "type":"ship", "actor_id": false, "fueled": true, "broken":false," firm":"AC", "content":[]},
-        {"id": "12", "x":11, "y":23, "type":"barge", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
-        {"id": "13", "x":11, "y":24, "type":"train", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
-        {"id": "14", "x":11, "y":12, "type":"brillmine", "actor_id": false, "fueled": true, "broken":false, "firm":"TM", "content":[]},
-        {"id": "15", "x":11, "y":13, "type":"stonemine", "actor_id": false, "fueled": true, "broken":false, "firm":"DB", "content":[]},
-        {"id": "16", "x":11, "y":14, "type":"ironmine", "actor_id": false, "fueled": true, "broken":false, "firm":"DB", "content":[]}
-      ]
+      "mine_equipment": {
+        "1": {"x":11, "y":11, "type":"driller", "actor_id": false, "fueled": true, "broken":true, "firm":"TM", "content":[]},
+        "2": {"x":11, "y":12, "type":"box", "actor_id": false, "fueled": true, "broken":false, "firm":"TM", "content":[]},
+        "3": {"x":11, "y":13, "type":"brill", "actor_id": false, "fueled": true, "broken":false, "firm":"DB", "content":[]},
+        "4": {"x":11, "y":14, "type":"buksir", "actor_id": false, "fueled": true, "broken":false, "firm":"DB", "content":[]},
+        "5": {"x":11, "y":15, "type":"digger", "actor_id": false, "fueled": true, "broken":false, "firm":"DB", "content":[]},
+        "6": {"x":11, "y":16, "type":"dron", "actor_id": false, "fueled": true, "broken":false, "firm":"AD", "content":[]},
+        "7": {"x":11, "y":17, "type":"iron", "actor_id": false, "fueled": true, "broken":false, "firm":"AD", "content":[]},
+        "8": {"x":11, "y":19, "type":"loader", "actor_id": false, "fueled": true, "broken":false, "firm":"AD", "content":[]},
+        "9": {"x":11, "y":20, "type":"stealer", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
+        "10": {"x":11, "y":21, "type":"stone", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
+        "11": {"x":11, "y":22, "type":"ship", "actor_id": false, "fueled": true, "broken":false," firm":"AC", "content":[]},
+        "12": {"x":11, "y":23, "type":"barge", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
+        "13": {"x":11, "y":24, "type":"train", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
+        "14": {"x":11, "y":12, "type":"brillmine", "actor_id": false, "fueled": true, "broken":false, "firm":"TM", "content":[]},
+        "15": {"x":11, "y":13, "type":"stonemine", "actor_id": false, "fueled": true, "broken":false, "firm":"DB", "content":[]},
+        "16": {"x":11, "y":14, "type":"ironmine", "actor_id": false, "fueled": true, "broken":false, "firm":"DB", "content":[]}
+      }
     }');
 end;
 $$

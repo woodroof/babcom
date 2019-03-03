@@ -9378,6 +9378,93 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_add_content(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_add_content(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_id text := json.get_string(in_user_params, 'id');
+  v_content_id text := json.get_string(in_user_params, 'content_id');
+  v_mine_equipment_id integer := data.get_object_id('mine_equipment');
+  v_equipment jsonb := data.get_raw_attribute_value_for_update(v_mine_equipment_id, 'mine_equipment');
+  v_equipment_content text[];
+  v_notified boolean := false;
+begin
+  if v_equipment ? v_id and v_equipment ? v_content_id then
+    v_equipment_content := json.get_string_array(json.get_object(v_equipment, v_id), 'content');
+    if array_position(v_equipment_content, v_content_id) is null then
+      v_equipment_content := array_append(v_equipment_content, v_content_id);
+      v_equipment := jsonb_set(v_equipment, array[v_id, 'content'], to_jsonb(v_equipment_content));
+
+      v_notified :=
+        data.change_current_object(
+          in_client_id,
+          in_request_id,
+          v_mine_equipment_id,
+          jsonb_build_object('mine_equipment', v_equipment));
+    end if;
+  end if;
+
+  if not v_notified then
+    perform pallas_project.create_ok_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_add_equipment(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_add_equipment(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_x integer := json.get_integer(in_user_params, 'x');
+  v_y integer := json.get_integer(in_user_params, 'y');
+  v_type text := json.get_string(in_user_params, 'type');
+
+  v_mine_equipment_id integer := data.get_object_id('mine_equipment');
+  v_equipment jsonb := data.get_raw_attribute_value_for_update(v_mine_equipment_id, 'mine_equipment');
+
+  v_notified boolean := false;
+begin
+  assert v_type in ('train', 'driller', 'box', 'brill', 'buksir', 'digger', 'dron', 'iron', 'loader', 'stealer', 'stone', 'ship', 'barge', 'brillmine', 'stonemine', 'ironmine');
+
+  v_equipment :=
+    v_equipment ||
+    format(
+      '{
+        "%s": {
+          "x": %s,
+          "y": %s,
+          "type": "%s",
+          "actor_id": false,
+          "fueled": true,
+          "broken": true,
+          "firm": "CM",
+          "content": []
+        }
+      }',
+      (pgcrypto.gen_random_uuid())::text,
+      v_x,
+      v_y,
+      v_type)::jsonb;
+
+  v_notified :=
+    data.change_current_object(
+      in_client_id,
+      in_request_id,
+      v_mine_equipment_id,
+      jsonb_build_object('mine_equipment', v_equipment));
+  assert v_notified;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_blog_create(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_blog_create(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -13726,6 +13813,42 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_free_equipment(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_free_equipment(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_id text := json.get_string(in_user_params, 'id');
+  v_mine_equipment_id integer := data.get_object_id('mine_equipment');
+  v_equipment jsonb := data.get_raw_attribute_value_for_update(v_mine_equipment_id, 'mine_equipment');
+  v_equipment_object jsonb;
+  v_notified boolean := false;
+begin
+  if v_equipment ? v_id then
+    v_equipment_object := json.get_object(v_equipment, v_id);
+
+    if jsonb_typeof(v_equipment_object->'actor_id') = 'string' then
+      v_equipment := jsonb_set(v_equipment, array[v_id, 'actor_id'], jsonb 'false');
+
+      v_notified :=
+        data.change_current_object(
+          in_client_id,
+          in_request_id,
+          v_mine_equipment_id,
+          jsonb_build_object('mine_equipment', v_equipment));
+    end if;
+  end if;
+
+  if not v_notified then
+    perform pallas_project.create_ok_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_go_back(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_go_back(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -14238,6 +14361,56 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_move_equipment(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_move_equipment(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_id text := json.get_string(in_user_params, 'id');
+  v_x integer := json.get_integer(in_user_params, 'x');
+  v_y integer := json.get_integer(in_user_params, 'y');
+
+  v_mine_equipment_id integer := data.get_object_id('mine_equipment');
+  v_equipment jsonb := data.get_raw_attribute_value_for_update(v_mine_equipment_id, 'mine_equipment');
+  v_equipment_content text[];
+  v_content_id text;
+
+  v_notified boolean := false;
+begin
+  if v_equipment ? v_id then
+    v_equipment_content := json.get_string_array(json.get_object(v_equipment, v_id), 'content');
+
+    for v_content_id in
+    (
+      select value
+      from unnest(v_equipment_content) a(value)
+    )
+    loop
+      v_equipment := jsonb_set(v_equipment, array[v_content_id, 'x'], to_jsonb(v_x));
+      v_equipment := jsonb_set(v_equipment, array[v_content_id, 'y'], to_jsonb(v_y));
+    end loop;
+
+    v_equipment := jsonb_set(v_equipment, array[v_id, 'x'], to_jsonb(v_x));
+    v_equipment := jsonb_set(v_equipment, array[v_id, 'y'], to_jsonb(v_y));
+
+    v_notified :=
+      data.change_current_object(
+        in_client_id,
+        in_request_id,
+        v_mine_equipment_id,
+        jsonb_build_object('mine_equipment', v_equipment));
+  end if;
+
+  if not v_notified then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_open_object(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_open_object(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -14251,6 +14424,43 @@ begin
   assert in_request_id is not null;
 
   perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, v_object_code);
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_remove_content(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_remove_content(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_id text := json.get_string(in_user_params, 'id');
+  v_content_id text := json.get_string(in_user_params, 'content_id');
+  v_mine_equipment_id integer := data.get_object_id('mine_equipment');
+  v_equipment jsonb := data.get_raw_attribute_value_for_update(v_mine_equipment_id, 'mine_equipment');
+  v_equipment_content text[];
+  v_notified boolean := false;
+begin
+  if v_equipment ? v_id then
+    v_equipment_content := json.get_string_array(json.get_object(v_equipment, v_id), 'content');
+    if array_position(v_equipment_content, v_content_id) is not null then
+      v_equipment_content := array_remove(v_equipment_content, v_content_id);
+      v_equipment := jsonb_set(v_equipment, array[v_id, 'content'], to_jsonb(v_equipment_content));
+
+      v_notified :=
+        data.change_current_object(
+          in_client_id,
+          in_request_id,
+          v_mine_equipment_id,
+          jsonb_build_object('mine_equipment', v_equipment));
+    end if;
+  end if;
+
+  if not v_notified then
+    perform pallas_project.create_ok_notification(in_client_id, in_request_id);
+  end if;
 end;
 $$
 language plpgsql;
@@ -14294,6 +14504,30 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_save_map(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_save_map(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_map text := json.get_string(in_user_params, 'map');
+  v_notified boolean;
+begin
+  v_notified :=
+    data.change_current_object(
+      in_client_id,
+      in_request_id,
+      data.get_object_id('mine_map'),
+      jsonb_build_object('mine_map', v_map));
+  if not v_notified then
+    perform pallas_project.create_ok_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_suspend_contract(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_suspend_contract(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -14328,6 +14562,44 @@ begin
   assert v_notified;
 
   perform pallas_project.notify_contract(v_contract_id, 'Выплаты по контракту были приостановлены');
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_take_equipment(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_take_equipment(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_actor_code text := data.get_object_code(v_actor_id);
+  v_id text := json.get_string(in_user_params, 'id');
+  v_mine_equipment_id integer := data.get_object_id('mine_equipment');
+  v_equipment jsonb := data.get_raw_attribute_value_for_update(v_mine_equipment_id, 'mine_equipment');
+  v_equipment_object jsonb;
+  v_notified boolean := false;
+begin
+  if v_equipment ? v_id then
+    v_equipment_object := json.get_object(v_equipment, v_id);
+
+    if jsonb_typeof(v_equipment_object->'actor_id') = 'boolean' then
+      v_equipment := jsonb_set(v_equipment, array[v_id, 'actor_id'], to_jsonb(v_actor_code));
+
+      v_notified :=
+        data.change_current_object(
+          in_client_id,
+          in_request_id,
+          v_mine_equipment_id,
+          jsonb_build_object('mine_equipment', v_equipment));
+    end if;
+  end if;
+
+  if not v_notified then
+    perform pallas_project.create_ok_notification(in_client_id, in_request_id);
+  end if;
 end;
 $$
 language plpgsql;
@@ -18673,8 +18945,16 @@ begin
     end loop;
     perform pallas_project.change_chat_person_list_on_person(v_master_chat_id, null, true);
     perform pp_utils.list_prepend_and_notify(v_master_chats_id, v_master_chat_id, null);
-
   end if;
+
+  -- Перекладываем навых шахтёра, если есть
+  declare
+    v_skill integer := json.get_opt_integer(data.get_attribute_value(v_person_id, 'system_person_miner_skill'), null);
+  begin
+    if v_skill is not null then
+      perform data.set_attribute_value(data.get_object_id('mine_person'), 'miner_skill', to_jsonb(v_skill));
+    end if;
+  end;
 
   return v_person_id;
 end;
@@ -21896,9 +22176,17 @@ begin
   insert into data.attributes(code, type, card_type, can_be_overridden) values
   ('mine_available_equipment', 'hidden', 'full', true),
   ('mine_available_companies', 'hidden', 'full', true),
-  ('mine_client_ids', 'hidden', 'full', false),
   ('mine_map', 'hidden', null, false),
   ('mine_equipment', 'hidden', null, false);
+
+  insert into data.actions(code, function) values
+  ('save_map', 'pallas_project.act_save_map'),
+  ('add_content', 'pallas_project.act_add_content'),
+  ('remove_content', 'pallas_project.act_remove_content'),
+  ('take_equipment', 'pallas_project.act_take_equipment'),
+  ('free_equipment', 'pallas_project.act_free_equipment'),
+  ('move_equipment', 'pallas_project.act_move_equipment'),
+  ('add_equipment', 'pallas_project.act_add_equipment');
 
   -- train (CM) все
   -- buksir (AC) чамберс онил
@@ -21927,7 +22215,6 @@ begin
       {"code": "type", "value": "mine"},
       {"code": "title", "value": "Карта"},
       {"code": "description", "value": "Управление оборудованием доступно только со специально оборудованных мест"},
-      {"code": "mine_client_ids", "value": []},
       {"code": "is_visible", "value": true},
       {"code": "is_master", "value": false},
       {"code": "is_master", "value": true, "value_object_code": "master"},
@@ -21963,8 +22250,8 @@ begin
         "value": ["train", "driller", "box", "brill", "buksir", "digger", "dron", "iron", "loader", "stealer", "stone", "ship", "barge", "brillmine", "stonemine", "ironmine"],
         "value_object_code": "master"
       },
-      {"code": "mine_available_companies", "value": ["CM", "TM", "DB", "SH", "TO", "AC", "AD", "OP", "CT", "TA"], "value_object_code": "master"},
-      {"code": "content", "value": ["mine_map", "mine_equipment"]},
+      {"code": "mine_available_companies", "value": ["CM", "TM", "DB", "AC", "AD", "OP", "CT", "TA"], "value_object_code": "master"},
+      {"code": "content", "value": ["mine_map", "mine_equipment", "mine_person"]},
       {
         "code": "template",
         "value": {
@@ -21985,27 +22272,27 @@ begin
   perform data.create_object(
     'mine_equipment',
     jsonb '{
-      "type": "mine_map",
+      "type": "mine_equipment",
       "is_visible": true,
       "template": {"groups": []},
-      "mine_equipment": [
-        {"id": "1", "x":11, "y":11, "type":"driller", "actor_id": false, "fueled": true, "broken":true, "firm":"TM", "content":[]},
-        {"id": "2", "x":11, "y":12, "type":"box", "actor_id": false, "fueled": true, "broken":false, "firm":"TM", "content":[]},
-        {"id": "3", "x":11, "y":13, "type":"brill", "actor_id": false, "fueled": true, "broken":false, "firm":"DB", "content":[]},
-        {"id": "4", "x":11, "y":14, "type":"buksir", "actor_id": false, "fueled": true, "broken":false, "firm":"DB", "content":[]},
-        {"id": "5", "x":11, "y":15, "type":"digger", "actor_id": false, "fueled": true, "broken":false, "firm":"SH", "content":[]},
-        {"id": "6", "x":11, "y":16, "type":"dron", "actor_id": false, "fueled": true, "broken":false, "firm":"AD", "content":[]},
-        {"id": "7", "x":11, "y":17, "type":"iron", "actor_id": false, "fueled": true, "broken":false, "firm":"TO", "content":[]},
-        {"id": "8", "x":11, "y":19, "type":"loader", "actor_id": false, "fueled": true, "broken":false, "firm":"TO", "content":[]},
-        {"id": "9", "x":11, "y":20, "type":"stealer", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
-        {"id": "10", "x":11, "y":21, "type":"stone", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
-        {"id": "11", "x":11, "y":22, "type":"ship", "actor_id": false, "fueled": true, "broken":false," firm":"AC", "content":[]},
-        {"id": "12", "x":11, "y":23, "type":"barge", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
-        {"id": "13", "x":11, "y":24, "type":"train", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
-        {"id": "14", "x":11, "y":12, "type":"brillmine", "actor_id": false, "fueled": true, "broken":false, "firm":"TM", "content":[]},
-        {"id": "15", "x":11, "y":13, "type":"stonemine", "actor_id": false, "fueled": true, "broken":false, "firm":"DB", "content":[]},
-        {"id": "16", "x":11, "y":14, "type":"ironmine", "actor_id": false, "fueled": true, "broken":false, "firm":"DB", "content":[]}
-      ]
+      "mine_equipment": {
+        "1": {"x":11, "y":11, "type":"driller", "actor_id": false, "fueled": true, "broken":true, "firm":"TM", "content":[]},
+        "2": {"x":11, "y":12, "type":"box", "actor_id": false, "fueled": true, "broken":false, "firm":"TM", "content":[]},
+        "3": {"x":11, "y":13, "type":"brill", "actor_id": false, "fueled": true, "broken":false, "firm":"DB", "content":[]},
+        "4": {"x":11, "y":14, "type":"buksir", "actor_id": false, "fueled": true, "broken":false, "firm":"DB", "content":[]},
+        "5": {"x":11, "y":15, "type":"digger", "actor_id": false, "fueled": true, "broken":false, "firm":"DB", "content":[]},
+        "6": {"x":11, "y":16, "type":"dron", "actor_id": false, "fueled": true, "broken":false, "firm":"AD", "content":[]},
+        "7": {"x":11, "y":17, "type":"iron", "actor_id": false, "fueled": true, "broken":false, "firm":"AD", "content":[]},
+        "8": {"x":11, "y":19, "type":"loader", "actor_id": false, "fueled": true, "broken":false, "firm":"AD", "content":[]},
+        "9": {"x":11, "y":20, "type":"stealer", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
+        "10": {"x":11, "y":21, "type":"stone", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
+        "11": {"x":11, "y":22, "type":"ship", "actor_id": false, "fueled": true, "broken":false," firm":"AC", "content":[]},
+        "12": {"x":11, "y":23, "type":"barge", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
+        "13": {"x":11, "y":24, "type":"train", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
+        "14": {"x":11, "y":12, "type":"brillmine", "actor_id": false, "fueled": true, "broken":false, "firm":"TM", "content":[]},
+        "15": {"x":11, "y":13, "type":"stonemine", "actor_id": false, "fueled": true, "broken":false, "firm":"DB", "content":[]},
+        "16": {"x":11, "y":14, "type":"ironmine", "actor_id": false, "fueled": true, "broken":false, "firm":"DB", "content":[]}
+      }
     }');
 end;
 $$
@@ -22524,7 +22811,10 @@ begin
   ('person_district', 'Район проживания', 'normal', 'full', 'pallas_project.vd_link', false),
   ('system_person_original_id', 'Идентификатор основной персоны', 'system', null, null, false),
   ('system_person_doubles_id_list', 'Список идентификаторов дублей персоны', 'system', null, null, false),
-  ('system_person_is_stimulant_used', 'Признак, что принят стимулятор', 'system', null, null, false);
+  ('system_person_is_stimulant_used', 'Признак, что принят стимулятор', 'system', null, null, false),
+  ('system_person_miner_skill', 'Навык шахтёра', 'system', null, null, false),
+  ('miner_skill', null, 'hidden', null, null, true),
+  ('is_stimulant_used', null, 'hidden', null, null, true);
 
   insert into data.actions(code, function) values
   ('change_un_rating', 'pallas_project.act_change_un_rating'),
@@ -22614,6 +22904,19 @@ begin
         "groups": []
       }
     }');
+
+  -- Доп. объект для шахты
+  perform data.create_object(
+    'mine_person',
+    jsonb '[
+      {"code": "is_visible", "value": true},
+      {"code": "type", "value": "mine_person"},
+      {"code": "miner_skill", "value": 0},
+      {"code": "miner_skill", "value": 1, "value_group_code": "master"},
+      {"code": "is_stimulant_used", "value": true, "value_group_code": "master"},
+      {"code": "is_stimulant_used", "value": false},
+      {"code": "template", "value": {"groups": []}}
+    ]');
 
   -- Мастера
   perform pallas_project.create_person(null, 'm1', jsonb '{"title": "Саша", "person_occupation": "Мастер"}', array['master']);
@@ -22847,7 +23150,8 @@ begin
       "system_person_recreation_status":2,
       "system_person_health_care_status":2,
       "system_person_life_support_status":2,
-      "system_person_administrative_services_status":1
+      "system_person_administrative_services_status":1,
+      "system_person_miner_skill":1
     }',
     array['all_person', 'player', 'aster', 'cartel']);
   perform pallas_project.create_person(
@@ -22866,7 +23170,8 @@ begin
       "system_person_recreation_status":1,
       "system_person_health_care_status":1,
       "system_person_life_support_status":2,
-      "system_person_administrative_services_status":1
+      "system_person_administrative_services_status":1,
+      "system_person_miner_skill":1
     }',
     array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
@@ -22942,7 +23247,8 @@ begin
       "system_person_recreation_status":1,
       "system_person_health_care_status":1,
       "system_person_life_support_status":2,
-      "system_person_administrative_services_status":0
+      "system_person_administrative_services_status":0,
+      "system_person_miner_skill":1
     }',
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
@@ -22979,7 +23285,8 @@ begin
       "system_person_recreation_status":1,
       "system_person_health_care_status":1,
       "system_person_life_support_status":2,
-      "system_person_administrative_services_status":1
+      "system_person_administrative_services_status":1,
+      "system_person_miner_skill":1
     }',
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
@@ -24873,6 +25180,10 @@ begin
                                             to_jsonb(v_changes),
                                             null);
     end loop;
+
+    perform data.change_object_and_notify(
+      data.get_object_id('mine_person'),
+      jsonb '[]' || data.attribute_change2jsonb('is_stimulant_used', jsonb 'null', v_actor_id));
   end if;
 end;
 $$
@@ -25984,6 +26295,10 @@ begin
   -- Если стимулятор уже принят, то удаляем джоб его окончания
   if v_last_stimulant_job is not null then 
     delete from data.jobs where id = v_last_stimulant_job;
+  else
+    perform data.change_object_and_notify(
+      data.get_object_id('mine_person'),
+      jsonb '[]' || data.attribute_change2jsonb('is_stimulant_used', jsonb 'true', v_orig_person_id));
   end if;
 
 -- Ставим, что принят стимулятор на персоны, отправляем уведомление всем дублям

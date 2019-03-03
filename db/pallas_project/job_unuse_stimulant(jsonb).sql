@@ -27,6 +27,10 @@ begin
                                             to_jsonb(v_changes),
                                             null);
     end loop;
+
+    perform data.change_object_and_notify(
+      data.get_object_id('mine_person'),
+      jsonb '[]' || data.attribute_change2jsonb('is_stimulant_used', jsonb 'null', v_actor_id));
   end if;
 end;
 $$
