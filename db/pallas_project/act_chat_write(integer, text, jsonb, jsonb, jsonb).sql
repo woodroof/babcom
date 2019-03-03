@@ -77,7 +77,6 @@ begin
     end if;
     v_changes := array_append(v_changes, data.attribute_change2jsonb(v_content_attribute_id, to_jsonb(v_new_content)));
 
-
     if v_chat_parent_list = 'chats' then
     -- Перекладываем этот чат в начало в списке всех игровых чатов
       perform pp_utils.list_replace_to_head_and_notify(v_all_chats_id, v_chat_code, null);

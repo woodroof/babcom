@@ -190,6 +190,7 @@ begin
         "documents": {"code": "act_open_object", "name": "Документы", "disabled": false, "params": {"object_code": "documents"}},
         "news": {"code": "act_open_object", "name": "Новости", "disabled": false, "params": {"object_code": "news"}},
         "claims": {"code": "act_open_object", "name": "Судебные иски", "disabled": false, "params": {"object_code": "claims"}},
+        "mine": {"code": "act_open_object", "name": "Карта", "disabled": false, "params": {"object_code": "mine"}},
         "logout": {"code": "logout", "name": "Выход", "disabled": false, "params": {}}
       }';
     if pp_utils.is_in_group(in_actor_id, 'doctor') then

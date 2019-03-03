@@ -13,7 +13,8 @@ begin
   ('description', 'Текстовый блок с развёрнутым описанием объекта, string', 'normal', 'full', true),
   ('mini_description', 'Текстовый блок с коротким описанием объекта, string', 'normal', 'mini', true),
   ('force_object_diff', 'Атрибут для принудительной генерации diff''а, integer', 'hidden', null, false),
-  ('system_is_master_object', 'Мастерский персонаж, boolean', 'system', null, false);
+  ('system_is_master_object', 'Мастерский персонаж, boolean', 'system', null, false),
+  ('is_master', 'Является ли текущий актор мастером, boolean', 'hidden', 'full', true);
 
   -- Создадим актора по умолчанию
   v_default_actor_id :=
@@ -51,7 +52,7 @@ begin
         "groups": [
           {"code": "menu_notifications", "actions": ["notifications"]},
           {"code": "menu_lottery", "actions": ["lottery"]},
-          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "med_health", "chats", "documents", "medicine", "customs", "my_contracts", "my_organizations", "claims", "important_notifications", "med_drugs"]},
+          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "med_health", "chats", "documents", "medicine", "customs", "my_contracts", "my_organizations", "claims", "important_notifications", "med_drugs", "mine"]},
           {"code": "menu_social", "actions": ["news", "all_chats", "debatles", "master_chats"]},
           {"code": "menu_info", "actions": ["all_contracts", "persons", "districts", "organizations"]},
           {"code": "menu_cycle", "actions": ["cycle_checklist"]},
@@ -157,6 +158,7 @@ begin
   perform pallas_project.init_routes();
   perform pallas_project.init_statuses();
   perform pallas_project.init_document_list();
+  perform pallas_project.init_mine();
 end;
 $$
 language plpgsql;
