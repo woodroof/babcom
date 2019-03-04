@@ -7,17 +7,11 @@ as
 $$
 declare
   v_map text := json.get_string(in_user_params, 'map');
-  v_notified boolean;
 begin
-  v_notified :=
-    data.change_current_object(
-      in_client_id,
-      in_request_id,
+  perform data.change_object_and_notify(
       data.get_object_id('mine_map'),
       jsonb_build_object('mine_map', v_map));
-  if not v_notified then
-    perform pallas_project.create_ok_notification(in_client_id, in_request_id);
-  end if;
+  perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
 language plpgsql;

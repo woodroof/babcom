@@ -33,17 +33,12 @@ begin
     v_equipment := jsonb_set(v_equipment, array[v_id, 'x'], to_jsonb(v_x));
     v_equipment := jsonb_set(v_equipment, array[v_id, 'y'], to_jsonb(v_y));
 
-    v_notified :=
-      data.change_current_object(
-        in_client_id,
-        in_request_id,
-        v_mine_equipment_id,
-        jsonb_build_object('mine_equipment', v_equipment));
+    perform data.change_object_and_notify(
+      v_mine_equipment_id,
+      jsonb_build_object('mine_equipment', v_equipment));
   end if;
 
-  if not v_notified then
-    perform api_utils.create_ok_notification(in_client_id, in_request_id);
-  end if;
+  perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
 language plpgsql;

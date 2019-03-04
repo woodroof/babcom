@@ -10,7 +10,6 @@ declare
   v_mine_equipment_id integer := data.get_object_id('mine_equipment');
   v_equipment jsonb := data.get_raw_attribute_value_for_update(v_mine_equipment_id, 'mine_equipment');
   v_equipment_object jsonb;
-  v_notified boolean := false;
 begin
   if v_equipment ? v_id then
     v_equipment_object := json.get_object(v_equipment, v_id);
@@ -18,18 +17,13 @@ begin
     if jsonb_typeof(v_equipment_object->'actor_id') = 'string' then
       v_equipment := jsonb_set(v_equipment, array[v_id, 'actor_id'], jsonb 'false');
 
-      v_notified :=
-        data.change_current_object(
-          in_client_id,
-          in_request_id,
-          v_mine_equipment_id,
-          jsonb_build_object('mine_equipment', v_equipment));
+      perform data.change_object_and_notify(
+        v_mine_equipment_id,
+        jsonb_build_object('mine_equipment', v_equipment));
     end if;
   end if;
 
-  if not v_notified then
-    perform pallas_project.create_ok_notification(in_client_id, in_request_id);
-  end if;
+  perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
 language plpgsql;

@@ -12,8 +12,6 @@ declare
 
   v_mine_equipment_id integer := data.get_object_id('mine_equipment');
   v_equipment jsonb := data.get_raw_attribute_value_for_update(v_mine_equipment_id, 'mine_equipment');
-
-  v_notified boolean := false;
 begin
   assert v_type in ('train', 'driller', 'box', 'brill', 'buksir', 'digger', 'dron', 'iron', 'loader', 'stealer', 'stone', 'ship', 'barge', 'brillmine', 'stonemine', 'ironmine');
 
@@ -37,13 +35,10 @@ begin
       v_y,
       v_type)::jsonb;
 
-  v_notified :=
-    data.change_current_object(
-      in_client_id,
-      in_request_id,
-      v_mine_equipment_id,
-      jsonb_build_object('mine_equipment', v_equipment));
-  assert v_notified;
+  perform data.change_object_and_notify(
+    v_mine_equipment_id,
+    jsonb_build_object('mine_equipment', v_equipment));
+  perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
 language plpgsql;

@@ -9457,7 +9457,6 @@ declare
   v_mine_equipment_id integer := data.get_object_id('mine_equipment');
   v_equipment jsonb := data.get_raw_attribute_value_for_update(v_mine_equipment_id, 'mine_equipment');
   v_equipment_content text[];
-  v_notified boolean := false;
 begin
   if v_equipment ? v_id and v_equipment ? v_content_id then
     v_equipment_content := json.get_string_array(json.get_object(v_equipment, v_id), 'content');
@@ -9465,18 +9464,13 @@ begin
       v_equipment_content := array_append(v_equipment_content, v_content_id);
       v_equipment := jsonb_set(v_equipment, array[v_id, 'content'], to_jsonb(v_equipment_content));
 
-      v_notified :=
-        data.change_current_object(
-          in_client_id,
-          in_request_id,
-          v_mine_equipment_id,
-          jsonb_build_object('mine_equipment', v_equipment));
+      perform data.change_object_and_notify(
+        v_mine_equipment_id,
+        jsonb_build_object('mine_equipment', v_equipment));
     end if;
   end if;
 
-  if not v_notified then
-    perform pallas_project.create_ok_notification(in_client_id, in_request_id);
-  end if;
+  perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
 language plpgsql;
@@ -9495,8 +9489,6 @@ declare
 
   v_mine_equipment_id integer := data.get_object_id('mine_equipment');
   v_equipment jsonb := data.get_raw_attribute_value_for_update(v_mine_equipment_id, 'mine_equipment');
-
-  v_notified boolean := false;
 begin
   assert v_type in ('train', 'driller', 'box', 'brill', 'buksir', 'digger', 'dron', 'iron', 'loader', 'stealer', 'stone', 'ship', 'barge', 'brillmine', 'stonemine', 'ironmine');
 
@@ -9520,13 +9512,10 @@ begin
       v_y,
       v_type)::jsonb;
 
-  v_notified :=
-    data.change_current_object(
-      in_client_id,
-      in_request_id,
-      v_mine_equipment_id,
-      jsonb_build_object('mine_equipment', v_equipment));
-  assert v_notified;
+  perform data.change_object_and_notify(
+    v_mine_equipment_id,
+    jsonb_build_object('mine_equipment', v_equipment));
+  perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
 language plpgsql;
@@ -14183,7 +14172,6 @@ declare
   v_mine_equipment_id integer := data.get_object_id('mine_equipment');
   v_equipment jsonb := data.get_raw_attribute_value_for_update(v_mine_equipment_id, 'mine_equipment');
   v_equipment_object jsonb;
-  v_notified boolean := false;
 begin
   if v_equipment ? v_id then
     v_equipment_object := json.get_object(v_equipment, v_id);
@@ -14191,18 +14179,13 @@ begin
     if jsonb_typeof(v_equipment_object->'actor_id') = 'string' then
       v_equipment := jsonb_set(v_equipment, array[v_id, 'actor_id'], jsonb 'false');
 
-      v_notified :=
-        data.change_current_object(
-          in_client_id,
-          in_request_id,
-          v_mine_equipment_id,
-          jsonb_build_object('mine_equipment', v_equipment));
+      perform data.change_object_and_notify(
+        v_mine_equipment_id,
+        jsonb_build_object('mine_equipment', v_equipment));
     end if;
   end if;
 
-  if not v_notified then
-    perform pallas_project.create_ok_notification(in_client_id, in_request_id);
-  end if;
+  perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
 language plpgsql;
@@ -14754,17 +14737,12 @@ begin
     v_equipment := jsonb_set(v_equipment, array[v_id, 'x'], to_jsonb(v_x));
     v_equipment := jsonb_set(v_equipment, array[v_id, 'y'], to_jsonb(v_y));
 
-    v_notified :=
-      data.change_current_object(
-        in_client_id,
-        in_request_id,
-        v_mine_equipment_id,
-        jsonb_build_object('mine_equipment', v_equipment));
+    perform data.change_object_and_notify(
+      v_mine_equipment_id,
+      jsonb_build_object('mine_equipment', v_equipment));
   end if;
 
-  if not v_notified then
-    perform api_utils.create_ok_notification(in_client_id, in_request_id);
-  end if;
+  perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
 language plpgsql;
@@ -14799,7 +14777,6 @@ declare
   v_mine_equipment_id integer := data.get_object_id('mine_equipment');
   v_equipment jsonb := data.get_raw_attribute_value_for_update(v_mine_equipment_id, 'mine_equipment');
   v_equipment_content text[];
-  v_notified boolean := false;
 begin
   if v_equipment ? v_id then
     v_equipment_content := json.get_string_array(json.get_object(v_equipment, v_id), 'content');
@@ -14807,18 +14784,13 @@ begin
       v_equipment_content := array_remove(v_equipment_content, v_content_id);
       v_equipment := jsonb_set(v_equipment, array[v_id, 'content'], to_jsonb(v_equipment_content));
 
-      v_notified :=
-        data.change_current_object(
-          in_client_id,
-          in_request_id,
-          v_mine_equipment_id,
-          jsonb_build_object('mine_equipment', v_equipment));
+      perform data.change_object_and_notify(
+        v_mine_equipment_id,
+        jsonb_build_object('mine_equipment', v_equipment));
     end if;
   end if;
 
-  if not v_notified then
-    perform pallas_project.create_ok_notification(in_client_id, in_request_id);
-  end if;
+  perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
 language plpgsql;
@@ -14871,17 +14843,11 @@ as
 $$
 declare
   v_map text := json.get_string(in_user_params, 'map');
-  v_notified boolean;
 begin
-  v_notified :=
-    data.change_current_object(
-      in_client_id,
-      in_request_id,
+  perform data.change_object_and_notify(
       data.get_object_id('mine_map'),
       jsonb_build_object('mine_map', v_map));
-  if not v_notified then
-    perform pallas_project.create_ok_notification(in_client_id, in_request_id);
-  end if;
+  perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
 language plpgsql;
@@ -14938,7 +14904,6 @@ declare
   v_mine_equipment_id integer := data.get_object_id('mine_equipment');
   v_equipment jsonb := data.get_raw_attribute_value_for_update(v_mine_equipment_id, 'mine_equipment');
   v_equipment_object jsonb;
-  v_notified boolean := false;
 begin
   if v_equipment ? v_id then
     v_equipment_object := json.get_object(v_equipment, v_id);
@@ -14946,18 +14911,13 @@ begin
     if jsonb_typeof(v_equipment_object->'actor_id') = 'boolean' then
       v_equipment := jsonb_set(v_equipment, array[v_id, 'actor_id'], to_jsonb(v_actor_code));
 
-      v_notified :=
-        data.change_current_object(
-          in_client_id,
-          in_request_id,
-          v_mine_equipment_id,
-          jsonb_build_object('mine_equipment', v_equipment));
+      perform data.change_object_and_notify(
+        v_mine_equipment_id,
+        jsonb_build_object('mine_equipment', v_equipment));
     end if;
   end if;
 
-  if not v_notified then
-    perform pallas_project.create_ok_notification(in_client_id, in_request_id);
-  end if;
+  perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
 language plpgsql;
@@ -19768,7 +19728,7 @@ declare
 8. Подумать, нужно ли написать что-то администрации, клинике, Akira SC.
 9. Написать СВП о новых закупочных ценах на алмазы.
 10. Посмотреть, отреагировал ли [мормон](babcom:ac1b23d0-ba5f-4042-85d5-880a66254803) на запросы о помощи, изменить его влияние. Написать новые запросы, если нужно.
-11. В начале пятого цикла - проверить, купила ли в прошлом цикле организация [Тариель](babcom:org_tariel) лицензию у администрации за UN$1000.
+11. В начале пятого цикла — проверить, купила ли в прошлом цикле организация [Тариель](babcom:org_tariel) лицензию у администрации за UN$1000.
 
 Справка по рейтингам и статусам:
 <100 10
