@@ -11,6 +11,8 @@ begin
   insert into data.actions(code, function) values
   ('change_next_tax', 'pallas_project.act_change_next_tax'),
   ('change_current_tax', 'pallas_project.act_change_current_tax'),
+  ('change_next_budget', 'pallas_project.act_change_next_budget'),
+  ('change_next_profit', 'pallas_project.act_change_next_profit'),
   ('transfer_org_money', 'pallas_project.act_transfer_org_money');
 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
@@ -46,7 +48,7 @@ begin
           {
             "code": "personal_info",
             "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_tax", "org_next_tax", "org_current_tax_sum", "org_districts_control", "org_districts_influence"],
-            "actions": ["transfer_money", "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5", "change_current_tax", "change_next_tax", "show_transactions", "show_contracts", "show_claims"]
+            "actions": ["transfer_money", "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5", "change_current_tax", "change_next_tax", "change_next_budget", "change_next_profit", "show_transactions", "show_contracts", "show_claims"]
           },
           {"code": "info", "attributes": ["description"]}
         ]

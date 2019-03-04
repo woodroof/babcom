@@ -72,7 +72,7 @@ begin
 
     if v_master or v_is_head then
       declare
-        v_next_tax integer := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_org_next_tax'), null);
+        v_next_tax integer := json.get_integer_opt(data.get_raw_attribute_value_for_share(in_object_id, 'system_org_next_tax'), null);
       begin
         if v_next_tax is not null then
           v_actions :=
@@ -103,7 +103,9 @@ begin
 
     if v_master then
       declare
-        v_tax integer := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_org_tax'), null);
+        v_tax integer := json.get_integer_opt(data.get_raw_attribute_value_for_share(in_object_id, 'system_org_tax'), null);
+        v_budget integer := json.get_integer_opt(data.get_raw_attribute_value_for_share(in_object_id, 'system_org_budget'), null);
+        v_profit integer := json.get_integer_opt(data.get_raw_attribute_value_for_share(in_object_id, 'system_org_profit'), null);
       begin
         if v_tax is not null then
           v_actions :=
@@ -128,6 +130,56 @@ begin
               }',
               v_object_code,
               v_tax)::jsonb;
+        end if;
+
+        if v_budget is not null then
+          v_actions :=
+            v_actions ||
+            format(
+              '{
+                "change_next_budget": {
+                  "code": "change_next_budget",
+                  "name": "Изменить бюджет на следующий цикл",
+                  "disabled": false,
+                  "params": "%s",
+                  "user_params": [
+                    {
+                      "code": "budget",
+                      "description": "Бюджет на следующий цикл, UN$",
+                      "type": "integer",
+                      "restrictions": {"min_value": 0},
+                      "default_value": %s
+                    }
+                  ]
+                }
+              }',
+              v_object_code,
+              v_budget)::jsonb;
+        end if;
+
+        if v_profit is not null then
+          v_actions :=
+            v_actions ||
+            format(
+              '{
+                "change_next_profit": {
+                  "code": "change_next_profit",
+                  "name": "Изменить доход на следующий цикл",
+                  "disabled": false,
+                  "params": "%s",
+                  "user_params": [
+                    {
+                      "code": "profit",
+                      "description": "Доход на следующий цикл, UN$",
+                      "type": "integer",
+                      "restrictions": {"min_value": 0},
+                      "default_value": %s
+                    }
+                  ]
+                }
+              }',
+              v_object_code,
+              v_profit)::jsonb;
         end if;
       end;
     end if;
