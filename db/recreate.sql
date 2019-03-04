@@ -310,6 +310,8 @@ volatile
 security definer
 as
 $$
+declare
+  v_metric record;
 begin
   delete from data.notifications;
   delete from data.client_subscription_objects;
@@ -319,6 +321,15 @@ begin
   set
     is_connected = false,
     actor_id = null;
+
+  for v_metric in
+  (
+    select type, value
+    from data.metrics
+  )
+  loop
+    perform api_utils.create_metric_notification(v_metric.type, v_metric.value);
+  end loop;
 
   perform data.log('info', 'All clients were disconnected');
 end;
@@ -4513,6 +4524,31 @@ begin
 
   delete from data.object_objects
   where id = any(v_ids);
+end;
+$$
+language plpgsql;
+
+-- drop function data.reset_metrics();
+
+create or replace function data.reset_metrics()
+returns void
+volatile
+as
+$$
+declare
+  v_metric_type data.metric_type;
+begin
+  for v_metric_type in
+  (
+    select type
+    from data.metrics
+    for update
+  )
+  loop
+    perform api_utils.create_metric_notification(v_metric_type, 0);
+  end loop;
+
+  truncate table data.metrics;
 end;
 $$
 language plpgsql;

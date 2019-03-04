@@ -315,12 +315,12 @@ async def init_app():
     app.listener['processing'] = False
 
     app.db_pool = await asyncpg.create_pool(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME, init=init_connection)
-    async with app.db_pool.acquire() as connection:
-        await connection.execute('select api.disconnect_all_clients()')
     app.listen_connection = await asyncpg.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, database=DB_NAME)
     await app.listen_connection.add_listener('api_channel', listener_creator(app))
     app.worker = Worker(app.db_pool)
     app.worker.set_timeout(0)
+    async with app.db_pool.acquire() as connection:
+        await connection.execute('select api.disconnect_all_clients()')
     return app
 
 if __name__ == '__main__':
