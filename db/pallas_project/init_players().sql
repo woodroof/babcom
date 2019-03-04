@@ -1161,7 +1161,7 @@ begin
       "system_person_life_support_status":3,
       "system_person_administrative_services_status":0
     }',
-    array['all_person', 'player', 'aster', 'opa', 'cartel','customs_officer']);
+    array['all_person', 'player', 'aster', 'opa', 'cartel', 'customs_officer']);
   perform pallas_project.create_person(
     '555e076c-ff8d-4dbb-a6c6-9d935314ff59',
     '555e',

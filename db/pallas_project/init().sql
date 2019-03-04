@@ -131,7 +131,10 @@ begin
     'notification',
     jsonb '{
       "type": "notification",
+      "subtitle": "Уведомление",
       "touch_function": "pallas_project.touch_notification",
+      "full_card_function": "pallas_project.fcard_notification",
+      "template": {"title": "subtitle", "groups": [{"code": "group", "attributes": ["title"]}]},
       "mini_card_template": {"groups": [{"code": "group", "attributes": ["title"], "actions": ["remove_notification"]}]}
     }');
 
