@@ -9,7 +9,6 @@ declare
   v_system_money_attr_id integer := data.get_attribute_id('system_money');
   v_system_person_deposit_money_attr_id integer := data.get_attribute_id('system_person_deposit_money');
   v_system_person_coin_attr_id integer := data.get_attribute_id('system_person_coin');
-  v_system_person_coin_profit_attr_id integer := data.get_attribute_id('system_person_coin_profit');
 
   v_time timestamp with time zone;
 
@@ -23,6 +22,7 @@ declare
   v_person_economy_type_attr_id integer := data.get_attribute_id('person_deposit_money');
   v_person_district_attr_id integer := data.get_attribute_id('person_district');
   v_person_coin_attr_id integer := data.get_attribute_id('person_coin');
+  v_person_un_rating_attr_id integer := data.get_attribute_id('person_un_rating');
   v_system_org_economics_type_attr_id integer := data.get_attribute_id('system_org_economics_type');
   v_system_org_districts_control_attr_id integer := data.get_attribute_id('system_org_districts_control');
   v_system_org_budget_attr_id integer := data.get_attribute_id('system_org_budget');
@@ -126,7 +126,7 @@ begin
       v_system_person_deposit_money bigint;
 
       v_system_person_coin integer;
-      v_system_person_coin_profit integer;
+      v_coin_profit integer;
 
       v_person_district_code text;
       v_tax bigint;
@@ -339,8 +339,8 @@ begin
         end if;
 
         -- Начисляем новые коины
-        v_system_person_coin_profit := json.get_integer(data.get_raw_attribute_value(v_person_id, v_system_person_coin_profit_attr_id));
-        v_system_person_coin := v_system_person_coin + v_system_person_coin_profit;
+        v_coin_profit := pallas_project.un_rating_to_coins(json.get_integer(data.get_raw_attribute_value(v_person_id, v_person_un_rating_attr_id)));
+        v_system_person_coin := v_system_person_coin + v_coin_profit;
 
         -- Покупаем статус жизнеобеспечения на следующий цикл
         v_system_person_coin := v_system_person_coin - v_life_support_price;

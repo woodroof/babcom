@@ -14,7 +14,6 @@ begin
   ('recreation_status_prices', jsonb '[2, 4, 4]'),
   ('police_status_prices', jsonb '[1, 5, 6]'),
   ('administrative_services_status_prices', jsonb '[2, 6, 7]'),
-  ('base_un_coins', jsonb '12'),
   ('base_un_rating', jsonb '150');
 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values

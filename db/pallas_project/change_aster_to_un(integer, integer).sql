@@ -6,7 +6,7 @@ volatile
 as
 $$
 declare
-  v_base_coins integer := data.get_integer_param('base_un_coins');
+  v_base_rating integer := data.get_integer_param('base_un_rating');
   v_life_support_prices integer[] := data.get_integer_array_param('life_support_status_prices');
   v_person_economy_type jsonb := data.get_attribute_value_for_update(in_aster_id, 'system_person_economy_type');
   v_aster_code text := data.get_object_code(in_aster_id);
@@ -18,7 +18,7 @@ begin
   assert v_person_economy_type = jsonb '"asters"';
 
   -- Начисление коинов
-  perform pallas_project.change_coins(in_aster_id, v_base_coins - v_life_support_prices[1], in_actor_id, v_reason);
+  perform pallas_project.change_coins(in_aster_id, pallas_project.un_rating_to_coins(v_base_rating) - v_life_support_prices[1], in_actor_id, v_reason);
   -- Сброс статусов следующего цикла
   perform data.change_object_and_notify(
     data.get_object_id(v_aster_code || '_next_statuses'),
@@ -39,7 +39,6 @@ begin
       '[
         {"code": "person_state", "value": "un"},
         {"code": "person_un_rating", "value": %s},
-        {"code": "system_person_coin_profit", "value": %s},
         {"code": "system_person_economy_type", "value": "un"},
         {"code": "person_economy_type", "value": "un", "value_object_code": "master"},
         {"code": "system_money"},
@@ -49,8 +48,7 @@ begin
         {"code": "person_deposit_money", "value_object_id": %s},
         {"code": "person_deposit_money", "value_object_code": "master"}
       ]',
-      data.get_integer_param('base_un_rating'),
-      v_base_coins,
+      v_base_rating,
       in_aster_id,
       in_aster_id)::jsonb);
 

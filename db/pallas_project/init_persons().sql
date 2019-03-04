@@ -21,7 +21,6 @@ begin
   ('money', 'Остаток средств на счёте', 'normal', 'full', 'pallas_project.vd_money', true),
   ('system_person_deposit_money', null, 'system', null, null, false),
   ('person_deposit_money', 'Остаток средств на инвестиционном счёте', 'normal', 'full', 'pallas_project.vd_money', true),
-  ('system_person_coin_profit', null, 'system', null, null, false),
   ('system_person_coin', null, 'system', null, null, false),
   ('person_coin', 'Нераспределённые коины', 'normal', 'full', null, true),
   ('person_opa_rating', 'Популярность среди астеров', 'normal', 'full', 'pallas_project.vd_person_opa_rating', false),

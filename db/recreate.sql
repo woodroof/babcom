@@ -18427,7 +18427,7 @@ volatile
 as
 $$
 declare
-  v_base_coins integer := data.get_integer_param('base_un_coins');
+  v_base_rating integer := data.get_integer_param('base_un_rating');
   v_life_support_prices integer[] := data.get_integer_array_param('life_support_status_prices');
   v_person_economy_type jsonb := data.get_attribute_value_for_update(in_aster_id, 'system_person_economy_type');
   v_aster_code text := data.get_object_code(in_aster_id);
@@ -18439,7 +18439,7 @@ begin
   assert v_person_economy_type = jsonb '"asters"';
 
   -- Начисление коинов
-  perform pallas_project.change_coins(in_aster_id, v_base_coins - v_life_support_prices[1], in_actor_id, v_reason);
+  perform pallas_project.change_coins(in_aster_id, pallas_project.un_rating_to_coins(v_base_rating) - v_life_support_prices[1], in_actor_id, v_reason);
   -- Сброс статусов следующего цикла
   perform data.change_object_and_notify(
     data.get_object_id(v_aster_code || '_next_statuses'),
@@ -18460,7 +18460,6 @@ begin
       '[
         {"code": "person_state", "value": "un"},
         {"code": "person_un_rating", "value": %s},
-        {"code": "system_person_coin_profit", "value": %s},
         {"code": "system_person_economy_type", "value": "un"},
         {"code": "person_economy_type", "value": "un", "value_object_code": "master"},
         {"code": "system_money"},
@@ -18470,8 +18469,7 @@ begin
         {"code": "person_deposit_money", "value_object_id": %s},
         {"code": "person_deposit_money", "value_object_code": "master"}
       ]',
-      data.get_integer_param('base_un_rating'),
-      v_base_coins,
+      v_base_rating,
       in_aster_id,
       in_aster_id)::jsonb);
 
@@ -19114,7 +19112,6 @@ begin
       v_cycle integer;
       v_money jsonb;
       v_deposit_money jsonb;
-      v_coin integer;
     begin
       perform data.set_attribute_value(v_person_id, 'person_economy_type', v_economy_type, v_master_group_id);
 
@@ -19138,40 +19135,8 @@ begin
       end if;
 
       if v_economy_type = jsonb '"un"' then
-        -- Считаем доход в коинах
-        v_coin := 0;
-
         declare
-          v_status text;
-          v_current_status integer;
-          v_prices integer[];
-        begin
-          for v_status in
-          (
-            select value
-            from unnest(array['life_support', 'health_care', 'recreation', 'police', 'administrative_services']) a(value)
-          )
-          loop
-            v_prices := data.get_integer_array_param(v_status || '_status_prices');
-            v_current_status := json.get_integer(data.get_attribute_value(v_person_id, 'system_person_' || v_status || '_status'));
-
-            if v_current_status > 0 then
-              v_coin := v_coin + v_prices[1];
-
-              if v_current_status > 1 then
-                v_coin := v_coin + v_prices[2];
-
-                if v_current_status > 2 then
-                  v_coin := v_coin + v_prices[3];
-                end if;
-              end if;
-            end if;
-          end loop;
-        end;
-
-        perform data.set_attribute_value(v_person_id, 'system_person_coin_profit', to_jsonb(v_coin));
-
-        declare
+          v_coin integer := pallas_project.un_rating_to_coins(json.get_integer(data.get_attribute_value(v_person_id, 'person_un_rating')));
           v_life_support_prices integer[] := data.get_integer_array_param('life_support_status_prices');
           v_life_support_price integer := v_life_support_prices[1];
         begin
@@ -19663,7 +19628,7 @@ declare
 %s
 
 После наступления нового цикла:
-1. Отреагировать на сообщение в мастерский чат про успехи администрации и поменять рейтинг и количество доступных коинов [экономиста](babcom:0d07f15b-2952-409b-b22e-4042cf70acc6).
+1. Отреагировать на сообщение в мастерский чат про успехи администрации и поменять рейтинг и количество доступных коинов [экономиста](babcom:0d07f15b-2952-409b-b22e-4042cf70acc6) (см. справку в самом низу этой страницы).
 2. Отреагировать на сообщение в мастерский чат про успехи Де Бирс и поменять рейтинг и количество доступных коинов [директора](babcom:784e4126-8dd7-41a3-a916-0fdc53a31ce2).
 3. Если меняли стоимости коинов или статусов, как-то донести это до игроков.
 4. Как-то отреагировать на сообщения в мастерский чат о том, что кто-то в минусе.
@@ -19673,7 +19638,16 @@ declare
 8. Подумать, нужно ли написать что-то администрации, клинике, Akira SC.
 9. Написать СВП о новых закупочных ценах на алмазы.
 10. Посмотреть, отреагировал ли [мормон](babcom:ac1b23d0-ba5f-4042-85d5-880a66254803) на запросы о помощи, изменить его влияние. Написать новые запросы, если нужно.
-11. В начале пятого цикла - проверить, купила ли в прошлом цикле организация [Тариель](babcom:org_tariel) лицензию у администрации за UN$1000.';
+11. В начале пятого цикла - проверить, купила ли в прошлом цикле организация [Тариель](babcom:org_tariel) лицензию у администрации за UN$1000.
+
+Справка по рейтингам и статусам:
+<100 10
+<200 29
+<300 34
+<400 50
+<500 60
+<600 70
+>599 80';
   v_un_citizens text;
   v_bugdet_orgs text;
   v_profit_orgs text;
@@ -21856,7 +21830,6 @@ begin
   ('recreation_status_prices', jsonb '[2, 4, 4]'),
   ('police_status_prices', jsonb '[1, 5, 6]'),
   ('administrative_services_status_prices', jsonb '[2, 6, 7]'),
-  ('base_un_coins', jsonb '12'),
   ('base_un_rating', jsonb '150');
 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
@@ -23556,7 +23529,6 @@ begin
   ('money', 'Остаток средств на счёте', 'normal', 'full', 'pallas_project.vd_money', true),
   ('system_person_deposit_money', null, 'system', null, null, false),
   ('person_deposit_money', 'Остаток средств на инвестиционном счёте', 'normal', 'full', 'pallas_project.vd_money', true),
-  ('system_person_coin_profit', null, 'system', null, null, false),
   ('system_person_coin', null, 'system', null, null, false),
   ('person_coin', 'Нераспределённые коины', 'normal', 'full', null, true),
   ('person_opa_rating', 'Популярность среди астеров', 'normal', 'full', 'pallas_project.vd_person_opa_rating', false),
@@ -25147,7 +25119,6 @@ declare
   v_system_money_attr_id integer := data.get_attribute_id('system_money');
   v_system_person_deposit_money_attr_id integer := data.get_attribute_id('system_person_deposit_money');
   v_system_person_coin_attr_id integer := data.get_attribute_id('system_person_coin');
-  v_system_person_coin_profit_attr_id integer := data.get_attribute_id('system_person_coin_profit');
 
   v_time timestamp with time zone;
 
@@ -25161,6 +25132,7 @@ declare
   v_person_economy_type_attr_id integer := data.get_attribute_id('person_deposit_money');
   v_person_district_attr_id integer := data.get_attribute_id('person_district');
   v_person_coin_attr_id integer := data.get_attribute_id('person_coin');
+  v_person_un_rating_attr_id integer := data.get_attribute_id('person_un_rating');
   v_system_org_economics_type_attr_id integer := data.get_attribute_id('system_org_economics_type');
   v_system_org_districts_control_attr_id integer := data.get_attribute_id('system_org_districts_control');
   v_system_org_budget_attr_id integer := data.get_attribute_id('system_org_budget');
@@ -25264,7 +25236,7 @@ begin
       v_system_person_deposit_money bigint;
 
       v_system_person_coin integer;
-      v_system_person_coin_profit integer;
+      v_coin_profit integer;
 
       v_person_district_code text;
       v_tax bigint;
@@ -25477,8 +25449,8 @@ begin
         end if;
 
         -- Начисляем новые коины
-        v_system_person_coin_profit := json.get_integer(data.get_raw_attribute_value(v_person_id, v_system_person_coin_profit_attr_id));
-        v_system_person_coin := v_system_person_coin + v_system_person_coin_profit;
+        v_coin_profit := pallas_project.un_rating_to_coins(json.get_integer(data.get_raw_attribute_value(v_person_id, v_person_un_rating_attr_id)));
+        v_system_person_coin := v_system_person_coin + v_coin_profit;
 
         -- Покупаем статус жизнеобеспечения на следующий цикл
         v_system_person_coin := v_system_person_coin - v_life_support_price;
@@ -27200,6 +27172,33 @@ begin
     jsonb '[]' || data.attribute_change2jsonb('content', to_jsonb(v_content)),
     in_actor_id,
     'Touch notification');
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.un_rating_to_coins(integer);
+
+create or replace function pallas_project.un_rating_to_coins(in_un_rating integer)
+returns integer
+immutable
+as
+$$
+begin
+  if in_un_rating < 100 then
+    return 10;
+  elsif in_un_rating < 200 then
+    return 29;
+  elsif in_un_rating < 300 then
+    return 34;
+  elsif in_un_rating < 400 then
+    return 50;
+  elsif in_un_rating < 500 then
+    return 60;
+  elsif in_un_rating < 600 then
+    return 70;
+  else
+    return 80;
+  end if;
 end;
 $$
 language plpgsql;
