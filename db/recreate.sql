@@ -13160,7 +13160,7 @@ begin
   v_changes := array[]::jsonb[];
 
   v_changes := array_append(v_changes, data.attribute_change2jsonb('document_status', jsonb '"deleted"'));
-  v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', to_jsonb(false), null));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('is_visible', to_jsonb(false)));
 
   perform data.change_object_and_notify(v_document_id, 
                                         to_jsonb(v_changes),
@@ -19527,9 +19527,9 @@ begin
 
   insert into data.params(code, value, description) values
   ('default_login_id', to_jsonb(v_default_login_id), 'Идентификатор логина по умолчанию'),
-  ('images_url', jsonb '"http://localhost:8000/images/"', 'Абсолютный или относительный URL к папке с изображениями, загружаемыми на сервер'),
+  ('images_url', jsonb '"https://harmlessapps.com/images/"', 'Абсолютный или относительный URL к папке с изображениями, загружаемыми на сервер'),
   ('year', jsonb '2340', 'Год событий игры'),
-  ('objects_url', jsonb '"https://petrosha.github.io/pallas/#/"', 'Адрес для ссылок на объекты'),
+  ('objects_url', jsonb '"https://harmlessapps.com/pallas/#/"', 'Адрес для ссылок на объекты'),
   ('first_names', to_jsonb(string_to_array('Джон Джек Пол Джордж Билл Кевин Уильям Кристофер Энтони Алекс Джош Томас Фред Филипп Джеймс Брюс Питер Рональд Люк Энди Антонио Итан Сэм Марк Карл Роберт'||
   ' Эльза Лидия Лия Роза Кейт Тесса Рэйчел Амали Шарлотта Эшли София Саманта Элоиз Талия Молли Анна Виктория Мария Натали Келли Ванесса Мишель Элизабет Кимберли Кортни Лоис Сьюзен Эмма', ' ')), 'Список имён'),
   ('last_names', to_jsonb(string_to_array('Янг Коннери Питерс Паркер Уэйн Ли Максуэлл Калвер Кэмерон Альба Сэндерсон Бэйли Блэкшоу Браун Клеменс Хаузер Кендалл Патридж Рой Сойер Стоун Фостер Хэнкс Грегг'||
@@ -21446,11 +21446,21 @@ begin
     ]');
   perform data.create_object(
     'contracts',
-    jsonb '{
-      "title": "Все контакты",
-      "content": []
-    }',
-    'contract_list');
+    jsonb '[
+      {"code": "title", "value": "Все контакты"},
+      {"code": "content", "value": []},
+      {"code": "is_visible", "value": true, "value_object_code": "master"},
+      {"code": "type", "value": "contract_list"},
+      {"code": "independent_from_actor_list_elements", "value": true},
+      {"code": "independent_from_object_list_elements", "value": true},
+      {
+        "code": "template",
+        "value": {
+          "title": "title",
+          "groups": []
+        }
+      }
+    ]');
   perform data.create_class(
     'contract_draft',
     jsonb '[

@@ -241,11 +241,21 @@ begin
     ]');
   perform data.create_object(
     'contracts',
-    jsonb '{
-      "title": "Все контакты",
-      "content": []
-    }',
-    'contract_list');
+    jsonb '[
+      {"code": "title", "value": "Все контакты"},
+      {"code": "content", "value": []},
+      {"code": "is_visible", "value": true, "value_object_code": "master"},
+      {"code": "type", "value": "contract_list"},
+      {"code": "independent_from_actor_list_elements", "value": true},
+      {"code": "independent_from_object_list_elements", "value": true},
+      {
+        "code": "template",
+        "value": {
+          "title": "title",
+          "groups": []
+        }
+      }
+    ]');
   perform data.create_class(
     'contract_draft',
     jsonb '[

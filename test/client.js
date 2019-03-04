@@ -84,7 +84,7 @@ function recreateSocket()
 
 function createSocket()
 {
-	socket = new WebSocket("ws://localhost:8000/api/" + uuid);
+	socket = new WebSocket("wss://harmlessapps.com/api/" + uuid);
 	socket.onopen =
 		function()
 		{
