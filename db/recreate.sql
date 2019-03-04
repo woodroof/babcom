@@ -1351,6 +1351,34 @@ end;
 $$
 language plpgsql;
 
+-- drop function data.add_object_to_object(integer, text, integer, text);
+
+create or replace function data.add_object_to_object(in_object_id integer, in_parent_object_code text, in_actor_id integer default null::integer, in_reason text default null::text)
+returns void
+volatile
+as
+$$
+-- Как правило вместо этой функции следует вызывать data.change_object_groups
+begin
+  perform data.add_object_to_object(in_object_id, data.get_object_id(in_parent_object_code), in_actor_id, in_reason);
+end;
+$$
+language plpgsql;
+
+-- drop function data.add_object_to_object(text, integer, integer, text);
+
+create or replace function data.add_object_to_object(in_object_code text, in_parent_object_id integer, in_actor_id integer default null::integer, in_reason text default null::text)
+returns void
+volatile
+as
+$$
+-- Как правило вместо этой функции следует вызывать data.change_object_groups
+begin
+  perform data.add_object_to_object(data.get_object_id(in_object_code), in_parent_object_id, in_actor_id, in_reason);
+end;
+$$
+language plpgsql;
+
 -- drop function data.add_object_to_object(text, text, integer, text);
 
 create or replace function data.add_object_to_object(in_object_code text, in_parent_object_code text, in_actor_id integer default null::integer, in_reason text default null::text)
@@ -1360,7 +1388,7 @@ as
 $$
 -- Как правило вместо этой функции следует вызывать data.change_object_groups
 begin
-  perform data.add_object_to_object(data.get_object_id(in_object_code), data.get_object_id(in_parent_object_code));
+  perform data.add_object_to_object(data.get_object_id(in_object_code), data.get_object_id(in_parent_object_code), in_actor_id, in_reason);
 end;
 $$
 language plpgsql;
@@ -10157,6 +10185,30 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_change_coin_price(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_change_coin_price(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_price integer := json.get_integer(in_user_params, 'price');
+  v_notified boolean;
+begin
+  update data.params
+  set value = to_jsonb(v_price)
+  where code = 'coin_price';
+
+  v_notified := data.change_current_object(in_client_id, in_request_id, data.get_object_id('prices'), jsonb_build_object('coin_price', v_price));
+
+  if not v_notified then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_change_current_tax(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_change_current_tax(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -10414,6 +10466,43 @@ begin
     (case when v_opa_rating_diff > 0 then 'Астеры стали больше вас уважать' else 'Астеры стали меньше вас уважать' end) || E'\n' || pp_utils.trim(v_comment),
     v_object_id,
     true);
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_change_status_price(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_change_status_price(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_type text := json.get_string(in_params);
+  v_index integer := json.get_integer(in_user_params, 'index');
+  v_price integer := json.get_integer(in_user_params, 'price');
+  v_full_name text := v_type || '_status_prices';
+
+  v_prices jsonb;
+  v_notified boolean;
+begin
+  select value
+  into v_prices
+  from data.params
+  where code = v_full_name
+  for update;
+
+  v_prices := jsonb_set(v_prices, array[(v_index - 1)::text], to_jsonb(v_price));
+
+  update data.params
+  set value = v_prices
+  where code = v_full_name;
+
+  v_notified := data.change_current_object(in_client_id, in_request_id, data.get_object_id('prices'), jsonb_build_object(v_full_name, v_prices));
+
+  if not v_notified then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
 end;
 $$
 language plpgsql;
@@ -17250,7 +17339,8 @@ begin
           "master_chats": {"code": "act_open_object", "name": "Мастерские чаты", "disabled": false, "params": {"object_code": "%s_master_chats"}},
           "all_contracts": {"code": "act_open_object", "name": "Все контракты", "disabled": false, "params": {"object_code": "contracts"}},
           "cycle_checklist": {"code": "act_open_object", "name": "Чеклист", "disabled": false, "params": {"object_code": "cycle_checklist"}},
-          "med_drugs": {"code": "act_open_object", "name": "Наркотики", "disabled": false, "params": {"object_code": "med_drugs"}}
+          "med_drugs": {"code": "act_open_object", "name": "Наркотики", "disabled": false, "params": {"object_code": "med_drugs"}},
+          "prices": {"code": "act_open_object", "name": "Цены", "disabled": false, "params": {"object_code": "prices"}}
         }',
         v_actor_code,
         v_actor_code)::jsonb;
@@ -17714,59 +17804,63 @@ begin
 
     if v_master or v_is_head then
       declare
-        v_next_tax integer := json.get_integer(data.get_attribute_value(in_object_id, 'system_org_next_tax'));
+        v_next_tax integer := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_org_next_tax'), null);
       begin
-        v_actions :=
-          v_actions ||
-          format(
-            '{
-              "change_next_tax": {
-                "code": "change_next_tax",
-                "name": "Изменить налоговую ставку на следующий цикл",
-                "disabled": false,
-                "params": "%s",
-                "user_params": [
-                  {
-                    "code": "tax",
-                    "description": "Налог, %%",
-                    "type": "integer",
-                    "restrictions": {"min_value": 0, "max_value": 90},
-                    "default_value": %s
-                  }
-                ]
-              }
-            }',
-            v_object_code,
-            v_next_tax)::jsonb;
+        if v_next_tax is not null then
+          v_actions :=
+            v_actions ||
+            format(
+              '{
+                "change_next_tax": {
+                  "code": "change_next_tax",
+                  "name": "Изменить налоговую ставку на следующий цикл",
+                  "disabled": false,
+                  "params": "%s",
+                  "user_params": [
+                    {
+                      "code": "tax",
+                      "description": "Налог, %%",
+                      "type": "integer",
+                      "restrictions": {"min_value": 0, "max_value": 90},
+                      "default_value": %s
+                    }
+                  ]
+                }
+              }',
+              v_object_code,
+              v_next_tax)::jsonb;
+        end if;
       end;
     end if;
 
     if v_master then
       declare
-        v_tax integer := json.get_integer(data.get_attribute_value(in_object_id, 'system_org_tax'));
+        v_tax integer := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_org_tax'), null);
       begin
-        v_actions :=
-          v_actions ||
-          format(
-            '{
-              "change_current_tax": {
-                "code": "change_current_tax",
-                "name": "Изменить налоговую ставку на ТЕКУЩИЙ цикл",
-                "disabled": false,
-                "params": "%s",
-                "user_params": [
-                  {
-                    "code": "tax",
-                    "description": "Налог, %%",
-                    "type": "integer",
-                    "restrictions": {"min_value": 0, "max_value": 90},
-                    "default_value": %s
-                  }
-                ]
-              }
-            }',
-            v_object_code,
-            v_tax)::jsonb;
+        if v_tax is not null then
+          v_actions :=
+            v_actions ||
+            format(
+              '{
+                "change_current_tax": {
+                  "code": "change_current_tax",
+                  "name": "Изменить налоговую ставку на ТЕКУЩИЙ цикл",
+                  "disabled": false,
+                  "params": "%s",
+                  "user_params": [
+                    {
+                      "code": "tax",
+                      "description": "Налог, %%",
+                      "type": "integer",
+                      "restrictions": {"min_value": 0, "max_value": 90},
+                      "default_value": %s
+                    }
+                  ]
+                }
+              }',
+              v_object_code,
+              v_tax)::jsonb;
+        end if;
       end;
     end if;
   end if;
@@ -18164,6 +18258,163 @@ begin
   end if;
 
   return v_actions;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.actgenerator_prices(integer, integer);
+
+create or replace function pallas_project.actgenerator_prices(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+begin
+  return
+    jsonb '{
+      "change_coin_price": {
+        "code": "change_coin_price",
+        "name": "Изменить статус коина",
+        "disabled": false,
+        "params": null,
+        "user_params": [
+          {
+            "code": "price",
+            "description": "Стоимость, UN$",
+            "type": "integer",
+            "restrictions": {
+              "min_value": 0
+            }
+          }
+        ]
+      },
+      "change_life_support_status_price": {
+        "code": "change_status_price",
+        "name": "Изменить стоимость статусов жизнеобеспечения",
+        "disabled": false,
+        "params": "life_support",
+        "user_params": [
+          {
+            "code": "index",
+            "description": "Статус (1 - бронза, 2 - серебро, 3 - золото)",
+            "type": "integer",
+            "restrictions": {
+              "min_value": 1,
+              "max_value": 3
+            }
+          },
+          {
+            "code": "price",
+            "description": "Стоимость в коинах перехода от предыдущего статуса",
+            "type": "integer",
+            "restrictions": {
+              "min_value": 0
+            }
+          }
+        ]
+      },
+      "change_health_care_status_price": {
+        "code": "change_status_price",
+        "name": "Изменить стоимость статусов медицины",
+        "disabled": false,
+        "params": "health_care",
+        "user_params": [
+          {
+            "code": "index",
+            "description": "Статус (1 - бронза, 2 - серебро, 3 - золото)",
+            "type": "integer",
+            "restrictions": {
+              "min_value": 1,
+              "max_value": 3
+            }
+          },
+          {
+            "code": "price",
+            "description": "Стоимость в коинах перехода от предыдущего статуса",
+            "type": "integer",
+            "restrictions": {
+              "min_value": 0
+            }
+          }
+        ]
+      },
+      "change_recreation_status_price": {
+        "code": "change_status_price",
+        "name": "Изменить стоимость статусов развлечений",
+        "disabled": false,
+        "params": "recreation",
+        "user_params": [
+          {
+            "code": "index",
+            "description": "Статус (1 - бронза, 2 - серебро, 3 - золото)",
+            "type": "integer",
+            "restrictions": {
+              "min_value": 1,
+              "max_value": 3
+            }
+          },
+          {
+            "code": "price",
+            "description": "Стоимость в коинах перехода от предыдущего статуса",
+            "type": "integer",
+            "restrictions": {
+              "min_value": 0
+            }
+          }
+        ]
+      },
+      "change_police_status_price": {
+        "code": "change_status_price",
+        "name": "Изменить стоимость статусов полиции",
+        "disabled": false,
+        "params": "police",
+        "user_params": [
+          {
+            "code": "index",
+            "description": "Статус (1 - бронза, 2 - серебро, 3 - золото)",
+            "type": "integer",
+            "restrictions": {
+              "min_value": 1,
+              "max_value": 3
+            }
+          },
+          {
+            "code": "price",
+            "description": "Стоимость в коинах перехода от предыдущего статуса",
+            "type": "integer",
+            "restrictions": {
+              "min_value": 0
+            }
+          }
+        ]
+      },
+      "change_administrative_services_status_price": {
+        "code": "change_status_price",
+        "name": "Изменить стоимость статусов адм. обслуживания",
+        "disabled": false,
+        "params": "administrative_services",
+        "user_params": [
+          {
+            "code": "index",
+            "description": "Статус (1 - бронза, 2 - серебро, 3 - золото)",
+            "type": "integer",
+            "restrictions": {
+              "min_value": 1,
+              "max_value": 3
+            }
+          },
+          {
+            "code": "price",
+            "description": "Стоимость в коинах перехода от предыдущего статуса",
+            "type": "integer",
+            "restrictions": {
+              "min_value": 0
+            }
+          }
+        ]
+      }
+    }';
 end;
 $$
 language plpgsql;
@@ -18759,6 +19010,8 @@ begin
     perform data.set_attribute_value(v_org_id, 'org_budget', v_value, v_master_group_id);
     perform data.set_attribute_value(v_org_id, 'org_budget', v_value, v_head_group_id);
     perform data.set_attribute_value(v_org_id, 'org_budget', v_value, v_economist_group_id);
+
+    perform data.add_object_to_object(v_org_id, 'budget_orgs');
   elsif v_org_economics_type = jsonb '"profit"' then
     v_value := data.get_attribute_value(v_org_id, 'system_org_profit');
     perform json.get_integer(v_value);
@@ -18766,6 +19019,8 @@ begin
     perform data.set_attribute_value(v_org_id, 'org_profit', v_value, v_master_group_id);
     perform data.set_attribute_value(v_org_id, 'org_profit', v_value, v_head_group_id);
     perform data.set_attribute_value(v_org_id, 'org_profit', v_value, v_economist_group_id);
+
+    perform data.add_object_to_object(v_org_id, 'profit_orgs');
   end if;
 
   -- Создадим страницу с историей транзакций
@@ -19392,8 +19647,8 @@ $$
 declare
   v_description text :=
 'Уведомление в мастерский чат приходит за 15 минут до наступления цикла. Это время даётся на то, чтобы:
-1. Изменить, если нужно, стоимость коина и стоимости в коинах статусов.
-2. Пройтись по гражданам ООН (кроме экономиста) и вручную изменить им рейтинг и количество коинов дохода.
+1. [Изменить](babcom:prices), если нужно, стоимость коина и стоимости в коинах статусов.
+2. Пройтись по гражданам ООН (кроме экономиста и начальника шахты) и вручную изменить им рейтинг.
 3. Пройтись по организациям с бюджетом и, если нужно, изменить им бюджет.
 4. Пройтись по организациям с безусловным доходом и, если нужно, изменить им доход.
 5. Начиная с конца второго цикла - списать UN$500 с организации [Тариель](babcom:org_tariel).
@@ -19408,15 +19663,72 @@ declare
 %s
 
 После наступления нового цикла:
-1. Отреагировать на сообщение в мастерский чат про успехи администрации и поменять рейтинг, количество коинов дохода и количество доступных коинов [экономиста](babcom:0d07f15b-2952-409b-b22e-4042cf70acc6).
-2. Как-то отреагировать на сообщения в мастерский чат о том, что кто-то в минусе.
-3. Гражданам ООН, у которых заметно изменился рейтинг, от лица мастерских персонажей написать какое-то сообщение.
-4. Проверить, что картель перечислял нужную сумму в головную организацию. Написать им о планах на новый цикл.
-5. Написать СВП о новых закупочных ценах на алмазы.
-6. Посмотреть, отреагировал ли [мормон](babcom:ac1b23d0-ba5f-4042-85d5-880a66254803) на запросы о помощи, изменить его влияние. Написать новые запросы, если нужно.
-7. В начале пятого цикла - проверить, купила ли в прошлом цикле организация [Тариель](babcom:org_tariel) лицензию у администрации за UN$1000.';
+1. Отреагировать на сообщение в мастерский чат про успехи администрации и поменять рейтинг и количество доступных коинов [экономиста](babcom:0d07f15b-2952-409b-b22e-4042cf70acc6).
+2. Отреагировать на сообщение в мастерский чат про успехи Де Бирс и поменять рейтинг и количество доступных коинов [директора](babcom:784e4126-8dd7-41a3-a916-0fdc53a31ce2).
+3. Если меняли стоимости коинов или статусов, как-то донести это до игроков.
+4. Как-то отреагировать на сообщения в мастерский чат о том, что кто-то в минусе.
+5. Гражданам ООН, у которых заметно изменился рейтинг, от лица мастерских персонажей написать какое-то сообщение.
+6. Проверить, что картель перечислял нужную сумму в головную организацию. Написать им о планах на новый цикл.
+7. Написать Де Бирс о планах на новый цикл.
+8. Подумать, нужно ли написать что-то администрации, клинике, Akira SC.
+9. Написать СВП о новых закупочных ценах на алмазы.
+10. Посмотреть, отреагировал ли [мормон](babcom:ac1b23d0-ba5f-4042-85d5-880a66254803) на запросы о помощи, изменить его влияние. Написать новые запросы, если нужно.
+11. В начале пятого цикла - проверить, купила ли в прошлом цикле организация [Тариель](babcom:org_tariel) лицензию у администрации за UN$1000.';
+  v_un_citizens text;
+  v_bugdet_orgs text;
+  v_profit_orgs text;
 begin
-  -- Генерируем description
+  select string_agg(value, E'\n')
+  into v_un_citizens
+  from (
+    select format('[%s](babcom:%s)', json.get_string(av.value), o.code) as value
+    from data.object_objects oo
+    join data.objects o on
+      o.id = oo.object_id
+    join data.attribute_values av on
+      av.object_id = o.id and
+      av.attribute_id = data.get_attribute_id('title') and
+      av.value_object_id is null
+    where
+      oo.parent_object_id = data.get_object_id('un') and
+      oo.object_id != oo.parent_object_id
+    order by value) v;
+
+  select string_agg(value, E'\n')
+  into v_bugdet_orgs
+  from (
+    select format('[%s](babcom:%s)', json.get_string(av.value), o.code) as value
+    from data.object_objects oo
+    join data.objects o on
+      o.id = oo.object_id
+    join data.attribute_values av on
+      av.object_id = o.id and
+      av.attribute_id = data.get_attribute_id('title') and
+      av.value_object_id is null
+    where
+      oo.parent_object_id = data.get_object_id('budget_orgs') and
+      oo.object_id != oo.parent_object_id) v;
+
+  select string_agg(value, E'\n')
+  into v_profit_orgs
+  from (
+    select format('[%s](babcom:%s)', json.get_string(av.value), o.code) as value
+    from data.object_objects oo
+    join data.objects o on
+      o.id = oo.object_id
+    join data.attribute_values av on
+      av.object_id = o.id and
+      av.attribute_id = data.get_attribute_id('title') and
+      av.value_object_id is null
+    where
+      oo.parent_object_id = data.get_object_id('profit_orgs') and
+      oo.object_id != oo.parent_object_id) v;
+
+  perform data.change_object_and_notify(
+    object_id,
+    jsonb_build_object(
+      'description',
+      format(v_description, coalesce(v_un_citizens, ''), coalesce(v_bugdet_orgs, ''), coalesce(v_profit_orgs, ''))));
 end;
 $$
 language plpgsql;
@@ -19762,7 +20074,7 @@ begin
           {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "med_health", "chats", "documents", "medicine", "customs", "my_contracts", "my_organizations", "claims", "important_notifications", "med_drugs", "mine"]},
           {"code": "menu_social", "actions": ["news", "all_chats", "debatles", "master_chats"]},
           {"code": "menu_info", "actions": ["all_contracts", "persons", "districts", "organizations"]},
-          {"code": "menu_cycle", "actions": ["cycle_checklist"]},
+          {"code": "menu_cycle", "actions": ["cycle_checklist", "prices"]},
           {"code": "menu_finish_game", "actions": ["finish_game"]},
           {"code": "menu_logout", "actions": ["logout"]}
         ]
@@ -21529,7 +21841,13 @@ begin
   ('contract_person', 'Исполнитель', null, 'normal', null, 'pallas_project.vd_link', false),
   ('contract_status', 'Статус контракта', null, 'normal', null, 'pallas_project.vd_contract_status', false),
   ('contract_reward', 'Вознаграждение за цикл', null, 'normal', 'full', 'pallas_project.vd_money', false),
-  ('contract_description', 'Условия', null, 'normal', 'full', null, false);
+  ('contract_description', 'Условия', null, 'normal', 'full', null, false),
+  ('coin_price', 'Цена коина', null, 'normal', 'full', 'pallas_project.vd_money', false),
+  ('life_support_status_prices', 'Стоимость статусов жизнеобеспечения в коинах', null, 'normal', 'full', 'pallas_project.vd_status_prices', false),
+  ('health_care_status_prices', 'Стоимость статусов медицины в коинах', null, 'normal', 'full', 'pallas_project.vd_status_prices', false),
+  ('recreation_status_prices', 'Стоимость статусов развлечений в коинах', null, 'normal', 'full', 'pallas_project.vd_status_prices', false),
+  ('police_status_prices', 'Стоимость статусов полиции в коинах', null, 'normal', 'full', 'pallas_project.vd_status_prices', false),
+  ('administrative_services_status_prices', 'Стоимость статусов адм. обслуживания в коинах', null, 'normal', 'full', 'pallas_project.vd_status_prices', false);
 
   insert into data.actions(code, function) values
   ('cancel_contract_immediate', 'pallas_project.act_cancel_contract_immediate'),
@@ -21542,7 +21860,38 @@ begin
   ('create_contract', 'pallas_project.act_create_contract'),
   ('contract_draft_edit', 'pallas_project.act_contract_draft_edit'),
   ('contract_draft_cancel', 'pallas_project.act_contract_draft_cancel'),
-  ('contract_draft_confirm', 'pallas_project.act_contract_draft_confirm');
+  ('contract_draft_confirm', 'pallas_project.act_contract_draft_confirm'),
+  ('change_coin_price', 'pallas_project.act_change_coin_price'),
+  ('change_status_price', 'pallas_project.act_change_status_price');
+
+  -- Объект для изменения стоимости коина и стоймостей в коинах статусов
+  perform data.create_object(
+    'prices',
+    jsonb '[
+      {"code": "type", "value": "prices"},
+      {"code": "coin_price", "value": 10},
+      {"code": "life_support_status_prices", "value": [6, 1, 1]},
+      {"code": "health_care_status_prices", "value": [1, 6, 8]},
+      {"code": "recreation_status_prices", "value": [2, 4, 4]},
+      {"code": "police_status_prices", "value": [1, 5, 6]},
+      {"code": "administrative_services_status_prices", "value": [2, 6, 7]},
+      {"code": "title", "value": "Изменение стоимости коина и стоимостей статусов"},
+      {"code": "is_visible", "value": true, "group_object_code": "master"},
+      {"code": "actions_function", "value": "pallas_project.actgenerator_prices"},
+      {
+        "code": "template",
+        "value": {
+          "title": "title",
+          "groups": [
+            {
+              "code": "group",
+              "attributes": ["coin_price", "life_support_status_prices", "health_care_status_prices", "recreation_status_prices", "police_status_prices", "administrative_services_status_prices"],
+              "actions": ["change_coin_price", "change_life_support_status_price", "change_health_care_status_price", "change_recreation_status_price", "change_police_status_price", "change_administrative_services_status_price"]
+            }
+          ]
+        }
+      }
+    ]');
 
   -- Классы для статусов
   perform data.create_class(
@@ -21878,6 +22227,9 @@ begin
 
   perform data.create_object('miners', jsonb '{"priority": 77, "title": "Шахтёры"}', 'group');
   perform data.create_object('loaders', jsonb '{"priority": 78, "title": "Грузчики"}', 'group');
+
+  perform data.create_object('profit_orgs', jsonb '{"priority": 71, "title": "Организации с безусловным доходом"}', 'group');
+  perform data.create_object('budget_orgs', jsonb '{"priority": 73, "title": "Организации с бюджетом"}', 'group');
 end;
 $$
 language plpgsql;
@@ -24525,7 +24877,7 @@ begin
       "person_district":"sector_B",
       "person_un_rating":550,
       "person_occupation":"Глава инвестиционного фонда ООН",
-      "person_opa_rating":0,
+      "person_opa_rating":1,
       "system_person_economy_type":"un",
       "system_person_police_status":3,
       "system_person_recreation_status":3,
@@ -24576,7 +24928,7 @@ begin
       "system_money":0,
       "person_district":"sector_G",
       "person_occupation":"Разнорабочий",
-      "person_opa_rating":0,
+      "person_opa_rating":1,
       "system_person_economy_type":"asters",
       "system_person_deposit_money":0,
       "system_person_police_status":0,
@@ -27914,6 +28266,23 @@ begin
   else
     return 'Золотой';
   end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.vd_status_prices(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_status_prices(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+declare
+  v_status_prices integer[] := json.get_integer_array(in_value);
+begin
+  assert array_length(v_status_prices, 1) = 3;
+
+  return format('%s %s %s', v_status_prices[1], v_status_prices[2], v_status_prices[3]);
 end;
 $$
 language plpgsql;

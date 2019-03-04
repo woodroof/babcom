@@ -34,7 +34,13 @@ begin
   ('contract_person', 'Исполнитель', null, 'normal', null, 'pallas_project.vd_link', false),
   ('contract_status', 'Статус контракта', null, 'normal', null, 'pallas_project.vd_contract_status', false),
   ('contract_reward', 'Вознаграждение за цикл', null, 'normal', 'full', 'pallas_project.vd_money', false),
-  ('contract_description', 'Условия', null, 'normal', 'full', null, false);
+  ('contract_description', 'Условия', null, 'normal', 'full', null, false),
+  ('coin_price', 'Цена коина', null, 'normal', 'full', 'pallas_project.vd_money', false),
+  ('life_support_status_prices', 'Стоимость статусов жизнеобеспечения в коинах', null, 'normal', 'full', 'pallas_project.vd_status_prices', false),
+  ('health_care_status_prices', 'Стоимость статусов медицины в коинах', null, 'normal', 'full', 'pallas_project.vd_status_prices', false),
+  ('recreation_status_prices', 'Стоимость статусов развлечений в коинах', null, 'normal', 'full', 'pallas_project.vd_status_prices', false),
+  ('police_status_prices', 'Стоимость статусов полиции в коинах', null, 'normal', 'full', 'pallas_project.vd_status_prices', false),
+  ('administrative_services_status_prices', 'Стоимость статусов адм. обслуживания в коинах', null, 'normal', 'full', 'pallas_project.vd_status_prices', false);
 
   insert into data.actions(code, function) values
   ('cancel_contract_immediate', 'pallas_project.act_cancel_contract_immediate'),
@@ -47,7 +53,38 @@ begin
   ('create_contract', 'pallas_project.act_create_contract'),
   ('contract_draft_edit', 'pallas_project.act_contract_draft_edit'),
   ('contract_draft_cancel', 'pallas_project.act_contract_draft_cancel'),
-  ('contract_draft_confirm', 'pallas_project.act_contract_draft_confirm');
+  ('contract_draft_confirm', 'pallas_project.act_contract_draft_confirm'),
+  ('change_coin_price', 'pallas_project.act_change_coin_price'),
+  ('change_status_price', 'pallas_project.act_change_status_price');
+
+  -- Объект для изменения стоимости коина и стоймостей в коинах статусов
+  perform data.create_object(
+    'prices',
+    jsonb '[
+      {"code": "type", "value": "prices"},
+      {"code": "coin_price", "value": 10},
+      {"code": "life_support_status_prices", "value": [6, 1, 1]},
+      {"code": "health_care_status_prices", "value": [1, 6, 8]},
+      {"code": "recreation_status_prices", "value": [2, 4, 4]},
+      {"code": "police_status_prices", "value": [1, 5, 6]},
+      {"code": "administrative_services_status_prices", "value": [2, 6, 7]},
+      {"code": "title", "value": "Изменение стоимости коина и стоимостей статусов"},
+      {"code": "is_visible", "value": true, "group_object_code": "master"},
+      {"code": "actions_function", "value": "pallas_project.actgenerator_prices"},
+      {
+        "code": "template",
+        "value": {
+          "title": "title",
+          "groups": [
+            {
+              "code": "group",
+              "attributes": ["coin_price", "life_support_status_prices", "health_care_status_prices", "recreation_status_prices", "police_status_prices", "administrative_services_status_prices"],
+              "actions": ["change_coin_price", "change_life_support_status_price", "change_health_care_status_price", "change_recreation_status_price", "change_police_status_price", "change_administrative_services_status_price"]
+            }
+          ]
+        }
+      }
+    ]');
 
   -- Классы для статусов
   perform data.create_class(

@@ -64,6 +64,8 @@ begin
     perform data.set_attribute_value(v_org_id, 'org_budget', v_value, v_master_group_id);
     perform data.set_attribute_value(v_org_id, 'org_budget', v_value, v_head_group_id);
     perform data.set_attribute_value(v_org_id, 'org_budget', v_value, v_economist_group_id);
+
+    perform data.add_object_to_object(v_org_id, 'budget_orgs');
   elsif v_org_economics_type = jsonb '"profit"' then
     v_value := data.get_attribute_value(v_org_id, 'system_org_profit');
     perform json.get_integer(v_value);
@@ -71,6 +73,8 @@ begin
     perform data.set_attribute_value(v_org_id, 'org_profit', v_value, v_master_group_id);
     perform data.set_attribute_value(v_org_id, 'org_profit', v_value, v_head_group_id);
     perform data.set_attribute_value(v_org_id, 'org_profit', v_value, v_economist_group_id);
+
+    perform data.add_object_to_object(v_org_id, 'profit_orgs');
   end if;
 
   -- Создадим страницу с историей транзакций

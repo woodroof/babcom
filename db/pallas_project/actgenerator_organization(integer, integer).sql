@@ -72,59 +72,63 @@ begin
 
     if v_master or v_is_head then
       declare
-        v_next_tax integer := json.get_integer(data.get_attribute_value(in_object_id, 'system_org_next_tax'));
+        v_next_tax integer := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_org_next_tax'), null);
       begin
-        v_actions :=
-          v_actions ||
-          format(
-            '{
-              "change_next_tax": {
-                "code": "change_next_tax",
-                "name": "Изменить налоговую ставку на следующий цикл",
-                "disabled": false,
-                "params": "%s",
-                "user_params": [
-                  {
-                    "code": "tax",
-                    "description": "Налог, %%",
-                    "type": "integer",
-                    "restrictions": {"min_value": 0, "max_value": 90},
-                    "default_value": %s
-                  }
-                ]
-              }
-            }',
-            v_object_code,
-            v_next_tax)::jsonb;
+        if v_next_tax is not null then
+          v_actions :=
+            v_actions ||
+            format(
+              '{
+                "change_next_tax": {
+                  "code": "change_next_tax",
+                  "name": "Изменить налоговую ставку на следующий цикл",
+                  "disabled": false,
+                  "params": "%s",
+                  "user_params": [
+                    {
+                      "code": "tax",
+                      "description": "Налог, %%",
+                      "type": "integer",
+                      "restrictions": {"min_value": 0, "max_value": 90},
+                      "default_value": %s
+                    }
+                  ]
+                }
+              }',
+              v_object_code,
+              v_next_tax)::jsonb;
+        end if;
       end;
     end if;
 
     if v_master then
       declare
-        v_tax integer := json.get_integer(data.get_attribute_value(in_object_id, 'system_org_tax'));
+        v_tax integer := json.get_integer_opt(data.get_attribute_value(in_object_id, 'system_org_tax'), null);
       begin
-        v_actions :=
-          v_actions ||
-          format(
-            '{
-              "change_current_tax": {
-                "code": "change_current_tax",
-                "name": "Изменить налоговую ставку на ТЕКУЩИЙ цикл",
-                "disabled": false,
-                "params": "%s",
-                "user_params": [
-                  {
-                    "code": "tax",
-                    "description": "Налог, %%",
-                    "type": "integer",
-                    "restrictions": {"min_value": 0, "max_value": 90},
-                    "default_value": %s
-                  }
-                ]
-              }
-            }',
-            v_object_code,
-            v_tax)::jsonb;
+        if v_tax is not null then
+          v_actions :=
+            v_actions ||
+            format(
+              '{
+                "change_current_tax": {
+                  "code": "change_current_tax",
+                  "name": "Изменить налоговую ставку на ТЕКУЩИЙ цикл",
+                  "disabled": false,
+                  "params": "%s",
+                  "user_params": [
+                    {
+                      "code": "tax",
+                      "description": "Налог, %%",
+                      "type": "integer",
+                      "restrictions": {"min_value": 0, "max_value": 90},
+                      "default_value": %s
+                    }
+                  ]
+                }
+              }',
+              v_object_code,
+              v_tax)::jsonb;
+        end if;
       end;
     end if;
   end if;
