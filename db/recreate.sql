@@ -255,9 +255,11 @@ begin
     perform data.metric_add('deadlock_count', v_deadlock_count);
   end if;
 
-  v_ms := extract(milliseconds from clock_timestamp() - v_start_time)::integer;
+  v_ms := (extract(epoch from clock_timestamp() - v_start_time) * 1000)::integer;
   perform data.metric_set_max('max_api_time_ms', v_ms);
-  --perform data.log('info', format(E'%s\n%s\n%s', v_ms, in_client_code, in_message));
+  if v_ms >= 500 then
+    perform data.log('warning', format(E'Slow api request detected: %s ms\nClient: %s\nMessage:\n%s', v_ms, in_client_code, in_message));
+  end if;
 end;
 $$
 language plpgsql;
@@ -463,7 +465,7 @@ begin
       end;
     end loop;
 
-    perform data.metric_set_max('max_job_time_ms', extract(milliseconds from clock_timestamp() - v_start_time)::integer);
+    perform data.metric_set_max('max_job_time_ms', (extract(epoch from clock_timestamp() - v_start_time) * 1000)::integer);
   end loop;
 
   select min(desired_time)
@@ -525,7 +527,7 @@ volatile
 as
 $$
 declare
-  v_timeout_sec double precision := greatest(extract(seconds from in_desired_time - clock_timestamp()), 0.);
+  v_timeout_sec double precision := greatest(extract(epoch from in_desired_time - clock_timestamp()), 0.);
   v_notification_code text;
 begin
   assert in_desired_time is not null;
@@ -28707,7 +28709,7 @@ begin
           exception when others then
           end;
 
-          v_test_time := round(extract(milliseconds from clock_timestamp() - v_test_start));
+          v_test_time := round(extract(epoch from clock_timestamp() - v_test_start) * 1000);
 
           if v_failed then
             raise notice '[  FAILED  ] % (% ms total)', v_test_name, v_test_time;
@@ -28723,12 +28725,12 @@ begin
       exception when others then
       end;
 
-      raise notice '[----------] % from % (% ms total)', v_tests_text, v_test_case.name, round(extract(milliseconds from clock_timestamp() - v_test_case_start));
+      raise notice '[----------] % from % (% ms total)', v_tests_text, v_test_case.name, round(extract(epoch from clock_timestamp() - v_test_case_start) * 1000);
       raise notice '';
     end loop;
   end;
 
-  raise notice '[==========] % from % ran. (% ms total)', v_total_tests_text, v_total_test_cases_text, round(extract(milliseconds from clock_timestamp() - v_start));
+  raise notice '[==========] % from % ran. (% ms total)', v_total_tests_text, v_total_test_cases_text, round(extract(epoch from clock_timestamp() - v_start) * 1000);
 
   declare
     v_disabled_tests_count integer;

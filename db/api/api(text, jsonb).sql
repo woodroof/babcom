@@ -94,9 +94,11 @@ begin
     perform data.metric_add('deadlock_count', v_deadlock_count);
   end if;
 
-  v_ms := extract(milliseconds from clock_timestamp() - v_start_time)::integer;
+  v_ms := (extract(epoch from clock_timestamp() - v_start_time) * 1000)::integer;
   perform data.metric_set_max('max_api_time_ms', v_ms);
-  --perform data.log('info', format(E'%s\n%s\n%s', v_ms, in_client_code, in_message));
+  if v_ms >= 500 then
+    perform data.log('warning', format(E'Slow api request detected: %s ms\nClient: %s\nMessage:\n%s', v_ms, in_client_code, in_message));
+  end if;
 end;
 $$
 language plpgsql;

@@ -56,7 +56,7 @@ begin
       end;
     end loop;
 
-    perform data.metric_set_max('max_job_time_ms', extract(milliseconds from clock_timestamp() - v_start_time)::integer);
+    perform data.metric_set_max('max_job_time_ms', (extract(epoch from clock_timestamp() - v_start_time) * 1000)::integer);
   end loop;
 
   select min(desired_time)

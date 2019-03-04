@@ -243,7 +243,7 @@ begin
           exception when others then
           end;
 
-          v_test_time := round(extract(milliseconds from clock_timestamp() - v_test_start));
+          v_test_time := round(extract(epoch from clock_timestamp() - v_test_start) * 1000);
 
           if v_failed then
             raise notice '[  FAILED  ] % (% ms total)', v_test_name, v_test_time;
@@ -259,12 +259,12 @@ begin
       exception when others then
       end;
 
-      raise notice '[----------] % from % (% ms total)', v_tests_text, v_test_case.name, round(extract(milliseconds from clock_timestamp() - v_test_case_start));
+      raise notice '[----------] % from % (% ms total)', v_tests_text, v_test_case.name, round(extract(epoch from clock_timestamp() - v_test_case_start) * 1000);
       raise notice '';
     end loop;
   end;
 
-  raise notice '[==========] % from % ran. (% ms total)', v_total_tests_text, v_total_test_cases_text, round(extract(milliseconds from clock_timestamp() - v_start));
+  raise notice '[==========] % from % ran. (% ms total)', v_total_tests_text, v_total_test_cases_text, round(extract(epoch from clock_timestamp() - v_start) * 1000);
 
   declare
     v_disabled_tests_count integer;

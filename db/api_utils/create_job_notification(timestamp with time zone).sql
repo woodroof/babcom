@@ -6,7 +6,7 @@ volatile
 as
 $$
 declare
-  v_timeout_sec double precision := greatest(extract(seconds from in_desired_time - clock_timestamp()), 0.);
+  v_timeout_sec double precision := greatest(extract(epoch from in_desired_time - clock_timestamp()), 0.);
   v_notification_code text;
 begin
   assert in_desired_time is not null;
