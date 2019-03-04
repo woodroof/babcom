@@ -10,75 +10,82 @@ declare
 begin
   -- Атрибуты 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
-  ('package_from', 'Откуда', 'Откуда посылка', 'normal', 'full', null, false),
-  ('package_ship', 'Корабль', 'Корабль, на котором прибыла посылка', 'normal', 'full', null, false),
-  ('package_what', 'Описание груза', 'Описание посылки', 'normal', 'full', null, false),
-  ('package_receiver_status', 'Статус получателя', 'Статус получателя', 'normal', 'full', null, false),
+  ('package_from', 'Откуда', 'Откуда посылка', 'normal', null, null, false),
+  ('package_what', 'Описание груза', 'Описание посылки', 'normal', null, null, false),
+  ('package_receiver_status', 'Статус получателя', 'Статус получателя', 'normal', null, 'pallas_project.vd_status', false),
   ('system_package_to', null, 'Адресат', 'system', null, null, false),
   ('system_package_receiver_code', null, 'Код для получения', 'system', null, null, false),
   ('package_receiver_code', 'Код для получения', 'Код для получения', 'normal', null, null, true),
   ('system_package_box_code', null, 'Код коробки', 'system', null, null, false),
   ('package_box_code', 'Код коробки', 'Код коробки', 'normal', null, null, true),
   ('package_to', 'Адресат', 'Адресат', 'system', null, null, true),
-  ('package_weight', 'Вес, кг.', 'Вес посылки', 'normal', 'full', null, false),
+  ('package_weight', 'Вес, кг.', 'Вес посылки', 'normal', null, null, false),
   ('package_arrival_time', 'Дата прибытия', 'Дата прибытия', 'normal', null, null, false),
   ('package_status', 'Статус', 'Статус посылки', 'normal', null, 'pallas_project.vd_package_status', false),
   ('system_package_reactions', null, 'Список проверок, на которые положительно реагирует', 'system', null, null, false),
-  ('package_reactions', null, 'Список проверок, на которые положительно реагирует', 'normal', null, null, true),
+  ('package_reactions', null, 'Список проверок, на которые положительно реагирует', 'normal', null, 'pallas_project.vd_package_reactions', true),
+  ('package_cheked_reactions', null, 'Список проведённых проверок с результатами', 'normal', null, 'pallas_project.vd_package_checked_reactions', false),
   ('system_package_ships_before_come', null, 'Количество кораблей до прибытия груза', 'system', null, null, false),
   ('system_package_id', null, 'Идентификатор посылки для проверок', 'system', null, null, false),
-  ('system_customs_cheking', null, 'Признак, что таможня проверяет какой-то груз', 'system', null, null, false);
+  ('system_customs_checking', null, 'Признак, что таможня проверяет какой-то груз', 'system', null, null, false);
 
   insert into data.params(code, value, description) values
   ('customs_goods', 
   jsonb_build_object(
-    'кефир', jsonb '{"live": 1}',
-    'мяч', jsonb '{}',
-    'одежда синтетическая', jsonb '{}',
-    'лабораторные мыши', jsonb '{"live": 1}',
-    'кабель электрический', jsonb '{"metal": 1}',
-    'набор мебели IKEA', jsonb '{"metal": 1}',
-    'кофеварка', jsonb '{"metal": 1}',
-    'аптечка \"Здоровый астер\"', jsonb '{"live": 1, "metal": 1}',
-    'лампы осветительные', jsonb '{"metal": 1}',
-    'коммуникатор NOD300', jsonb '{"metal": 1}',
-    'шляпа', jsonb '{}',
-    'кресло офисное', jsonb '{"metal": 1}',
-    'горшок цветочный', jsonb '{}',
-    'косметика', jsonb '{}',
-    'бижутерия', jsonb '{"metal": 1}',
-    'подушки', jsonb '{}',
-    'сухари', jsonb '{}',
-    'консервированное мясо', jsonb '{}',
-    'соевый соус', jsonb '{}',
-    'клубничный джем', jsonb '{}',
-    'вата', jsonb '{}',
-    'молоко сухое', jsonb '{}',
-    'кофе', jsonb '{}',
-    'чай', jsonb '{}',
-    'сахар', jsonb '{}',
-    'соль', jsonb '{}',
-    'посуда', jsonb '{}',
-    'датчики освещения', jsonb '{"metal": 1}',
-    'перья птичьи', jsonb '{}',
-    'уксус', jsonb '{}',
-    'картина', jsonb '{}',
-    'модель корабля', jsonb '{}',
-    'тапочки', jsonb '{}',
-    'туфли', jsonb '{}',
-    'перчатки', jsonb '{}',
-    'гуталин', jsonb '{}',
-    'крекеры', jsonb '{}',
-    'клетка', jsonb '{"metal": 1}',
-    'галстук', jsonb '{}',
-    'рюкзак', jsonb '{"metal": 1}',
-    'мыло', jsonb '{}',
-    'карамель', jsonb '{}',
-    'краска', jsonb '{}',
-    'кот', jsonb '{"live": 1}',
-    'гантели', jsonb '{}',
-    'растение в горшке', jsonb '{"live": 1}'
-    ), 'Товары для таможни');
+    'кефир', jsonb '["life"]',
+    'мяч', jsonb '[]',
+    'одежда синтетическая', jsonb '[]',
+    'лабораторные мыши', jsonb '["life"]',
+    'кабель электрический', jsonb '["metal"]',
+    'набор мебели IKEA', jsonb '["metal"]',
+    'кофеварка', jsonb '["metal"]',
+    'аптечка "Здоровый астер"', jsonb '["life", "metal"]',
+    'лампы осветительные', jsonb '["metal"]',
+    'коммуникатор NOD300', jsonb '["metal"]',
+    'шляпа', jsonb '[]',
+    'кресло офисное', jsonb '["metal"]',
+    'горшок цветочный', jsonb '[]',
+    'косметика', jsonb '[]',
+    'бижутерия', jsonb '["metal"]',
+    'подушки', jsonb '[]',
+    'сухари', jsonb '[]',
+    'консервированное мясо', jsonb '[]',
+    'соевый соус', jsonb '[]',
+    'клубничный джем', jsonb '[]',
+    'вата', jsonb '[]',
+    'молоко сухое', jsonb '[]',
+    'кофе', jsonb '[]',
+    'чай', jsonb '[]',
+    'сахар', jsonb '[]',
+    'соль', jsonb '[]',
+    'посуда', jsonb '[]',
+    'датчики освещения', jsonb '["metal"]',
+    'перья птичьи', jsonb '[]',
+    'уксус', jsonb '[]',
+    'картина', jsonb '[]',
+    'модель корабля', jsonb '[]',
+    'тапочки', jsonb '[]',
+    'туфли', jsonb '[]',
+    'перчатки', jsonb '[]',
+    'гуталин', jsonb '[]',
+    'крекеры', jsonb '[]',
+    'клетка', jsonb '["metal"]',
+    'галстук', jsonb '[]',
+    'рюкзак', jsonb '["metal"]',
+    'мыло', jsonb '[]',
+    'карамель', jsonb '[]',
+    'краска', jsonb '[]',
+    'кот', jsonb '["live"]',
+    'гантели', jsonb '["metal"]',
+    'растение в горшке', jsonb '["life"]',
+    'переключатель', jsonb '[]',
+    'крем для рук', jsonb '[]',
+    'шнурки', jsonb '[]',
+    'трубы', jsonb '[]'
+    ), 'Товары для таможни'),
+  ('customs_from', to_jsonb(string_to_array('Церера Паллада Юнона Веста Флора Ида Матильда Эрос Гаспра Икарус Географ Аполлон' ||
+  'Хирон Тоутатис Касталия Земля Луна Марс Фобос Деймос Ио Европа Ганимед Каллисто Сатурн Мимас Энцелад Тефия Диона Рея Титан'||
+  'Елена Япет Уран Миранда Ариэль Умбриэль Титания Оберон Нептун Тритон Протей Нереид Наяда Таласса Деспина Ларисса Галатея ', ' ')), 'Варианты откуда товар');
 
 
   -- Объект - страница для таможни
@@ -88,18 +95,100 @@ begin
     {"code": "title", "value": "Таможня"},
     {"code": "is_visible", "value": true, "value_object_code": "master"},
     {"code": "is_visible", "value": true, "value_object_code": "customs_officer"},
-    {"code": "content", "value": []},
+    {"code": "content", "value": ["customs_new", "customs_checked", "customs_arrested", "customs_received"]},
+    {"code": "content", "value": ["customs_future", "customs_new", "customs_checked", "customs_arrested", "customs_received"], "value_object_code": "master"},
     {"code": "independent_from_actor_list_elements", "value": true},
-    {"code": "actions_function", "value": "pallas_project.actgenerator_customs"},
+    {"code": "independent_from_object_list_elements", "value": true},
     {
       "code": "template",
       "value": {
         "title": "title",
         "subtitle": "subtitle",
-        "groups": [{"code": "customs_group", "attributes": ["description"], "actions": ["customs_ship_arrival", "customs_future_packages"]}]
+        "groups": []
       }
     }
   ]');
+
+  perform data.create_object(
+  'customs_new',
+  jsonb '[
+    {"code": "title", "value": "Ждут проверки"},
+    {"code": "is_visible", "value": true, "value_object_code": "master"},
+    {"code": "is_visible", "value": true, "value_object_code": "customs_officer"},
+    {"code": "content", "value": []},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "list_element_function", "value": "pallas_project.lef_do_nothing"},
+    {"code": "list_actions_function", "value": "pallas_project.actgenerator_customs_content"},
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": []
+      }
+    }
+  ]');
+  perform data.create_object(
+  'customs_checked',
+  jsonb '[
+    {"code": "title", "value": "Проверены"},
+    {"code": "is_visible", "value": true, "value_object_code": "master"},
+    {"code": "is_visible", "value": true, "value_object_code": "customs_officer"},
+    {"code": "content", "value": []},
+    {"code": "independent_from_object_list_elements", "value": true},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "list_element_function", "value": "pallas_project.lef_do_nothing"},
+    {"code": "list_actions_function", "value": "pallas_project.actgenerator_customs_content"},
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": []
+      }
+    }
+  ]');
+  perform data.create_object(
+  'customs_arrested',
+  jsonb '[
+    {"code": "title", "value": "Задержаны или арестованы"},
+    {"code": "is_visible", "value": true, "value_object_code": "master"},
+    {"code": "is_visible", "value": true, "value_object_code": "customs_officer"},
+    {"code": "content", "value": []},
+    {"code": "independent_from_object_list_elements", "value": true},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {"code": "list_element_function", "value": "pallas_project.lef_do_nothing"},
+    {"code": "list_actions_function", "value": "pallas_project.actgenerator_customs_content"},
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": []
+      }
+    }
+  ]');
+
+  perform data.create_object(
+  'customs_received',
+  jsonb '[
+    {"code": "title", "value": "Выданы"},
+    {"code": "is_visible", "value": true, "value_object_code": "master"},
+    {"code": "is_visible", "value": true, "value_object_code": "customs_officer"},
+    {"code": "content", "value": []},
+    {"code": "independent_from_object_list_elements", "value": true},
+    {"code": "list_element_function", "value": "pallas_project.lef_do_nothing"},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": []
+      }
+    }
+  ]');
+
 
   -- Списки посылок
   -- Класс
@@ -112,6 +201,7 @@ begin
     {"code": "independent_from_actor_list_elements", "value": true},
     {"code": "independent_from_object_list_elements", "value": true},
     {"code": "actions_function", "value": "pallas_project.actgenerator_customs_package_list"},
+    {"code": "list_element_function", "value": "pallas_project.lef_do_nothing"},
     {"code": "temporary_object", "value": true},
     {
       "code": "template",
@@ -125,14 +215,15 @@ begin
 
   -- Мастерский список будущих посылок
   perform data.create_object(
-  'customs_future_packages',
+  'customs_future',
   jsonb '[
     {"code": "title", "value": "Будущие посылки"},
     {"code": "is_visible", "value": true, "value_object_code": "master"},
     {"code": "content", "value": []},
     {"code": "independent_from_actor_list_elements", "value": true},
     {"code": "independent_from_object_list_elements", "value": true},
-    {"code": "actions_function", "value": "pallas_project.actgenerator_customs_future_packages"},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_customs_future"},
+    {"code": "list_element_function", "value": "pallas_project.lef_do_nothing"},
     {
       "code": "template",
       "value": {
@@ -151,36 +242,24 @@ begin
     {"code": "type", "value": "package"},
     {"code": "is_visible", "value": true, "value_object_code": "master"},
     {"code": "is_visible", "value": true, "value_object_code": "customs_officer"},
-    {"code": "actions_function", "value": "pallas_project.actgenerator_customs_package"},
     {
       "code": "mini_card_template",
       "value": {
         "title": "title",
         "subtitle": "package_status",
-        "groups": []
-      }
-    },
-    {
-      "code": "template",
-      "value": {
-        "title": "title",
-        "subtitle": "subtitle",
         "groups": [
           {
             "code": "package_group1",
-            "attributes": ["package_status","package_arrival_time", "package_from", "package_ship", "package_what", "package_weight"]
-          },
-          {
-            "code": "package_group1",
-            "attributes": ["package_receiver_code", "package_to"]
+            "attributes": ["package_arrival_time", "package_from", "package_what", "package_weight", "package_receiver_status"]
           },
           {
             "code": "package_group2",
+            "attributes": ["package_receiver_code", "package_to", "package_reactions", "package_box_code", "package_cheked_reactions"],
             "actions": ["customs_package_check_spectrometer", "customs_package_check_radiation", "customs_package_chack_x_ray"]
           },
           {
-            "code": "package_group3",
-            "actions": ["customs_package_set_checked", "customs_package_set_arrested", "customs_package_receive"]
+            "code": "package_group4",
+            "actions": ["customs_package_set_checked", "customs_package_set_arrested", "customs_package_set_frozen", "customs_package_set_new", "customs_package_receive"]
           }
         ]
       }
@@ -190,11 +269,9 @@ begin
 
   insert into data.actions(code, function) values
   ('customs_package_list_go_back', 'pallas_project.act_customs_package_list_go_back'),
-  ('customs_ship_arrival', 'pallas_project.act_customs_ship_arrival'),
   ('customs_create_future_package', 'pallas_project.act_customs_create_future_package'),
   ('customs_package_check','pallas_project.act_customs_package_check'),
-  ('customs_package_set_checked','pallas_project.act_customs_package_set_checked'),
-  ('customs_package_set_arrested', 'pallas_project.act_customs_package_set_arrested'),
+  ('customs_package_set_status','pallas_project.act_customs_package_set_status'),
   ('customs_package_receive', 'pallas_project.act_customs_package_receive');
 end;
 $$
