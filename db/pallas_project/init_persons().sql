@@ -49,7 +49,10 @@ begin
   insert into data.actions(code, function) values
   ('change_un_rating', 'pallas_project.act_change_un_rating'),
   ('change_opa_rating', 'pallas_project.act_change_opa_rating'),
-  ('change_district', 'pallas_project.act_change_district');
+  ('change_district', 'pallas_project.act_change_district'),
+  ('change_coins', 'pallas_project.act_change_coins'),
+  ('change_money', 'pallas_project.act_change_money'),
+  ('change_deposit_money', 'pallas_project.act_change_deposit_money');
 
   -- Объект класса для персон
   perform data.create_class(
@@ -93,8 +96,11 @@ begin
               "open_contracts",
               "transfer_money",
               "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5",
+              "change_money",
+              "change_deposit_money",
               "change_un_rating",
               "change_opa_rating",
+              "change_coins",
               "change_district",
               "med_health"
             ]

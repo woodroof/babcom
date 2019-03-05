@@ -156,7 +156,7 @@ begin
               loop
                 -- Если клиенту не возвращался объект, указанный в position,
                 -- то этот объект и все дальнейшие обрабатывать не нужно
-                if not v_processed_objects ? v_add_element.position then
+                if v_add_element.position is not null and (v_processed_objects is null or not v_processed_objects ? v_add_element.position) then
                   exit;
                 end if;
 

@@ -49,7 +49,7 @@ begin
   end if;
 
   if v_actor_current_sum < v_sum then
-    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'На вашем счету нет указанной суммы.');
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'На вашем счёте нет указанной суммы.');
     return;
   end if;
 

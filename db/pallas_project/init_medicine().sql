@@ -14,7 +14,7 @@ begin
 -- *format med_health*{"wound": {"level": 3, "start": "26.02.2019 23:58:17", "diagnosted": 5, "job": 4837438}, "radiation": {"level": 4, "start": "26.02.2019 23:58:30", "diagnosted": 9, "job": 4837489}}
   ('med_stimulant', null, 'Данные о приёме стимулятора', 'hidden', null, null, false),
 -- *format med_stimulant*{"last": {"job": 4837438}, "cycle1": 1, "cycle2": 3}
-  ('med_clinic_money', null, 'Остаток на счету клиники', 'hidden', null, null, false),
+  ('med_clinic_money', null, 'Остаток на счёте клиники', 'hidden', null, null, false),
   ('med_person_code', null, 'Код пациента', 'hidden', null, null, false),
   ('med_health_care_status', null, 'Статус обслуживания пациента', 'hidden', null, null, false),
   ('med_drug_qr_link',null, 'Ссылка для QR-кода', 'normal', 'mini', null, false),

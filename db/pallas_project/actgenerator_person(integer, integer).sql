@@ -11,7 +11,10 @@ declare
   v_economy_type jsonb := data.get_attribute_value_for_share(in_object_id, 'system_person_economy_type');
   v_district_code text;
   v_opa_rating integer;
+  v_money integer;
+  v_deposit_money integer;
   v_un_rating integer;
+  v_coins integer;
   v_actor_economy_type text;
   v_actor_money bigint;
   v_tax integer;
@@ -108,6 +111,8 @@ begin
           v_object_code)::jsonb;
 
         if v_economy_type != jsonb '"un"' then
+          v_money := json.get_integer(data.get_attribute_value_for_share(in_object_id, 'system_money'));
+
           v_actions :=
             v_actions ||
             format('{
@@ -118,10 +123,63 @@ begin
                 "params": {
                   "object_code": "%s_transactions"
                 }
+              },
+              "change_money": {
+                "code": "change_money",
+                "name": "Изменить количество доступных денег",
+                "disabled": false,
+                "params": "%s",
+                "user_params": [
+                  {
+                    "code": "money_diff",
+                    "description": "Значение изменения остатка, UN$ (сейчас %s)",
+                    "type": "integer"
+                  },
+                  {
+                    "code": "comment",
+                    "description": "Причина изменения",
+                    "type": "string",
+                    "restrictions": {"min_length": 1, "max_length": 1000, "multiline": true}
+                  }
+                ]
               }
-            }', v_object_code)::jsonb;
+            }',
+            v_object_code,
+            v_object_code,
+            v_money)::jsonb;
+
+          if v_economy_type = jsonb '"asters"' then
+            v_deposit_money := json.get_integer(data.get_attribute_value_for_share(in_object_id, 'system_person_deposit_money'));
+
+            v_actions :=
+              v_actions ||
+              format('{
+                "change_deposit_money": {
+                  "code": "change_deposit_money",
+                  "name": "Изменить количество доступных денег на инвестиционном счёте",
+                  "disabled": false,
+                  "params": "%s",
+                  "user_params": [
+                    {
+                      "code": "money_diff",
+                      "description": "Значение изменения остатка на инвестиционном счёте, UN$ (сейчас %s)",
+                      "type": "integer"
+                    },
+                    {
+                      "code": "comment",
+                      "description": "Причина изменения",
+                      "type": "string",
+                      "restrictions": {"min_length": 1, "max_length": 1000, "multiline": true}
+                    }
+                  ]
+                }
+              }',
+              v_object_code,
+              v_deposit_money)::jsonb;
+          end if;
         else
           v_un_rating := json.get_integer(data.get_attribute_value_for_share(in_object_id, 'person_un_rating'));
+          v_coins := json.get_integer(data.get_attribute_value_for_share(in_object_id, 'system_person_coin'));
 
           v_actions :=
             v_actions ||
@@ -144,10 +202,25 @@ begin
                     "restrictions": {"min_length": 1, "max_length": 1000, "multiline": true}
                   }
                 ]
+              },
+              "change_coins": {
+                "code": "change_coins",
+                "name": "Изменить количество доступных коинов",
+                "disabled": false,
+                "params": "%s",
+                "user_params": [
+                  {
+                    "code": "coins_diff",
+                    "description": "Значение изменения количества коинов (сейчас %s)",
+                    "type": "integer"
+                  }
+                ]
               }
             }',
             v_object_code,
-            v_un_rating)::jsonb;
+            v_un_rating,
+            v_object_code,
+            v_coins)::jsonb;
         end if;
       end if;
     end if;

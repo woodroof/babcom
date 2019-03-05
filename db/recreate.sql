@@ -4993,7 +4993,7 @@ begin
               loop
                 -- Если клиенту не возвращался объект, указанный в position,
                 -- то этот объект и все дальнейшие обрабатывать не нужно
-                if not v_processed_objects ? v_add_element.position then
+                if v_add_element.position is not null and (v_processed_objects is null or not v_processed_objects ? v_add_element.position) then
                   exit;
                 end if;
 
@@ -9922,7 +9922,7 @@ begin
   end if;
 
   if v_current_sum < v_price then
-    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Не хватает денег', 'На вашем счету недостаточно средств для покупки лотерейных билетов.');
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Не хватает денег', 'На вашем счёте недостаточно средств для покупки лотерейных билетов.');
     return;
   end if;
 
@@ -10166,6 +10166,43 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_change_coins(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_change_coins(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_object_code text := json.get_string(in_params);
+  v_object_id integer := data.get_object_id(v_object_code);
+  v_coins_diff integer := json.get_integer(in_user_params, 'coins_diff');
+  v_coins integer := json.get_integer(data.get_raw_attribute_value_for_update(v_object_id, 'system_person_coin'));
+  v_notified boolean;
+  v_diff jsonb;
+begin
+  if v_coins_diff = 0 then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+    return;
+  end if;
+
+  v_diff :=
+    pallas_project.change_coins(
+      v_object_id,
+      v_coins + v_coins_diff,
+      data.get_active_actor_id(in_client_id),
+      'Изменение количества доступных коинов мастером');
+  v_notified :=
+    data.process_diffs_and_notify_current_object(
+      v_diff,
+      in_client_id,
+      in_request_id,
+      v_object_id);
+  assert v_notified;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_change_current_tax(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_change_current_tax(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -10220,6 +10257,61 @@ begin
         }',
         v_tax)::jsonb);
   end loop;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_change_deposit_money(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_change_deposit_money(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_object_code text := json.get_string(in_params);
+  v_object_id integer := data.get_object_id(v_object_code);
+  v_money_diff integer := json.get_integer(in_user_params, 'money_diff');
+  v_money integer := json.get_integer(data.get_raw_attribute_value_for_update(v_object_id, 'system_person_deposit_money'));
+  v_comment text := pp_utils.trim(json.get_string(in_user_params, 'comment'));
+  v_diff jsonb;
+  v_notified boolean;
+begin
+  if v_money_diff = 0 then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+    return;
+  end if;
+
+  v_money := v_money + v_money_diff;
+
+  v_notified :=
+    data.change_current_object(
+      in_client_id,
+      in_request_id,
+      v_object_id,
+      format(
+        '[
+          {"code": "system_person_deposit_money", "value": %s},
+          {"code": "person_deposit_money", "value": %s, "value_object_id": %s},
+          {"code": "person_deposit_money", "value": %s, "value_object_code": "master"}
+        ]',
+        v_money,
+        v_money,
+        v_object_id,
+        v_money)::jsonb,
+      'Изменение количества доступных денег на инвестиционном счёте мастером');
+  assert v_notified;
+
+  perform pp_utils.add_notification(
+    v_object_id,
+    format(
+      E'Изменение суммы остатка на инвестиционном счёте.\nИзменение: %s\nНовый остаток: %s\n%s',
+      pp_utils.format_money(v_money_diff),
+      pp_utils.format_money(v_money),
+      v_comment),
+    v_object_id,
+    true);
 end;
 $$
 language plpgsql;
@@ -10332,6 +10424,63 @@ begin
     format(E'Вы были переселены в %s\n', pp_utils.link(v_new_district_code)) || pp_utils.trim(v_comment),
     v_object_id,
     true);
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_change_money(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_change_money(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_object_code text := json.get_string(in_params);
+  v_object_id integer := data.get_object_id(v_object_code);
+  v_money_diff integer := json.get_integer(in_user_params, 'money_diff');
+  v_money integer := json.get_integer(data.get_raw_attribute_value_for_update(v_object_id, 'system_money'));
+  v_comment text := pp_utils.trim(json.get_string(in_user_params, 'comment'));
+  v_diff jsonb;
+  v_notified boolean;
+begin
+  if v_money_diff = 0 then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+    return;
+  end if;
+
+  if v_comment = '' then
+    v_comment := 'Перевод средств';
+  else
+    v_comment := E'Перевод средств\nКомментарий:\n' || v_comment;
+  end if;
+
+  v_diff :=
+    pallas_project.change_money(
+      v_object_id,
+      v_money + v_money_diff,
+      v_actor_id,
+      'Изменение количества доступных денег мастером');
+  v_notified :=
+    data.process_diffs_and_notify_current_object(
+      v_diff,
+      in_client_id,
+      in_request_id,
+      v_object_id);
+  assert v_notified;
+
+  perform pallas_project.create_transaction(
+    v_object_id,
+    null,
+    v_comment,
+    v_money_diff,
+    v_money + v_money_diff,
+    null,
+    null,
+    v_actor_id,
+    array[v_object_id]);
+  perform pallas_project.notify_transfer_receiver(v_object_id, v_money_diff);
 end;
 $$
 language plpgsql;
@@ -15011,7 +15160,7 @@ begin
   end if;
 
   if v_actor_current_sum < v_sum then
-    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'На вашем счету нет указанной суммы.');
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'На вашем счёте нет указанной суммы.');
     return;
   end if;
 
@@ -15153,7 +15302,7 @@ begin
   end if;
 
   if v_org_current_sum < v_sum then
-    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'На счету организации нет указанной суммы.');
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'На счёте организации нет указанной суммы.');
     return;
   end if;
 
@@ -18169,7 +18318,10 @@ declare
   v_economy_type jsonb := data.get_attribute_value_for_share(in_object_id, 'system_person_economy_type');
   v_district_code text;
   v_opa_rating integer;
+  v_money integer;
+  v_deposit_money integer;
   v_un_rating integer;
+  v_coins integer;
   v_actor_economy_type text;
   v_actor_money bigint;
   v_tax integer;
@@ -18266,6 +18418,8 @@ begin
           v_object_code)::jsonb;
 
         if v_economy_type != jsonb '"un"' then
+          v_money := json.get_integer(data.get_attribute_value_for_share(in_object_id, 'system_money'));
+
           v_actions :=
             v_actions ||
             format('{
@@ -18276,10 +18430,63 @@ begin
                 "params": {
                   "object_code": "%s_transactions"
                 }
+              },
+              "change_money": {
+                "code": "change_money",
+                "name": "Изменить количество доступных денег",
+                "disabled": false,
+                "params": "%s",
+                "user_params": [
+                  {
+                    "code": "money_diff",
+                    "description": "Значение изменения остатка, UN$ (сейчас %s)",
+                    "type": "integer"
+                  },
+                  {
+                    "code": "comment",
+                    "description": "Причина изменения",
+                    "type": "string",
+                    "restrictions": {"min_length": 1, "max_length": 1000, "multiline": true}
+                  }
+                ]
               }
-            }', v_object_code)::jsonb;
+            }',
+            v_object_code,
+            v_object_code,
+            v_money)::jsonb;
+
+          if v_economy_type = jsonb '"asters"' then
+            v_deposit_money := json.get_integer(data.get_attribute_value_for_share(in_object_id, 'system_person_deposit_money'));
+
+            v_actions :=
+              v_actions ||
+              format('{
+                "change_deposit_money": {
+                  "code": "change_deposit_money",
+                  "name": "Изменить количество доступных денег на инвестиционном счёте",
+                  "disabled": false,
+                  "params": "%s",
+                  "user_params": [
+                    {
+                      "code": "money_diff",
+                      "description": "Значение изменения остатка на инвестиционном счёте, UN$ (сейчас %s)",
+                      "type": "integer"
+                    },
+                    {
+                      "code": "comment",
+                      "description": "Причина изменения",
+                      "type": "string",
+                      "restrictions": {"min_length": 1, "max_length": 1000, "multiline": true}
+                    }
+                  ]
+                }
+              }',
+              v_object_code,
+              v_deposit_money)::jsonb;
+          end if;
         else
           v_un_rating := json.get_integer(data.get_attribute_value_for_share(in_object_id, 'person_un_rating'));
+          v_coins := json.get_integer(data.get_attribute_value_for_share(in_object_id, 'system_person_coin'));
 
           v_actions :=
             v_actions ||
@@ -18302,10 +18509,25 @@ begin
                     "restrictions": {"min_length": 1, "max_length": 1000, "multiline": true}
                   }
                 ]
+              },
+              "change_coins": {
+                "code": "change_coins",
+                "name": "Изменить количество доступных коинов",
+                "disabled": false,
+                "params": "%s",
+                "user_params": [
+                  {
+                    "code": "coins_diff",
+                    "description": "Значение изменения количества коинов (сейчас %s)",
+                    "type": "integer"
+                  }
+                ]
               }
             }',
             v_object_code,
-            v_un_rating)::jsonb;
+            v_un_rating,
+            v_object_code,
+            v_coins)::jsonb;
         end if;
       end if;
     end if;
@@ -22744,7 +22966,7 @@ begin
 -- *format med_health*{"wound": {"level": 3, "start": "26.02.2019 23:58:17", "diagnosted": 5, "job": 4837438}, "radiation": {"level": 4, "start": "26.02.2019 23:58:30", "diagnosted": 9, "job": 4837489}}
   ('med_stimulant', null, 'Данные о приёме стимулятора', 'hidden', null, null, false),
 -- *format med_stimulant*{"last": {"job": 4837438}, "cycle1": 1, "cycle2": 3}
-  ('med_clinic_money', null, 'Остаток на счету клиники', 'hidden', null, null, false),
+  ('med_clinic_money', null, 'Остаток на счёте клиники', 'hidden', null, null, false),
   ('med_person_code', null, 'Код пациента', 'hidden', null, null, false),
   ('med_health_care_status', null, 'Статус обслуживания пациента', 'hidden', null, null, false),
   ('med_drug_qr_link',null, 'Ссылка для QR-кода', 'normal', 'mini', null, false),
@@ -23849,7 +24071,10 @@ begin
   insert into data.actions(code, function) values
   ('change_un_rating', 'pallas_project.act_change_un_rating'),
   ('change_opa_rating', 'pallas_project.act_change_opa_rating'),
-  ('change_district', 'pallas_project.act_change_district');
+  ('change_district', 'pallas_project.act_change_district'),
+  ('change_coins', 'pallas_project.act_change_coins'),
+  ('change_money', 'pallas_project.act_change_money'),
+  ('change_deposit_money', 'pallas_project.act_change_deposit_money');
 
   -- Объект класса для персон
   perform data.create_class(
@@ -23893,8 +24118,11 @@ begin
               "open_contracts",
               "transfer_money",
               "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5",
+              "change_money",
+              "change_deposit_money",
               "change_un_rating",
               "change_opa_rating",
+              "change_coins",
               "change_district",
               "med_health"
             ]
@@ -32607,7 +32835,7 @@ create index attribute_values_nuidx_oi_ai on data.attribute_values(object_id, at
 
 -- drop index data.client_subscription_objects_idx_csi_i;
 
-create unique index client_subscription_objects_idx_csi_i on data.client_subscription_objects(client_subscription_id, index) where (data is not null);
+create index client_subscription_objects_idx_csi_i on data.client_subscription_objects(client_subscription_id, index) where (data is not null);
 
 -- drop index data.client_subscriptions_idx_client;
 

@@ -30,7 +30,7 @@ begin
   end if;
 
   if v_current_sum < v_price then
-    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Не хватает денег', 'На вашем счету недостаточно средств для покупки лотерейных билетов.');
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Не хватает денег', 'На вашем счёте недостаточно средств для покупки лотерейных билетов.');
     return;
   end if;
 
