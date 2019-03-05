@@ -106,6 +106,7 @@ begin
         v_tax integer := json.get_integer_opt(data.get_raw_attribute_value_for_share(in_object_id, 'system_org_tax'), null);
         v_budget integer := json.get_integer_opt(data.get_raw_attribute_value_for_share(in_object_id, 'system_org_budget'), null);
         v_profit integer := json.get_integer_opt(data.get_raw_attribute_value_for_share(in_object_id, 'system_org_profit'), null);
+        v_money integer := json.get_integer(data.get_raw_attribute_value_for_share(in_object_id, 'system_money'));
       begin
         if v_tax is not null then
           v_actions :=
@@ -181,6 +182,32 @@ begin
               v_object_code,
               v_profit)::jsonb;
         end if;
+
+        v_actions :=
+          v_actions ||
+          format('{
+            "change_org_money": {
+              "code": "change_org_money",
+              "name": "Изменить количество денег на счёте",
+              "disabled": false,
+              "params": "%s",
+              "user_params": [
+                {
+                  "code": "money_diff",
+                  "description": "Значение изменения остатка, UN$ (сейчас %s)",
+                  "type": "integer"
+                },
+                {
+                  "code": "comment",
+                  "description": "Причина изменения",
+                  "type": "string",
+                  "restrictions": {"min_length": 1, "max_length": 1000, "multiline": true}
+                }
+              ]
+            }
+          }',
+          v_object_code,
+          v_money)::jsonb;
       end;
     end if;
   end if;

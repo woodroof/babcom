@@ -10654,6 +10654,67 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_change_org_money(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_change_org_money(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_object_code text := json.get_string(in_params);
+  v_object_id integer := data.get_object_id(v_object_code);
+  v_money_diff integer := json.get_integer(in_user_params, 'money_diff');
+  v_money integer := json.get_integer(data.get_raw_attribute_value_for_update(v_object_id, 'system_money'));
+  v_comment text := pp_utils.trim(json.get_string(in_user_params, 'comment'));
+  v_diff jsonb;
+  v_notified boolean;
+begin
+  if v_money_diff = 0 then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+    return;
+  end if;
+
+  if v_comment = '' then
+    v_comment := 'Перевод средств';
+  else
+    v_comment := E'Перевод средств\nКомментарий:\n' || v_comment;
+  end if;
+
+  v_diff :=
+    pallas_project.change_money(
+      v_object_id,
+      v_money + v_money_diff,
+      v_actor_id,
+      'Изменение количества доступных денег мастером');
+  v_notified :=
+    data.process_diffs_and_notify_current_object(
+      v_diff,
+      in_client_id,
+      in_request_id,
+      v_object_id);
+  assert v_notified;
+
+  perform pallas_project.create_transaction(
+    v_object_id,
+    null,
+    v_comment,
+    v_money_diff,
+    v_money + v_money_diff,
+    null,
+    null,
+    v_actor_id,
+    array[
+      data.get_object_id(v_object_code || '_head'),
+      data.get_object_id(v_object_code || '_economist'),
+      data.get_object_id(v_object_code || '_auditor'),
+      data.get_object_id(v_object_code || '_temporary_auditor')]);
+  perform pallas_project.notify_transfer_receiver(v_object_id, v_money_diff);
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_change_status_price(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_change_status_price(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -18117,6 +18178,7 @@ begin
         v_tax integer := json.get_integer_opt(data.get_raw_attribute_value_for_share(in_object_id, 'system_org_tax'), null);
         v_budget integer := json.get_integer_opt(data.get_raw_attribute_value_for_share(in_object_id, 'system_org_budget'), null);
         v_profit integer := json.get_integer_opt(data.get_raw_attribute_value_for_share(in_object_id, 'system_org_profit'), null);
+        v_money integer := json.get_integer(data.get_raw_attribute_value_for_share(in_object_id, 'system_money'));
       begin
         if v_tax is not null then
           v_actions :=
@@ -18192,6 +18254,32 @@ begin
               v_object_code,
               v_profit)::jsonb;
         end if;
+
+        v_actions :=
+          v_actions ||
+          format('{
+            "change_org_money": {
+              "code": "change_org_money",
+              "name": "Изменить количество денег на счёте",
+              "disabled": false,
+              "params": "%s",
+              "user_params": [
+                {
+                  "code": "money_diff",
+                  "description": "Значение изменения остатка, UN$ (сейчас %s)",
+                  "type": "integer"
+                },
+                {
+                  "code": "comment",
+                  "description": "Причина изменения",
+                  "type": "string",
+                  "restrictions": {"min_length": 1, "max_length": 1000, "multiline": true}
+                }
+              ]
+            }
+          }',
+          v_object_code,
+          v_money)::jsonb;
       end;
     end if;
   end if;
@@ -22910,6 +22998,9 @@ begin
   -- Головной офис картеля
   -- 70e5db08-df47-4395-9f4a-15eef99b2b89
 
+  -- Головной офис Akira SC
+  -- 939b6537-afc1-41f4-963a-21ccfd1c7d28
+
   -- Дана Скалли, глава департамента безопасности при комитете по делам колоний ООН
   -- 939b6537-afc1-41f4-963a-21ccfd1c7d28
 
@@ -23571,6 +23662,7 @@ begin
   perform data.add_object_to_object(data.get_object_id('c9e08512-e729-430a-b2fd-df8e7c94a5e7'), data.get_object_id('org_starbucks_auditor'));
   perform data.add_object_to_object(data.get_object_id('70e5db08-df47-4395-9f4a-15eef99b2b89'), data.get_object_id('org_starbucks_head'));
   perform data.add_object_to_object(data.get_object_id('939b6537-afc1-41f4-963a-21ccfd1c7d28'), data.get_object_id('org_opa_head'));
+  perform data.add_object_to_object(data.get_object_id('939b6537-afc1-41f4-963a-21ccfd1c7d28'), data.get_object_id('org_akira_sc_head'));
   perform data.add_object_to_object(data.get_object_id('54e94c45-ce2a-459a-8613-9b75e23d9b68'), data.get_object_id('org_clinic_head'));
   perform data.add_object_to_object(data.get_object_id('e0c49e51-779f-4f21-bb94-bbbad33bc6e2'), data.get_object_id('org_clean_asteroid_head'));
   perform data.add_object_to_object(data.get_object_id('8f7b1cc6-28cd-4fb1-8c81-e0ab1c0df5c9'), data.get_object_id('org_teco_mars_head'));
@@ -23599,7 +23691,8 @@ begin
   ('change_current_tax', 'pallas_project.act_change_current_tax'),
   ('change_next_budget', 'pallas_project.act_change_next_budget'),
   ('change_next_profit', 'pallas_project.act_change_next_profit'),
-  ('transfer_org_money', 'pallas_project.act_transfer_org_money');
+  ('transfer_org_money', 'pallas_project.act_transfer_org_money'),
+  ('change_org_money', 'pallas_project.act_change_org_money');
 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
   ('system_org_synonym', null, 'Код оригинальной организации, string', 'system', null, null, false),
@@ -23634,7 +23727,7 @@ begin
           {
             "code": "personal_info",
             "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_tax", "org_next_tax", "org_current_tax_sum", "org_districts_control", "org_districts_influence"],
-            "actions": ["transfer_money", "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5", "change_current_tax", "change_next_tax", "change_next_budget", "change_next_profit", "show_transactions", "show_contracts", "show_claims"]
+            "actions": ["transfer_money", "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5", "change_org_money", "change_current_tax", "change_next_tax", "change_next_budget", "change_next_profit", "show_transactions", "show_contracts", "show_claims"]
           },
           {"code": "info", "attributes": ["description"]}
         ]

@@ -20,6 +20,7 @@ begin
   perform data.add_object_to_object(data.get_object_id('c9e08512-e729-430a-b2fd-df8e7c94a5e7'), data.get_object_id('org_starbucks_auditor'));
   perform data.add_object_to_object(data.get_object_id('70e5db08-df47-4395-9f4a-15eef99b2b89'), data.get_object_id('org_starbucks_head'));
   perform data.add_object_to_object(data.get_object_id('939b6537-afc1-41f4-963a-21ccfd1c7d28'), data.get_object_id('org_opa_head'));
+  perform data.add_object_to_object(data.get_object_id('939b6537-afc1-41f4-963a-21ccfd1c7d28'), data.get_object_id('org_akira_sc_head'));
   perform data.add_object_to_object(data.get_object_id('54e94c45-ce2a-459a-8613-9b75e23d9b68'), data.get_object_id('org_clinic_head'));
   perform data.add_object_to_object(data.get_object_id('e0c49e51-779f-4f21-bb94-bbbad33bc6e2'), data.get_object_id('org_clean_asteroid_head'));
   perform data.add_object_to_object(data.get_object_id('8f7b1cc6-28cd-4fb1-8c81-e0ab1c0df5c9'), data.get_object_id('org_teco_mars_head'));
