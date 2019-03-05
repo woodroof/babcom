@@ -12274,6 +12274,105 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_customs_find_by_number(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_customs_find_by_number(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_package_number text := json.get_string(in_user_params, 'package_number');
+  v_content text[];
+  v_temp_object_id integer;
+  v_package_class_id integer := data.get_class_id('package');
+  v_system_customs_checking boolean := json.get_boolean_opt(data.get_attribute_value_for_share('customs_new', 'system_customs_checking'), false);
+begin
+  assert in_request_id is not null;
+
+  select array_agg(o.code) into v_content
+  from data.objects o
+  where upper(replace(o.code, '-', '')) like upper(v_package_number) || '%'
+    and o.class_id = v_package_class_id;
+  if v_content is null then
+    v_content := array[]::text[];
+  end if;
+  -- создаём темповый список
+  v_temp_object_id := data.create_object(
+  null,
+  jsonb_build_array(
+    jsonb_build_object('code', 'description', 'value', 'Результат поиска по номеру ' || v_package_number),
+    jsonb_build_object('code', 'system_customs_checking', 'value', v_system_customs_checking),
+    jsonb_build_object('code', 'content', 'value', v_content)
+  ),
+  'customs_package_list');
+
+  perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, data.get_object_code(v_temp_object_id));
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_customs_find_by_status_or_from(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_customs_find_by_status_or_from(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_package_from text := json.get_string_opt(in_user_params, 'package_from', null);
+  v_package_to_status integer := json.get_integer_opt(in_user_params, 'package_to_status', null);
+  v_content text[];
+  v_temp_object_id integer;
+  v_package_class_id integer := data.get_class_id('package');
+  v_package_from_attribute_id integer = data.get_attribute_id('package_from');
+  v_package_receiver_status_attribute_id integer = data.get_attribute_id('package_receiver_status');
+  v_system_customs_checking boolean := json.get_boolean_opt(data.get_attribute_value_for_share('customs_new', 'system_customs_checking'), false);
+begin
+  assert in_request_id is not null;
+
+  if v_package_from = '' then
+    v_package_from := null;
+  end if;
+  if v_package_to_status = '-1' then
+    v_package_to_status := null;
+  end if;
+  if v_package_from is null and v_package_to_status is null then
+    perform api_utils.create_show_message_action_notification(
+      in_client_id,
+      in_request_id,
+      'Нужно больше данных для поиска',
+      'Хотя бы один из параметров должен быть конкретизирован.'); 
+    return;
+  end if;
+
+  select array_agg(o.code) into v_content
+  from data.objects o
+  left join data.attribute_values av1 on av1.object_id = o.id and av1.attribute_id = v_package_from_attribute_id
+  left join data.attribute_values av2 on av2.object_id = o.id and av2.attribute_id = v_package_receiver_status_attribute_id
+  where (v_package_from is null or json.get_string(av1.value) = v_package_from)
+    and (v_package_to_status is null or json.get_integer(av2.value) = v_package_to_status)
+    and o.class_id = v_package_class_id;
+
+  if v_content is null then
+    v_content := array[]::text[];
+  end if;
+  -- создаём темповый список
+  v_temp_object_id := data.create_object(
+  null,
+  jsonb_build_array(
+    jsonb_build_object('code', 'description', 'value', 'Результат поиска по месту отправки ' || coalesce(v_package_from, 'Все') || ' и статусу получателя ' ||
+      case v_package_to_status when 3 then 'Золотой' when 2 then 'Серебряный' when 1 then 'Бронзовый' when 0 then 'Нет' else 'Все' end),
+    jsonb_build_object('code', 'system_customs_checking', 'value', v_system_customs_checking),
+    jsonb_build_object('code', 'content', 'value', v_content)
+  ),
+  'customs_package_list');
+
+  perform api_utils.create_open_object_action_notification(in_client_id, in_request_id, data.get_object_code(v_temp_object_id));
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_customs_package_check(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_customs_package_check(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -12283,10 +12382,12 @@ as
 $$
 declare
   v_package_code text := json.get_string(in_params, 'package_code');
+  v_from_list text := json.get_string(in_params, 'from_list');
   v_package_id integer := data.get_object_id(v_package_code);
 
-  v_custons_new_id integer := data.get_object_id('customs_new');
-  v_system_customs_checking boolean := json.get_boolean_opt(data.get_attribute_value_for_update(v_custons_new_id, 'system_customs_checking'), false);
+  v_customs_new_id integer := data.get_object_id('customs_new');
+  v_customs_id integer := data.get_object_id(v_from_list);
+  v_system_customs_checking boolean := json.get_boolean_opt(data.get_attribute_value_for_update(v_customs_new_id, 'system_customs_checking'), false);
   v_package_status text := json.get_string(data.get_attribute_value_for_update(v_package_id, 'package_status'));
   v_check_result boolean;
 
@@ -12312,7 +12413,13 @@ begin
   v_changes :=
     v_changes ||
     jsonb_build_object('id', v_package_id, 'changes', jsonb '[]' || data.attribute_change2jsonb('package_status', '"checking"')) ||
-    jsonb_build_object('id', v_custons_new_id, 'changes', jsonb '[]' || data.attribute_change2jsonb('system_customs_checking', jsonb 'true'));
+    jsonb_build_object('id', v_customs_new_id, 'changes', jsonb '[]' || data.attribute_change2jsonb('system_customs_checking', jsonb 'true'));
+
+  if v_customs_id <> v_customs_new_id then
+    v_changes :=
+      v_changes ||
+      jsonb_build_object('id', v_customs_id, 'changes', jsonb '[]' || data.attribute_change2jsonb('system_customs_checking', jsonb 'true'));
+  end if;
 
   perform data.process_diffs_and_notify(data.change_objects(v_changes));
 
@@ -12321,6 +12428,106 @@ begin
       in_params);
 
   perform api_utils.create_ok_notification(in_client_id, in_request_id);
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_customs_package_delete(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_customs_package_delete(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_package_code text := json.get_string(in_params, 'package_code');
+  v_from_list text := json.get_string(in_params, 'from_list');
+  v_package_id integer := data.get_object_id(v_package_code);
+  v_package_status text := json.get_string(data.get_attribute_value_for_update(v_package_id, 'package_status'));
+  v_customs_id integer := data.get_object_id(v_from_list);
+  v_content text[] := json.get_string_array(data.get_raw_attribute_value_for_update(v_customs_id, 'content', null));
+  v_changes jsonb := jsonb '[]';
+begin
+  v_content := array_remove(v_content, v_package_code);
+  v_changes :=
+    v_changes ||
+    jsonb_build_object('id', v_package_id, 'changes', jsonb '[]' || data.attribute_change2jsonb('is_visible', jsonb 'false', 'master') ||
+                                                                    data.attribute_change2jsonb('is_visible', jsonb 'false', 'customs_officer') ||
+                                                                    data.attribute_change2jsonb('package_status', jsonb '"frozen"')) ||
+    jsonb_build_object('id', v_customs_id, 'changes', jsonb '[]' || data.attribute_change2jsonb('content', to_jsonb(v_content)));
+  perform data.process_diffs_and_notify(data.change_objects(v_changes));
+
+  perform api_utils.create_ok_notification(in_client_id, in_request_id);
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_customs_package_receive(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_customs_package_receive(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_package_code text := json.get_string(in_params, 'package_code');
+  v_list_code text := json.get_string_opt(in_params, 'from_list', null);
+  v_receiver_code text := json.get_string(in_user_params, 'receiver_code');
+  v_new_status text := 'received';
+  v_package_id integer := data.get_object_id(v_package_code);
+  v_package_status text := json.get_string(data.get_attribute_value_for_update(v_package_id, 'package_status'));
+  v_package_receiver_status integer := json.get_integer(data.get_attribute_value(v_package_id, 'package_receiver_status'));
+  v_package_receiver_code text := json.get_string(data.get_attribute_value(v_package_id, 'system_package_receiver_code'));
+  v_package_box_code text := json.get_string_opt(data.get_attribute_value(v_package_id, 'system_package_box_code'), null);
+  v_package_title text := json.get_string(data.get_attribute_value(v_package_id, 'title'));
+
+  v_message_sent boolean := false;
+  v_customs_list_old text;
+  v_customs_list_new text;
+  v_customs_id integer;
+  v_customs_new_id integer;
+  v_content text[];
+  v_change jsonb[] := array[]::jsonb[];
+begin
+  if v_package_status <> 'checked' then
+    perform api_utils.create_show_message_action_notification(
+      in_client_id,
+      in_request_id,
+      'Ошибка',
+      'Нельзя выдать груз, который не в статусе Проверен'); 
+    return;
+  end if;
+  if v_package_receiver_code <> upper(v_receiver_code) then
+    perform api_utils.create_show_message_action_notification(
+      in_client_id,
+      in_request_id,
+      'Ошибка',
+      'Неверный пароль получателя груза'); 
+    return;
+  end if;
+
+  v_customs_list_old := 'checked';
+  v_customs_list_new := 'received';
+
+  v_customs_id := data.get_object_id('customs_' || v_customs_list_old);
+  v_customs_new_id := data.get_object_id('customs_' || v_customs_list_new);
+
+  perform pp_utils.list_remove_and_notify(v_customs_id, v_package_code, null);
+
+  v_change := array_append(v_change, data.attribute_change2jsonb('package_status', to_jsonb(v_new_status)));
+  v_change := array_append(v_change, data.attribute_change2jsonb('package_box_code', to_jsonb(v_package_box_code)));
+  perform data.change_object_and_notify(v_package_id, 
+                                          to_jsonb(v_change),
+                                          null);
+
+  perform pp_utils.list_prepend_and_notify(v_customs_new_id, v_package_code, null);
+
+  perform api_utils.create_show_message_action_notification(
+      in_client_id,
+      in_request_id,
+      'Выдача подтверждена',
+      'Груз ' || v_package_title || ' находится в коробке ' || coalesce(v_package_box_code, '-') || '. Отдайте коробку получателю.'); 
 end;
 $$
 language plpgsql;
@@ -12340,6 +12547,9 @@ declare
   v_package_id integer := data.get_object_id(v_package_code);
   v_package_status text := json.get_string(data.get_attribute_value_for_update(v_package_id, 'package_status'));
   v_package_receiver_status integer := json.get_integer(data.get_attribute_value(v_package_id, 'package_receiver_status'));
+  v_package_to text := json.get_string_opt(data.get_attribute_value(v_package_id, 'system_package_to'), null);
+  v_package_title text := json.get_string(data.get_attribute_value(v_package_id, 'title'));
+  v_package_receiver_code text := json.get_string(data.get_attribute_value(v_package_id, 'system_package_receiver_code'));
   v_package_arrival_time text := json.get_string(data.get_attribute_value(v_package_id, 'package_arrival_time'));
   v_interval text;
 
@@ -12403,27 +12613,40 @@ begin
       end if;
     end if;
     v_change := array_append(v_change, data.attribute_change2jsonb('package_status', to_jsonb(v_new_status)));
-    if not v_is_job and (v_list_code is null or v_list_code <> 'customs_' || v_customs_list_old) then
-        v_message_sent := data.change_current_object(in_client_id, 
-                                                     in_request_id,
-                                                     v_package_id, 
-                                                     to_jsonb(v_change));
-    else
-      perform data.change_object_and_notify(v_package_id, 
-                                            to_jsonb(v_change),
-                                            null);
-    end if;
+    perform data.change_object_and_notify(v_package_id, 
+                                          to_jsonb(v_change),
+                                          null);
     if v_customs_id <> v_customs_new_id then
       perform pp_utils.list_prepend_and_notify(v_customs_new_id, v_package_code, null);
     end if;
     if v_new_status = 'checked' then
-      null;  -- TODO - уведомление для получателя
+      if v_package_to is not null then
+        perform pp_utils.add_notification(v_package_to, 'Сотрудники таможни завершили проверку вашего груза ' || v_package_title || '. Для получения придите на таможню, назовите номер груза, а затем, когда спросят, пароль для получения: ' || v_package_receiver_code, v_package_to || '_important_chat', true);
+      end if;
+    elsif v_new_status in ('frozen', 'arrested') then
+      perform pallas_project.send_to_master_chat('Груз ' || pp_utils.link(v_package_id) || ' был ' || case v_new_status when 'frozen' then 'задержан' else 'арестован' end, null);
     end if;
   end if;
 
   if not v_message_sent and not v_is_job then
     perform api_utils.create_ok_notification(in_client_id, in_request_id);
   end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_customs_ship_arrival(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_customs_ship_arrival(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+
+begin
+  perform pallas_project.ship_arrival();
+  perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
 language plpgsql;
@@ -12439,12 +12662,12 @@ declare
   v_ships_count integer := json.get_integer(in_user_params, 'ships_count');
   v_package_from text := json.get_string(in_user_params, 'package_from');
   v_package_box text :=  json.get_string(in_user_params, 'package_box');
-  v_package_to text := json.get_string(in_params, 'package_to');
+  v_package_to text := json.get_string_opt(in_params, 'package_to', null);
   v_package_reactions text[] := json.get_string_array(in_params, 'package_reactions');
 
   v_random_reactions text[];
 
-  v_package_receiver_status integer := json.get_integer_opt(data.get_attribute_value(v_package_to, 'system_person_administrative_services_status'), 0);
+  v_package_receiver_status integer;
 
   v_goods jsonb := data.get_param('customs_goods');
   v_goods_array text[];
@@ -12457,6 +12680,15 @@ declare
   v_customs_id integer := data.get_object_id('customs_future');
   v_content text[] := json.get_string_array(data.get_raw_attribute_value_for_update(v_customs_id, 'content', null));
 begin
+  if coalesce(v_package_to, '') = '' then
+    perform api_utils.create_show_message_action_notification(
+      in_client_id,
+      in_request_id,
+      'Отсутствует получатель',
+      'Выберите получателя из списка'); 
+    return;
+  end if;
+  v_package_receiver_status := json.get_integer_opt(data.get_attribute_value(v_package_to, 'system_person_administrative_services_status'), 0);
   select array_agg(x) into v_goods_array from jsonb_object_keys(v_goods) as x;
   v_goods_array_length := array_length(v_goods_array, 1);
   v_package_code := pgcrypto.gen_random_uuid()::text;
@@ -16401,15 +16633,19 @@ as
 $$
 declare
   v_actions_list text := '';
-  v_object_code text := data.get_object_code(in_object_id);
 begin
   assert in_actor_id is not null;
 
-  if pp_utils.is_in_group(in_actor_id, 'master') then
     v_actions_list := v_actions_list || 
-      ', "customs_future_packages": {"code": "act_open_object", "name": "Будущие грузы", "disabled": false, "params": {"object_code": "customs_future_packages"}}';
+      ', "customs_find_by_number": {"code": "customs_find_by_number", "name": "Поиск по коду груза", "disabled": false, "params": {},
+      "user_params": [{"code": "package_number", "description": "Код груза", "type": "string", "restrictions": {"min_length": 3}}]}';
 
-  end if;
+    v_actions_list := v_actions_list || 
+      ', "customs_find_by_status_or_from": {"code": "customs_find_by_status_or_from", "name": "Поиск по месту отправки или статусу получателя", "disabled": false, "params": {},
+      "user_params": [{"code": "package_from", "description": "Введите планету, спутник или астероид, с которого отправлен груз", "type": "string"},
+                      {"code": "package_to_status", "description": "Введите числом статус административного обслуживания получателя груза: -1 - все статусы, 0 - нет статуса, 1 - бронзовый, 2 - серебряный, 3 - золотой", "type": "integer"}]}';
+
+
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;
 $$
@@ -16427,7 +16663,7 @@ declare
   v_object_code text := data.get_object_code(in_list_object_id);
   v_list_code text := data.get_object_code(in_object_id);
   v_package_status text := json.get_string(data.get_attribute_value_for_share(in_list_object_id, 'package_status'));
-  v_system_customs_checking boolean := json.get_boolean_opt(data.get_attribute_value_for_share('customs_new', 'system_customs_checking'), false);
+  v_system_customs_checking boolean := json.get_boolean_opt(data.get_attribute_value_for_share(in_object_id, 'system_customs_checking'), false);
 begin
   assert in_actor_id is not null;
 
@@ -16444,19 +16680,22 @@ begin
       v_list_code);
     v_actions_list := v_actions_list || 
       format(', "customs_package_check_spectrometer": {"code": "customs_package_check", "name": "Cпектрометр", "disabled": %s, 
-      "params": {"package_code": "%s", "check_type": "life"}}',
+      "params": {"package_code": "%s", "from_list": "%s", "check_type": "life"}}',
       case when v_system_customs_checking then 'true' else 'false' end,
-      v_object_code);
+      v_object_code,
+      v_list_code);
     v_actions_list := v_actions_list || 
       format(', "customs_package_check_radiation": {"code": "customs_package_check", "name": "Радиационная проверка", "disabled": %s, 
-      "params": {"package_code": "%s", "check_type": "radiation"}}',
+      "params": {"package_code": "%s", "from_list": "%s", "check_type": "radiation"}}',
       case when v_system_customs_checking then 'true' else 'false' end,
-      v_object_code);
+      v_object_code,
+      v_list_code);
     v_actions_list := v_actions_list || 
       format(', "customs_package_chack_x_ray": {"code": "customs_package_check", "name": "Рентген", "disabled": %s, 
-      "params": {"package_code": "%s", "check_type": "metal"}}',
+      "params": {"package_code": "%s", "from_list": "%s", "check_type": "metal"}}',
       case when v_system_customs_checking then 'true' else 'false' end,
-      v_object_code);
+      v_object_code,
+      v_list_code);
   end if;
   if v_package_status in ('new', 'checking', 'frozen') then
     v_actions_list := v_actions_list || 
@@ -16469,6 +16708,22 @@ begin
     v_actions_list := v_actions_list || 
       format(', "customs_package_set_new": {"code": "customs_package_set_status", "name": "Вернуть на проверку", "disabled": false, "warning": "Если время, отведённое на проверку успело истечь, то посылка стразу станет готовой к выдаче",
       "params": {"package_code": "%s", "from_list": "%s", "status": "new"}}',
+      v_object_code,
+      v_list_code);
+  end if;
+  if v_package_status in ('checked') then
+    v_actions_list := v_actions_list || 
+      format(', "customs_package_receive": {"code": "customs_package_receive", "name": "Выдать груз получателю", "disabled": false,
+      "params": {"package_code": "%s", "from_list": "%s"}, 
+      "user_params": [{"code": "receiver_code", "description": "Спросите у получателя пароль, который пришёл ему в извещении и грузе (извещение сохранилось в его Важных уведомлениях)", "type": "string", "restrictions": {"min_length": 6}}]}',
+      v_object_code,
+      v_list_code);
+  end if;
+
+  if pp_utils.is_in_group(in_actor_id, 'master') then
+    v_actions_list := v_actions_list || 
+      format(', "customs_package_delete": {"code": "customs_package_delete", "name": "Удалить", "disabled": false, "warning": "Груз безвозвратно исчезнет из всех списков",
+      "params": {"package_code": "%s", "from_list": "%s"}}',
       v_object_code,
       v_list_code);
   end if;
@@ -16494,6 +16749,35 @@ begin
   if v_is_master then
     v_actions_list := v_actions_list || ', "customs_create_future_package": {"code": "customs_create_future_package", "name": "Добавить будущую посылку", "disabled": false, '||
                 '"params": {}}';
+    v_actions_list := v_actions_list || ', "customs_ship_arrival": {"code": "customs_ship_arrival", "name": "Прибытие корабля с кучей случайных посылок", "disabled": false, "warning": "Постарайтесь не использовать эту кнопку, если осталось ещё много непроверенных посылок (то есть не чаще чем раз в 2 часа). Чревато тормозами.",'||
+                '"params": {}}';
+  end if;
+
+  return jsonb ('{'||trim(v_actions_list,',')||'}');
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.actgenerator_customs_future_content(integer, integer, integer);
+
+create or replace function pallas_project.actgenerator_customs_future_content(in_object_id integer, in_list_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_actions_list text := '';
+  v_object_code text := data.get_object_code(in_list_object_id);
+  v_list_code text := data.get_object_code(in_object_id);
+begin
+  assert in_actor_id is not null;
+
+  if pp_utils.is_in_group(in_actor_id, 'master') then
+    v_actions_list := v_actions_list || 
+      format(', "customs_package_delete": {"code": "customs_package_delete", "name": "Удалить", "disabled": false, "warning": "Груз безвозвратно исчезнет из всех списков",
+      "params": {"package_code": "%s", "from_list": "%s"}}',
+      v_object_code,
+      v_list_code);
   end if;
 
   return jsonb ('{'||trim(v_actions_list,',')||'}');
@@ -19403,7 +19687,8 @@ begin
   end if;
   perform pp_utils.list_prepend_and_notify(v_claims_all_id, v_claim_code, null);
 
-  --Уведомления 
+--Уведомления 
+  /*
   perform pallas_project.send_to_master_chat('Создан новый иск. Направлен судье.', v_claim_code);
   perform pp_utils.add_notification(v_actor_id, 'Ваш иск "' || v_claim_title || '" направлен на рассмотрение судье.', v_claim_id, true);
 
@@ -19418,7 +19703,8 @@ begin
         perform pp_utils.add_notification(v_person_id, 'Ваша организация "'|| v_organization_name ||'" является ответчиком по иску "' || v_claim_title || '". Иск направлен судье.', v_claim_id, true);
       end loop;
     end if;
-  end if;
+  end if;*/
+
   for v_person_id in (select * from unnest(pallas_project.get_group_members('judge'))) loop
     perform pp_utils.add_notification(v_person_id, 'Вам на рассмотрение передан иск', v_claim_id, true);
   end loop;
@@ -20584,7 +20870,11 @@ begin
         v_packages := array_append(v_packages, v_package_id);
         v_content := array_append(v_content, v_package_code);
         v_content_future := array_remove(v_content_future, v_package_code);
-        perform data.change_object_and_notify(v_package_id, jsonb_build_array(data.attribute_change2jsonb('package_arrival_time', to_jsonb(pp_utils.format_date(clock_timestamp())))));
+        perform data.change_object_and_notify(
+          v_package_id, 
+          jsonb_build_array(
+            data.attribute_change2jsonb('package_arrival_time', to_jsonb(pp_utils.format_date(clock_timestamp()))),
+            data.attribute_change2jsonb('package_ships_before_come', null, v_master_id)));
       elsif v_ships > 1 then
         perform data.change_object_and_notify(v_package_id, jsonb_build_array(data.attribute_change2jsonb('package_ships_before_come', to_jsonb(v_ships - 1), v_master_id)));
       end if;
@@ -21047,8 +21337,8 @@ begin
       'claim_plaintiff', 'aebb6773-8651-4afc-851a-83a79a2bcbec',
       'claim_defendant', 'a11d2240-3dce-4d75-bc52-46e98b07ff27',
       'claim_status', 'processing',
-      'claim_text', 'Сообщаю о том, что 04.03.2340 около 16 часов в коридоре сектора B Сьюзан Сидорова напала на меня Феликса Рыбкина. Ранее она обвиняла меня в некачественно проведённой очистке шахты от радиации, и сейчас выкрикнув несколько выкрикнув тоже обвинение, принялась меня избивать.
-      Я заверял её, что всё сделал все работы как нужно, и просил прекратить меня бить. Но она никак не реагировала на мои слова и продолжала.
+      'claim_text', 'Сообщаю о том, что 04.03.2340 около 16 часов в коридоре сектора B Сьюзан Сидорова напала на меня, Феликса Рыбкина. Ранее она обвиняла меня в некачественно проведённой очистке шахты от радиации, и сейчас выкрикнув то же обвинение, принялась меня избивать.
+      Я заверял её, что сделал все работы как нужно, и просил прекратить меня бить. Но она никак не реагировала на мои слова и продолжала.
       В результате мне были нанесены тяжкие телесные повреждения.',
       'claim_time', pp_utils.format_date((timestamp with time zone '2019-03-08 14:00:00') - '3 days'::interval)), 
     'claims_my');
@@ -21298,8 +21588,7 @@ begin
   ('system_package_reactions', null, 'Список проверок, на которые положительно реагирует', 'system', null, null, false),
   ('package_reactions', null, 'Список проверок, на которые положительно реагирует', 'normal', null, 'pallas_project.vd_package_reactions', true),
   ('package_cheked_reactions', null, 'Список проведённых проверок с результатами', 'normal', null, 'pallas_project.vd_package_checked_reactions', false),
-  ('package_ships_before_come', null, 'Количество кораблей до прибытия груза', 'normal', null, null, true),
-  ('system_package_id', null, 'Идентификатор посылки для проверок', 'system', null, null, false),
+  ('package_ships_before_come', 'Количество кораблей до прибытия груза', 'Количество кораблей до прибытия груза', 'normal', null, null, true),
   ('system_customs_checking', null, 'Признак, что таможня проверяет какой-то груз', 'system', null, null, false);
 
   insert into data.params(code, value, description) values
@@ -21368,6 +21657,7 @@ begin
     {"code": "title", "value": "Таможня"},
     {"code": "is_visible", "value": true, "value_object_code": "master"},
     {"code": "is_visible", "value": true, "value_object_code": "customs_officer"},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_customs"},
     {"code": "content", "value": ["customs_new", "customs_checked", "customs_arrested", "customs_received"]},
     {"code": "content", "value": ["customs_future", "customs_new", "customs_checked", "customs_arrested", "customs_received"], "value_object_code": "master"},
     {"code": "independent_from_actor_list_elements", "value": true},
@@ -21377,7 +21667,7 @@ begin
       "value": {
         "title": "title",
         "subtitle": "subtitle",
-        "groups": []
+        "groups": [{"code": "package_list_group1", "attributes": ["description"], "actions": ["customs_find_by_number", "customs_find_by_status_or_from"]}]
       }
     }
   ]');
@@ -21468,13 +21758,13 @@ begin
   perform data.create_class(
   'customs_package_list',
   jsonb '[
+    {"code": "title", "value": "Таможня"},
     {"code": "is_visible", "value": true, "value_object_code": "master"},
     {"code": "is_visible", "value": true, "value_object_code": "customs_officer"},
     {"code": "content", "value": []},
     {"code": "independent_from_actor_list_elements", "value": true},
-    {"code": "independent_from_object_list_elements", "value": true},
-    {"code": "actions_function", "value": "pallas_project.actgenerator_customs_package_list"},
     {"code": "list_element_function", "value": "pallas_project.lef_do_nothing"},
+    {"code": "list_actions_function", "value": "pallas_project.actgenerator_customs_content"},
     {"code": "temporary_object", "value": true},
     {
       "code": "template",
@@ -21496,6 +21786,7 @@ begin
     {"code": "independent_from_actor_list_elements", "value": true},
     {"code": "independent_from_object_list_elements", "value": true},
     {"code": "actions_function", "value": "pallas_project.actgenerator_customs_future"},
+    {"code": "list_actions_function", "value": "pallas_project.actgenerator_customs_future_content"},
     {"code": "list_element_function", "value": "pallas_project.lef_do_nothing"},
     {
       "code": "template",
@@ -21503,7 +21794,7 @@ begin
         "title": "title",
         "subtitle": "subtitle",
         "groups": [{"code": "package_list_group1", "attributes": ["description"]},
-                   {"code": "package_list_group2", "actions": ["customs_create_future_package"]}]
+                   {"code": "package_list_group2", "actions": ["customs_create_future_package", "customs_ship_arrival"]}]
       }
     }
   ]');
@@ -21527,12 +21818,29 @@ begin
           },
           {
             "code": "package_group2",
-            "attributes": ["package_receiver_code", "package_to", "package_reactions", "package_box_code", "package_cheked_reactions"],
+            "attributes": ["package_receiver_code", "package_to", "package_ships_before_come", "package_reactions", "package_box_code", "package_cheked_reactions"],
             "actions": ["customs_package_check_spectrometer", "customs_package_check_radiation", "customs_package_chack_x_ray"]
           },
           {
             "code": "package_group4",
-            "actions": ["customs_package_set_checked", "customs_package_set_arrested", "customs_package_set_frozen", "customs_package_set_new", "customs_package_receive"]
+            "actions": ["customs_package_set_checked", "customs_package_set_frozen", "customs_package_set_arrested", "customs_package_set_new", "customs_package_receive", "customs_package_delete"]
+          }
+        ]
+      }
+    },
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "package_status",
+        "groups": [
+          {
+            "code": "package_group1",
+            "attributes": ["package_arrival_time", "package_from", "package_what", "package_weight", "package_receiver_status"]
+          },
+          {
+            "code": "package_group2",
+            "attributes": ["package_receiver_code", "package_to", "package_ships_before_come", "package_reactions", "package_box_code", "package_cheked_reactions"]
           }
         ]
       }
@@ -21580,7 +21888,7 @@ begin
     }
   ]');
 
-  -- Объект-класс для временных списков персон для редактирования дебатла
+  -- Объект-класс для временных списков персон
   perform data.create_class(
   'customs_temp_future',
   jsonb '[
@@ -21616,7 +21924,11 @@ begin
   ('customs_package_check','pallas_project.act_customs_package_check'),
   ('customs_package_set_status','pallas_project.act_customs_package_set_status'),
   ('customs_package_receive', 'pallas_project.act_customs_package_receive'),
-  ('customs_temp_future_create', 'pallas_project.act_customs_temp_future_create');
+  ('customs_temp_future_create', 'pallas_project.act_customs_temp_future_create'),
+  ('customs_find_by_number', 'pallas_project.act_customs_find_by_number'),
+  ('customs_find_by_status_or_from', 'pallas_project.act_customs_find_by_status_or_from'),
+  ('customs_ship_arrival', 'pallas_project.act_customs_ship_arrival'),
+  ('customs_package_delete', 'pallas_project.act_customs_package_delete');
 end;
 $$
 language plpgsql;
@@ -23451,7 +23763,7 @@ begin
   ('med_drug_qr_link',null, 'Ссылка для QR-кода', 'normal', 'mini', null, false),
   ('med_drug_status', null, 'Статус наркотика', 'normal', null, 'pallas_project.vd_med_drug_status', false),
   ('med_drug_category', null, 'Тип наркотика', 'normal', null, 'pallas_project.vd_med_drug_category', false),
-  ('med_drug_effect', 'Эффект', 'Эффект наркотипа', 'normal', 'full', 'pallas_project.vd_med_drug_effect', false);
+  ('med_drug_effect', 'Эффект', 'Эффект наркотика', 'normal', 'full', 'pallas_project.vd_med_drug_effect', false);
 
   insert into data.params(code, value, description) values
   ('med_comp_client_ids', jsonb '[1, 2]', 'client_id медицинского компьютера'),
@@ -26092,12 +26404,14 @@ as
 $$
 declare
   v_package_code text := json.get_string(in_params, 'package_code');
+  v_from_list text := json.get_string(in_params, 'from_list');
   v_check_type text := json.get_string(in_params, 'check_type');
   v_package_id integer := data.get_object_id(v_package_code);
 
-  v_custons_new_id integer := data.get_object_id('customs_new');
+  v_customs_id integer := data.get_object_id(v_from_list);
+  v_customs_new_id integer := data.get_object_id('customs_new');
   v_package_status text := json.get_string(data.get_attribute_value_for_update(v_package_id, 'package_status'));
-  v_system_customs_checking boolean := json.get_boolean_opt(data.get_attribute_value_for_update(v_custons_new_id, 'system_customs_checking'), false);
+  v_system_customs_checking boolean := json.get_boolean_opt(data.get_attribute_value_for_update(v_customs_new_id, 'system_customs_checking'), false);
   v_system_package_reactions text[] := json.get_string_array(data.get_attribute_value(v_package_id, 'system_package_reactions'));
   v_package_cheked_reactions jsonb := coalesce(data.get_attribute_value_for_update(v_package_id, 'package_cheked_reactions'), jsonb '{}');
 
@@ -26127,9 +26441,18 @@ begin
     v_changes ||
     jsonb_build_object(
       'id',
-      v_custons_new_id,
+      v_customs_new_id,
       'changes',
       jsonb '[]' || data.attribute_change2jsonb('system_customs_checking', null));
+  if v_customs_new_id <> v_customs_id then
+    v_changes :=
+      v_changes ||
+      jsonb_build_object(
+        'id',
+        v_customs_id,
+        'changes',
+        jsonb '[]' || data.attribute_change2jsonb('system_customs_checking', null));
+  end if;
 
   perform data.process_diffs_and_notify(data.change_objects(v_changes));
 end;
@@ -28128,6 +28451,7 @@ declare
   v_receiver_code text;
   v_customs_id integer := data.get_object_id('customs_new');
   v_content text[] := json.get_string_array(data.get_raw_attribute_value_for_update(v_customs_id, 'content', null));
+  v_person_id integer;
 begin
   select array_agg(x) into v_goods_array from jsonb_object_keys(v_goods) as x;
   v_goods_array_length := array_length(v_goods_array, 1);
@@ -28280,6 +28604,10 @@ begin
       to_jsonb(v_packages3));
 
   perform data.change_object_and_notify(v_customs_id, jsonb_build_array(data.attribute_change2jsonb('content', to_jsonb(v_content))));
+
+  for v_person_id in (select * from unnest(pallas_project.get_group_members('customs_officer'))) loop
+    perform pp_utils.add_notification(v_person_id, 'На таможню прибыла новая партия грузов', 'customs_new');
+  end loop;
 end;
 $$
 language plpgsql;
@@ -29187,7 +29515,7 @@ begin
   for v_record in (select * from jsonb_each_text(in_value)) loop
     case 
     when v_record.key = 'life' then
-      v_text_value := v_text_value || 'запрещённые вещества и формы жизни: ';
+      v_text_value := v_text_value || 'запрещённые вещества или любые формы жизни: ';
     when v_record.key = 'radiation' then
       v_text_value := v_text_value || 'радиация: ';
     when v_record.key = 'metal' then
@@ -29219,7 +29547,7 @@ begin
   for v_t in select json.get_string(jsonb_array_elements(in_value)) loop
     case 
     when v_t = 'life' then
-      v_text_value := v_text_value || 'запрещённые вещества и формы жизни, ';
+      v_text_value := v_text_value || 'запрещённые вещества или любые формы жизни, ';
     when v_t = 'radiation' then
       v_text_value := v_text_value || 'радиация, ';
     when v_t = 'metal' then

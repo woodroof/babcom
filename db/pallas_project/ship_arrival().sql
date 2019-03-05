@@ -28,6 +28,7 @@ declare
   v_receiver_code text;
   v_customs_id integer := data.get_object_id('customs_new');
   v_content text[] := json.get_string_array(data.get_raw_attribute_value_for_update(v_customs_id, 'content', null));
+  v_person_id integer;
 begin
   select array_agg(x) into v_goods_array from jsonb_object_keys(v_goods) as x;
   v_goods_array_length := array_length(v_goods_array, 1);
@@ -180,6 +181,10 @@ begin
       to_jsonb(v_packages3));
 
   perform data.change_object_and_notify(v_customs_id, jsonb_build_array(data.attribute_change2jsonb('content', to_jsonb(v_content))));
+
+  for v_person_id in (select * from unnest(pallas_project.get_group_members('customs_officer'))) loop
+    perform pp_utils.add_notification(v_person_id, 'На таможню прибыла новая партия грузов', 'customs_new');
+  end loop;
 end;
 $$
 language plpgsql;

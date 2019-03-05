@@ -48,7 +48,8 @@ begin
   end if;
   perform pp_utils.list_prepend_and_notify(v_claims_all_id, v_claim_code, null);
 
-  --Уведомления 
+--Уведомления 
+  /*
   perform pallas_project.send_to_master_chat('Создан новый иск. Направлен судье.', v_claim_code);
   perform pp_utils.add_notification(v_actor_id, 'Ваш иск "' || v_claim_title || '" направлен на рассмотрение судье.', v_claim_id, true);
 
@@ -63,7 +64,8 @@ begin
         perform pp_utils.add_notification(v_person_id, 'Ваша организация "'|| v_organization_name ||'" является ответчиком по иску "' || v_claim_title || '". Иск направлен судье.', v_claim_id, true);
       end loop;
     end if;
-  end if;
+  end if;*/
+
   for v_person_id in (select * from unnest(pallas_project.get_group_members('judge'))) loop
     perform pp_utils.add_notification(v_person_id, 'Вам на рассмотрение передан иск', v_claim_id, true);
   end loop;

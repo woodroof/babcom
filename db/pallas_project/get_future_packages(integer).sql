@@ -23,7 +23,11 @@ begin
         v_packages := array_append(v_packages, v_package_id);
         v_content := array_append(v_content, v_package_code);
         v_content_future := array_remove(v_content_future, v_package_code);
-        perform data.change_object_and_notify(v_package_id, jsonb_build_array(data.attribute_change2jsonb('package_arrival_time', to_jsonb(pp_utils.format_date(clock_timestamp())))));
+        perform data.change_object_and_notify(
+          v_package_id, 
+          jsonb_build_array(
+            data.attribute_change2jsonb('package_arrival_time', to_jsonb(pp_utils.format_date(clock_timestamp()))),
+            data.attribute_change2jsonb('package_ships_before_come', null, v_master_id)));
       elsif v_ships > 1 then
         perform data.change_object_and_notify(v_package_id, jsonb_build_array(data.attribute_change2jsonb('package_ships_before_come', to_jsonb(v_ships - 1), v_master_id)));
       end if;

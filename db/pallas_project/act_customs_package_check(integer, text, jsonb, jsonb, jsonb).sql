@@ -7,10 +7,12 @@ as
 $$
 declare
   v_package_code text := json.get_string(in_params, 'package_code');
+  v_from_list text := json.get_string(in_params, 'from_list');
   v_package_id integer := data.get_object_id(v_package_code);
 
-  v_custons_new_id integer := data.get_object_id('customs_new');
-  v_system_customs_checking boolean := json.get_boolean_opt(data.get_attribute_value_for_update(v_custons_new_id, 'system_customs_checking'), false);
+  v_customs_new_id integer := data.get_object_id('customs_new');
+  v_customs_id integer := data.get_object_id(v_from_list);
+  v_system_customs_checking boolean := json.get_boolean_opt(data.get_attribute_value_for_update(v_customs_new_id, 'system_customs_checking'), false);
   v_package_status text := json.get_string(data.get_attribute_value_for_update(v_package_id, 'package_status'));
   v_check_result boolean;
 
@@ -36,7 +38,13 @@ begin
   v_changes :=
     v_changes ||
     jsonb_build_object('id', v_package_id, 'changes', jsonb '[]' || data.attribute_change2jsonb('package_status', '"checking"')) ||
-    jsonb_build_object('id', v_custons_new_id, 'changes', jsonb '[]' || data.attribute_change2jsonb('system_customs_checking', jsonb 'true'));
+    jsonb_build_object('id', v_customs_new_id, 'changes', jsonb '[]' || data.attribute_change2jsonb('system_customs_checking', jsonb 'true'));
+
+  if v_customs_id <> v_customs_new_id then
+    v_changes :=
+      v_changes ||
+      jsonb_build_object('id', v_customs_id, 'changes', jsonb '[]' || data.attribute_change2jsonb('system_customs_checking', jsonb 'true'));
+  end if;
 
   perform data.process_diffs_and_notify(data.change_objects(v_changes));
 

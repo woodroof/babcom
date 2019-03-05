@@ -9,12 +9,12 @@ declare
   v_ships_count integer := json.get_integer(in_user_params, 'ships_count');
   v_package_from text := json.get_string(in_user_params, 'package_from');
   v_package_box text :=  json.get_string(in_user_params, 'package_box');
-  v_package_to text := json.get_string(in_params, 'package_to');
+  v_package_to text := json.get_string_opt(in_params, 'package_to', null);
   v_package_reactions text[] := json.get_string_array(in_params, 'package_reactions');
 
   v_random_reactions text[];
 
-  v_package_receiver_status integer := json.get_integer_opt(data.get_attribute_value(v_package_to, 'system_person_administrative_services_status'), 0);
+  v_package_receiver_status integer;
 
   v_goods jsonb := data.get_param('customs_goods');
   v_goods_array text[];
@@ -27,6 +27,15 @@ declare
   v_customs_id integer := data.get_object_id('customs_future');
   v_content text[] := json.get_string_array(data.get_raw_attribute_value_for_update(v_customs_id, 'content', null));
 begin
+  if coalesce(v_package_to, '') = '' then
+    perform api_utils.create_show_message_action_notification(
+      in_client_id,
+      in_request_id,
+      'Отсутствует получатель',
+      'Выберите получателя из списка'); 
+    return;
+  end if;
+  v_package_receiver_status := json.get_integer_opt(data.get_attribute_value(v_package_to, 'system_person_administrative_services_status'), 0);
   select array_agg(x) into v_goods_array from jsonb_object_keys(v_goods) as x;
   v_goods_array_length := array_length(v_goods_array, 1);
   v_package_code := pgcrypto.gen_random_uuid()::text;

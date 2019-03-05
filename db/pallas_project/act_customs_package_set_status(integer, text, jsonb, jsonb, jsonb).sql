@@ -13,6 +13,9 @@ declare
   v_package_id integer := data.get_object_id(v_package_code);
   v_package_status text := json.get_string(data.get_attribute_value_for_update(v_package_id, 'package_status'));
   v_package_receiver_status integer := json.get_integer(data.get_attribute_value(v_package_id, 'package_receiver_status'));
+  v_package_to text := json.get_string_opt(data.get_attribute_value(v_package_id, 'system_package_to'), null);
+  v_package_title text := json.get_string(data.get_attribute_value(v_package_id, 'title'));
+  v_package_receiver_code text := json.get_string(data.get_attribute_value(v_package_id, 'system_package_receiver_code'));
   v_package_arrival_time text := json.get_string(data.get_attribute_value(v_package_id, 'package_arrival_time'));
   v_interval text;
 
@@ -76,21 +79,18 @@ begin
       end if;
     end if;
     v_change := array_append(v_change, data.attribute_change2jsonb('package_status', to_jsonb(v_new_status)));
-    if not v_is_job and (v_list_code is null or v_list_code <> 'customs_' || v_customs_list_old) then
-        v_message_sent := data.change_current_object(in_client_id, 
-                                                     in_request_id,
-                                                     v_package_id, 
-                                                     to_jsonb(v_change));
-    else
-      perform data.change_object_and_notify(v_package_id, 
-                                            to_jsonb(v_change),
-                                            null);
-    end if;
+    perform data.change_object_and_notify(v_package_id, 
+                                          to_jsonb(v_change),
+                                          null);
     if v_customs_id <> v_customs_new_id then
       perform pp_utils.list_prepend_and_notify(v_customs_new_id, v_package_code, null);
     end if;
     if v_new_status = 'checked' then
-      null;  -- TODO - уведомление для получателя
+      if v_package_to is not null then
+        perform pp_utils.add_notification(v_package_to, 'Сотрудники таможни завершили проверку вашего груза ' || v_package_title || '. Для получения придите на таможню, назовите номер груза, а затем, когда спросят, пароль для получения: ' || v_package_receiver_code, v_package_to || '_important_chat', true);
+      end if;
+    elsif v_new_status in ('frozen', 'arrested') then
+      perform pallas_project.send_to_master_chat('Груз ' || pp_utils.link(v_package_id) || ' был ' || case v_new_status when 'frozen' then 'задержан' else 'арестован' end, null);
     end if;
   end if;
 

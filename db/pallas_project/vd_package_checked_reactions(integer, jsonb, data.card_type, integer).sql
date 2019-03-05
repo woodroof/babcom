@@ -12,7 +12,7 @@ begin
   for v_record in (select * from jsonb_each_text(in_value)) loop
     case 
     when v_record.key = 'life' then
-      v_text_value := v_text_value || 'запрещённые вещества и формы жизни: ';
+      v_text_value := v_text_value || 'запрещённые вещества или любые формы жизни: ';
     when v_record.key = 'radiation' then
       v_text_value := v_text_value || 'радиация: ';
     when v_record.key = 'metal' then

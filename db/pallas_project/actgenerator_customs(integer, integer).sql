@@ -7,15 +7,19 @@ as
 $$
 declare
   v_actions_list text := '';
-  v_object_code text := data.get_object_code(in_object_id);
 begin
   assert in_actor_id is not null;
 
-  if pp_utils.is_in_group(in_actor_id, 'master') then
     v_actions_list := v_actions_list || 
-      ', "customs_future_packages": {"code": "act_open_object", "name": "Будущие грузы", "disabled": false, "params": {"object_code": "customs_future_packages"}}';
+      ', "customs_find_by_number": {"code": "customs_find_by_number", "name": "Поиск по коду груза", "disabled": false, "params": {},
+      "user_params": [{"code": "package_number", "description": "Код груза", "type": "string", "restrictions": {"min_length": 3}}]}';
 
-  end if;
+    v_actions_list := v_actions_list || 
+      ', "customs_find_by_status_or_from": {"code": "customs_find_by_status_or_from", "name": "Поиск по месту отправки или статусу получателя", "disabled": false, "params": {},
+      "user_params": [{"code": "package_from", "description": "Введите планету, спутник или астероид, с которого отправлен груз", "type": "string"},
+                      {"code": "package_to_status", "description": "Введите числом статус административного обслуживания получателя груза: -1 - все статусы, 0 - нет статуса, 1 - бронзовый, 2 - серебряный, 3 - золотой", "type": "integer"}]}';
+
+
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;
 $$

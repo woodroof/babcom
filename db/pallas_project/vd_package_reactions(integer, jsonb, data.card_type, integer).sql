@@ -12,7 +12,7 @@ begin
   for v_t in select json.get_string(jsonb_array_elements(in_value)) loop
     case 
     when v_t = 'life' then
-      v_text_value := v_text_value || 'запрещённые вещества и формы жизни, ';
+      v_text_value := v_text_value || 'запрещённые вещества или любые формы жизни, ';
     when v_t = 'radiation' then
       v_text_value := v_text_value || 'радиация, ';
     when v_t = 'metal' then

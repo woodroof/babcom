@@ -20,7 +20,7 @@ begin
   ('med_drug_qr_link',null, 'Ссылка для QR-кода', 'normal', 'mini', null, false),
   ('med_drug_status', null, 'Статус наркотика', 'normal', null, 'pallas_project.vd_med_drug_status', false),
   ('med_drug_category', null, 'Тип наркотика', 'normal', null, 'pallas_project.vd_med_drug_category', false),
-  ('med_drug_effect', 'Эффект', 'Эффект наркотипа', 'normal', 'full', 'pallas_project.vd_med_drug_effect', false);
+  ('med_drug_effect', 'Эффект', 'Эффект наркотика', 'normal', 'full', 'pallas_project.vd_med_drug_effect', false);
 
   insert into data.params(code, value, description) values
   ('med_comp_client_ids', jsonb '[1, 2]', 'client_id медицинского компьютера'),
