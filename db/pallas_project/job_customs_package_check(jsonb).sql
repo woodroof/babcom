@@ -19,10 +19,23 @@ declare
   v_package_cheked_reactions jsonb := coalesce(data.get_attribute_value_for_update(v_package_id, 'package_cheked_reactions'), jsonb '{}');
 
   v_check_result boolean;
+  v_object_changes jsonb := jsonb '[]';
   v_changes jsonb := jsonb '[]';
 begin
   if v_package_status = 'checking' then
-    if array_position(v_system_package_reactions, v_check_type) is not null then
+    if v_check_type = 'life' and data.get_raw_attribute_value(v_package_id, 'package_what') = jsonb '"кот Шрёдингера"' then
+      if random.random_integer(0, 1) = 0 then
+        v_object_changes := v_object_changes || data.attribute_change2jsonb('package_what', jsonb '"мёртвый кот"');
+        v_check_result := false;
+      else
+        v_object_changes :=
+          v_object_changes ||
+          data.attribute_change2jsonb('package_what', jsonb '"кот"') ||
+          data.attribute_change2jsonb('system_package_reactions', jsonb '["life"]') ||
+          data.attribute_change2jsonb('package_reactions', jsonb '["life"]', 'master');
+        v_check_result := true;
+      end if;
+    elsif array_position(v_system_package_reactions, v_check_type) is not null then
       v_check_result := true;
     else
       v_check_result := false;
@@ -35,7 +48,7 @@ begin
         'id',
         v_package_id,
         'changes',
-        jsonb '[]' ||
+        v_object_changes ||
         data.attribute_change2jsonb('package_cheked_reactions', v_package_cheked_reactions) ||
         data.attribute_change2jsonb('package_status', '"new"'));
   end if;

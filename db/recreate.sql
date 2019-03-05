@@ -21602,62 +21602,62 @@ begin
 
   insert into data.params(code, value, description) values
   ('customs_goods', 
-  jsonb_build_object(
-    'кефир', jsonb '["life"]',
-    'мяч', jsonb '[]',
-    'одежда синтетическая', jsonb '[]',
-    'лабораторные мыши', jsonb '["life"]',
-    'кабель электрический', jsonb '["metal"]',
-    'набор мебели IKEA', jsonb '["metal"]',
-    'кофеварка', jsonb '["metal"]',
-    'аптечка "Здоровый астер"', jsonb '["life", "metal"]',
-    'лампы осветительные', jsonb '["metal"]',
-    'коммуникатор NOD300', jsonb '["metal"]',
-    'шляпа', jsonb '[]',
-    'кресло офисное', jsonb '["metal"]',
-    'горшок цветочный', jsonb '[]',
-    'косметика', jsonb '[]',
-    'бижутерия', jsonb '["metal"]',
-    'подушки', jsonb '[]',
-    'сухари', jsonb '[]',
-    'консервированное мясо', jsonb '[]',
-    'соевый соус', jsonb '[]',
-    'клубничный джем', jsonb '[]',
-    'вата', jsonb '[]',
-    'молоко сухое', jsonb '[]',
-    'кофе', jsonb '[]',
-    'чай', jsonb '[]',
-    'сахар', jsonb '[]',
-    'соль', jsonb '[]',
-    'посуда', jsonb '[]',
-    'датчики освещения', jsonb '["metal"]',
-    'перья птичьи', jsonb '[]',
-    'уксус', jsonb '[]',
-    'картина', jsonb '[]',
-    'модель корабля', jsonb '[]',
-    'тапочки', jsonb '[]',
-    'туфли', jsonb '[]',
-    'перчатки', jsonb '[]',
-    'гуталин', jsonb '[]',
-    'крекеры', jsonb '[]',
-    'клетка', jsonb '["metal"]',
-    'галстук', jsonb '[]',
-    'рюкзак', jsonb '["metal"]',
-    'мыло', jsonb '[]',
-    'карамель', jsonb '[]',
-    'краска', jsonb '[]',
-    'кот', jsonb '["live"]',
-    'гантели', jsonb '["metal"]',
-    'растение в горшке', jsonb '["life"]',
-    'переключатель', jsonb '[]',
-    'крем для рук', jsonb '[]',
-    'шнурки', jsonb '[]',
-    'трубы', jsonb '[]'
-    ), 'Товары для таможни'),
+  jsonb '{
+    "кефир": ["life"],
+    "мяч": [],
+    "одежда синтетическая": [],
+    "лабораторные мыши": ["life"],
+    "кабель электрический": ["metal"],
+    "набор мебели IKEA": ["metal"],
+    "кофеварка": ["metal"],
+    "аптечка \"Здоровый астер\"": ["life", "metal"],
+    "лампы осветительные": ["metal"],
+    "коммуникатор NOD300": ["metal"],
+    "шляпа": [],
+    "кресло офисное": ["metal"],
+    "горшок цветочный": [],
+    "косметика": [],
+    "бижутерия": ["metal"],
+    "подушки": [],
+    "сухари": [],
+    "консервированное мясо": [],
+    "соевый соус": [],
+    "клубничный джем": [],
+    "вата": [],
+    "молоко сухое": [],
+    "кофе": [],
+    "чай": [],
+    "сахар": [],
+    "соль": [],
+    "посуда": [],
+    "датчики освещения": ["metal"],
+    "перья птичьи": [],
+    "уксус": [],
+    "картина": [],
+    "модель корабля": [],
+    "тапочки": [],
+    "туфли": [],
+    "перчатки": [],
+    "гуталин": [],
+    "крекеры": [],
+    "клетка": ["metal"],
+    "галстук": [],
+    "рюкзак": ["metal"],
+    "мыло": [],
+    "карамель": [],
+    "краска": [],
+    "кот": ["live"],
+    "кот Шрёдингера": [],
+    "гантели": ["metal"],
+    "растение в горшке": ["life"],
+    "переключатель": [],
+    "крем для рук": [],
+    "шнурки": [],
+    "трубы": []
+  }', 'Товары для таможни'),
   ('customs_from', to_jsonb(string_to_array('Церера Паллада Юнона Веста Флора Ида Матильда Эрос Гаспра Икарус Географ Аполлон ' ||
   'Хирон Тоутатис Касталия Земля Луна Марс Фобос Деймос Ио Европа Ганимед Каллисто Сатурн Мимас Энцелад Тефия Диона Рея Титан '||
   'Елена Япет Уран Миранда Ариэль Умбриэль Титания Оберон Нептун Тритон Протей Нереид Наяда Таласса Деспина Ларисса Галатея', ' ')), 'Варианты откуда товар');
-
 
   -- Объект - страница для таможни
   perform data.create_object(
@@ -21761,7 +21761,6 @@ begin
     }
   ]');
 
-
   -- Списки посылок
   -- Класс
   perform data.create_class(
@@ -21855,7 +21854,6 @@ begin
       }
     }
   ]');
-
 
   perform data.create_object(
   'check_life',
@@ -26568,10 +26566,23 @@ declare
   v_package_cheked_reactions jsonb := coalesce(data.get_attribute_value_for_update(v_package_id, 'package_cheked_reactions'), jsonb '{}');
 
   v_check_result boolean;
+  v_object_changes jsonb := jsonb '[]';
   v_changes jsonb := jsonb '[]';
 begin
   if v_package_status = 'checking' then
-    if array_position(v_system_package_reactions, v_check_type) is not null then
+    if v_check_type = 'life' and data.get_raw_attribute_value(v_package_id, 'package_what') = jsonb '"кот Шрёдингера"' then
+      if random.random_integer(0, 1) = 0 then
+        v_object_changes := v_object_changes || data.attribute_change2jsonb('package_what', jsonb '"мёртвый кот"');
+        v_check_result := false;
+      else
+        v_object_changes :=
+          v_object_changes ||
+          data.attribute_change2jsonb('package_what', jsonb '"кот"') ||
+          data.attribute_change2jsonb('system_package_reactions', jsonb '["life"]') ||
+          data.attribute_change2jsonb('package_reactions', jsonb '["life"]', 'master');
+        v_check_result := true;
+      end if;
+    elsif array_position(v_system_package_reactions, v_check_type) is not null then
       v_check_result := true;
     else
       v_check_result := false;
@@ -26584,7 +26595,7 @@ begin
         'id',
         v_package_id,
         'changes',
-        jsonb '[]' ||
+        v_object_changes ||
         data.attribute_change2jsonb('package_cheked_reactions', v_package_cheked_reactions) ||
         data.attribute_change2jsonb('package_status', '"new"'));
   end if;
