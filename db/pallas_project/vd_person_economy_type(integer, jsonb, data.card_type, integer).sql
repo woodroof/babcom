@@ -14,6 +14,8 @@ begin
     return 'Астеры — инвестиционный и обнуляемый текущий счета';
   elsif in_value = jsonb '"fixed"' then
     return 'Фиксированные статусы — нет счетов, нет распределения токенов';
+  elsif in_value = jsonb '"fixed_with_money"' then
+    return 'Фиксированные статусы, есть счёт — нет распределения токенов';
   end if;
 
   assert false;

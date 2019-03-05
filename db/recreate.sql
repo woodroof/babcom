@@ -16626,14 +16626,14 @@ begin
                 '"params": {"debatle_code": "%s", "voted_person": "instigator"}}',
                 json.get_string_opt(data.get_attribute_value(v_person1_id, 'title'), ''),
                 case when v_person1_my_vote > 0 then 'true' else 'false' end,
-                case when v_person1_my_vote + v_person2_my_vote = 0 then '"warning": "Участие в голосовании стоит ' || v_debatle_price_text || '. Изменение голоса бесплатно.",' else '' end,
+                case when v_person1_my_vote + v_person2_my_vote = 0 and v_economy_type not in ('fixed', 'fixed_with_money') then '"warning": "Участие в голосовании стоит ' || v_debatle_price_text || '. Изменение голоса бесплатно.",' else '' end,
                 v_debatle_code);
      v_actions_list := v_actions_list || 
         format(', "debatle_vote_person2": {"code": "debatle_vote", "name": "Голосовать за %s", "disabled": %s, %s'||
                 '"params": {"debatle_code": "%s", "voted_person": "opponent"}}',
                 json.get_string_opt(data.get_attribute_value(v_person2_id, 'title'), ''),
                 case when v_person2_my_vote > 0 then 'true' else 'false' end,
-                case when v_person1_my_vote + v_person2_my_vote = 0 then '"warning": "Участие в голосовании стоит ' || v_debatle_price_text || '. Изменение голоса бесплатно.",' else '' end,
+                case when v_person1_my_vote + v_person2_my_vote = 0 and v_economy_type not in ('fixed', 'fixed_with_money') then '"warning": "Участие в голосовании стоит ' || v_debatle_price_text || '. Изменение голоса бесплатно.",' else '' end,
                 v_debatle_code);
   end if;
 
@@ -17638,7 +17638,7 @@ begin
             }',
             v_original_person_code)::jsonb;
 
-      if v_economy_type != 'fixed' then
+      if v_economy_type not in ('fixed', 'fixed_with_money') then
         v_actions :=
           v_actions ||
           format(
@@ -18417,9 +18417,6 @@ declare
 begin
   if v_master then
     if v_economy_type is not null then
-      v_district_code := json.get_string(data.get_attribute_value_for_share(in_object_id, 'person_district'));
-      v_opa_rating := json.get_integer(data.get_attribute_value_for_share(in_object_id, 'person_opa_rating'));
-
       v_actions :=
         v_actions ||
         format('{
@@ -18430,58 +18427,76 @@ begin
             "params": {
               "object_code": "%s_statuses"
             }
-          },
-          "change_opa_rating": {
-            "code": "change_opa_rating",
-            "name": "Изменить рейтинг в СВП",
-            "disabled": false,
-            "params": "%s",
-            "user_params": [
-              {
-                "code": "opa_rating_diff",
-                "description": "Значение изменения рейтинга (сейчас %s)",
-                "type": "integer",
-                "restrictions": {"min_value": %s},
-                "default_value": 1
-              },
-              {
-                "code": "comment",
-                "description": "Причина изменения",
-                "type": "string",
-                "restrictions": {"min_length": 1, "max_length": 1000, "multiline": true}
-              }
-            ]
-          },
-          "change_district": {
-            "code": "change_district",
-            "name": "Изменить сектор проживания",
-            "disabled": false,
-            "params": "%s",
-            "user_params": [
-              {
-                "code": "district_letter",
-                "description": "Буква нового сектора",
-                "type": "string",
-                "restrictions": {"min_length": 1, "max_length": 1},
-                "default_value": "%s"
-              },
-              {
-                "code": "comment",
-                "description": "Причина изменения",
-                "type": "string",
-                "restrictions": {"min_length": 1, "max_length": 1000, "multiline": true}
-              }
-            ]
           }
         }',
-        v_object_code,
-        v_object_code,
-        v_opa_rating,
-        -v_opa_rating + 1,
-        v_object_code,
-        substring(v_district_code from length(v_district_code)))::jsonb;
+        v_object_code)::jsonb;
 
-      if v_economy_type != jsonb '"fixed"' then
+      v_district_code := json.get_string_opt(data.get_attribute_value_for_share(in_object_id, 'person_district'), null);
+
+      if v_district_code is not null then
+        v_actions :=
+          v_actions ||
+          format('{
+            "change_district": {
+              "code": "change_district",
+              "name": "Изменить сектор проживания",
+              "disabled": false,
+              "params": "%s",
+              "user_params": [
+                {
+                  "code": "district_letter",
+                  "description": "Буква нового сектора",
+                  "type": "string",
+                  "restrictions": {"min_length": 1, "max_length": 1},
+                  "default_value": "%s"
+                },
+                {
+                  "code": "comment",
+                  "description": "Причина изменения",
+                  "type": "string",
+                  "restrictions": {"min_length": 1, "max_length": 1000, "multiline": true}
+                }
+              ]
+            }
+          }',
+          v_object_code,
+          substring(v_district_code from length(v_district_code)))::jsonb;
+      end if;
+
+      v_opa_rating := json.get_integer_opt(data.get_attribute_value_for_share(in_object_id, 'person_opa_rating'), null);
+
+      if v_opa_rating is not null then
+        v_actions :=
+          v_actions ||
+          format('{
+            "change_opa_rating": {
+              "code": "change_opa_rating",
+              "name": "Изменить рейтинг в СВП",
+              "disabled": false,
+              "params": "%s",
+              "user_params": [
+                {
+                  "code": "opa_rating_diff",
+                  "description": "Значение изменения рейтинга (сейчас %s)",
+                  "type": "integer",
+                  "restrictions": {"min_value": %s},
+                  "default_value": 1
+                },
+                {
+                  "code": "comment",
+                  "description": "Причина изменения",
+                  "type": "string",
+                  "restrictions": {"min_length": 1, "max_length": 1000, "multiline": true}
+                }
+              ]
+            }
+          }',
+          v_object_code,
+          v_opa_rating,
+          -v_opa_rating + 1)::jsonb;
+      end if;
+
+      if v_economy_type not in (jsonb '"fixed"', jsonb '"fixed_with_money"') then
         v_actions :=
           v_actions ||
           format('{
@@ -19728,7 +19743,7 @@ begin
           json.get_integer(data.get_attribute_value(v_person_id, 'system_person_administrative_services_status')))::jsonb,
         'administrative_services_status_page');
 
-      if v_economy_type != jsonb '"fixed"' then
+      if v_economy_type not in (jsonb '"fixed"', jsonb '"fixed_with_money"') then
         -- Создадим страницу для покупки статусов
         v_attributes :=
           format(
@@ -26094,7 +26109,7 @@ begin
           data.attribute_change2jsonb(v_person_coin_attr_id, to_jsonb(v_system_person_coin), v_person_id);
       end if;
 
-      if v_economy_type in ('un', 'fixed') then
+      if v_economy_type in ('un', 'fixed', 'fixed_with_money') then
         v_notification_id :=
           data.create_object(
             null,
@@ -28886,6 +28901,8 @@ begin
     return 'Астеры — инвестиционный и обнуляемый текущий счета';
   elsif in_value = jsonb '"fixed"' then
     return 'Фиксированные статусы — нет счетов, нет распределения токенов';
+  elsif in_value = jsonb '"fixed_with_money"' then
+    return 'Фиксированные статусы, есть счёт — нет распределения токенов';
   end if;
 
   assert false;

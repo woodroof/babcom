@@ -364,7 +364,7 @@ begin
           data.attribute_change2jsonb(v_person_coin_attr_id, to_jsonb(v_system_person_coin), v_person_id);
       end if;
 
-      if v_economy_type in ('un', 'fixed') then
+      if v_economy_type in ('un', 'fixed', 'fixed_with_money') then
         v_notification_id :=
           data.create_object(
             null,

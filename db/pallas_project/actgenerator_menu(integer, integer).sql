@@ -67,7 +67,7 @@ begin
             }',
             v_original_person_code)::jsonb;
 
-      if v_economy_type != 'fixed' then
+      if v_economy_type not in ('fixed', 'fixed_with_money') then
         v_actions :=
           v_actions ||
           format(

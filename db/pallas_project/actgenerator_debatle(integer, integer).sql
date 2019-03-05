@@ -122,14 +122,14 @@ begin
                 '"params": {"debatle_code": "%s", "voted_person": "instigator"}}',
                 json.get_string_opt(data.get_attribute_value(v_person1_id, 'title'), ''),
                 case when v_person1_my_vote > 0 then 'true' else 'false' end,
-                case when v_person1_my_vote + v_person2_my_vote = 0 then '"warning": "Участие в голосовании стоит ' || v_debatle_price_text || '. Изменение голоса бесплатно.",' else '' end,
+                case when v_person1_my_vote + v_person2_my_vote = 0 and v_economy_type not in ('fixed', 'fixed_with_money') then '"warning": "Участие в голосовании стоит ' || v_debatle_price_text || '. Изменение голоса бесплатно.",' else '' end,
                 v_debatle_code);
      v_actions_list := v_actions_list || 
         format(', "debatle_vote_person2": {"code": "debatle_vote", "name": "Голосовать за %s", "disabled": %s, %s'||
                 '"params": {"debatle_code": "%s", "voted_person": "opponent"}}',
                 json.get_string_opt(data.get_attribute_value(v_person2_id, 'title'), ''),
                 case when v_person2_my_vote > 0 then 'true' else 'false' end,
-                case when v_person1_my_vote + v_person2_my_vote = 0 then '"warning": "Участие в голосовании стоит ' || v_debatle_price_text || '. Изменение голоса бесплатно.",' else '' end,
+                case when v_person1_my_vote + v_person2_my_vote = 0 and v_economy_type not in ('fixed', 'fixed_with_money') then '"warning": "Участие в голосовании стоит ' || v_debatle_price_text || '. Изменение голоса бесплатно.",' else '' end,
                 v_debatle_code);
   end if;
 

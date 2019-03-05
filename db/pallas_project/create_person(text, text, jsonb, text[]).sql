@@ -155,7 +155,7 @@ begin
           json.get_integer(data.get_attribute_value(v_person_id, 'system_person_administrative_services_status')))::jsonb,
         'administrative_services_status_page');
 
-      if v_economy_type != jsonb '"fixed"' then
+      if v_economy_type not in (jsonb '"fixed"', jsonb '"fixed_with_money"') then
         -- Создадим страницу для покупки статусов
         v_attributes :=
           format(
