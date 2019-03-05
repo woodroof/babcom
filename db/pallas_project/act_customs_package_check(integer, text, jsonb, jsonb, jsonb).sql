@@ -40,7 +40,7 @@ begin
 
   perform data.process_diffs_and_notify(data.change_objects(v_changes));
 
-  perform data.create_job(clock_timestamp() + ('10 seconds')::interval, 
+  perform data.create_job(clock_timestamp() + ('1 minute')::interval, 
       'pallas_project.job_customs_package_check', 
       in_params);
 
