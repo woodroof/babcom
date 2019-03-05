@@ -196,8 +196,7 @@ begin
       null,
       null,
       jsonb '{
-        "title": "Дана Скалли",
-        "person_occupation": "Глава департамента безопасности при комитете по делам колоний ООН"
+        "title": "Тамара Мёрдок"
       }',
       array['all_person']);
   v_master_characters := array_append(v_master_characters, v_char_id);
@@ -211,7 +210,8 @@ begin
       null,
       null,
       jsonb '{
-        "title": "Тамара Мёрдоки"
+        "title": "Дана Скалли",
+        "person_occupation": "Глава департамента безопасности при комитете по делам колоний ООН"
       }',
       array['all_person']);
   v_master_characters := array_append(v_master_characters, v_char_id);

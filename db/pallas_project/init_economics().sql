@@ -89,12 +89,12 @@ begin
   perform data.create_class(
     'life_support_status_page',
     jsonb '[
-      {"code": "title", "value": "Жизнеобеспечение"},
+      {"code": "subtitle", "value": "Жизнеобеспечение"},
       {"code": "is_visible", "value": true, "value_object_code": "master"},
       {
         "code": "mini_card_template",
         "value": {
-          "title": "title",
+          "title": "subtitle",
           "groups": [{"code": "status_group", "attributes": ["life_support_status"]}]
         }
       },
@@ -110,12 +110,12 @@ begin
   perform data.create_class(
     'health_care_status_page',
     jsonb '[
-      {"code": "title", "value": "Медицина"},
+      {"code": "subtitle", "value": "Медицина"},
       {"code": "is_visible", "value": true, "value_object_code": "master"},
       {
         "code": "mini_card_template",
         "value": {
-          "title": "title",
+          "title": "subtitle",
           "groups": [{"code": "status_group", "attributes": ["health_care_status"]}]
         }
       },
@@ -131,12 +131,12 @@ begin
   perform data.create_class(
     'recreation_status_page',
     jsonb '[
-      {"code": "title", "value": "Развлечения"},
+      {"code": "subtitle", "value": "Развлечения"},
       {"code": "is_visible", "value": true, "value_object_code": "master"},
       {
         "code": "mini_card_template",
         "value": {
-          "title": "title",
+          "title": "subtitle",
           "groups": [{"code": "status_group", "attributes": ["recreation_status"]}]
         }
       },
@@ -152,12 +152,12 @@ begin
   perform data.create_class(
     'police_status_page',
     jsonb '[
-      {"code": "title", "value": "Полиция"},
+      {"code": "subtitle", "value": "Полиция"},
       {"code": "is_visible", "value": true, "value_object_code": "master"},
       {
         "code": "mini_card_template",
         "value": {
-          "title": "title",
+          "title": "subtitle",
           "groups": [{"code": "status_group", "attributes": ["police_status"]}]
         }
       },
@@ -173,12 +173,12 @@ begin
   perform data.create_class(
     'administrative_services_status_page',
     jsonb '[
-      {"code": "title", "value": "Административное обслуживание"},
+      {"code": "subtitle", "value": "Административное обслуживание"},
       {"code": "is_visible", "value": true, "value_object_code": "master"},
       {
         "code": "mini_card_template",
         "value": {
-          "title": "title",
+          "title": "subtitle",
           "groups": [{"code": "status_group", "attributes": ["administrative_services_status"]}]
         }
       },

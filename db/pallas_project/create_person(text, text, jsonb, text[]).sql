@@ -31,6 +31,7 @@ begin
       v_cycle integer;
       v_money jsonb;
       v_deposit_money jsonb;
+      v_title text := json.get_string(data.get_attribute_value(v_person_id, 'title'));
     begin
       perform data.set_attribute_value(v_person_id, 'person_economy_type', v_economy_type, v_master_group_id);
 
@@ -98,10 +99,12 @@ begin
         v_person_code || '_life_support_status_page',
         format(
           '[
+            {"code": "title", "value": "%s"},
             {"code": "cycle", "value": %s},
             {"code": "is_visible", "value": true, "value_object_id": %s},
             {"code": "life_support_status", "value": %s}
           ]',
+          v_title,
           v_cycle,
           v_person_id,
           json.get_integer(data.get_attribute_value(v_person_id, 'system_person_life_support_status')))::jsonb,
@@ -110,10 +113,12 @@ begin
         v_person_code || '_health_care_status_page',
         format(
           '[
+            {"code": "title", "value": "%s"},
             {"code": "cycle", "value": %s},
             {"code": "is_visible", "value": true, "value_object_id": %s},
             {"code": "health_care_status", "value": %s}
           ]',
+          v_title,
           v_cycle,
           v_person_id,
           json.get_integer(data.get_attribute_value(v_person_id, 'system_person_health_care_status')))::jsonb,
@@ -122,10 +127,12 @@ begin
         v_person_code || '_recreation_status_page',
         format(
           '[
+            {"code": "title", "value": "%s"},
             {"code": "cycle", "value": %s},
             {"code": "is_visible", "value": true, "value_object_id": %s},
             {"code": "recreation_status", "value": %s}
           ]',
+          v_title,
           v_cycle,
           v_person_id,
           json.get_integer(data.get_attribute_value(v_person_id, 'system_person_recreation_status')))::jsonb,
@@ -134,10 +141,12 @@ begin
         v_person_code || '_police_status_page',
         format(
           '[
+            {"code": "title", "value": "%s"},
             {"code": "cycle", "value": %s},
             {"code": "is_visible", "value": true, "value_object_id": %s},
             {"code": "police_status", "value": %s}
           ]',
+          v_title,
           v_cycle,
           v_person_id,
           json.get_integer(data.get_attribute_value(v_person_id, 'system_person_police_status')))::jsonb,
@@ -146,10 +155,12 @@ begin
         v_person_code || '_administrative_services_status_page',
         format(
           '[
+            {"code": "title", "value": "%s"},
             {"code": "cycle", "value": %s},
             {"code": "is_visible", "value": true, "value_object_id": %s},
             {"code": "administrative_services_status", "value": %s}
           ]',
+          v_title,
           v_cycle,
           v_person_id,
           json.get_integer(data.get_attribute_value(v_person_id, 'system_person_administrative_services_status')))::jsonb,
