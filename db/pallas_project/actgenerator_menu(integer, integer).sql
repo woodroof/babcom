@@ -10,15 +10,8 @@ declare
   v_actions jsonb := '{}';
   v_is_master boolean;
   v_economy_type text;
-  v_original_person_id integer;
-  v_original_person_code text;
-
+  v_original_person_id jsonb := data.get_attribute_value(in_actor_id, 'system_person_original_id');
 begin
-  assert in_actor_id is not null;
-
-  v_original_person_id := json.get_integer_opt(data.get_attribute_value(in_actor_id, 'system_person_original_id'), in_actor_id);
-  v_original_person_code := data.get_object_code(v_original_person_id);
-
   -- Тут порядок не важен, т.к. он задаётся в шаблоне
 
   if v_actor_code = 'anonymous' then
@@ -59,13 +52,16 @@ begin
           v_actor_code,
           v_actor_code,
           v_actor_code)::jsonb;
-      v_actions :=
+
+      if v_original_person_id is null then
+        v_actions :=
           v_actions ||
           format(
             '{
               "med_health": {"code": "act_open_object", "name": "💔 Состояние здоровья 💔", "disabled": false, "params": {"object_code": "%s_med_health"}}
             }',
-            v_original_person_code)::jsonb;
+            v_actor_code)::jsonb;
+      end if;
 
       if v_economy_type not in ('fixed', 'fixed_with_money') then
         v_actions :=

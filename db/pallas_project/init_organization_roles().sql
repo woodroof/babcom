@@ -29,6 +29,7 @@ begin
   perform data.add_object_to_object(data.get_object_id('97539130-5977-41cb-a96d-d160522430f8'), data.get_object_id('org_cavern_head'));
   perform data.add_object_to_object(data.get_object_id('d23550d0-d599-4cf2-9a15-1594fd2df2b2'), data.get_object_id('org_tatu_head'));
   perform data.add_object_to_object(data.get_object_id('74bc1a0f-72d9-4271-b358-0ef464f3cbf9'), data.get_object_id('org_starbucks_auditor'));
+  perform data.add_object_to_object(data.get_object_id('ac1b23d0-ba5f-4042-85d5-880a66254803'), data.get_object_id('org_free_sky_head'));
 
   -- Заполняем "Мои организации"
   perform data.set_attribute_value('b7845724-0c9a-498e-8b2f-a01455c22399_my_organizations', 'content', jsonb '["org_administration"]');
@@ -50,6 +51,7 @@ begin
   perform data.set_attribute_value('97539130-5977-41cb-a96d-d160522430f8_my_organizations', 'content', jsonb '["org_cavern"]');
   perform data.set_attribute_value('d23550d0-d599-4cf2-9a15-1594fd2df2b2_my_organizations', 'content', jsonb '["org_tatu"]');
   perform data.set_attribute_value('74bc1a0f-72d9-4271-b358-0ef464f3cbf9_my_organizations', 'content', jsonb '["org_starbucks"]');
+  perform data.set_attribute_value('ac1b23d0-ba5f-4042-85d5-880a66254803_my_organizations', 'content', jsonb '["org_free_sky"]');
 end;
 $$
 language plpgsql;

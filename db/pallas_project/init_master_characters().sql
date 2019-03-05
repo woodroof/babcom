@@ -211,6 +211,20 @@ begin
       null,
       null,
       jsonb '{
+        "title": "Тамара Мёрдоки"
+      }',
+      array['all_person']);
+  v_master_characters := array_append(v_master_characters, v_char_id);
+  perform pallas_project.create_chats_with_master_character(
+    v_char_id,
+    array[
+      '939b6537-afc1-41f4-963a-21ccfd1c7d28']);
+
+  v_char_id :=
+    pallas_project.create_person(
+      null,
+      null,
+      jsonb '{
         "title": "Эйлин Андервуд",
         "person_occupation": "Менеджер по контролю медицинских организаций экстерриториальных владений ООН"
       }',

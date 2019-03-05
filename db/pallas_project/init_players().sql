@@ -1270,6 +1270,26 @@ begin
     }',
     array['all_person', 'player', 'aster', 'rider']);
 
+  -- Доп. персонаж с паролем
+  perform pallas_project.create_person(
+    '71efd585-080c-431d-a258-b4e222ff7623',
+    '71ef',
+    jsonb '{
+      "title":"Брэндон Мёрфи",
+      "system_money":500,
+      "person_district":"sector_G",
+      "person_occupation":"Разнорабочий",
+      "person_opa_rating":1,
+      "system_person_economy_type":"asters",
+      "system_person_deposit_money":2500,
+      "system_person_police_status":0,
+      "system_person_recreation_status":0,
+      "system_person_health_care_status":0,
+      "system_person_life_support_status":1,
+      "system_person_administrative_services_status":0
+    }',
+    array['all_person', 'player', 'aster', 'cartel']);
+
   -- Группы
   perform data.add_object_to_object('9b956c40-7978-4b0a-993e-8373fe581761', 'judge');
 
@@ -1280,18 +1300,7 @@ begin
   perform data.add_object_to_object('e0c49e51-779f-4f21-bb94-bbbad33bc6e2', 'unofficial_doctor');
   perform data.add_object_to_object('7051afe2-3430-44a7-92e3-ad299aae62e1', 'unofficial_doctor');
 
-  -- todo доп. персонажи
-  -- 0d07f15b-2952-409b-b22e-4042cf70acc6 Одна мёртвая душа, с которой заключён контракт\r\nЭлтон Спирс
-  -- c9e08512-e729-430a-b2fd-df8e7c94a5e7 Чарльз Эшфорд, астер, фикс серый, UN$2000
-  -- 939b6537-afc1-41f4-963a-21ccfd1c7d28 Руперт Мёрдок, гражданин, рейтинг 450, фикс. статусы: золото, серебро, серебро, серебро, золото + Тамара Мёрдок - внешний контакт + Дана Скалли
-  -- 5a764843-9edc-4cfb-8367-80c1d3c54ed9 Карла Хьюз, нет денег, фикс нет + Лицензия пилота
-  -- 523e8589-f948-4c42-a32b-fe39648488f2 Клэр Санхилл, фикс серый, письмо от Эшли Гарсия
-  -- ac1b23d0-ba5f-4042-85d5-880a66254803 Фред Амбер, фикс серый, компания Свободное Небо\r\n+ Письмо доктору Янг\r\n+ Заказ оружия с Марса\r\n+ Письмо Сьюзан Сидоровой\r\n+ Перевод денег Свободного Неба Чистому Астероиду
-  -- 6dc0a14a-a63f-44aa-a677-e5376490f28d Алекс Камаль, 10000, фикс золотой, марсианин\r\n+ документ со списком особых полномочий + связь с советником
-  -- 36cef6aa-aefc-479d-8cef-55534e8cd159 Астер Шенг, блог
-  -- f4a2767d-73f2-4057-9430-f887d4cd05e5 Безухов
-
-  -- С паролем: Брэндон Мёрфи - доп. персонаж\r\n- Астер, фикс. серый, цепочка стимуляторов картеля, любовное письмо к Алисии Сильверстоун, письмо - заказ у Валентины Штерн пробирки с вирусом, заметка в календаре о встрече с человеком с Джорданом Заксом, 500
+  perform pallas_project.init_second_characters();
 end;
 $$
 language plpgsql;

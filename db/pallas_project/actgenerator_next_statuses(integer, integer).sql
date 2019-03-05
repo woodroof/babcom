@@ -72,7 +72,7 @@ begin
                   v_status_name,
                   v_action.action_suffix,
                   v_action.description,
-                  v_price)::jsonb;
+                  (case when v_economy_type = 'un' then v_price::text else pp_utils.format_money(v_price) end))::jsonb;
             else
               v_actions :=
                 v_actions ||
