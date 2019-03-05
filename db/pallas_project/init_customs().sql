@@ -14,18 +14,18 @@ begin
   ('package_what', 'Описание груза', 'Описание посылки', 'normal', null, null, false),
   ('package_receiver_status', 'Статус получателя', 'Статус получателя', 'normal', null, 'pallas_project.vd_status', false),
   ('system_package_to', null, 'Адресат', 'system', null, null, false),
+  ('package_to', 'Адресат', 'Адресат', 'normal', null, 'pallas_project.vd_link', true),
   ('system_package_receiver_code', null, 'Код для получения', 'system', null, null, false),
   ('package_receiver_code', 'Код для получения', 'Код для получения', 'normal', null, null, true),
   ('system_package_box_code', null, 'Код коробки', 'system', null, null, false),
   ('package_box_code', 'Код коробки', 'Код коробки', 'normal', null, null, true),
-  ('package_to', 'Адресат', 'Адресат', 'system', null, null, true),
   ('package_weight', 'Вес, кг.', 'Вес посылки', 'normal', null, null, false),
   ('package_arrival_time', 'Дата прибытия', 'Дата прибытия', 'normal', null, null, false),
   ('package_status', 'Статус', 'Статус посылки', 'normal', null, 'pallas_project.vd_package_status', false),
   ('system_package_reactions', null, 'Список проверок, на которые положительно реагирует', 'system', null, null, false),
   ('package_reactions', null, 'Список проверок, на которые положительно реагирует', 'normal', null, 'pallas_project.vd_package_reactions', true),
   ('package_cheked_reactions', null, 'Список проведённых проверок с результатами', 'normal', null, 'pallas_project.vd_package_checked_reactions', false),
-  ('system_package_ships_before_come', null, 'Количество кораблей до прибытия груза', 'system', null, null, false),
+  ('package_ships_before_come', null, 'Количество кораблей до прибытия груза', 'normal', null, null, true),
   ('system_package_id', null, 'Идентификатор посылки для проверок', 'system', null, null, false),
   ('system_customs_checking', null, 'Признак, что таможня проверяет какой-то груз', 'system', null, null, false);
 
@@ -83,9 +83,9 @@ begin
     'шнурки', jsonb '[]',
     'трубы', jsonb '[]'
     ), 'Товары для таможни'),
-  ('customs_from', to_jsonb(string_to_array('Церера Паллада Юнона Веста Флора Ида Матильда Эрос Гаспра Икарус Географ Аполлон' ||
-  'Хирон Тоутатис Касталия Земля Луна Марс Фобос Деймос Ио Европа Ганимед Каллисто Сатурн Мимас Энцелад Тефия Диона Рея Титан'||
-  'Елена Япет Уран Миранда Ариэль Умбриэль Титания Оберон Нептун Тритон Протей Нереид Наяда Таласса Деспина Ларисса Галатея ', ' ')), 'Варианты откуда товар');
+  ('customs_from', to_jsonb(string_to_array('Церера Паллада Юнона Веста Флора Ида Матильда Эрос Гаспра Икарус Географ Аполлон ' ||
+  'Хирон Тоутатис Касталия Земля Луна Марс Фобос Деймос Ио Европа Ганимед Каллисто Сатурн Мимас Энцелад Тефия Диона Рея Титан '||
+  'Елена Япет Уран Миранда Ариэль Умбриэль Титания Оберон Нептун Тритон Протей Нереид Наяда Таласса Деспина Ларисса Галатея', ' ')), 'Варианты откуда товар');
 
 
   -- Объект - страница для таможни
@@ -267,12 +267,83 @@ begin
   ]');
 
 
+  perform data.create_object(
+  'check_life',
+  jsonb '[
+    {"code": "title", "value": "Запрещённые вещества и формы жизни"},
+    {"code": "is_visible", "value": true},
+    {
+      "code": "mini_card_template",
+      "value": {
+        "title": "title",
+        "groups": []
+      }
+    }
+  ]');
+  perform data.create_object(
+  'check_radiation',
+  jsonb '[
+    {"code": "title", "value": "Радиация"},
+    {"code": "is_visible", "value": true},
+    {
+      "code": "mini_card_template",
+      "value": {
+        "title": "title",
+        "groups": []
+      }
+    }
+  ]');
+  perform data.create_object(
+  'check_metal',
+  jsonb '[
+    {"code": "title", "value": "Металл"},
+    {"code": "is_visible", "value": true},
+    {
+      "code": "mini_card_template",
+      "value": {
+        "title": "title",
+        "groups": []
+      }
+    }
+  ]');
+
+  -- Объект-класс для временных списков персон для редактирования дебатла
+  perform data.create_class(
+  'customs_temp_future',
+  jsonb '[
+    {"code": "title", "value": "Добавить посылку"},
+    {"code": "is_visible", "value": true, "value_object_code": "master"},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_customs_temp_future"},
+    {"code": "list_element_function", "value": "pallas_project.lef_customs_temp_future"},
+    {"code": "temporary_object", "value": true},
+    {"code": "independent_from_actor_list_elements", "value": true},
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [
+          {
+            "code": "group1",
+            "actions": ["customs_future_back"]
+          },
+          {
+            "code": "group2",
+            "attributes": ["package_to", "package_reactions"],
+            "actions": ["customs_temp_future_create"]
+          }
+        ]
+      }
+    }
+  ]');
+
   insert into data.actions(code, function) values
   ('customs_package_list_go_back', 'pallas_project.act_customs_package_list_go_back'),
   ('customs_create_future_package', 'pallas_project.act_customs_create_future_package'),
   ('customs_package_check','pallas_project.act_customs_package_check'),
   ('customs_package_set_status','pallas_project.act_customs_package_set_status'),
-  ('customs_package_receive', 'pallas_project.act_customs_package_receive');
+  ('customs_package_receive', 'pallas_project.act_customs_package_receive'),
+  ('customs_temp_future_create', 'pallas_project.act_customs_temp_future_create');
 end;
 $$
 language plpgsql;

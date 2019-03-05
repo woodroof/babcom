@@ -21,7 +21,7 @@ begin
       v_object_code,
       v_list_code);
     v_actions_list := v_actions_list || 
-      format(', "customs_package_set_frozen": {"code": "customs_package_set_status", "name": "Задержать", "disabled": false, 
+      format(', "customs_package_set_frozen": {"code": "customs_package_set_status", "name": "Задержать", "disabled": false, "warning": "Задержать груз можно только при возникновении подозрений о провозе запрещённых товаров. После задержания нельзя проводить проверки.",
       "params": {"package_code": "%s", "from_list": "%s", "status": "frozen"}}',
       v_object_code,
       v_list_code);
@@ -43,7 +43,7 @@ begin
   end if;
   if v_package_status in ('new', 'checking', 'frozen') then
     v_actions_list := v_actions_list || 
-      format(', "customs_package_set_arrested": {"code": "customs_package_set_status", "name": "Арестовать", "disabled": false, 
+      format(', "customs_package_set_arrested": {"code": "customs_package_set_status", "name": "Арестовать", "disabled": false, "warning": "Арестовать груз можно только при наличии ордера из полиции. Вы уверены, что ордер есть?",
       "params": {"package_code": "%s", "from_list": "%s", "status": "arrested"}}',
       v_object_code,
       v_list_code);
