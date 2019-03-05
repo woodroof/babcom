@@ -23,8 +23,6 @@ declare
   v_subtitle text;
   v_ret_val jsonb;
 begin
-  assert json.get_object(in_attributes) is not null;
-
   for v_group in
     select value
     from jsonb_array_elements(v_groups)
@@ -46,7 +44,7 @@ begin
           v_attribute_value_description := json.get_string_opt(v_attribute, 'value_description', null);
 
           if v_attribute_name is not null or v_attribute_value is not null or v_attribute_value_description is not null then
-            assert not data.is_hidden_attribute(data.get_attribute_id(v_attribute_code));
+            --assert not data.is_hidden_attribute(data.get_attribute_id(v_attribute_code));
 
             v_filtered_attributes := array_append(v_filtered_attributes, v_attribute_code);
           end if;

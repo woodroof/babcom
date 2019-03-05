@@ -36,48 +36,43 @@ begin
 
     v_length := array_length(v_client.client_subscriptions, 1);
     for i in 1..v_length loop
-      v_list_objects := jsonb '[]';
       v_id := v_client.client_subscriptions[i][1];
       v_object_id := v_client.client_subscriptions[i][2];
       v_ignore := json.get_boolean_opt(data.get_attribute_value(v_object_id, in_ignore_list_elements_attr_id), false);
 
       if not v_ignore then
-        for v_list in
-        (
-          select
-            id,
-            object_id,
-            is_visible,
-            index
-          from data.client_subscription_objects
-          where
-            client_subscription_id = v_id and
-            object_id not in (
-              select value
-              from unnest(in_filtered_list_object_ids) a(value))
-        )
-        loop
-          v_list_object :=
+        select
+          jsonb_agg(
             jsonb_build_object(
               'id',
-              v_list.id,
+              id,
               'object_id',
-              v_list.object_id,
+              object_id,
               'is_visible',
-              v_list.is_visible,
+              is_visible,
               'index',
-              v_list.index);
-
-          if v_list.is_visible then
-            v_list_object :=
-              v_list_object ||
+              index) ||
+            (case
+              when is_visible then
                 jsonb_build_object(
                   'data',
-                  data.get_object(v_list.object_id, v_actor_id, 'mini', v_object_id));
-          end if;
+                  data.get_object(object_id, v_actor_id, 'mini', v_object_id))
+              else
+                jsonb '{}'
+            end))
+        into v_list_objects
+        from data.client_subscription_objects
+        where
+          client_subscription_id = v_id and
+          object_id not in (
+            select value
+            from unnest(in_filtered_list_object_ids) a(value));
 
-          v_list_objects := v_list_objects || v_list_object;
-        end loop;
+        if v_list_objects is null then
+          v_list_objects := jsonb '[]';
+        end if;
+      else
+        v_list_objects := jsonb '[]';
       end if;
 
       v_state :=

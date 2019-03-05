@@ -14,8 +14,7 @@ declare
   v_package_status text := json.get_string(data.get_attribute_value_for_update(v_package_id, 'package_status'));
   v_check_result boolean;
 
-  v_message_sent boolean := false;
-  v_change jsonb[] := array[]::jsonb[];
+  v_changes jsonb := jsonb '[]';
 begin
   if v_system_customs_checking then
     perform api_utils.create_show_message_action_notification(
@@ -34,22 +33,18 @@ begin
     return;
   end if;
 
-  v_change := array_append(v_change, data.attribute_change2jsonb('package_status', '"checking"'));
-  perform data.change_object_and_notify(v_package_id, 
-                                        to_jsonb(v_change),
-                                        null);
+  v_changes :=
+    v_changes ||
+    jsonb_build_object('id', v_package_id, 'changes', jsonb '[]' || data.attribute_change2jsonb('package_status', '"checking"')) ||
+    jsonb_build_object('id', v_custons_new_id, 'changes', jsonb '[]' || data.attribute_change2jsonb('system_customs_checking', jsonb 'true'));
 
-  v_change := array[]::jsonb[];
-  v_change := array_append(v_change, data.attribute_change2jsonb('system_customs_checking', jsonb 'true'));
-  perform data.change_object_and_notify(v_custons_new_id, 
-                                        to_jsonb(v_change),
-                                        null);
-  perform data.create_job(clock_timestamp() + ('1 minute')::interval, 
+  perform data.process_diffs_and_notify(data.change_objects(v_changes));
+
+  perform data.create_job(clock_timestamp() + ('10 seconds')::interval, 
       'pallas_project.job_customs_package_check', 
       in_params);
-  if not v_message_sent then
-    perform api_utils.create_ok_notification(in_client_id, in_request_id);
-  end if;
+
+  perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
 language plpgsql;

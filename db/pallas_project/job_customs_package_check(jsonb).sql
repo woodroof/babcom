@@ -17,7 +17,7 @@ declare
   v_package_cheked_reactions jsonb := coalesce(data.get_attribute_value_for_update(v_package_id, 'package_cheked_reactions'), jsonb '{}');
 
   v_check_result boolean;
-  v_change jsonb[] := array[]::jsonb[];
+  v_changes jsonb := jsonb '[]';
 begin
   if v_package_status = 'checking' then
     if array_position(v_system_package_reactions, v_check_type) is not null then
@@ -27,19 +27,26 @@ begin
     end if;
     v_package_cheked_reactions := jsonb_set(v_package_cheked_reactions, array[v_check_type], to_jsonb(v_check_result));
 
-    v_change := array_append(v_change, data.attribute_change2jsonb('package_cheked_reactions', v_package_cheked_reactions));
-    v_change := array_append(v_change, data.attribute_change2jsonb('package_status', '"new"'));
-    perform data.change_object_and_notify(v_package_id, 
-                                          to_jsonb(v_change),
-                                          null);
+    v_changes :=
+      v_changes ||
+      jsonb_build_object(
+        'id',
+        v_package_id,
+        'changes',
+        jsonb '[]' ||
+        data.attribute_change2jsonb('package_cheked_reactions', v_package_cheked_reactions) ||
+        data.attribute_change2jsonb('package_status', '"new"'));
   end if;
 
-  v_change := array[]::jsonb[];
-  v_change := array_append(v_change, data.attribute_change2jsonb('system_customs_checking', null));
-  perform data.change_object_and_notify(v_custons_new_id, 
-                                        to_jsonb(v_change),
-                                        null);
+  v_changes :=
+    v_changes ||
+    jsonb_build_object(
+      'id',
+      v_custons_new_id,
+      'changes',
+      jsonb '[]' || data.attribute_change2jsonb('system_customs_checking', null));
 
+  perform data.process_diffs_and_notify(data.change_objects(v_changes));
 end;
 $$
 language plpgsql;

@@ -2340,8 +2340,6 @@ declare
   v_subtitle text;
   v_ret_val jsonb;
 begin
-  assert json.get_object(in_attributes) is not null;
-
   for v_group in
     select value
     from jsonb_array_elements(v_groups)
@@ -2363,7 +2361,7 @@ begin
           v_attribute_value_description := json.get_string_opt(v_attribute, 'value_description', null);
 
           if v_attribute_name is not null or v_attribute_value is not null or v_attribute_value_description is not null then
-            assert not data.is_hidden_attribute(data.get_attribute_id(v_attribute_code));
+            --assert not data.is_hidden_attribute(data.get_attribute_id(v_attribute_code));
 
             v_filtered_attributes := array_append(v_filtered_attributes, v_attribute_code);
           end if;
@@ -5293,48 +5291,43 @@ begin
 
     v_length := array_length(v_client.client_subscriptions, 1);
     for i in 1..v_length loop
-      v_list_objects := jsonb '[]';
       v_id := v_client.client_subscriptions[i][1];
       v_object_id := v_client.client_subscriptions[i][2];
       v_ignore := json.get_boolean_opt(data.get_attribute_value(v_object_id, in_ignore_list_elements_attr_id), false);
 
       if not v_ignore then
-        for v_list in
-        (
-          select
-            id,
-            object_id,
-            is_visible,
-            index
-          from data.client_subscription_objects
-          where
-            client_subscription_id = v_id and
-            object_id not in (
-              select value
-              from unnest(in_filtered_list_object_ids) a(value))
-        )
-        loop
-          v_list_object :=
+        select
+          jsonb_agg(
             jsonb_build_object(
               'id',
-              v_list.id,
+              id,
               'object_id',
-              v_list.object_id,
+              object_id,
               'is_visible',
-              v_list.is_visible,
+              is_visible,
               'index',
-              v_list.index);
-
-          if v_list.is_visible then
-            v_list_object :=
-              v_list_object ||
+              index) ||
+            (case
+              when is_visible then
                 jsonb_build_object(
                   'data',
-                  data.get_object(v_list.object_id, v_actor_id, 'mini', v_object_id));
-          end if;
+                  data.get_object(object_id, v_actor_id, 'mini', v_object_id))
+              else
+                jsonb '{}'
+            end))
+        into v_list_objects
+        from data.client_subscription_objects
+        where
+          client_subscription_id = v_id and
+          object_id not in (
+            select value
+            from unnest(in_filtered_list_object_ids) a(value));
 
-          v_list_objects := v_list_objects || v_list_object;
-        end loop;
+        if v_list_objects is null then
+          v_list_objects := jsonb '[]';
+        end if;
+      else
+        v_list_objects := jsonb '[]';
       end if;
 
       v_state :=
@@ -12042,8 +12035,7 @@ declare
   v_package_status text := json.get_string(data.get_attribute_value_for_update(v_package_id, 'package_status'));
   v_check_result boolean;
 
-  v_message_sent boolean := false;
-  v_change jsonb[] := array[]::jsonb[];
+  v_changes jsonb := jsonb '[]';
 begin
   if v_system_customs_checking then
     perform api_utils.create_show_message_action_notification(
@@ -12062,22 +12054,18 @@ begin
     return;
   end if;
 
-  v_change := array_append(v_change, data.attribute_change2jsonb('package_status', '"checking"'));
-  perform data.change_object_and_notify(v_package_id, 
-                                        to_jsonb(v_change),
-                                        null);
+  v_changes :=
+    v_changes ||
+    jsonb_build_object('id', v_package_id, 'changes', jsonb '[]' || data.attribute_change2jsonb('package_status', '"checking"')) ||
+    jsonb_build_object('id', v_custons_new_id, 'changes', jsonb '[]' || data.attribute_change2jsonb('system_customs_checking', jsonb 'true'));
 
-  v_change := array[]::jsonb[];
-  v_change := array_append(v_change, data.attribute_change2jsonb('system_customs_checking', jsonb 'true'));
-  perform data.change_object_and_notify(v_custons_new_id, 
-                                        to_jsonb(v_change),
-                                        null);
-  perform data.create_job(clock_timestamp() + ('1 minute')::interval, 
+  perform data.process_diffs_and_notify(data.change_objects(v_changes));
+
+  perform data.create_job(clock_timestamp() + ('10 seconds')::interval, 
       'pallas_project.job_customs_package_check', 
       in_params);
-  if not v_message_sent then
-    perform api_utils.create_ok_notification(in_client_id, in_request_id);
-  end if;
+
+  perform api_utils.create_ok_notification(in_client_id, in_request_id);
 end;
 $$
 language plpgsql;
@@ -25173,7 +25161,7 @@ declare
   v_package_cheked_reactions jsonb := coalesce(data.get_attribute_value_for_update(v_package_id, 'package_cheked_reactions'), jsonb '{}');
 
   v_check_result boolean;
-  v_change jsonb[] := array[]::jsonb[];
+  v_changes jsonb := jsonb '[]';
 begin
   if v_package_status = 'checking' then
     if array_position(v_system_package_reactions, v_check_type) is not null then
@@ -25183,19 +25171,26 @@ begin
     end if;
     v_package_cheked_reactions := jsonb_set(v_package_cheked_reactions, array[v_check_type], to_jsonb(v_check_result));
 
-    v_change := array_append(v_change, data.attribute_change2jsonb('package_cheked_reactions', v_package_cheked_reactions));
-    v_change := array_append(v_change, data.attribute_change2jsonb('package_status', '"new"'));
-    perform data.change_object_and_notify(v_package_id, 
-                                          to_jsonb(v_change),
-                                          null);
+    v_changes :=
+      v_changes ||
+      jsonb_build_object(
+        'id',
+        v_package_id,
+        'changes',
+        jsonb '[]' ||
+        data.attribute_change2jsonb('package_cheked_reactions', v_package_cheked_reactions) ||
+        data.attribute_change2jsonb('package_status', '"new"'));
   end if;
 
-  v_change := array[]::jsonb[];
-  v_change := array_append(v_change, data.attribute_change2jsonb('system_customs_checking', null));
-  perform data.change_object_and_notify(v_custons_new_id, 
-                                        to_jsonb(v_change),
-                                        null);
+  v_changes :=
+    v_changes ||
+    jsonb_build_object(
+      'id',
+      v_custons_new_id,
+      'changes',
+      jsonb '[]' || data.attribute_change2jsonb('system_customs_checking', null));
 
+  perform data.process_diffs_and_notify(data.change_objects(v_changes));
 end;
 $$
 language plpgsql;
