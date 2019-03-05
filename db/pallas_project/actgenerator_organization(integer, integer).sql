@@ -212,7 +212,7 @@ begin
     end if;
   end if;
 
-  if v_actor_economy_type in ('asters', 'mcr') then
+  if v_actor_economy_type in ('asters', 'mcr', 'fixed_with_money') then
     v_actor_money := json.get_bigint(data.get_attribute_value_for_share(in_actor_id, 'system_money'));
     if v_actor_money <= 0 then
       v_actions :=

@@ -17948,6 +17948,16 @@ begin
             v_actor_code)::jsonb;
       end if;
 
+      if v_economy_type != 'un' and v_economy_type != 'fixed' then
+        v_actions :=
+          v_actions ||
+          format(
+            '{
+              "transactions": {"code": "act_open_object", "name": "🏦 История транзакций 🏦", "disabled": false, "params": {"object_code": "%s_transactions"}}
+            }',
+            v_actor_code)::jsonb;
+      end if;
+
       if v_economy_type not in ('fixed', 'fixed_with_money') then
         v_actions :=
           v_actions ||
@@ -17956,15 +17966,6 @@ begin
               "next_statuses": {"code": "act_open_object", "name": "Покупка статусов", "disabled": false, "params": {"object_code": "%s_next_statuses"}}
             }',
             v_actor_code)::jsonb;
-        if v_economy_type != 'un' then
-          v_actions :=
-            v_actions ||
-            format(
-              '{
-                "transactions": {"code": "act_open_object", "name": "🏦 История транзакций 🏦", "disabled": false, "params": {"object_code": "%s_transactions"}}
-              }',
-              v_actor_code)::jsonb;
-        end if;
 
         declare
           v_contracts jsonb := data.get_raw_attribute_value_for_share(v_actor_code || '_contracts', 'content');
@@ -18594,7 +18595,7 @@ begin
     end if;
   end if;
 
-  if v_actor_economy_type in ('asters', 'mcr') then
+  if v_actor_economy_type in ('asters', 'mcr', 'fixed_with_money') then
     v_actor_money := json.get_bigint(data.get_attribute_value_for_share(in_actor_id, 'system_money'));
     if v_actor_money <= 0 then
       v_actions :=
@@ -18964,7 +18965,7 @@ begin
 
       if in_object_id != in_actor_id then
         v_actor_economy_type := json.get_string_opt(data.get_attribute_value_for_share(in_actor_id, 'system_person_economy_type'), null);
-        if v_actor_economy_type in ('asters', 'mcr') then
+        if v_actor_economy_type in ('asters', 'mcr', 'fixed_with_money') then
           v_actor_money := json.get_bigint(data.get_attribute_value_for_share(in_actor_id, 'system_money'));
           if v_actor_money <= 0 then
             v_actions :=
@@ -20153,19 +20154,6 @@ begin
           v_attributes,
           'next_statuses');
 
-        if v_economy_type != jsonb '"un"' and v_economy_type != jsonb '"fixed"' then
-          -- Создадим страницу с историей транзакций
-          perform data.create_object(
-            v_person_code || '_transactions',
-            format(
-              '[
-                {"code": "is_visible", "value": true, "value_object_id": %s},
-                {"code": "content", "value": []}
-              ]',
-              v_person_id)::jsonb,
-            'transactions');
-        end if;
-
         -- Создадим список контактов
         perform data.create_object(
           v_person_code || '_contracts',
@@ -20177,6 +20165,19 @@ begin
             ]',
             v_person_id)::jsonb,
           'contract_list');
+      end if;
+
+      if v_economy_type != jsonb '"fixed"' then
+        -- Создадим страницу с историей транзакций
+        perform data.create_object(
+          v_person_code || '_transactions',
+          format(
+            '[
+              {"code": "is_visible", "value": true, "value_object_id": %s},
+              {"code": "content", "value": []}
+            ]',
+            v_person_id)::jsonb,
+          'transactions');
       end if;
     end;
   end if;

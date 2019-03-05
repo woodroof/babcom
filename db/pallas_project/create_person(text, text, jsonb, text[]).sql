@@ -193,19 +193,6 @@ begin
           v_attributes,
           'next_statuses');
 
-        if v_economy_type != jsonb '"un"' and v_economy_type != jsonb '"fixed"' then
-          -- Создадим страницу с историей транзакций
-          perform data.create_object(
-            v_person_code || '_transactions',
-            format(
-              '[
-                {"code": "is_visible", "value": true, "value_object_id": %s},
-                {"code": "content", "value": []}
-              ]',
-              v_person_id)::jsonb,
-            'transactions');
-        end if;
-
         -- Создадим список контактов
         perform data.create_object(
           v_person_code || '_contracts',
@@ -217,6 +204,19 @@ begin
             ]',
             v_person_id)::jsonb,
           'contract_list');
+      end if;
+
+      if v_economy_type != jsonb '"fixed"' then
+        -- Создадим страницу с историей транзакций
+        perform data.create_object(
+          v_person_code || '_transactions',
+          format(
+            '[
+              {"code": "is_visible", "value": true, "value_object_id": %s},
+              {"code": "content", "value": []}
+            ]',
+            v_person_id)::jsonb,
+          'transactions');
       end if;
     end;
   end if;
