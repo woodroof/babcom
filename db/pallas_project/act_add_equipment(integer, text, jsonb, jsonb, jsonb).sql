@@ -25,7 +25,7 @@ begin
           "type": "%s",
           "actor_id": false,
           "fueled": true,
-          "broken": true,
+          "broken": false,
           "firm": "CM",
           "content": []
         }
