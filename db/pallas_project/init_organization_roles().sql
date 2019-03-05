@@ -19,6 +19,7 @@ begin
   perform data.add_object_to_object(data.get_object_id('48569d1d-5f01-410f-a67b-c5fe99d8dbc1'), data.get_object_id('org_star_helix_head'));
   perform data.add_object_to_object(data.get_object_id('c9e08512-e729-430a-b2fd-df8e7c94a5e7'), data.get_object_id('org_starbucks_auditor'));
   perform data.add_object_to_object(data.get_object_id('70e5db08-df47-4395-9f4a-15eef99b2b89'), data.get_object_id('org_starbucks_head'));
+  perform data.add_object_to_object(data.get_object_id('70e5db08-df47-4395-9f4a-15eef99b2b89'), data.get_object_id('org_akira_sc_auditor'));
   perform data.add_object_to_object(data.get_object_id('939b6537-afc1-41f4-963a-21ccfd1c7d28'), data.get_object_id('org_opa_head'));
   perform data.add_object_to_object(data.get_object_id('939b6537-afc1-41f4-963a-21ccfd1c7d28'), data.get_object_id('org_akira_sc_head'));
   perform data.add_object_to_object(data.get_object_id('54e94c45-ce2a-459a-8613-9b75e23d9b68'), data.get_object_id('org_clinic_head'));

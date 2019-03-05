@@ -10,7 +10,7 @@ declare
   v_title_attribute_id integer := data.get_attribute_id('title');
   v_player_id integer := data.get_object_id('player');
   v_master_id  integer := data.get_object_id('master');
-  v_all_person_id  integer := data.get_object_id('master');
+  v_all_person_id  integer := data.get_object_id('all_person');
 begin
   assert in_is_master_chat is not null;
   -- Собираем список всех персонажей, кроме тех, кто уже в чате

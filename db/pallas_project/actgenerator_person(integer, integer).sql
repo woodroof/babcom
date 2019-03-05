@@ -239,7 +239,7 @@ begin
         end if;
       end if;
     end if;
-    if pp_utils.is_in_group(in_object_id, 'all_person') then
+    if pp_utils.is_in_group(in_object_id, 'player') then
       v_actions :=
               v_actions ||
               format('{

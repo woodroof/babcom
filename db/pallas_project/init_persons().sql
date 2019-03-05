@@ -163,11 +163,11 @@ begin
 
   perform pallas_project.change_chat_person_list_on_person(data.get_object_id('master_chat'), null, true);
 
-  -- Мастерские персонажи
-  perform pallas_project.init_master_characters();
-
   -- Игроки
   perform pallas_project.init_players();
+
+  -- Мастерские персонажи
+  perform pallas_project.init_master_characters();
 end;
 $$
 language plpgsql;
