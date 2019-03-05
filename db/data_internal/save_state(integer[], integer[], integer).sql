@@ -16,6 +16,8 @@ declare
   v_length integer;
   v_id integer;
   v_object_id integer;
+  v_object_code text;
+  v_data jsonb;
   v_ignore boolean;
 begin
   if in_subsciptions_ids is null then
@@ -26,9 +28,15 @@ begin
 
   for v_client in
   (
-    select client_id, array_agg(array[id, object_id]) client_subscriptions
-    from data.client_subscriptions
-    where id = any(in_subsciptions_ids)
+    select
+      cs.client_id,
+      array_agg(array[cs.id, cs.object_id]) client_subscriptions,
+      array_agg(o.code) client_object_codes,
+      array_agg(cs.data) client_datas
+    from data.client_subscriptions cs
+    join data.objects o on
+      o.id = cs.object_id
+    where cs.id = any(in_subsciptions_ids)
     group by client_id
   )
   loop
@@ -38,6 +46,8 @@ begin
     for i in 1..v_length loop
       v_id := v_client.client_subscriptions[i][1];
       v_object_id := v_client.client_subscriptions[i][2];
+      v_object_code := v_client.client_object_codes[i];
+      v_data := v_client.client_datas[i];
       v_ignore := json.get_boolean_opt(data.get_attribute_value(v_object_id, in_ignore_list_elements_attr_id), false);
 
       if not v_ignore then
@@ -45,26 +55,22 @@ begin
           jsonb_agg(
             jsonb_build_object(
               'id',
-              id,
+              cso.id,
               'object_id',
-              object_id,
-              'is_visible',
-              is_visible,
+              cso.object_id,
+              'object_code',
+              o.code,
               'index',
-              index) ||
-            (case
-              when is_visible then
-                jsonb_build_object(
-                  'data',
-                  data.get_object(object_id, v_actor_id, 'mini', v_object_id))
-              else
-                jsonb '{}'
-            end))
+              cso.index,
+              'data',
+              cso.data))
         into v_list_objects
-        from data.client_subscription_objects
+        from data.client_subscription_objects cso
+        join data.objects o on
+          o.id = cso.object_id
         where
-          client_subscription_id = v_id and
-          object_id not in (
+          cso.client_subscription_id = v_id and
+          cso.object_id not in (
             select value
             from unnest(in_filtered_list_object_ids) a(value));
 
@@ -86,8 +92,10 @@ begin
           v_actor_id,
           'object_id',
           v_object_id,
+          'object_code',
+          v_object_code,
           'data',
-          data.get_object(v_object_id, v_actor_id, 'full', v_object_id),
+          v_data,
           'content',
           data.get_attribute_value(v_object_id, v_content_attr_id, v_actor_id),
           'list_objects',

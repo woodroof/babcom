@@ -16,13 +16,9 @@ declare
   v_actions jsonb;
   v_position_object_id integer;
   v_add jsonb;
-  v_subscription_object_code text;
 
-  v_set_visible integer[];
   v_set_invisible integer[];
 begin
-  assert json.is_object_array(in_state);
-
   if in_state = jsonb '[]' then
     return v_ret_val;
   end if;
@@ -34,9 +30,9 @@ begin
       json.get_integer(value, 'client_id') as client_id,
       json.get_integer(value, 'actor_id') as actor_id,
       json.get_integer(value, 'object_id') as object_id,
-      json.get_boolean(value, 'is_visible') as is_visible,
+      json.get_string(value, 'object_code') as object_code,
       json.get_integer(value, 'index') as index,
-      json.get_object_opt(value, 'data', null) as data
+      value->'data' as data
     from jsonb_array_elements(in_state)
   )
   loop
@@ -46,7 +42,7 @@ begin
     end if;
 
     if not json.get_boolean_opt(data.get_attribute_value(in_object_id, 'is_visible', v_list.actor_id), false) then
-      if v_list.is_visible then
+      if v_list.data != jsonb 'null' then
         v_set_invisible := array_append(v_set_invisible, v_list.id);
 
         v_ret_val :=
@@ -62,12 +58,12 @@ begin
     else
       v_new_data := data.get_object(in_object_id, v_list.actor_id, 'mini', v_list.object_id);
 
-      if not v_list.is_visible or v_new_data != v_list.data then
-        v_subscription_object_code := data.get_object_code(v_list.object_id);
+      if v_list.data = jsonb 'null' or v_new_data != v_list.data then
+        update data.client_subscription_objects
+        set data = v_new_data
+        where id = v_list.id;
 
-        if not v_list.is_visible then
-          v_set_visible := array_append(v_set_visible, v_list.id);
-
+        if v_list.data = jsonb 'null' then
           v_add := jsonb_build_object('object', v_new_data);
 
           select s.value
@@ -81,7 +77,7 @@ begin
                 from data.client_subscription_objects
                 where id = v_list.id) and
               index > v_list.index and
-              is_visible is true
+              data is not null
           ) s
           limit 1;
 
@@ -93,7 +89,7 @@ begin
             v_ret_val ||
             jsonb_build_object(
               'object_id',
-              v_subscription_object_code,
+              v_list.object_code,
               'client_id',
               v_list.client_id,
               'list_changes',
@@ -105,7 +101,7 @@ begin
             v_ret_val ||
             jsonb_build_object(
               'object_id',
-              v_subscription_object_code,
+              v_list.object_code,
               'client_id',
               v_list.client_id,
               'list_changes',
@@ -115,15 +111,9 @@ begin
     end if;
   end loop;
 
-  if v_set_visible is not null then
-    update data.client_subscription_objects
-    set is_visible = true
-    where id = any(v_set_visible);
-  end if;
-
   if v_set_invisible is not null then
     update data.client_subscription_objects
-    set is_visible = false
+    set data = null
     where id = any(v_set_invisible);
   end if;
 

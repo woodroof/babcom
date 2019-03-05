@@ -77,8 +77,8 @@ begin
 
   v_object := data.get_object(v_object_id, v_actor_id, 'full', v_object_id);
 
-  insert into data.client_subscriptions(client_id, object_id)
-  values(in_client_id, v_object_id);
+  insert into data.client_subscriptions(client_id, object_id, data)
+  values(in_client_id, v_object_id, v_object);
 
   -- Получаем список, если есть
   v_list := data.get_next_list(in_client_id, v_object_id);

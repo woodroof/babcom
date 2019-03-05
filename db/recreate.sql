@@ -313,9 +313,7 @@ $$
 declare
   v_metric record;
 begin
-  delete from data.notifications;
-  delete from data.client_subscription_objects;
-  delete from data.client_subscriptions;
+  truncate data.notifications, data.client_subscription_objects, data.client_subscriptions;
 
   update data.clients
   set
@@ -1061,8 +1059,8 @@ begin
 
   v_object := data.get_object(v_object_id, v_actor_id, 'full', v_object_id);
 
-  insert into data.client_subscriptions(client_id, object_id)
-  values(in_client_id, v_object_id);
+  insert into data.client_subscriptions(client_id, object_id, data)
+  values(in_client_id, v_object_id, v_object);
 
   -- Получаем список, если есть
   v_list := data.get_next_list(in_client_id, v_object_id);
@@ -2986,6 +2984,7 @@ declare
   v_object record;
   v_mini_card_function text;
   v_is_visible boolean;
+  v_data jsonb;
   v_count integer := 0;
   v_has_more boolean := false;
   v_objects jsonb[] := array[]::jsonb[];
@@ -3051,14 +3050,20 @@ begin
     -- Проверяем видимость
     v_is_visible := json.get_boolean_opt(data.get_attribute_value(v_object.id, 'is_visible', v_actor_id), false);
 
-    insert into data.client_subscription_objects(client_subscription_id, object_id, index, is_visible)
-    values(v_client_subscription_id, v_object.id, v_object.index, v_is_visible);
+    if v_is_visible then
+      v_data := data.get_object(v_object.id, v_actor_id, 'mini', in_object_id);
+    else
+      v_data := null;
+    end if;
+
+    insert into data.client_subscription_objects(client_subscription_id, object_id, index, data)
+    values(v_client_subscription_id, v_object.id, v_object.index, v_data);
 
     if not v_is_visible then
       continue;
     end if;
 
-    v_objects := array_append(v_objects, data.get_object(v_object.id, v_actor_id, 'mini', in_object_id));
+    v_objects := array_append(v_objects, v_data);
 
     v_count := v_count + 1;
   end loop;
@@ -4724,13 +4729,9 @@ declare
   v_actions jsonb;
   v_position_object_id integer;
   v_add jsonb;
-  v_subscription_object_code text;
 
-  v_set_visible integer[];
   v_set_invisible integer[];
 begin
-  assert json.is_object_array(in_state);
-
   if in_state = jsonb '[]' then
     return v_ret_val;
   end if;
@@ -4742,9 +4743,9 @@ begin
       json.get_integer(value, 'client_id') as client_id,
       json.get_integer(value, 'actor_id') as actor_id,
       json.get_integer(value, 'object_id') as object_id,
-      json.get_boolean(value, 'is_visible') as is_visible,
+      json.get_string(value, 'object_code') as object_code,
       json.get_integer(value, 'index') as index,
-      json.get_object_opt(value, 'data', null) as data
+      value->'data' as data
     from jsonb_array_elements(in_state)
   )
   loop
@@ -4754,7 +4755,7 @@ begin
     end if;
 
     if not json.get_boolean_opt(data.get_attribute_value(in_object_id, 'is_visible', v_list.actor_id), false) then
-      if v_list.is_visible then
+      if v_list.data != jsonb 'null' then
         v_set_invisible := array_append(v_set_invisible, v_list.id);
 
         v_ret_val :=
@@ -4770,12 +4771,12 @@ begin
     else
       v_new_data := data.get_object(in_object_id, v_list.actor_id, 'mini', v_list.object_id);
 
-      if not v_list.is_visible or v_new_data != v_list.data then
-        v_subscription_object_code := data.get_object_code(v_list.object_id);
+      if v_list.data = jsonb 'null' or v_new_data != v_list.data then
+        update data.client_subscription_objects
+        set data = v_new_data
+        where id = v_list.id;
 
-        if not v_list.is_visible then
-          v_set_visible := array_append(v_set_visible, v_list.id);
-
+        if v_list.data = jsonb 'null' then
           v_add := jsonb_build_object('object', v_new_data);
 
           select s.value
@@ -4789,7 +4790,7 @@ begin
                 from data.client_subscription_objects
                 where id = v_list.id) and
               index > v_list.index and
-              is_visible is true
+              data is not null
           ) s
           limit 1;
 
@@ -4801,7 +4802,7 @@ begin
             v_ret_val ||
             jsonb_build_object(
               'object_id',
-              v_subscription_object_code,
+              v_list.object_code,
               'client_id',
               v_list.client_id,
               'list_changes',
@@ -4813,7 +4814,7 @@ begin
             v_ret_val ||
             jsonb_build_object(
               'object_id',
-              v_subscription_object_code,
+              v_list.object_code,
               'client_id',
               v_list.client_id,
               'list_changes',
@@ -4823,15 +4824,9 @@ begin
     end if;
   end loop;
 
-  if v_set_visible is not null then
-    update data.client_subscription_objects
-    set is_visible = true
-    where id = any(v_set_visible);
-  end if;
-
   if v_set_invisible is not null then
     update data.client_subscription_objects
-    set is_visible = false
+    set data = null
     where id = any(v_set_invisible);
   end if;
 
@@ -4850,13 +4845,11 @@ $$
 declare
   v_ret_val jsonb := jsonb '[]';
 
-  v_set_visible integer[];
   v_set_invisible integer[];
 
   v_content_attr_id integer;
   v_subscription record;
   v_full_card_function text;
-  v_subscription_object_code text;
   v_new_data jsonb;
   v_object jsonb;
   v_new_content jsonb;
@@ -4866,8 +4859,6 @@ declare
   v_list_changes jsonb;
   v_ret_val_element jsonb;
 begin
-  assert json.is_object_array(in_state);
-
   if in_state = jsonb '[]' then
     return v_ret_val;
   end if;
@@ -4880,10 +4871,11 @@ begin
       json.get_integer(value, 'id') as id,
       json.get_integer(value, 'client_id') as client_id,
       json.get_integer(value, 'object_id') as object_id,
+      json.get_string(value, 'object_code') as object_code,
       json.get_integer(value, 'actor_id') as actor_id,
-      json.get_object(value, 'data') as data,
+      value->'data' as data,
       json.get_array_opt(value, 'content', null) as content,
-      json.get_array(value, 'list_objects') as list_objects
+      value->'list_objects' as list_objects
     from jsonb_array_elements(in_state)
   )
   loop
@@ -4897,15 +4889,13 @@ begin
       using v_subscription.object_id, v_subscription.actor_id;
     end if;
 
-    v_subscription_object_code := data.get_object_code(v_subscription.object_id);
-
     -- Объект стал невидимым - отправляем специальный diff и вычищаем подписки
     if not json.get_boolean_opt(data.get_attribute_value(v_subscription.object_id, 'is_visible', v_subscription.actor_id), false) then
       v_ret_val :=
         v_ret_val ||
         jsonb_build_object(
           'object_id',
-          v_subscription_object_code,
+          v_subscription.object_code,
           'client_id',
           v_subscription.client_id,
           'object',
@@ -4930,6 +4920,10 @@ begin
 
     -- Сравниваем и при нахождении различий включаем в diff
     if v_new_data != v_subscription.data then
+      update data.client_subscriptions
+      set data = v_new_data
+      where id = v_subscription.id;
+
       v_object := v_new_data;
     end if;
 
@@ -4957,7 +4951,7 @@ begin
             join data.client_subscription_objects cso
               on cso.object_id = o.id
               and cso.client_subscription_id = v_subscription.id
-              and cso.is_visible is true;
+              and cso.data is not null;
 
             -- А вот удаляем реально все
             delete from data.client_subscription_objects
@@ -4979,9 +4973,10 @@ begin
               v_processed_object jsonb;
               v_index integer;
               v_position text;
+              v_data jsonb;
               v_add_list_change jsonb;
             begin
-              select jsonb_object_agg(o.code, jsonb_build_object('is_visible', cso.is_visible, 'index', cso.index))
+              select jsonb_object_agg(o.code, jsonb_build_object('is_visible', cso.data is not null, 'index', cso.index))
               into v_processed_objects
               from data.client_subscription_objects cso
               join data.objects o
@@ -5031,7 +5026,7 @@ begin
                         where
                           client_subscription_id = v_subscription.id and
                           index > v_index and
-                          is_visible is true);
+                          data is not null);
                   end if;
 
                   update data.client_subscription_objects
@@ -5047,19 +5042,20 @@ begin
                     client_subscription_id = v_subscription.id;
                 end if;
 
-                insert into data.client_subscription_objects(client_subscription_id, object_id, index, is_visible)
-                values(v_subscription.id, data.get_object_id(v_add_element.object_code), v_index, v_is_visible);
-
                 if v_is_visible then
-                  v_add_list_change :=
-                    jsonb_build_object(
-                      'object',
-                      data.get_object(v_object_id, v_subscription.actor_id, 'mini', v_subscription.object_id));
+                  v_data := data.get_object(v_object_id, v_subscription.actor_id, 'mini', v_subscription.object_id);
+
+                  v_add_list_change := jsonb_build_object('object', v_data);
                   if v_position is not null then
                     v_add_list_change := v_add_list_change || jsonb_build_object('position', v_position);
                   end if;
                   v_add_list_changes := v_add_list_changes || v_add_list_change;
+                else
+                  v_data := null;
                 end if;
+
+                insert into data.client_subscription_objects(client_subscription_id, object_id, index, data)
+                values(v_subscription.id, data.get_object_id(v_add_element.object_code), v_index, v_data);
               end loop;
             end;
           end if;
@@ -5080,9 +5076,9 @@ begin
           select
             json.get_integer(value, 'id') as id,
             json.get_integer(value, 'object_id') as object_id,
-            json.get_boolean(value, 'is_visible') as is_visible,
-            json.get_integer(value, 'index') as index,
-            json.get_object_opt(value, 'data', null) as data
+            value->'object_code' as object_code,
+            value->'data' as data,
+            json.get_integer(value, 'index') as index
           from jsonb_array_elements(v_subscription.list_objects)
           -- Удалённые из content'а мы уже обработали
           where json.get_integer(value, 'object_id') not in (
@@ -5103,18 +5099,20 @@ begin
           end if;
 
           if not json.get_boolean_opt(data.get_attribute_value(v_list.object_id, 'is_visible', v_subscription.actor_id), false) then
-            if v_list.is_visible then
+            if v_list.data != jsonb 'null' then
               v_set_invisible := array_append(v_set_invisible, v_list.id);
 
-              v_remove_list_changes := v_remove_list_changes || to_jsonb(data.get_object_code(v_list.object_id));
+              v_remove_list_changes := v_remove_list_changes || v_list.object_code;
             end if;
           else
             v_new_list_data := data.get_object(v_list.object_id, v_subscription.actor_id, 'mini', v_subscription.object_id);
 
-            if not v_list.is_visible or v_new_list_data != v_list.data then
-              if not v_list.is_visible then
-                v_set_visible := array_append(v_set_visible, v_list.id);
+            if v_list.data = jsonb 'null' or v_new_list_data != v_list.data then
+              update data.client_subscription_objects
+              set data = v_new_list_data
+              where id = v_list.id;
 
+              if v_list.data = jsonb 'null' then
                 v_add := jsonb_build_object('object', v_new_list_data);
 
                 select s.value
@@ -5125,7 +5123,7 @@ begin
                   where
                     client_subscription_id = v_subscription.id and
                     index > v_list.index and
-                    is_visible is true
+                    data is not null
                 ) s
                 limit 1;
 
@@ -5156,7 +5154,7 @@ begin
     end if;
 
     if v_object is not null or v_list_changes != jsonb '{}' then
-      v_ret_val_element := jsonb_build_object('object_id', v_subscription_object_code, 'client_id', v_subscription.client_id);
+      v_ret_val_element := jsonb_build_object('object_id', v_subscription.object_code, 'client_id', v_subscription.client_id);
 
       if v_object is not null then
       v_ret_val_element := v_ret_val_element || jsonb_build_object('object', v_object);
@@ -5170,15 +5168,9 @@ begin
     end if;
   end loop;
 
-  if v_set_visible is not null then
-    update data.client_subscription_objects
-    set is_visible = true
-    where id = any(v_set_visible);
-  end if;
-
   if v_set_invisible is not null then
     update data.client_subscription_objects
-    set is_visible = false
+    set data = null
     where id = any(v_set_invisible);
   end if;
 
@@ -5195,60 +5187,35 @@ volatile
 as
 $$
 declare
-  v_object_code text := data.get_object_code(in_object_id);
-  v_state jsonb := jsonb '[]';
-
-  v_list record;
-  v_actor_id integer;
-  v_subscription_object jsonb;
+  v_state jsonb;
 begin
-  for v_list in
-  (
-    select
-      cso.id,
-      cs.client_id,
-      cs.object_id,
-      cso.is_visible,
-      cso.index
-    from data.client_subscription_objects cso
-    join data.client_subscriptions cs
-      on cs.id = cso.client_subscription_id
-      and cs.object_id not in (select value from unnest(in_filtered_parent_object_ids) a(value))
-    where cso.object_id = in_object_id
-  )
-  loop
-    v_actor_id := data.get_active_actor_id(v_list.client_id);
-
-    v_subscription_object :=
+  select
+    jsonb_agg(
       jsonb_build_object(
         'id',
-        v_list.id,
+        cso.id,
         'client_id',
-        v_list.client_id,
+        cs.client_id,
         'actor_id',
-        v_actor_id,
+        data.get_active_actor_id(cs.client_id),
         'object_id',
-        v_list.object_id,
+        cs.object_id,
         'object_code',
-        v_object_code,
-        'is_visible',
-        v_list.is_visible,
+        o.code,
+        'data',
+        cso.data,
         'index',
-        v_list.index);
+        cso.index))
+  into v_state
+  from data.client_subscription_objects cso
+  join data.client_subscriptions cs
+    on cs.id = cso.client_subscription_id
+    and cs.object_id not in (select value from unnest(in_filtered_parent_object_ids) a(value))
+  join data.objects o
+    on o.id = cs.object_id
+  where cso.object_id = in_object_id;
 
-    if v_list.is_visible then
-      -- Изменения невидимых объектов должны были пройти через change_object, атрибут в таблице client_subscription_objects был бы изменён
-      assert json.get_boolean(data.get_attribute_value(in_object_id, 'is_visible', v_actor_id));
-
-      v_subscription_object :=
-        v_subscription_object ||
-          jsonb_build_object('data', data.get_object(in_object_id, v_actor_id, 'mini', v_list.object_id));
-    end if;
-
-    v_state := v_state || v_subscription_object;
-  end loop;
-
-  return v_state;
+  return coalesce(v_state, jsonb '[]');
 end;
 $$
 language plpgsql;
@@ -5271,6 +5238,8 @@ declare
   v_length integer;
   v_id integer;
   v_object_id integer;
+  v_object_code text;
+  v_data jsonb;
   v_ignore boolean;
 begin
   if in_subsciptions_ids is null then
@@ -5281,9 +5250,15 @@ begin
 
   for v_client in
   (
-    select client_id, array_agg(array[id, object_id]) client_subscriptions
-    from data.client_subscriptions
-    where id = any(in_subsciptions_ids)
+    select
+      cs.client_id,
+      array_agg(array[cs.id, cs.object_id]) client_subscriptions,
+      array_agg(o.code) client_object_codes,
+      array_agg(cs.data) client_datas
+    from data.client_subscriptions cs
+    join data.objects o on
+      o.id = cs.object_id
+    where cs.id = any(in_subsciptions_ids)
     group by client_id
   )
   loop
@@ -5293,6 +5268,8 @@ begin
     for i in 1..v_length loop
       v_id := v_client.client_subscriptions[i][1];
       v_object_id := v_client.client_subscriptions[i][2];
+      v_object_code := v_client.client_object_codes[i];
+      v_data := v_client.client_datas[i];
       v_ignore := json.get_boolean_opt(data.get_attribute_value(v_object_id, in_ignore_list_elements_attr_id), false);
 
       if not v_ignore then
@@ -5300,26 +5277,22 @@ begin
           jsonb_agg(
             jsonb_build_object(
               'id',
-              id,
+              cso.id,
               'object_id',
-              object_id,
-              'is_visible',
-              is_visible,
+              cso.object_id,
+              'object_code',
+              o.code,
               'index',
-              index) ||
-            (case
-              when is_visible then
-                jsonb_build_object(
-                  'data',
-                  data.get_object(object_id, v_actor_id, 'mini', v_object_id))
-              else
-                jsonb '{}'
-            end))
+              cso.index,
+              'data',
+              cso.data))
         into v_list_objects
-        from data.client_subscription_objects
+        from data.client_subscription_objects cso
+        join data.objects o on
+          o.id = cso.object_id
         where
-          client_subscription_id = v_id and
-          object_id not in (
+          cso.client_subscription_id = v_id and
+          cso.object_id not in (
             select value
             from unnest(in_filtered_list_object_ids) a(value));
 
@@ -5341,8 +5314,10 @@ begin
           v_actor_id,
           'object_id',
           v_object_id,
+          'object_code',
+          v_object_code,
           'data',
-          data.get_object(v_object_id, v_actor_id, 'full', v_object_id),
+          v_data,
           'content',
           data.get_attribute_value(v_object_id, v_content_attr_id, v_actor_id),
           'list_objects',
@@ -12163,49 +12138,6 @@ begin
   if not v_message_sent then
     perform api_utils.create_ok_notification(in_client_id, in_request_id);
   end if;
-end;
-$$
-language plpgsql;
-
--- drop function pallas_project.act_customs_ship_arrival(integer, text, jsonb, jsonb, jsonb);
-
-create or replace function pallas_project.act_customs_ship_arrival(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
-returns void
-volatile
-as
-$$
-declare
-  v_title text;
-
-  v_person_id integer;
-  v_login_id integer;
-
-  v_first_names text[] := json.get_string_array(data.get_param('first_names'));
-  v_last_names text[] := json.get_string_array(data.get_param('last_names'));
-
-  v_title_attribute_id integer := data.get_attribute_id('title');
-
-  v_goods jsonb := data.get_param('customs_goods');
-
-begin
-  assert in_request_id is not null;
-
-  v_title := v_first_names[random.random_integer(1, array_length(v_first_names, 1))] || ' '|| v_last_names[random.random_integer(1, array_length(v_last_names, 1))];
-  insert into data.objects(class_id) values(v_person_class_id) returning id into v_person_id;
-    -- Логин
-  insert into data.logins default values returning id into v_login_id;
-  insert into data.login_actors(login_id, actor_id) values(v_login_id, v_person_id);
-  insert into data.attribute_values(object_id, attribute_id, value) values
-  (v_person_id, v_title_attribute_id, to_jsonb(v_title));
-
-  insert into data.object_objects(parent_object_id, object_id) values
-  (v_all_person_group_id, v_person_id),
-  (v_player_group_id, v_person_id);
-
-  -- Заменим логин
-  perform data.set_login(in_client_id, v_login_id);
-  -- И отправим новый список акторов
-  perform api_utils.process_get_actors_message(in_client_id, in_request_id);
 end;
 $$
 language plpgsql;
@@ -32023,7 +31955,7 @@ create table data.client_subscription_objects(
   client_subscription_id integer not null,
   object_id integer not null,
   index integer not null,
-  is_visible boolean not null,
+  data jsonb,
   constraint client_subscription_objects_index_check check(index > 0),
   constraint client_subscription_objects_object_check check(data.is_instance(object_id)),
   constraint client_subscription_objects_pk primary key(id),
@@ -32037,6 +31969,7 @@ create table data.client_subscriptions(
   id integer not null generated always as identity,
   client_id integer not null,
   object_id integer not null,
+  data jsonb not null,
   constraint client_subscriptions_object_check check(data.is_instance(object_id)),
   constraint client_subscriptions_pk primary key(id),
   constraint client_subscriptions_unique_object_client unique(object_id, client_id)
@@ -32278,6 +32211,10 @@ create unique index attribute_values_idx_oi_ai_voi on data.attribute_values(obje
 -- drop index data.attribute_values_nuidx_oi_ai;
 
 create index attribute_values_nuidx_oi_ai on data.attribute_values(object_id, attribute_id);
+
+-- drop index data.client_subscription_objects_idx_csi_i;
+
+create unique index client_subscription_objects_idx_csi_i on data.client_subscription_objects(client_subscription_id, index) where (data is not null);
 
 -- drop index data.client_subscriptions_idx_client;
 

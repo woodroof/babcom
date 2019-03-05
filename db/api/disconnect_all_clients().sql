@@ -9,9 +9,7 @@ $$
 declare
   v_metric record;
 begin
-  delete from data.notifications;
-  delete from data.client_subscription_objects;
-  delete from data.client_subscriptions;
+  truncate data.notifications, data.client_subscription_objects, data.client_subscriptions;
 
   update data.clients
   set

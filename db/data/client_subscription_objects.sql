@@ -5,7 +5,7 @@ create table data.client_subscription_objects(
   client_subscription_id integer not null,
   object_id integer not null,
   index integer not null,
-  is_visible boolean not null,
+  data jsonb,
   constraint client_subscription_objects_index_check check(index > 0),
   constraint client_subscription_objects_object_check check(data.is_instance(object_id)),
   constraint client_subscription_objects_pk primary key(id),

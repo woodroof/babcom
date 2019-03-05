@@ -16,6 +16,7 @@ declare
   v_object record;
   v_mini_card_function text;
   v_is_visible boolean;
+  v_data jsonb;
   v_count integer := 0;
   v_has_more boolean := false;
   v_objects jsonb[] := array[]::jsonb[];
@@ -81,14 +82,20 @@ begin
     -- Проверяем видимость
     v_is_visible := json.get_boolean_opt(data.get_attribute_value(v_object.id, 'is_visible', v_actor_id), false);
 
-    insert into data.client_subscription_objects(client_subscription_id, object_id, index, is_visible)
-    values(v_client_subscription_id, v_object.id, v_object.index, v_is_visible);
+    if v_is_visible then
+      v_data := data.get_object(v_object.id, v_actor_id, 'mini', in_object_id);
+    else
+      v_data := null;
+    end if;
+
+    insert into data.client_subscription_objects(client_subscription_id, object_id, index, data)
+    values(v_client_subscription_id, v_object.id, v_object.index, v_data);
 
     if not v_is_visible then
       continue;
     end if;
 
-    v_objects := array_append(v_objects, data.get_object(v_object.id, v_actor_id, 'mini', in_object_id));
+    v_objects := array_append(v_objects, v_data);
 
     v_count := v_count + 1;
   end loop;
