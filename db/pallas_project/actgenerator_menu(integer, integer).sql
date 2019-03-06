@@ -106,7 +106,8 @@ begin
           "all_contracts": {"code": "act_open_object", "name": "Все контракты", "disabled": false, "params": {"object_code": "contracts"}},
           "cycle_checklist": {"code": "act_open_object", "name": "Чеклист", "disabled": false, "params": {"object_code": "cycle_checklist"}},
           "med_drugs": {"code": "act_open_object", "name": "Наркотики", "disabled": false, "params": {"object_code": "med_drugs"}},
-          "prices": {"code": "act_open_object", "name": "Цены", "disabled": false, "params": {"object_code": "prices"}}
+          "prices": {"code": "act_open_object", "name": "Цены", "disabled": false, "params": {"object_code": "prices"}},
+          "equipment": {"code": "act_open_object", "name": "Оборудование", "disabled": false, "params": {"object_code": "equipment"}}
         }',
         v_actor_code,
         v_actor_code)::jsonb;
@@ -191,7 +192,7 @@ begin
         "mine": {"code": "act_open_object", "name": "Карта", "disabled": false, "params": {"object_code": "mine"}},
         "logout": {"code": "logout", "name": "Выход", "disabled": false, "params": {}}
       }';
-    if pp_utils.is_in_group(in_actor_id, 'doctor') then
+    if pp_utils.is_in_group(in_actor_id, 'doctor') or pp_utils.is_in_group(in_actor_id, 'unofficial_doctor') then
       v_actions :=
         v_actions ||
         jsonb '{

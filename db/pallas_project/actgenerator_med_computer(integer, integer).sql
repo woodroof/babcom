@@ -19,7 +19,7 @@ declare
 begin
   assert in_actor_id is not null;
 
-  for v_disease in (select * from unnest(array['wound', 'radiation', 'asthma', 'rio_miamore', 'addiction', 'genetic'])) loop
+  for v_disease in (select * from unnest(array['wound', 'radiation', 'asthma', 'rio_miamore', 'addiction', 'genetic', 'sleg', 'sleg_addiction', 'back_rio_miamore'])) loop
     select x.level into v_level
     from jsonb_to_record(jsonb_extract_path(v_med_health, v_disease)) as x(level integer);
     v_disease_params := data.get_param('med_' || v_disease );
@@ -44,8 +44,11 @@ begin
   v_actions_list := v_actions_list || 
         format(', "med_cure": {"code": "med_cure", "name": "med_cure", "disabled": false,'||
                 '"params": {"med_computer_code": "%s", "person_code": "%s"},
-                "user_params": [{"code": "med_health", "description": "med_health", "type": "jsonb"}, 
-                                {"code": "med_clinic_money", "description": "med_clinic_money", "type": "integer"}]}',
+                "user_params": [{"code": "disease", "description": "disease", "type": "string"}, 
+                                {"code": "level", "description": "level", "type": "integer"},
+                                {"code": "message", "description": "Сообщение для пациента", "type": "string"},
+                                {"code": "med_clinic_money_price", "description": "Стоимость лечения в деньгах", "type": "integer"},
+                                {"code": "med_clinic_panacelin_price", "description": "Стоимость лечения в панацелине", "type": "integer"}]}',
                 v_medcomputer_code,
                 v_person_code);
 

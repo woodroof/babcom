@@ -117,7 +117,8 @@ begin
       "system_person_recreation_status":2,
       "system_person_health_care_status":2,
       "system_person_life_support_status":3,
-      "system_person_administrative_services_status":3
+      "system_person_administrative_services_status":3,
+      "system_person_tech_skill":1
     }',
     array['all_person', 'player', 'un']);
   perform pallas_project.create_person(
@@ -136,7 +137,8 @@ begin
       "system_person_recreation_status":3,
       "system_person_health_care_status":3,
       "system_person_life_support_status":3,
-      "system_person_administrative_services_status":3
+      "system_person_administrative_services_status":3,
+      "system_person_tech_skill":1
     }',
     array['all_person', 'player', 'un', 'opa']);
   perform pallas_project.create_person(
@@ -155,7 +157,8 @@ begin
       "system_person_recreation_status":1,
       "system_person_health_care_status":1,
       "system_person_life_support_status":2,
-      "system_person_administrative_services_status":1
+      "system_person_administrative_services_status":1,
+      "system_person_tech_skill":1
     }',
     array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
@@ -174,7 +177,8 @@ begin
       "system_person_recreation_status":1,
       "system_person_health_care_status":1,
       "system_person_life_support_status":2,
-      "system_person_administrative_services_status":1
+      "system_person_administrative_services_status":1,
+      "system_person_tech_skill":0
     }',
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
@@ -481,7 +485,8 @@ begin
       "system_person_recreation_status":1,
       "system_person_health_care_status":1,
       "system_person_life_support_status":2,
-      "system_person_administrative_services_status":0
+      "system_person_administrative_services_status":0,
+      "system_person_tech_skill":0
     }',
     array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
@@ -500,7 +505,8 @@ begin
       "system_person_recreation_status":1,
       "system_person_health_care_status":1,
       "system_person_life_support_status":1,
-      "system_person_administrative_services_status":0
+      "system_person_administrative_services_status":0,
+      "system_person_tech_skill":0
     }',
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
@@ -519,7 +525,8 @@ begin
       "system_person_recreation_status":3,
       "system_person_health_care_status":2,
       "system_person_life_support_status":3,
-      "system_person_administrative_services_status":0
+      "system_person_administrative_services_status":0,
+      "system_person_tech_skill":1
     }',
     array['all_person', 'player', 'aster', 'cartel']);
   perform pallas_project.create_person(
@@ -671,7 +678,8 @@ begin
       "system_person_recreation_status":2,
       "system_person_health_care_status":3,
       "system_person_life_support_status":3,
-      "system_person_administrative_services_status":3
+      "system_person_administrative_services_status":3,
+      "system_person_med_skill":1
     }',
     array['all_person', 'player', 'un']);
   perform pallas_project.create_person(
@@ -690,7 +698,8 @@ begin
       "system_person_recreation_status":1,
       "system_person_health_care_status":0,
       "system_person_life_support_status":1,
-      "system_person_administrative_services_status":0
+      "system_person_administrative_services_status":0,
+      "system_person_med_skill":0
     }',
     array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
@@ -709,7 +718,8 @@ begin
       "system_person_recreation_status":1,
       "system_person_health_care_status":1,
       "system_person_life_support_status":1,
-      "system_person_administrative_services_status":0
+      "system_person_administrative_services_status":0,
+      "system_person_med_skill":0
     }',
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
@@ -728,7 +738,8 @@ begin
       "system_person_recreation_status":1,
       "system_person_health_care_status":1,
       "system_person_life_support_status":1,
-      "system_person_administrative_services_status":0
+      "system_person_administrative_services_status":0,
+      "system_person_med_skill":0
     }',
     array['all_person', 'player', 'aster', 'cartel']);
   perform pallas_project.create_person(
@@ -747,7 +758,8 @@ begin
       "system_person_recreation_status":0,
       "system_person_health_care_status":1,
       "system_person_life_support_status":1,
-      "system_person_administrative_services_status":1
+      "system_person_administrative_services_status":1,
+      "system_person_med_skill":1
     }',
     array['all_person', 'player', 'un', 'opa']);
   perform pallas_project.create_person(
@@ -954,7 +966,8 @@ begin
       "system_person_recreation_status":2,
       "system_person_health_care_status":2,
       "system_person_life_support_status":2,
-      "system_person_administrative_services_status":2
+      "system_person_administrative_services_status":2,
+      "system_person_med_skill":1
     }',
     array['all_person', 'player', 'mcr']);
   perform pallas_project.create_person(

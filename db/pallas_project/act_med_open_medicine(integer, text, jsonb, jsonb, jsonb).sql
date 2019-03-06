@@ -6,11 +6,13 @@ volatile
 as
 $$
 declare
-  v_med_comp_client_ids integer[] := json.get_integer_array(data.get_param('med_comp_client_ids'));
+  v_med_comp_client_ids text[] := json.get_string_array(data.get_param('med_comp_client_ids'));
   v_object_code text;
+  v_client_code text;
 begin
   assert in_request_id is not null;
-  if array_position(v_med_comp_client_ids, coalesce(in_client_id, 0)) is not null then
+  select code into v_client_code from data.clients c where id = in_client_id;
+  if array_position(v_med_comp_client_ids, coalesce(v_client_code, '~')) is not null then
     v_object_code := 'medicine';
   else
     v_object_code := 'wrong_medicine';

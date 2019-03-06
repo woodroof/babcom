@@ -9,20 +9,20 @@ declare
   v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_med_computer_code text := json.get_string(in_params, 'med_computer_code');
   v_person_code text := json.get_string(in_params, 'person_code');
-  v_med_health jsonb := to_jsonb(json.get_string(in_user_params, 'med_health'));
-  v_med_clinic_money integer := json.get_integer(in_user_params, 'med_clinic_money');
-  v_disease text;
-  v_level integer;
+  v_disease text := json.get_string(in_user_params, 'disease');
+  v_level integer := json.get_integer(in_user_params, 'level');
+  v_message text := json.get_string(in_user_params, 'message');
+  v_med_clinic_money_price integer := json.get_integer(in_user_params, 'med_clinic_money_price');
+  v_med_clinic_panacelin_price integer := json.get_integer(in_user_params, 'med_clinic_panacelin_price');
   v_diagnosted integer;
+
+  v_clinic_money integer;
+  v_resource_panacelin integer;
 
   v_person_id integer := data.get_object_id(v_person_code);
   v_child_person_id integer;
 
-  v_old_med_health jsonb;
-  v_old_level integer;
-
-  v_disease_params jsonb;
-  v_message_text text ;
+  v_med_health jsonb;
 
   v_health_care_status integer;
   v_orig_health_care_status integer;
@@ -33,72 +33,68 @@ declare
 
   v_message_sent boolean := false;
   v_changes jsonb[];
+  v_diff jsonb;
+  v_med_skill integer := json.get_integer_opt(data.get_attribute_value(v_actor_id, 'system_person_med_skill'), null);
+  v_is_stimulant boolean := json.get_boolean_opt(data.get_attribute_value(v_actor_id, 'system_person_is_stimulant_used'), null);
+
 begin
 
   v_person_id := json.get_integer_opt(data.get_attribute_value(v_person_id, 'system_person_original_id'), v_person_id);
   v_person_code := data.get_object_code(v_person_id);
 
-  v_old_med_health := coalesce(data.get_attribute_value_for_update(v_person_code || '_med_health', 'med_health'), jsonb '{}');
+  perform pallas_project.act_med_set_disease_level(
+        null, 
+        null, 
+        format('{"person_code": "%s", "disease": "%s", "level": %s, "without_message": true}', v_person_code, v_disease, v_level)::jsonb, 
+        null, 
+        null);
 
-  for v_disease in (select * from jsonb_object_keys(v_med_health)) loop
-    select x.job, x.level into v_job_id, v_old_level
-    from jsonb_to_record(jsonb_extract_path(v_old_med_health, v_disease)) as x(job integer, level integer);
-    select x.level, x_diagnosted into v_level, v_diagnosted
-    from jsonb_to_record(jsonb_extract_path(v_med_health, v_disease)) as x(level integer, diagnosted integer);
+  if coalesce(v_message,'') <> '' then
+    perform pp_utils.add_notification(v_person_id, v_message);
+    for v_child_person_id in (select * from unnest(json.get_integer_array_opt(data.get_attribute_value(v_person_id, 'system_person_doubles_id_list'), array[]::integer[]))) loop
+      perform pp_utils.add_notification(v_child_person_id, v_message);
+    end loop;
+  end if;
 
-    if v_level is null then 
-      v_level := 0;
-    end if;
-    if coalesce(v_old_level, 0) <> v_level then
-
-      v_message_text := data.get_string_param('med_' || v_disease || '_' || v_level);
-      v_disease_params := data.get_param('med_' || v_disease );
-      select x.time, coalesce(x.next_level, v_level + 1) into v_time_to_next, v_next_level
-      from jsonb_to_record(jsonb_extract_path(v_disease_params, 'l'||v_level)) as x(time integer, next_level integer);
-
-      delete from data.jobs where id = v_job_id;
-
-      if v_time_to_next is not null then
-        v_job_id := data.create_job(clock_timestamp() + (v_time_to_next::text || ' minutes')::interval, 
-          'pallas_project.job_med_set_disease_level', 
-          format('{"person_code": "%s", "disease": "%s", "level": %s}', v_person_code, v_disease, v_next_level)::jsonb);
-      end if;
-
-      if coalesce(v_message_text,'') <> '' then
-        perform pp_utils.add_notification(v_person_id, v_message_text);
-        for v_child_person_id in (select * from unnest(json.get_integer_array_opt(data.get_attribute_value(v_person_id, ''), array[]::integer[]))) loop
-          perform pp_utils.add_notification(v_child_person_id, v_message_text);
-        end loop;
-      end if;
-
-      v_med_health := jsonb_set(v_med_health, 
-                                array[v_disease]::text[], 
-                                jsonb_strip_nulls(format('{"level": %s, "start": "%s", "diagnosted": %s, "job": %s}', 
-                                                          v_level, 
-                                                          pp_utils.format_date(clock_timestamp()), 
-                                                          coalesce(v_diagnosted::text, 'null'), 
-                                                          coalesce(v_job_id::text, 'null')
-                                                        )::jsonb));
-
-    end if;
-  end loop;
-
+  v_changes := array[]::jsonb[];
   if pp_utils.is_in_group(v_actor_id, 'unofficial_doctor') then
-    v_changes := array[]::jsonb[];
-    v_changes := array_append(v_changes, data.attribute_change2jsonb('system_money', to_jsonb(v_med_clinic_money)));
+    v_clinic_money := json.get_bigint_opt(data.get_attribute_value('org_clean_asteroid', 'system_money'), 0);
+    v_diff := pallas_project.change_money(data.get_object_id('org_clean_asteroid'), v_clinic_money - v_med_clinic_money_price, v_actor_id, 'Cure');
+    perform pallas_project.create_transaction(
+          data.get_object_id('org_clean_asteroid'),
+          null,
+          'Покупка чистящих средств',
+          -v_med_clinic_money_price,
+          v_clinic_money - v_med_clinic_money_price,
+          null,
+          null,
+          v_actor_id,
+           array[
+            data.get_object_id('org_clean_asteroid_head'),
+            data.get_object_id('org_clean_asteroid_economist'),
+            data.get_object_id('org_clean_asteroid_auditor'),
+            data.get_object_id('org_clean_asteroid_temporary_auditor')]);
+      perform data.process_diffs_and_notify(v_diff);
+
+  elsif pp_utils.is_in_group(v_actor_id, 'doctor') then
+    v_resource_panacelin := json.get_bigint_opt(data.get_attribute_value('org_clinic', 'system_resource_panacelin'), 0);
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('system_resource_panacelin', to_jsonb(v_resource_panacelin - v_med_clinic_panacelin_price)));
     perform data.change_object_and_notify(data.get_object_id('org_clean_asteroid'), 
                                          to_jsonb(v_changes),
                                          null);
   end if;
 
   v_changes := array[]::jsonb[];
+  v_med_health := coalesce(data.get_attribute_value_for_share(v_person_code || '_med_health', 'med_health'), jsonb '{}');
   v_changes := array_append(v_changes, data.attribute_change2jsonb('med_health', v_med_health));
-  perform data.change_object_and_notify(data.get_object_id(v_person_code || '_med_health'), 
-                                        to_jsonb(v_changes),
-                                        null);
   if pp_utils.is_in_group(v_actor_id, 'unofficial_doctor') then
-    v_changes := array_append(v_changes, data.attribute_change2jsonb('med_clinic_money', to_jsonb(v_med_clinic_money)));
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('med_clinic_money', to_jsonb(v_clinic_money - v_med_clinic_money_price)));
+  elsif pp_utils.is_in_group(v_actor_id, 'doctor') then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('resource_panacelin', to_jsonb(v_resource_panacelin - v_med_clinic_panacelin_price)));
   end if;
+
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('med_skill', to_jsonb(v_med_skill)));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('is_stimulant_used', to_jsonb(v_is_stimulant)));
 
   select coalesce(max(json.get_integer_opt(data.get_attribute_value_for_share(x, 'system_person_health_care_status'), 0)), 0) into v_health_care_status 
     from unnest(json.get_integer_array_opt(data.get_attribute_value(v_person_id, 'system_person_doubles_id_list'), array[]::integer[])) as x;

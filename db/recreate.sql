@@ -14920,20 +14920,20 @@ declare
   v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_med_computer_code text := json.get_string(in_params, 'med_computer_code');
   v_person_code text := json.get_string(in_params, 'person_code');
-  v_med_health jsonb := to_jsonb(json.get_string(in_user_params, 'med_health'));
-  v_med_clinic_money integer := json.get_integer(in_user_params, 'med_clinic_money');
-  v_disease text;
-  v_level integer;
+  v_disease text := json.get_string(in_user_params, 'disease');
+  v_level integer := json.get_integer(in_user_params, 'level');
+  v_message text := json.get_string(in_user_params, 'message');
+  v_med_clinic_money_price integer := json.get_integer(in_user_params, 'med_clinic_money_price');
+  v_med_clinic_panacelin_price integer := json.get_integer(in_user_params, 'med_clinic_panacelin_price');
   v_diagnosted integer;
+
+  v_clinic_money integer;
+  v_resource_panacelin integer;
 
   v_person_id integer := data.get_object_id(v_person_code);
   v_child_person_id integer;
 
-  v_old_med_health jsonb;
-  v_old_level integer;
-
-  v_disease_params jsonb;
-  v_message_text text ;
+  v_med_health jsonb;
 
   v_health_care_status integer;
   v_orig_health_care_status integer;
@@ -14944,72 +14944,68 @@ declare
 
   v_message_sent boolean := false;
   v_changes jsonb[];
+  v_diff jsonb;
+  v_med_skill integer := json.get_integer_opt(data.get_attribute_value(v_actor_id, 'system_person_med_skill'), null);
+  v_is_stimulant boolean := json.get_boolean_opt(data.get_attribute_value(v_actor_id, 'system_person_is_stimulant_used'), null);
+
 begin
 
   v_person_id := json.get_integer_opt(data.get_attribute_value(v_person_id, 'system_person_original_id'), v_person_id);
   v_person_code := data.get_object_code(v_person_id);
 
-  v_old_med_health := coalesce(data.get_attribute_value_for_update(v_person_code || '_med_health', 'med_health'), jsonb '{}');
+  perform pallas_project.act_med_set_disease_level(
+        null, 
+        null, 
+        format('{"person_code": "%s", "disease": "%s", "level": %s, "without_message": true}', v_person_code, v_disease, v_level)::jsonb, 
+        null, 
+        null);
 
-  for v_disease in (select * from jsonb_object_keys(v_med_health)) loop
-    select x.job, x.level into v_job_id, v_old_level
-    from jsonb_to_record(jsonb_extract_path(v_old_med_health, v_disease)) as x(job integer, level integer);
-    select x.level, x_diagnosted into v_level, v_diagnosted
-    from jsonb_to_record(jsonb_extract_path(v_med_health, v_disease)) as x(level integer, diagnosted integer);
+  if coalesce(v_message,'') <> '' then
+    perform pp_utils.add_notification(v_person_id, v_message);
+    for v_child_person_id in (select * from unnest(json.get_integer_array_opt(data.get_attribute_value(v_person_id, 'system_person_doubles_id_list'), array[]::integer[]))) loop
+      perform pp_utils.add_notification(v_child_person_id, v_message);
+    end loop;
+  end if;
 
-    if v_level is null then 
-      v_level := 0;
-    end if;
-    if coalesce(v_old_level, 0) <> v_level then
-
-      v_message_text := data.get_string_param('med_' || v_disease || '_' || v_level);
-      v_disease_params := data.get_param('med_' || v_disease );
-      select x.time, coalesce(x.next_level, v_level + 1) into v_time_to_next, v_next_level
-      from jsonb_to_record(jsonb_extract_path(v_disease_params, 'l'||v_level)) as x(time integer, next_level integer);
-
-      delete from data.jobs where id = v_job_id;
-
-      if v_time_to_next is not null then
-        v_job_id := data.create_job(clock_timestamp() + (v_time_to_next::text || ' minutes')::interval, 
-          'pallas_project.job_med_set_disease_level', 
-          format('{"person_code": "%s", "disease": "%s", "level": %s}', v_person_code, v_disease, v_next_level)::jsonb);
-      end if;
-
-      if coalesce(v_message_text,'') <> '' then
-        perform pp_utils.add_notification(v_person_id, v_message_text);
-        for v_child_person_id in (select * from unnest(json.get_integer_array_opt(data.get_attribute_value(v_person_id, ''), array[]::integer[]))) loop
-          perform pp_utils.add_notification(v_child_person_id, v_message_text);
-        end loop;
-      end if;
-
-      v_med_health := jsonb_set(v_med_health, 
-                                array[v_disease]::text[], 
-                                jsonb_strip_nulls(format('{"level": %s, "start": "%s", "diagnosted": %s, "job": %s}', 
-                                                          v_level, 
-                                                          pp_utils.format_date(clock_timestamp()), 
-                                                          coalesce(v_diagnosted::text, 'null'), 
-                                                          coalesce(v_job_id::text, 'null')
-                                                        )::jsonb));
-
-    end if;
-  end loop;
-
+  v_changes := array[]::jsonb[];
   if pp_utils.is_in_group(v_actor_id, 'unofficial_doctor') then
-    v_changes := array[]::jsonb[];
-    v_changes := array_append(v_changes, data.attribute_change2jsonb('system_money', to_jsonb(v_med_clinic_money)));
+    v_clinic_money := json.get_bigint_opt(data.get_attribute_value('org_clean_asteroid', 'system_money'), 0);
+    v_diff := pallas_project.change_money(data.get_object_id('org_clean_asteroid'), v_clinic_money - v_med_clinic_money_price, v_actor_id, 'Cure');
+    perform pallas_project.create_transaction(
+          data.get_object_id('org_clean_asteroid'),
+          null,
+          'Покупка чистящих средств',
+          -v_med_clinic_money_price,
+          v_clinic_money - v_med_clinic_money_price,
+          null,
+          null,
+          v_actor_id,
+           array[
+            data.get_object_id('org_clean_asteroid_head'),
+            data.get_object_id('org_clean_asteroid_economist'),
+            data.get_object_id('org_clean_asteroid_auditor'),
+            data.get_object_id('org_clean_asteroid_temporary_auditor')]);
+      perform data.process_diffs_and_notify(v_diff);
+
+  elsif pp_utils.is_in_group(v_actor_id, 'doctor') then
+    v_resource_panacelin := json.get_bigint_opt(data.get_attribute_value('org_clinic', 'system_resource_panacelin'), 0);
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('system_resource_panacelin', to_jsonb(v_resource_panacelin - v_med_clinic_panacelin_price)));
     perform data.change_object_and_notify(data.get_object_id('org_clean_asteroid'), 
                                          to_jsonb(v_changes),
                                          null);
   end if;
 
   v_changes := array[]::jsonb[];
+  v_med_health := coalesce(data.get_attribute_value_for_share(v_person_code || '_med_health', 'med_health'), jsonb '{}');
   v_changes := array_append(v_changes, data.attribute_change2jsonb('med_health', v_med_health));
-  perform data.change_object_and_notify(data.get_object_id(v_person_code || '_med_health'), 
-                                        to_jsonb(v_changes),
-                                        null);
   if pp_utils.is_in_group(v_actor_id, 'unofficial_doctor') then
-    v_changes := array_append(v_changes, data.attribute_change2jsonb('med_clinic_money', to_jsonb(v_med_clinic_money)));
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('med_clinic_money', to_jsonb(v_clinic_money - v_med_clinic_money_price)));
+  elsif pp_utils.is_in_group(v_actor_id, 'doctor') then
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('resource_panacelin', to_jsonb(v_resource_panacelin - v_med_clinic_panacelin_price)));
   end if;
+
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('med_skill', to_jsonb(v_med_skill)));
+  v_changes := array_append(v_changes, data.attribute_change2jsonb('is_stimulant_used', to_jsonb(v_is_stimulant)));
 
   select coalesce(max(json.get_integer_opt(data.get_attribute_value_for_share(x, 'system_person_health_care_status'), 0)), 0) into v_health_care_status 
     from unnest(json.get_integer_array_opt(data.get_attribute_value(v_person_id, 'system_person_doubles_id_list'), array[]::integer[])) as x;
@@ -15145,11 +15141,13 @@ volatile
 as
 $$
 declare
-  v_med_comp_client_ids integer[] := json.get_integer_array(data.get_param('med_comp_client_ids'));
+  v_med_comp_client_ids text[] := json.get_string_array(data.get_param('med_comp_client_ids'));
   v_object_code text;
+  v_client_code text;
 begin
   assert in_request_id is not null;
-  if array_position(v_med_comp_client_ids, coalesce(in_client_id, 0)) is not null then
+  select code into v_client_code from data.clients c where id = in_client_id;
+  if array_position(v_med_comp_client_ids, coalesce(v_client_code, '~')) is not null then
     v_object_code := 'medicine';
   else
     v_object_code := 'wrong_medicine';
@@ -15172,6 +15170,7 @@ declare
   v_person_code text := json.get_string(in_params, 'person_code');
   v_disease text := json.get_string_opt(in_params, 'disease', null);
   v_level integer := json.get_integer_opt(in_params, 'level', null);
+  v_without_message boolean := json.get_boolean_opt(in_params, 'without_message', false);
   v_diagnosted integer := json.get_integer_opt(coalesce(in_user_params,'{}'::jsonb), 'diagnosted', null);
 
   v_person_id integer := data.get_object_id(v_person_code);
@@ -15223,7 +15222,7 @@ begin
       format('{"person_code": "%s", "disease": "%s", "level": %s}', v_person_code, v_disease, v_next_level)::jsonb);
   end if;
 
-  if coalesce(v_message_text,'') <> '' then
+  if coalesce(v_message_text,'') <> '' and not v_without_message then
     perform pp_utils.add_notification(v_person_id, v_message_text);
     for v_child_person_id in (select * from unnest(json.get_integer_array_opt(data.get_attribute_value(v_person_id, 'system_person_doubles_id_list'), array[]::integer[]))) loop
       perform pp_utils.add_notification(v_child_person_id, v_message_text);
@@ -15285,8 +15284,9 @@ as
 $$
 declare
   v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_client_code text;
   v_patient_login text := json.get_string(in_user_params, 'patient_login');
-  v_med_comp_client_ids integer[] := json.get_integer_array(data.get_param('med_comp_client_ids'));
+  v_med_comp_client_ids text[] := json.get_string_array(data.get_param('med_comp_client_ids'));
   v_object_id integer;
   v_object_code text;
   v_person_id integer;
@@ -15295,9 +15295,13 @@ declare
   v_health_care_status integer;
   v_orig_health_care_status integer;
   v_attributes jsonb;
+  v_med_skill integer := json.get_integer_opt(data.get_attribute_value(v_actor_id, 'system_person_med_skill'), null);
+  v_is_stimulant boolean := json.get_boolean_opt(data.get_attribute_value(v_actor_id, 'system_person_is_stimulant_used'), null);
+  v_resource_panacelin integer;
 begin
   assert in_request_id is not null;
-  if array_position(v_med_comp_client_ids, coalesce(in_client_id, 0)) is null then
+  select code into v_client_code from data.clients c where id = in_client_id;
+  if array_position(v_med_comp_client_ids, coalesce(v_client_code, '~')) is null then
     perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Зайдите со стационарного медицинского компьютера');
     return;
   end if;
@@ -15316,20 +15320,31 @@ begin
     v_health_care_status := v_orig_health_care_status;
   end if;
 
-  v_attributes :=  jsonb_build_object('med_person_code', data.get_object_code(v_person_id),
+  v_attributes :=  jsonb_build_object(
+    'med_person_code', data.get_object_code(v_person_id),
     'med_health', v_med_health,
     'med_health_care_status', v_health_care_status
   );
 
+  if v_med_skill is not null then
+    v_attributes :=  v_attributes || jsonb_build_object('med_skill', v_med_skill);
+  end if;
+  if v_is_stimulant is not null then
+    v_attributes :=  v_attributes || jsonb_build_object('is_stimulant_used', v_is_stimulant);
+  end if;
+
   if pp_utils.is_in_group(v_actor_id, 'unofficial_doctor') then
     v_clinic_money := json.get_bigint_opt(data.get_attribute_value('org_clean_asteroid', 'system_money'), 0);
     v_attributes := v_attributes || jsonb_build_object('med_clinic_money', v_clinic_money);
+  elsif pp_utils.is_in_group(v_actor_id, 'doctor') then
+    v_resource_panacelin := json.get_bigint_opt(data.get_attribute_value('org_clinic', 'system_resource_panacelin'), 0);
+    v_attributes := v_attributes || jsonb_build_object('resource_panacelin', v_resource_panacelin);
   end if;
 
   v_object_id := data.create_object(
-  null,
-  v_attributes,
-  'med_computer');
+    null,
+    v_attributes,
+    'med_computer');
 
   v_object_code := data.get_object_code(v_object_id);
 
@@ -15633,6 +15648,41 @@ begin
   end if;
 
   perform api_utils.create_ok_notification(in_client_id, in_request_id);
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_tech_break(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_tech_break(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_tech_code text := json.get_string(in_params, 'tech_code');
+  v_tech_id text := replace(v_tech_code, 'equipment_', '');
+  v_message_sent boolean := false;
+  v_mine_equipment_id integer := data.get_object_id('mine_equipment');
+  v_mine_equipment_json jsonb := data.get_attribute_value_for_update(v_mine_equipment_id, 'mine_equipment');
+begin
+  assert in_request_id is not null;
+
+  if not json.get_boolean_opt(json.get_object_opt(v_mine_equipment_json, v_tech_id, jsonb '{}'), 'broken', true) then
+    v_mine_equipment_json := jsonb_set(v_mine_equipment_json, array[v_tech_id, 'broken'], jsonb 'true');
+     perform data.change_object_and_notify(in_client_id, 
+                                           in_request_id,
+                                           v_mine_equipment_id, 
+                                           jsonb_build_array(data.attribute_change2jsonb('mine_equipment', v_mine_equipment_json)));
+
+    v_message_sent := data.change_current_object(in_client_id, 
+                                                 in_request_id,
+                                                 data.get_object_id(v_tech_code), 
+                                                 jsonb_build_array(data.attribute_change2jsonb('tech_broken', jsonb 'true')));
+  end if;
+  if not v_message_sent then
+   perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
 end;
 $$
 language plpgsql;
@@ -18061,7 +18111,7 @@ declare
 begin
   assert in_actor_id is not null;
 
-  for v_disease in (select * from unnest(array['wound', 'radiation', 'asthma', 'rio_miamore', 'addiction', 'genetic'])) loop
+  for v_disease in (select * from unnest(array['wound', 'radiation', 'asthma', 'rio_miamore', 'addiction', 'genetic', 'sleg', 'sleg_addiction', 'back_rio_miamore'])) loop
     select x.level into v_level
     from jsonb_to_record(jsonb_extract_path(v_med_health, v_disease)) as x(level integer);
     v_disease_params := data.get_param('med_' || v_disease );
@@ -18086,8 +18136,11 @@ begin
   v_actions_list := v_actions_list || 
         format(', "med_cure": {"code": "med_cure", "name": "med_cure", "disabled": false,'||
                 '"params": {"med_computer_code": "%s", "person_code": "%s"},
-                "user_params": [{"code": "med_health", "description": "med_health", "type": "jsonb"}, 
-                                {"code": "med_clinic_money", "description": "med_clinic_money", "type": "integer"}]}',
+                "user_params": [{"code": "disease", "description": "disease", "type": "string"}, 
+                                {"code": "level", "description": "level", "type": "integer"},
+                                {"code": "message", "description": "Сообщение для пациента", "type": "string"},
+                                {"code": "med_clinic_money_price", "description": "Стоимость лечения в деньгах", "type": "integer"},
+                                {"code": "med_clinic_panacelin_price", "description": "Стоимость лечения в панацелине", "type": "integer"}]}',
                 v_medcomputer_code,
                 v_person_code);
 
@@ -18367,7 +18420,8 @@ begin
           "all_contracts": {"code": "act_open_object", "name": "Все контракты", "disabled": false, "params": {"object_code": "contracts"}},
           "cycle_checklist": {"code": "act_open_object", "name": "Чеклист", "disabled": false, "params": {"object_code": "cycle_checklist"}},
           "med_drugs": {"code": "act_open_object", "name": "Наркотики", "disabled": false, "params": {"object_code": "med_drugs"}},
-          "prices": {"code": "act_open_object", "name": "Цены", "disabled": false, "params": {"object_code": "prices"}}
+          "prices": {"code": "act_open_object", "name": "Цены", "disabled": false, "params": {"object_code": "prices"}},
+          "equipment": {"code": "act_open_object", "name": "Оборудование", "disabled": false, "params": {"object_code": "equipment"}}
         }',
         v_actor_code,
         v_actor_code)::jsonb;
@@ -18452,7 +18506,7 @@ begin
         "mine": {"code": "act_open_object", "name": "Карта", "disabled": false, "params": {"object_code": "mine"}},
         "logout": {"code": "logout", "name": "Выход", "disabled": false, "params": {}}
       }';
-    if pp_utils.is_in_group(in_actor_id, 'doctor') then
+    if pp_utils.is_in_group(in_actor_id, 'doctor') or pp_utils.is_in_group(in_actor_id, 'unofficial_doctor') then
       v_actions :=
         v_actions ||
         jsonb '{
@@ -21260,6 +21314,56 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.fcard_equipment(integer, integer);
+
+create or replace function pallas_project.fcard_equipment(in_object_id integer, in_actor_id integer)
+returns void
+volatile
+as
+$$
+declare
+  v_mine_equipment_json jsonb := data.get_attribute_value_for_share('mine_equipment', 'mine_equipment');
+  v_tech_id text;
+  v_tech_object jsonb;
+  v_tech_type text;
+  v_old_equipment_list text := json.get_string_opt(data.get_attribute_value_for_update('equipment', 'equipment_list'), '');
+  v_equipment_list text := '';
+begin
+  for v_tech_id in (select * from jsonb_object_keys(v_mine_equipment_json)) loop
+    v_tech_object := json.get_object(v_mine_equipment_json, v_tech_id);
+    v_tech_type := json.get_string(v_tech_object, 'type');
+    if v_tech_type in ('driller', 'digger', 'buksir', 'dron', 'loader', 'stealer', 'ship', 'train') then
+      if not data.is_object_exists('equipment_' || v_tech_id) then
+        perform data.create_object(
+          'equipment_' || v_tech_id,
+          format('[
+            {"code": "title", "value": "%s"},
+            {"code": "tech_type", "value": "%s"},
+            {"code": "tech_broken", "value": %s},
+            {"code": "tech_qr", "value": "%s"}
+            ]',
+            v_tech_type,
+            v_tech_type,
+            case when json.get_boolean(v_tech_object, 'broken') then 'broken' else 'working' end,
+            data.get_string_param('objects_url') || 'equipment_' || v_tech_id
+          ) ::jsonb,
+          'tech') ;
+      end if;
+      v_equipment_list := v_equipment_list 
+        || E'\n' || pp_utils.link('equipment_' || v_tech_id) 
+        || '(broken: ' || json.get_boolean_opt(v_tech_object, 'x', null) 
+        || ', x: ' || json.get_integer_opt(v_tech_object, 'x', -100) 
+        || ', y: '|| json.get_integer_opt(v_tech_object, 'y', -100) 
+        || ', firm: ' || json.get_string_opt(v_tech_object, 'firm', '-') ||')';
+    end if;
+  end loop;
+  if v_old_equipment_list <> v_equipment_list then
+    perform data.set_attribute_value('equipment', 'equipment_list', to_jsonb(v_equipment_list));
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.fcard_notification(integer, integer);
 
 create or replace function pallas_project.fcard_notification(in_object_id integer, in_actor_id integer)
@@ -21671,7 +21775,7 @@ begin
         "groups": [
           {"code": "menu_notifications", "actions": ["notifications"]},
           {"code": "menu_lottery", "actions": ["lottery"]},
-          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "med_health", "chats", "documents", "medicine", "customs", "my_contracts", "my_organizations", "claims", "important_notifications", "med_drugs", "mine"]},
+          {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "med_health", "chats", "documents", "medicine", "customs", "my_contracts", "my_organizations", "claims", "important_notifications", "med_drugs", "mine", "equipment"]},
           {"code": "menu_social", "actions": ["news", "all_chats", "debatles", "master_chats"]},
           {"code": "menu_info", "actions": ["all_contracts", "persons", "districts", "organizations"]},
           {"code": "menu_cycle", "actions": ["cycle_checklist", "prices"]},
@@ -24450,7 +24554,7 @@ begin
   ('med_drug_effect', 'Эффект', 'Эффект наркотика', 'normal', 'full', 'pallas_project.vd_med_drug_effect', false);
 
   insert into data.params(code, value, description) values
-  ('med_comp_client_ids', jsonb '[1, 2]', 'client_id медицинского компьютера'),
+  ('med_comp_client_ids', jsonb '["1", "2"]', 'client_id медицинского компьютера'),
   ('med_wound', '{"l0": {}, "l1": {"time": 5}, "l2": {"time": 15}, "l3": {"time": 1}, "l4": {"time": 3}, "l5": {"time": 5}, "l6": {"time": 5}, "l7": {"time": 5}, "l8": {}}'::jsonb, 'Длительность этапов заболевания'),
   ('med_wound_0', jsonb '"Вы чувствуете себя хорошо, ничего не болит."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_wound_1', jsonb '"Вам больно в месте ранения. Не можете прикасаться к ране и шевелить конечностью."', 'Сообщение для игрока о состоянии заболевания'),
@@ -24562,6 +24666,7 @@ begin
   jsonb '[
     {"code": "title", "value": "Медицинское обслуживание"},
     {"code": "is_visible", "value": true, "value_object_code": "doctor"},
+    {"code": "is_visible", "value": true, "value_object_code": "unofficial_doctor"},
     {"code": "actions_function", "value": "pallas_project.actgenerator_medicine"},
     {
       "code": "template",
@@ -24579,6 +24684,7 @@ begin
   jsonb '[
     {"code": "title", "value": "Медицинское обслуживание"},
     {"code": "is_visible", "value": true, "value_object_code": "doctor"},
+    {"code": "is_visible", "value": true, "value_object_code": "unofficial_doctor"},
     {"code": "description", "value": "Зайдите со стационарного медицинского компьютера"},
     {
       "code": "template",
@@ -24598,6 +24704,7 @@ begin
     {"code": "type", "value": "med_computer"},
     {"code": "is_visible", "value": true, "value_object_code": "master"},
     {"code": "is_visible", "value": true, "value_object_code": "doctor"},
+    {"code": "is_visible", "value": true, "value_object_code": "unofficial_doctor"},
     {"code": "actions_function", "value": "pallas_project.actgenerator_med_computer"},
     {"code": "temporary_object", "value": true},
     {
@@ -25041,7 +25148,7 @@ begin
         "8": {"x":11, "y":19, "type":"loader", "actor_id": false, "fueled": true, "broken":false, "firm":"AD", "content":[]},
         "9": {"x":11, "y":20, "type":"stealer", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
         "10": {"x":11, "y":21, "type":"stone", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
-        "11": {"x":11, "y":22, "type":"ship", "actor_id": false, "fueled": true, "broken":false," firm":"AC", "content":[]},
+        "11": {"x":11, "y":22, "type":"ship", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
         "12": {"x":11, "y":23, "type":"barge", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
         "13": {"x":11, "y":24, "type":"train", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
         "14": {"x":11, "y":12, "type":"brillmine", "actor_id": false, "fueled": true, "broken":false, "firm":"TM", "content":[]},
@@ -25049,6 +25156,43 @@ begin
         "16": {"x":11, "y":14, "type":"ironmine", "actor_id": false, "fueled": true, "broken":false, "firm":"DB", "content":[]}
       }
     }');
+
+  insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
+  ('equipment_list', null, 'Список оборудования', 'normal', 'full', null, false),
+  ('tech_type', null, 'Тип оборудования', 'normal', 'full', 'pallas_project.vd_tech_type', false),
+  ('tech_broken', 'Статус', 'Статус поломанности оборудования', 'normal', 'full', 'pallas_project.vd_tech_broken', false),
+  ('tech_qr', 'Ссылка для QR-кода', 'Ссылка для QR-кода', 'normal', 'full', null, true);
+
+  -- Оборудование
+  perform data.create_object(
+  'equipment',
+  jsonb '[
+    {"code": "title", "value": "Оборудование"},
+    {"code": "is_visible", "value": true, "value_object_code": "master"},
+    {"code": "full_card_function", "value": "pallas_project.fcard_equipment"},
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [{"code": "equipment_group", "attributes": ["equipment_list"]}]
+      }
+    }
+  ]');
+
+  perform data.create_class(
+  'tech',
+  jsonb '[
+    {"code": "title", "value": "Оборудование"},
+    {"code": "is_visible", "value": true},
+    {
+      "code": "template",
+      "value": {
+        "title": "tech_type",
+        "groups": [{"code": "tech_group", "attributes": ["tech_broken", "tech_qr"], "actions": ["tech_broke", "tech_repare"]}]
+      }
+    }
+  ]');
 end;
 $$
 language plpgsql;
@@ -25175,6 +25319,8 @@ begin
   ('resource_methane', 'Метан', null, 'normal', 'full', null, true),
   ('system_resource_goods', null, null, 'system', null, null, false),
   ('resource_goods', 'Товары', null, 'normal', 'full', null, true),
+  ('system_resource_panacelin', null, null, 'system', null, null, false),
+  ('resource_panacelin', 'Панацелин', null, 'hidden', null, null, true),
 
   ('system_ice_efficiency', null, null, 'system', null, null, false),
   ('ice_efficiency', 'Эффективность переработки льда', null, 'normal', 'full', 'pallas_project.vd_eff_percent', true),
@@ -25341,7 +25487,8 @@ begin
       "title": "Клиника",
       "system_org_economics_type": "budget",
       "system_org_budget": 250,
-      "system_money": 250
+      "system_money": 250,
+      "system_resource_panacelin": 25
     }');
   perform pallas_project.create_organization(
     'org_star_helix',
@@ -25688,9 +25835,14 @@ begin
   ('system_person_original_id', 'Идентификатор основной персоны', 'system', null, null, false),
   ('system_person_doubles_id_list', 'Список идентификаторов дублей персоны', 'system', null, null, false),
   ('system_person_is_stimulant_used', 'Признак, что принят стимулятор', 'system', null, null, false),
+  ('is_stimulant_used', 'Признак, что принят стимулятор', 'hidden', null, null, true),
   ('system_person_miner_skill', 'Навык шахтёра', 'system', null, null, false),
   ('miner_skill', null, 'hidden', null, null, true),
-  ('is_stimulant_used', null, 'hidden', null, null, true);
+  ('system_person_med_skill', 'Навык медика', 'system', null, null, false),
+  ('med_skill', null, 'hidden', null, null, true),
+  ('system_person_tech_skill', 'Навык медика', 'system', null, null, false),
+  ('tech_skill', null, 'hidden', null, null, true),
+  ('system_person_repare_count', 'Количество починок в этом цикле', 'system', null, null, false);
 
   insert into data.actions(code, function) values
   ('change_un_rating', 'pallas_project.act_change_un_rating'),
@@ -25937,7 +26089,8 @@ begin
       "system_person_recreation_status":2,
       "system_person_health_care_status":2,
       "system_person_life_support_status":3,
-      "system_person_administrative_services_status":3
+      "system_person_administrative_services_status":3,
+      "system_person_tech_skill":1
     }',
     array['all_person', 'player', 'un']);
   perform pallas_project.create_person(
@@ -25956,7 +26109,8 @@ begin
       "system_person_recreation_status":3,
       "system_person_health_care_status":3,
       "system_person_life_support_status":3,
-      "system_person_administrative_services_status":3
+      "system_person_administrative_services_status":3,
+      "system_person_tech_skill":1
     }',
     array['all_person', 'player', 'un', 'opa']);
   perform pallas_project.create_person(
@@ -25975,7 +26129,8 @@ begin
       "system_person_recreation_status":1,
       "system_person_health_care_status":1,
       "system_person_life_support_status":2,
-      "system_person_administrative_services_status":1
+      "system_person_administrative_services_status":1,
+      "system_person_tech_skill":1
     }',
     array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
@@ -25994,7 +26149,8 @@ begin
       "system_person_recreation_status":1,
       "system_person_health_care_status":1,
       "system_person_life_support_status":2,
-      "system_person_administrative_services_status":1
+      "system_person_administrative_services_status":1,
+      "system_person_tech_skill":0
     }',
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
@@ -26301,7 +26457,8 @@ begin
       "system_person_recreation_status":1,
       "system_person_health_care_status":1,
       "system_person_life_support_status":2,
-      "system_person_administrative_services_status":0
+      "system_person_administrative_services_status":0,
+      "system_person_tech_skill":0
     }',
     array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
@@ -26320,7 +26477,8 @@ begin
       "system_person_recreation_status":1,
       "system_person_health_care_status":1,
       "system_person_life_support_status":1,
-      "system_person_administrative_services_status":0
+      "system_person_administrative_services_status":0,
+      "system_person_tech_skill":0
     }',
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
@@ -26339,7 +26497,8 @@ begin
       "system_person_recreation_status":3,
       "system_person_health_care_status":2,
       "system_person_life_support_status":3,
-      "system_person_administrative_services_status":0
+      "system_person_administrative_services_status":0,
+      "system_person_tech_skill":1
     }',
     array['all_person', 'player', 'aster', 'cartel']);
   perform pallas_project.create_person(
@@ -26491,7 +26650,8 @@ begin
       "system_person_recreation_status":2,
       "system_person_health_care_status":3,
       "system_person_life_support_status":3,
-      "system_person_administrative_services_status":3
+      "system_person_administrative_services_status":3,
+      "system_person_med_skill":1
     }',
     array['all_person', 'player', 'un']);
   perform pallas_project.create_person(
@@ -26510,7 +26670,8 @@ begin
       "system_person_recreation_status":1,
       "system_person_health_care_status":0,
       "system_person_life_support_status":1,
-      "system_person_administrative_services_status":0
+      "system_person_administrative_services_status":0,
+      "system_person_med_skill":0
     }',
     array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
@@ -26529,7 +26690,8 @@ begin
       "system_person_recreation_status":1,
       "system_person_health_care_status":1,
       "system_person_life_support_status":1,
-      "system_person_administrative_services_status":0
+      "system_person_administrative_services_status":0,
+      "system_person_med_skill":0
     }',
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
@@ -26548,7 +26710,8 @@ begin
       "system_person_recreation_status":1,
       "system_person_health_care_status":1,
       "system_person_life_support_status":1,
-      "system_person_administrative_services_status":0
+      "system_person_administrative_services_status":0,
+      "system_person_med_skill":0
     }',
     array['all_person', 'player', 'aster', 'cartel']);
   perform pallas_project.create_person(
@@ -26567,7 +26730,8 @@ begin
       "system_person_recreation_status":0,
       "system_person_health_care_status":1,
       "system_person_life_support_status":1,
-      "system_person_administrative_services_status":1
+      "system_person_administrative_services_status":1,
+      "system_person_med_skill":1
     }',
     array['all_person', 'player', 'un', 'opa']);
   perform pallas_project.create_person(
@@ -26774,7 +26938,8 @@ begin
       "system_person_recreation_status":2,
       "system_person_health_care_status":2,
       "system_person_life_support_status":2,
-      "system_person_administrative_services_status":2
+      "system_person_administrative_services_status":2,
+      "system_person_med_skill":1
     }',
     array['all_person', 'player', 'mcr']);
   perform pallas_project.create_person(
@@ -31025,6 +31190,58 @@ as
 $$
 begin
   return 'На цикл ' || json.get_integer(in_value) + 1;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.vd_tech_broken(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_tech_broken(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+declare
+  v_value boolean := json.get_boolean(in_value);
+begin
+  case when v_value then
+    return 'Сломано';
+  else
+    return 'Исправно';
+  end case;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.vd_tech_type(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_tech_type(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+declare
+  v_text_value text := json.get_string(in_value);
+begin
+  case when v_text_value = 'driller' then
+    return 'Проходческий щит';
+  when v_text_value = 'digger' then
+    return 'Бурильная установка';
+  when v_text_value = 'buksir' then
+    return 'Буксир';
+  when v_text_value = 'dron' then
+    return 'Дрон';
+  when v_text_value = 'loader' then
+    return 'Грузовая платформа';
+  when v_text_value = 'stealer' then
+    return 'Грузовой дрон';
+  when v_text_value = 'ship' then
+    return 'Корабль';
+  when v_text_value = 'train' then
+    return 'Вагонетка';
+  else
+    return 'Оборудование';
+  end case;
 end;
 $$
 language plpgsql;

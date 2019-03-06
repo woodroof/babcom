@@ -119,7 +119,7 @@ begin
         "8": {"x":11, "y":19, "type":"loader", "actor_id": false, "fueled": true, "broken":false, "firm":"AD", "content":[]},
         "9": {"x":11, "y":20, "type":"stealer", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
         "10": {"x":11, "y":21, "type":"stone", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
-        "11": {"x":11, "y":22, "type":"ship", "actor_id": false, "fueled": true, "broken":false," firm":"AC", "content":[]},
+        "11": {"x":11, "y":22, "type":"ship", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
         "12": {"x":11, "y":23, "type":"barge", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
         "13": {"x":11, "y":24, "type":"train", "actor_id": false, "fueled": true, "broken":false, "firm":"AC", "content":[]},
         "14": {"x":11, "y":12, "type":"brillmine", "actor_id": false, "fueled": true, "broken":false, "firm":"TM", "content":[]},
@@ -127,6 +127,43 @@ begin
         "16": {"x":11, "y":14, "type":"ironmine", "actor_id": false, "fueled": true, "broken":false, "firm":"DB", "content":[]}
       }
     }');
+
+  insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
+  ('equipment_list', null, 'Список оборудования', 'normal', 'full', null, false),
+  ('tech_type', null, 'Тип оборудования', 'normal', 'full', 'pallas_project.vd_tech_type', false),
+  ('tech_broken', 'Статус', 'Статус поломанности оборудования', 'normal', 'full', 'pallas_project.vd_tech_broken', false),
+  ('tech_qr', 'Ссылка для QR-кода', 'Ссылка для QR-кода', 'normal', 'full', null, true);
+
+  -- Оборудование
+  perform data.create_object(
+  'equipment',
+  jsonb '[
+    {"code": "title", "value": "Оборудование"},
+    {"code": "is_visible", "value": true, "value_object_code": "master"},
+    {"code": "full_card_function", "value": "pallas_project.fcard_equipment"},
+    {
+      "code": "template",
+      "value": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [{"code": "equipment_group", "attributes": ["equipment_list"]}]
+      }
+    }
+  ]');
+
+  perform data.create_class(
+  'tech',
+  jsonb '[
+    {"code": "title", "value": "Оборудование"},
+    {"code": "is_visible", "value": true},
+    {
+      "code": "template",
+      "value": {
+        "title": "tech_type",
+        "groups": [{"code": "tech_group", "attributes": ["tech_broken", "tech_qr"], "actions": ["tech_broke", "tech_repare"]}]
+      }
+    }
+  ]');
 end;
 $$
 language plpgsql;

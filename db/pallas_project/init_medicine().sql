@@ -25,7 +25,7 @@ begin
   ('med_drug_effect', 'Эффект', 'Эффект наркотика', 'normal', 'full', 'pallas_project.vd_med_drug_effect', false);
 
   insert into data.params(code, value, description) values
-  ('med_comp_client_ids', jsonb '[1, 2]', 'client_id медицинского компьютера'),
+  ('med_comp_client_ids', jsonb '["1", "2"]', 'client_id медицинского компьютера'),
   ('med_wound', '{"l0": {}, "l1": {"time": 5}, "l2": {"time": 15}, "l3": {"time": 1}, "l4": {"time": 3}, "l5": {"time": 5}, "l6": {"time": 5}, "l7": {"time": 5}, "l8": {}}'::jsonb, 'Длительность этапов заболевания'),
   ('med_wound_0', jsonb '"Вы чувствуете себя хорошо, ничего не болит."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_wound_1', jsonb '"Вам больно в месте ранения. Не можете прикасаться к ране и шевелить конечностью."', 'Сообщение для игрока о состоянии заболевания'),
@@ -137,6 +137,7 @@ begin
   jsonb '[
     {"code": "title", "value": "Медицинское обслуживание"},
     {"code": "is_visible", "value": true, "value_object_code": "doctor"},
+    {"code": "is_visible", "value": true, "value_object_code": "unofficial_doctor"},
     {"code": "actions_function", "value": "pallas_project.actgenerator_medicine"},
     {
       "code": "template",
@@ -154,6 +155,7 @@ begin
   jsonb '[
     {"code": "title", "value": "Медицинское обслуживание"},
     {"code": "is_visible", "value": true, "value_object_code": "doctor"},
+    {"code": "is_visible", "value": true, "value_object_code": "unofficial_doctor"},
     {"code": "description", "value": "Зайдите со стационарного медицинского компьютера"},
     {
       "code": "template",
@@ -173,6 +175,7 @@ begin
     {"code": "type", "value": "med_computer"},
     {"code": "is_visible", "value": true, "value_object_code": "master"},
     {"code": "is_visible", "value": true, "value_object_code": "doctor"},
+    {"code": "is_visible", "value": true, "value_object_code": "unofficial_doctor"},
     {"code": "actions_function", "value": "pallas_project.actgenerator_med_computer"},
     {"code": "temporary_object", "value": true},
     {

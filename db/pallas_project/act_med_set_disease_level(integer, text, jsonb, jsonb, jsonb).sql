@@ -11,6 +11,7 @@ declare
   v_person_code text := json.get_string(in_params, 'person_code');
   v_disease text := json.get_string_opt(in_params, 'disease', null);
   v_level integer := json.get_integer_opt(in_params, 'level', null);
+  v_without_message boolean := json.get_boolean_opt(in_params, 'without_message', false);
   v_diagnosted integer := json.get_integer_opt(coalesce(in_user_params,'{}'::jsonb), 'diagnosted', null);
 
   v_person_id integer := data.get_object_id(v_person_code);
@@ -62,7 +63,7 @@ begin
       format('{"person_code": "%s", "disease": "%s", "level": %s}', v_person_code, v_disease, v_next_level)::jsonb);
   end if;
 
-  if coalesce(v_message_text,'') <> '' then
+  if coalesce(v_message_text,'') <> '' and not v_without_message then
     perform pp_utils.add_notification(v_person_id, v_message_text);
     for v_child_person_id in (select * from unnest(json.get_integer_array_opt(data.get_attribute_value(v_person_id, 'system_person_doubles_id_list'), array[]::integer[]))) loop
       perform pp_utils.add_notification(v_child_person_id, v_message_text);

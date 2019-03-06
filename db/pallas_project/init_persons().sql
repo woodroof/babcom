@@ -42,9 +42,14 @@ begin
   ('system_person_original_id', 'Идентификатор основной персоны', 'system', null, null, false),
   ('system_person_doubles_id_list', 'Список идентификаторов дублей персоны', 'system', null, null, false),
   ('system_person_is_stimulant_used', 'Признак, что принят стимулятор', 'system', null, null, false),
+  ('is_stimulant_used', 'Признак, что принят стимулятор', 'hidden', null, null, true),
   ('system_person_miner_skill', 'Навык шахтёра', 'system', null, null, false),
   ('miner_skill', null, 'hidden', null, null, true),
-  ('is_stimulant_used', null, 'hidden', null, null, true);
+  ('system_person_med_skill', 'Навык медика', 'system', null, null, false),
+  ('med_skill', null, 'hidden', null, null, true),
+  ('system_person_tech_skill', 'Навык медика', 'system', null, null, false),
+  ('tech_skill', null, 'hidden', null, null, true),
+  ('system_person_repare_count', 'Количество починок в этом цикле', 'system', null, null, false);
 
   insert into data.actions(code, function) values
   ('change_un_rating', 'pallas_project.act_change_un_rating'),
