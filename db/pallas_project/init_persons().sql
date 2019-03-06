@@ -155,11 +155,11 @@ begin
     ]');
 
   -- Мастера
-  perform pallas_project.create_person(null, 'm1', jsonb '{"title": "Саша", "person_occupation": "Мастер"}', array['master']);
-  perform pallas_project.create_person(null, 'm2', jsonb '{"title": "Петя", "person_occupation": "Мастер"}', array['master']);
-  perform pallas_project.create_person(null, 'm3', jsonb '{"title": "Данил", "person_occupation": "Мастер"}', array['master']);
-  perform pallas_project.create_person(null, 'm4', jsonb '{"title": "Нина", "person_occupation": "Мастер"}', array['master']);
-  perform pallas_project.create_person(null, 'm5', jsonb '{"title": "Оля", "person_occupation": "Мастер"}', array['master']);
+  perform pallas_project.create_person(null, 'gpbt', jsonb '{"title": "Саша", "person_occupation": "Мастер"}', array['master']);
+  perform pallas_project.create_person(null, 'cf7q', jsonb '{"title": "Петя", "person_occupation": "Мастер"}', array['master']);
+  perform pallas_project.create_person(null, 'haru', jsonb '{"title": "Данил", "person_occupation": "Мастер"}', array['master']);
+  perform pallas_project.create_person(null, '6ntn', jsonb '{"title": "Нина", "person_occupation": "Мастер"}', array['master']);
+  perform pallas_project.create_person(null, '5msh', jsonb '{"title": "Оля", "person_occupation": "Мастер"}', array['master']);
 
   perform pallas_project.change_chat_person_list_on_person(data.get_object_id('master_chat'), null, true);
 

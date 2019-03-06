@@ -8,7 +8,7 @@ $$
 begin
   perform pallas_project.create_person(
     'b7845724-0c9a-498e-8b2f-a01455c22399',
-    'b784',
+    '3xap',
     jsonb '{
       "title":"Фрида Фогель",
       "description":"Временно исполняющий обязанности губернатора. Землянин. Член совета станции.",
@@ -27,7 +27,7 @@ begin
     array['all_person', 'player', 'un']);
   perform pallas_project.create_person(
     '0d07f15b-2952-409b-b22e-4042cf70acc6',
-    '0d07',
+    'vpzc',
     jsonb '{
       "title":"Саша Корсак",
       "description":"Специалист, ответственный за экономическую деятельность колонии. Землянин. Член совета станции.",
@@ -46,7 +46,7 @@ begin
     array['all_person', 'player', 'un']);
   perform pallas_project.create_person(
     '9b956c40-7978-4b0a-993e-8373fe581761',
-    '9b95',
+    'rqp7',
     jsonb '{
       "title":"Сергей Корсак",
       "description":"Верховный судья колонии. Землянин. Член совета станции.",
@@ -65,7 +65,7 @@ begin
     array['all_person', 'player', 'un']);
   perform pallas_project.create_person(
     '7545edc8-d3f8-4ff3-a984-6c96e261f5c5',
-    '7545',
+    'g11t',
     jsonb '{
       "title":"Михаил Ситников",
       "description":"Единственный астер, работающий в администрации.",
@@ -84,7 +84,7 @@ begin
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
     '494dd323-d808-48e6-8971-cd8f18656ec0',
-    '494d',
+    'g9jx',
     jsonb '{
       "title":"Кара Трэйс",
       "description":"Выпускница звёздной академии ООН им. Н. Армстронга. Деятельная личность. Идеалистка и гуманистка. Младший лейтенант. Землянин. Представитель Министерства обороны ООН на Палладе. Член совета станции.",
@@ -103,7 +103,7 @@ begin
     array['all_person', 'player', 'un']);
   perform pallas_project.create_person(
     '95a3dc9e-8512-44ab-9173-29f0f4fd6e05',
-    '95a3',
+    'kasq',
     jsonb '{
       "title":"Рон Портер",
       "description":"Учёный. Эколог. Землянин. Член совета станции.",
@@ -122,7 +122,7 @@ begin
     array['all_person', 'player', 'un']);
   perform pallas_project.create_person(
     'aebb6773-8651-4afc-851a-83a79a2bcbec',
-    'aebb',
+    'yle4',
     jsonb '{
       "title":"Феликс Рыбкин",
       "description":"Известный учёный-астроном. Землянин.",
@@ -141,7 +141,7 @@ begin
     array['all_person', 'player', 'un', 'opa']);
   perform pallas_project.create_person(
     '5f7c2dc0-0cb4-4fc5-870c-c0776272a02e',
-    '5f7c',
+    '76mb',
     jsonb '{
       "title":"Люк Ламбер",
       "description":"Опытный инженер. Член СВП. Астер.",
@@ -160,7 +160,7 @@ begin
     array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
     '4cb29808-bc92-4cf8-a755-a3f0785ac4b8',
-    '4cb2',
+    '4w0z',
     jsonb '{
       "title":"Кристиан Остерхаген",
       "description":"Работник администрации. Астер.",
@@ -179,7 +179,7 @@ begin
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
     '784e4126-8dd7-41a3-a916-0fdc53a31ce2',
-    '784e',
+    'mzcd',
     jsonb '{
       "title":"Мишон Грэй",
       "description":"Начальник филиала компании Де Бирс на астероиде Паллада. Землянин.",
@@ -198,7 +198,7 @@ begin
     array['all_person', 'player', 'un']);
   perform pallas_project.create_person(
     '0a0dc809-7bf1-41ee-bfe7-700fd26c1c0a',
-    '0a0d',
+    'q1l6',
     jsonb '{
       "title":"Абрахам Грей",
       "description":"Заместитель начальника филиала Де Бирс на астероиде Паллада.",
@@ -218,7 +218,7 @@ begin
     array['all_person', 'player', 'aster', 'cartel']);
   perform pallas_project.create_person(
     '5074485d-73cd-4e19-8d4b-4ffedcf1fb5f',
-    '5074',
+    '2mzj',
     jsonb '{
       "title":"Лаура Джаррет",
       "description":"Глава профсоюза шахтёров. Член СВП. Астер.",
@@ -238,7 +238,7 @@ begin
     array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
     '82d0dbb5-0c9b-412c-810f-79827370c37f',
-    '82d0',
+    'wjhg',
     jsonb '{
       "title":"Невил Гонзалес",
       "description":"Астер.",
@@ -257,7 +257,7 @@ begin
     array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
     'a11d2240-3dce-4d75-bc52-46e98b07ff27',
-    'a11d',
+    't97s',
     jsonb '{
       "title":"Сьюзан Сидорова",
       "description":"Астер.",
@@ -276,7 +276,7 @@ begin
     array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
     '3beea660-35a3-431e-b9ae-e2e88e6ac064',
-    '3bee',
+    'ulw2',
     jsonb '{
       "title":"Джеф Бриджес",
       "description":"Астер.",
@@ -295,7 +295,7 @@ begin
     array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
     '09951000-d915-495d-867d-4d0e7ebfcf9c',
-    '0995',
+    'sjdw',
     jsonb '{
       "title":"Аарон Краузе",
       "description":"Опытный шахтёр. Астер.",
@@ -315,7 +315,7 @@ begin
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
     'be0489a5-05ec-430f-a74c-279a198a22e5',
-    'be04',
+    'fdw2',
     jsonb '{
       "title":"Хэнк Даттон",
       "system_money":32,
@@ -333,7 +333,7 @@ begin
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
     '2ce20542-04f1-418f-99eb-3c9d2665f733',
-    '2ce2',
+    'd8f3',
     jsonb '{
       "title":"Герберт Чао Су",
       "description":"Астер.",
@@ -353,7 +353,7 @@ begin
     array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
     '18ce44b8-5df9-4c84-8af4-b58b3f5e7b21',
-    '18ce',
+    'a0ad',
     jsonb '{
       "title":"Алисия Сильверстоун",
       "description":"Получила образование на Луне. Астер.",
@@ -372,7 +372,7 @@ begin
     array['all_person', 'player', 'aster', 'cartel']);
   perform pallas_project.create_person(
     '48569d1d-5f01-410f-a67b-c5fe99d8dbc1',
-    '4856',
+    'n9wj',
     jsonb '{
       "title":"Кайла Ангас",
       "description":"Лейтенант полиции. Астер.",
@@ -391,7 +391,7 @@ begin
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
     '2903429c-8f58-4f78-96f7-315246b17796',
-    '2903',
+    'se0m',
     jsonb '{
       "title":"Борислав Маслов",
       "description":"Землянин русского происхождения, морпех ООН в отставке.",
@@ -410,7 +410,7 @@ begin
     array['all_person', 'player', 'un']);
   perform pallas_project.create_person(
     '3d303557-6459-4b94-b834-3c70d2ba295d',
-    '3d30',
+    'n7fh',
     jsonb '{
       "title":"Джордан Закс",
       "description":"Астер.",
@@ -429,7 +429,7 @@ begin
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
     '24f8fd67-962e-4466-ac85-02ca88cd66eb',
-    '24f8',
+    'tckl',
     jsonb '{
       "title":"Бобби Смит",
       "description":"Астер.",
@@ -448,7 +448,7 @@ begin
     array['all_person', 'player', 'un']);
   perform pallas_project.create_person(
     'be28d490-6c68-4ee4-a244-6700d01d16cc',
-    'be28',
+    'vxib',
     jsonb '{
       "title":"Лила Финчер",
       "description":"Астер.",
@@ -467,7 +467,7 @@ begin
     array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
     '81491084-b02a-471f-9293-b20497e0054a',
-    '8149',
+    'bedp',
     jsonb '{
       "title":"Наоми Гейтс",
       "description":"Астер.",
@@ -486,7 +486,7 @@ begin
     array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
     'b9309ed3-d19f-4d2d-855a-a9a3ffdf8e9c',
-    'b930',
+    'nssy',
     jsonb '{
       "title":"Харальд Скарсгард",
       "description":"Астер.",
@@ -505,7 +505,7 @@ begin
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
     'c9e08512-e729-430a-b2fd-df8e7c94a5e7',
-    'c9e0',
+    't3bh',
     jsonb '{
       "title":"Чарльз Вилкинсон",
       "description":"Астер.",
@@ -524,7 +524,7 @@ begin
     array['all_person', 'player', 'aster', 'cartel']);
   perform pallas_project.create_person(
     '1fbcf296-e9ad-43b0-9064-1da3ff6d326d',
-    '1fbc',
+    'd816',
     jsonb '{
       "title":"Амели Сноу",
       "description":"Астер.",
@@ -543,7 +543,7 @@ begin
     array['all_person', 'player', 'aster', 'cartel', 'opa']);
   perform pallas_project.create_person(
     '3a83fb3c-b954-4a04-aa6c-7a46d7bf9b8e',
-    '3a83',
+    'm1t9',
     jsonb '{
       "title":"Джессика Куин",
       "description":"Астер.",
@@ -562,7 +562,7 @@ begin
     array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
     'a9e4bc61-4e10-4c9e-a7de-d8f61536f657',
-    'a9e4',
+    '98r2',
     jsonb '{
       "title":"Сэмми Куин",
       "description":"Астер.",
@@ -581,7 +581,7 @@ begin
     array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
     '70e5db08-df47-4395-9f4a-15eef99b2b89',
-    '70e5',
+    'kbog',
     jsonb '{
       "title":"Марк Попов",
       "description":"Заведующий складом в порту. Астер.",
@@ -600,7 +600,7 @@ begin
     array['all_person', 'player', 'aster', 'cartel']);
   perform pallas_project.create_person(
     '939b6537-afc1-41f4-963a-21ccfd1c7d28',
-    '939b',
+    '96rk',
     jsonb '{
       "title":"Роберт Ли",
       "description":"Астер.",
@@ -619,7 +619,7 @@ begin
     array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
     '5a764843-9edc-4cfb-8367-80c1d3c54ed9',
-    '5a76',
+    'l499',
     jsonb '{
       "title":"Луиза О''Нил",
       "description":"Пилот буксира.",
@@ -638,7 +638,7 @@ begin
     array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
     '47d63ed5-3764-4892-b56d-597dd1bbc016',
-    '47d6',
+    'w27q',
     jsonb '{
       "title":"Дональд Чамберс",
       "description":"Пилот буксира",
@@ -657,7 +657,7 @@ begin
     array['all_person', 'player', 'aster', 'cartel', 'opa']);
   perform pallas_project.create_person(
     '54e94c45-ce2a-459a-8613-9b75e23d9b68',
-    '54e9',
+    '6j7j',
     jsonb '{
       "title":"Лина Ковач",
       "description":"Врач-генетик родом с Ганимеда. Астер.",
@@ -676,7 +676,7 @@ begin
     array['all_person', 'player', 'un']);
   perform pallas_project.create_person(
     '7051afe2-3430-44a7-92e3-ad299aae62e1',
-    '7051',
+    'r8pd',
     jsonb '{
       "title":"Мария Липпи",
       "description":"Медсестра по образованию. Астер.",
@@ -695,7 +695,7 @@ begin
     array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
     '21670857-6be0-4f77-8756-79636950bc36',
-    '2167',
+    'ainj',
     jsonb '{
       "title":"Анна Джаррет",
       "description":"Методист. Астер.",
@@ -714,7 +714,7 @@ begin
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
     '523e8589-f948-4c42-a32b-fe39648488f2',
-    '523e',
+    'rfmb',
     jsonb '{
       "title":"Лиза Скай",
       "description":"Астер.",
@@ -733,7 +733,7 @@ begin
     array['all_person', 'player', 'aster', 'cartel']);
   perform pallas_project.create_person(
     'e0c49e51-779f-4f21-bb94-bbbad33bc6e2',
-    'e0c4',
+    'rar0',
     jsonb '{
       "title":"Элисон Янг",
       "description":"Землянин.",
@@ -752,7 +752,7 @@ begin
     array['all_person', 'player', 'un', 'opa']);
   perform pallas_project.create_person(
     '8f7b1cc6-28cd-4fb1-8c81-e0ab1c0df5c9',
-    '8f7b',
+    'gjl2',
     jsonb '{
       "title":"Рашид Файзи",
       "description":"Марсианин.",
@@ -771,7 +771,7 @@ begin
     array['all_person', 'player', 'mcr']);
   perform pallas_project.create_person(
     '2ecb2a46-50f7-4e93-b340-2c9875287252',
-    '2ecb',
+    'nvbk',
     jsonb '{
       "title":"Грейс Огустин",
       "description":"Марсианин.",
@@ -790,7 +790,7 @@ begin
     array['all_person', 'player', 'mcr']);
   perform pallas_project.create_person(
     '9b8c205e-9483-44f9-be9b-2af47a765f9c',
-    '9b8c',
+    'yia4',
     jsonb '{
       "title":"Сара Ф. Остин",
       "description":"Марсианин.",
@@ -809,7 +809,7 @@ begin
     array['all_person', 'player', 'mcr']);
   perform pallas_project.create_person(
     'c336c33b-5b87-4844-8459-eaff6124cd15',
-    'c336',
+    '1ins',
     jsonb '{
       "title":"Чан Хи Го",
       "description":"Марсианин.",
@@ -828,7 +828,7 @@ begin
     array['all_person', 'player', 'mcr']);
   perform pallas_project.create_person(
     'ea68988b-b540-4685-aefb-cbd999f4c9ba',
-    'ea68',
+    'rd61',
     jsonb '{
       "title":"Том Алиев",
       "description":"Марсианин",
@@ -847,7 +847,7 @@ begin
     array['all_person', 'player', 'mcr']);
   perform pallas_project.create_person(
     '2956e4b7-7b02-4ffd-a725-ea3390b9a1cc',
-    '2956',
+    'vulm',
     jsonb '{
       "title":"Валентин Штерн",
       "system_money":0,
@@ -865,7 +865,7 @@ begin
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
     '468c4f12-1a52-4681-8a78-d80dfeaec90e',
-    '468c',
+    'a7y1',
     jsonb '{
       "title":"Джэйн Синглтон",
       "system_money":240,
@@ -883,7 +883,7 @@ begin
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
     'ac1b23d0-ba5f-4042-85d5-880a66254803',
-    'ac1b',
+    'hq2y',
     jsonb '{
       "title":"Уильям Келли",
       "description":"Активист Церкви Космической Выси. Мормон. Астер.",
@@ -902,7 +902,7 @@ begin
     array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
     '2d912a30-6c35-4cef-9d74-94665ac0b476',
-    '2d91',
+    '9n0x',
     jsonb '{
       "title":"Грег Тэйлор",
       "description":"Бывший военный пилот, майор в отставке. Марсианин.",
@@ -921,7 +921,7 @@ begin
     array['all_person', 'player', 'mcr']);
   perform pallas_project.create_person(
     '6dc0a14a-a63f-44aa-a677-e5376490f28d',
-    '6dc0',
+    'ibhg',
     jsonb '{
       "title":"Люси Мартин",
       "description":"Марсианин.",
@@ -940,7 +940,7 @@ begin
     array['all_person', 'player', 'mcr']);
   perform pallas_project.create_person(
     '8d3e1b38-ab96-4d87-8c51-1be2ce1a0111',
-    '8d3e',
+    'tskv',
     jsonb '{
       "title":"Нозоми Табато",
       "description":"Марсианин.",
@@ -959,7 +959,7 @@ begin
     array['all_person', 'player', 'mcr']);
   perform pallas_project.create_person(
     '97539130-5977-41cb-a96d-d160522430f8',
-    '9753',
+    'a8o1',
     jsonb '{
       "title":"Джэй Рейнольдс",
       "description":"Хозяин \"Каверны\". Трижды разведён. Астер.",
@@ -976,7 +976,7 @@ begin
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
     '9f114f78-8b87-4363-bf55-a19522282e4e',
-    '9f11',
+    'lv3h',
     jsonb '{
       "title":"Соня Попова",
       "description":"Родилась на Марсе.",
@@ -995,7 +995,7 @@ begin
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
     '7a51a4fc-ed1f-47c9-a67a-d56cd56b67de',
-    '7a51',
+    'qo40',
     jsonb '{
       "title":"Марта Скарсгард",
       "description":"Сестра Харальда. Астер.",
@@ -1014,7 +1014,7 @@ begin
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
     'ea450b61-9489-4f98-ab0e-375e01a7df03',
-    'ea45',
+    'v32d',
     jsonb '{
       "title":"Кип Шиммер",
       "description":"Астер.",
@@ -1033,7 +1033,7 @@ begin
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
     'd23550d0-d599-4cf2-9a15-1594fd2df2b2',
-    'd235',
+    't4b3',
     jsonb '{
       "title":"Шона Кагари",
       "description":"Астер",
@@ -1052,7 +1052,7 @@ begin
     array['all_person', 'player', 'aster', 'opa']);
   perform pallas_project.create_person(
     '74bc1a0f-72d9-4271-b358-0ef464f3cbf9',
-    '74bc',
+    'rb0a',
     jsonb '{
       "title":"Милан Ясневски",
       "description":"Ясновидящий. Астер.",
@@ -1071,7 +1071,7 @@ begin
     array['all_person', 'player', 'aster', 'cartel']);
   perform pallas_project.create_person(
     '36cef6aa-aefc-479d-8cef-55534e8cd159',
-    '36ce',
+    'nhrh',
     jsonb '{
       "title":"Джаспер Шоу",
       "description":"Репортёр. Землянин.",
@@ -1090,7 +1090,7 @@ begin
     array['all_person', 'player', 'un']);
   perform pallas_project.create_person(
     'cb792572-631b-4b09-8248-ae3e1e2dc7dc',
-    'cb79',
+    '9cck',
     jsonb '{
       "title":"Шань Ю",
       "description":"Работает по контракту с медиа-компанией ООН Reuters. Астер.",
@@ -1107,7 +1107,7 @@ begin
     array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
     '457ea315-fc47-4579-a12b-fd7b91375ba8',
-    '457e',
+    'k0m6',
     jsonb '{
       "title":"Джулия Рэйс",
       "description":"Принадлежит к богатой семье с Земли.",
@@ -1126,7 +1126,7 @@ begin
     array['all_person', 'player', 'un']);
   perform pallas_project.create_person(
     '19b66636-cd8e-4733-8a3d-2f16346bb81e',
-    '19b6',
+    'wpnm',
     jsonb '{
       "title":"Аманда Ганди",
       "description":"Заместитель отдела внутренней ревизии Управления по вопросам космического пространства ООН. Землянка.",
@@ -1145,7 +1145,7 @@ begin
     array['all_person', 'player', 'un']);
   perform pallas_project.create_person(
     '37fb2074-498c-4d28-8395-9fdf993f2b06',
-    '37fb',
+    'drm9',
     jsonb '{
       "title":"Джесси О''Коннелл",
       "description":"Астер.",
@@ -1164,7 +1164,7 @@ begin
     array['all_person', 'player', 'aster', 'opa', 'cartel', 'customs_officer']);
   perform pallas_project.create_person(
     '555e076c-ff8d-4dbb-a6c6-9d935314ff59',
-    '555e',
+    'uomo',
     jsonb '{
       "title":"Лола Ди",
       "description":"Работает по контракту с медиа-компанией ООН Reuters.",
@@ -1181,7 +1181,7 @@ begin
     array['all_person', 'player']);
   perform pallas_project.create_person(
     'd6ed7fcb-2e68-40b3-b0ab-5f6f4edc2f19',
-    'd6ed',
+    'txrk',
     jsonb '{
       "title":"Элен Марвинг",
       "description":"Астер",
@@ -1200,7 +1200,7 @@ begin
     array['all_person', 'player', 'aster', 'opa', 'customs_officer']);
   perform pallas_project.create_person(
     'dc2505e8-9f8e-4a41-b42f-f1f348db8c99',
-    'dc25',
+    '9rvw',
     jsonb '{
       "title":"Ашшурбанапал Ганди",
       "description":"Землянин.",
@@ -1219,7 +1219,7 @@ begin
     array['all_person', 'player', 'un']);
   perform pallas_project.create_person(
     '82a7d37d-1067-4f21-a980-9c0665ce579c',
-    '82a7',
+    '9mdj',
     jsonb '{
       "title":"Мишель Буфано",
       "system_money":255,
@@ -1236,7 +1236,7 @@ begin
     array['all_person', 'player', 'rider']);
   perform pallas_project.create_person(
     '0815d2a6-c82c-476c-a3dd-ed70a3f59e91',
-    '0815',
+    'yq3i',
     jsonb '{
       "title":"Саймон Фронцек",
       "system_money":255,
@@ -1253,7 +1253,7 @@ begin
     array['all_person', 'player', 'rider']);
   perform pallas_project.create_person(
     'f4a2767d-73f2-4057-9430-f887d4cd05e5',
-    'f4a2',
+    'rppn',
     jsonb '{
       "title":"Джейсон Айронхарт",
       "system_money":0,
@@ -1273,7 +1273,7 @@ begin
   -- Доп. персонаж с паролем
   perform pallas_project.create_person(
     '71efd585-080c-431d-a258-b4e222ff7623',
-    '71ef',
+    'ec9s',
     jsonb '{
       "title":"Брэндон Мёрфи",
       "system_money":500,
