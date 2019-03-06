@@ -29,8 +29,12 @@ begin
       perform pallas_project.use_stimulant(v_actor_id);
     when 'superbuff' then
       perform pallas_project.use_superbuff(v_actor_id);
+    when 'sleg' then
+     perform pallas_project.use_sleg(v_actor_id);
+    when 'rio_vaccine' then
+     perform pallas_project.use_rio_vaccine(v_actor_id);
     else 
-      null;
+    null;
   end case;
 
   v_changes := array_append(v_changes, data.attribute_change2jsonb('med_drug_status', jsonb '"used"'));

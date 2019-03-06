@@ -15058,8 +15058,12 @@ begin
       perform pallas_project.use_stimulant(v_actor_id);
     when 'superbuff' then
       perform pallas_project.use_superbuff(v_actor_id);
+    when 'sleg' then
+     perform pallas_project.use_sleg(v_actor_id);
+    when 'rio_vaccine' then
+     perform pallas_project.use_rio_vaccine(v_actor_id);
     else 
-      null;
+    null;
   end case;
 
   v_changes := array_append(v_changes, data.attribute_change2jsonb('med_drug_status', jsonb '"used"'));
@@ -17880,7 +17884,7 @@ declare
 begin
   assert in_actor_id is not null;
 
-  for v_drug_code in (select * from unnest(array['stimulant', 'superbuff', 'sleg'])) loop
+  for v_drug_code in (select * from unnest(array['stimulant', 'superbuff', 'sleg', 'rio_vaccine'])) loop
   v_actions_list := v_actions_list || 
         format(', "med_drugs_add_%s": {"code": "med_drugs_add_drug", "name": "%s", "disabled": false, '||
                 '"params": {"category": "%s"}}',
@@ -23974,6 +23978,8 @@ begin
 -- *format med_health*{"wound": {"level": 3, "start": "26.02.2019 23:58:17", "diagnosted": 5, "job": 4837438}, "radiation": {"level": 4, "start": "26.02.2019 23:58:30", "diagnosted": 9, "job": 4837489}}
   ('med_stimulant', null, 'Данные о приёме стимулятора', 'hidden', null, null, false),
 -- *format med_stimulant*{"last": {"job": 4837438}, "cycle1": 1, "cycle2": 3}
+  ('med_sleg', null, 'Данные о приёме слега', 'system', null, null, false),
+-- *format med_sleg*{"last": {"job": 4837438}}
   ('med_clinic_money', null, 'Остаток на счёте клиники', 'hidden', null, null, false),
   ('med_person_code', null, 'Код пациента', 'hidden', null, null, false),
   ('med_health_care_status', null, 'Статус обслуживания пациента', 'hidden', null, null, false),
@@ -23995,7 +24001,7 @@ begin
   ('med_wound_7', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
   ('med_wound_8', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
   ('med_radiation', '{"l0": {}, "l1": {"time": 3}, "l2": {"time": 3}, "l3": {"time": 3}, "l4": {"time": 5}, "l5": {"time": 5}, "l6": {}}'::jsonb, 'Длительность этапов заболевания'),
-  ('med_radiation_0', jsonb '"Вы чувствуете себя хорошо, все симптомы прошли."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_radiation_0', jsonb '"Вам стало лучше."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_radiation_1', jsonb '"Ваша кожа очень чешется, вам больно к ней прикасаться."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_radiation_2', jsonb '"Кожа горит. Кожа очень болит, прикосновения вызывают сильнейшую боль. Вам очень хочется пить и подташнивает. Запахи еды отвратительны."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_radiation_3', jsonb '"Кожа очень болит, прикосновения вызывают сильнейшую боль. Сильная головная боль. Вы видите галлюцинации. Вспомните самый страшный ваш сон - он стал явью."', 'Сообщение для игрока о состоянии заболевания'),
@@ -24003,7 +24009,7 @@ begin
   ('med_radiation_5', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
   ('med_radiation_6', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
   ('med_asthma', '{"l0": {}, "l1": {"time": 1}, "l2": {"time": 60}, "l3": {"time": 1}, "l4": {"time": 1}, "l5": {"time": 60}, "l6": {"time": 1}, "l7": {"time": 1}, "l8": {"time": 1, "next_level": 5}}'::jsonb, 'Длительность этапов заболевания'),
-  ('med_asthma_0', jsonb '"Вы чувствуете себя хорошо, все симптомы прошли."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_asthma_0', jsonb '"Вам стало лучше."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_asthma_1', jsonb '"У вас жуткий приступ кашля. Пройдет через минуту или после того как вы попьёте горячего."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_asthma_2', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
   ('med_asthma_3', jsonb '"У вас жуткий приступ кашля. Пройдет через минуту или после того как вы попьёте горячего."', 'Сообщение для игрока о состоянии заболевания'),
@@ -24013,7 +24019,7 @@ begin
   ('med_asthma_7', jsonb '"Вам становится трудно дышать. Вы ненадолго теряете сознание. Придёте в себя когда досчитаете до 60 или если вас приведут в чувство."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_asthma_8', jsonb '"Вы пришли в себя, но вам очень трудно дышать. Не можете стоять, быстро двигаться или говорить. Через минуту пройдет."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_rio_miamore', '{"l0": {}, "l1": {"time": 10}, "l2": {"time": 10}, "l3": {"time": 5}, "l4": {"time": 2}, "l5": {"time": 1}, "l6": {"time": 1}, "l7": {"time": 10}, "l8": {"time": 10}, "l9": {}}'::jsonb, 'Длительность этапов заболевания'),
-  ('med_rio_miamore_0', jsonb '"Вы чувствуете себя хорошо, все симптомы прошли."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_rio_miamore_0', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
   ('med_rio_miamore_1', jsonb '"У вас жуткий приступ кашля. Пройдет через минуту или после того как вы попьёте горячего."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_rio_miamore_2', jsonb '"У вас жуткий приступ кашля. Пройдет через минуту или после того как вы попьёте горячего."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_rio_miamore_3', jsonb '"У вас озноб. Вам холодно. Сильная слабость."', 'Сообщение для игрока о состоянии заболевания'),
@@ -24023,8 +24029,19 @@ begin
   ('med_rio_miamore_7', jsonb '"Вам очень больно. Боль пронизывает всё тело. Боль проходит, если не двигаться и лежать. Трудно дышать."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_rio_miamore_8', jsonb '"Вы парализованы. Можете только дышать и говорить."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_rio_miamore_9', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_back_rio_miamore', '{"l0": {}, "l1": {"time": 10, "next_level": 0}, "l2": {"time": 10, "next_level": 1}, "l3": {"time": 5, "next_level": 2}, "l4": {"time": 2, "next_level": 3}, "l5": {"time": 1, "next_level": 4}, "l6": {"time": 1, "next_level": 5}, "l7": {"time": 10, "next_level": 6}, "l8": {"time": 10, "next_level": 7}, "l9": {"next_level": 8}}'::jsonb, 'Длительность этапов заболевания'),
+  ('med_back_rio_miamore_0', jsonb '"Вам стало лучше."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_back_rio_miamore_1', jsonb '"У вас жуткий приступ кашля. Пройдет через минуту или после того как вы попьёте горячего."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_back_rio_miamore_2', jsonb '"У вас жуткий приступ кашля. Пройдет через минуту или после того как вы попьёте горячего."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_back_rio_miamore_3', jsonb '"У вас озноб. Вам холодно. Сильная слабость."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_back_rio_miamore_4', jsonb '"Вас знобит, у вас слабость. Ваша кожа очень чешется, вам больно к ней прикасаться. "', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_back_rio_miamore_5', jsonb '"Вам становится трудно дышать. Вы ненадолго теряете сознание. Придёте в себя когда досчитаете до 60 или если вас приведут в чувство."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_back_rio_miamore_6', jsonb '"Вы пришли в себя, но вам очень трудно дышать. Не можете стоять, быстро двигаться или говорить. Через минуту пройдет."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_back_rio_miamore_7', jsonb '"Вам очень больно. Боль пронизывает всё тело. Боль проходит, если не двигаться и лежать. Трудно дышать."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_back_rio_miamore_8', jsonb '"Вы парализованы. Можете только дышать и говорить."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_back_rio_miamore_9', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
   ('med_addiction', '{"l0": {}, "l1": {"time": 120}, "l2": {"time": 5}, "l3": {"time": 20}, "l4": {"time": 20}, "l5": {"time": 20}, "l6": {"time": 20}, "l7": {"time": 15}, "l8": {"time": 15}, "l9": {"time": 5, "next_level": 0}}'::jsonb, 'Длительность этапов заболевания'),
-  ('med_addiction_0', jsonb '"Вы чувствуете себя хорошо, все симптомы прошли."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_addiction_0', jsonb '"Вам стало лучше."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_addiction_1', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
   ('med_addiction_2', jsonb '"Ваша кожа очень чешется. Выберите место на теле и чешите его периодически."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_addiction_3', jsonb '"Вам очень хочется пить. Выпейте не меньше 2-х стаканов. Или имитируйте."', 'Сообщение для игрока о состоянии заболевания'),
@@ -24034,12 +24051,30 @@ begin
   ('med_addiction_7', jsonb '"Вы видите галлюцинации. Вспомните самый страшный ваш сон - он стал явью. И все вокруг участники этого кошмара. Приступ продлится 3 минуты."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_addiction_8', jsonb '"Агрессия. Вам хочется рвать и метать. Вы в ярости! Кричите, рвите! Не успокоитесь, пока не ударите человека или не сломаете что-нибудь."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_addiction_9', jsonb '"Вам очень больно. Боль пронизывает всё тело. Боль проходит, если не двигаться и лежать. Трудно дышать. Приступ продлится 5 минут."', 'Сообщение для игрока о состоянии заболевания'),
-  ('med_genetic', '{"l0": {}, "l1": {"time": 10}, "l2": {"time": 5}, "l3": {"time": 20}, "l4": {"time": 20}}'::jsonb, 'Длительность этапов заболевания'),
-  ('med_genetic_0', jsonb '"Вы чувствуете себя хорошо, все симптомы прошли."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_sleg_addiction', '{"l0": {}, "l1": {"time": 120}, "l2": {"time": 5}, "l3": {"time": 20}, "l4": {"time": 20}, "l5": {"time": 20}, "l6": {"time": 20}, "l7": {"time": 15}, "l8": {"time": 15}, "l9": {"time": 5, "next_level": 0}}'::jsonb, 'Длительность этапов заболевания'),
+  ('med_sleg_addiction_0', jsonb '"Вам стало лучше."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_sleg_addiction_1', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_sleg_addiction_2', jsonb '"Ваша кожа очень чешется. Выберите место на теле и чешите его периодически."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_sleg_addiction_3', jsonb '"Вам очень хочется пить. Выпейте не меньше 2-х стаканов. Или имитируйте."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_sleg_addiction_4', jsonb '"Руки трясутся, не можете работать и выполнять точные действия руками."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_sleg_addiction_5', jsonb '"Сильно кружится голова, не можете стоять. Через минуту всё пройдёт. Всё ещё не можете работать."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_sleg_addiction_6', jsonb '"Следующие 5 минут вам больно от яркого света и шума."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_sleg_addiction_7', jsonb '"Вы видите галлюцинации. Вспомните самый страшный ваш сон - он стал явью. И все вокруг участники этого кошмара. Приступ продлится 3 минуты."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_sleg_addiction_8', jsonb '"Агрессия. Вам хочется рвать и метать. Вы в ярости! Кричите, рвите! Не успокоитесь, пока не ударите человека или не сломаете что-нибудь."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_sleg_addiction_9', jsonb '"Вам очень больно. Боль пронизывает всё тело. Боль проходит, если не двигаться и лежать. Трудно дышать. Приступ продлится 5 минут."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_genetic', '{"l0": {}, "l1": {"time": 10}, "l2": {"time": 5}, "l3": {"time": 20}, "l4": {"time": 20}, "l5": {"time": 146, "next_level": 1}}'::jsonb, 'Длительность этапов заболевания'),
+  ('med_genetic_0', jsonb '"Вам стало лучше."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_genetic_1', jsonb '"У вас жуткий приступ кашля. Пройдет через минуту или после того как вы попьёте горячего."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_genetic_2', jsonb '"У вас озноб. Вам холодно. Сильная слабость."', 'Сообщение для игрока о состоянии заболевания'),
   ('med_genetic_3', jsonb '"Сильно кружится голова, не можете стоять. Через минуту всё пройдёт. Всё ещё не можете работать."', 'Сообщение для игрока о состоянии заболевания'),
-  ('med_genetic_4', jsonb '"Следующие 5 минут вам больно от яркого света и шума."', 'Сообщение для игрока о состоянии заболевания');
+  ('med_genetic_4', jsonb '"Следующие 5 минут вам больно от яркого света и шума."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_genetic_5', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_sleg', '{"l0": {}, "l1": {"time": 3}, "l2": {"time": 3}, "l3": {"time": 3}, "l4": {"time": 3, "next_level": 0}}'::jsonb, 'Длительность этапов заболевания'),
+  ('med_sleg_0', jsonb '"Ваше эмоциональное состояние снова подчинено только вам. Ведите себя как обычно"', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_sleg_1', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_sleg_2', jsonb '"Вы чувствуете себя беспомощным и верите всему, что вам говорят. Эти люди поняли буквально всё и сейчас поделятся с вами этим знанием. Если вокруг вас никого нет, отправьтесь на поиски. "', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_sleg_3', jsonb '"Вам очень страшно - вокруг враги. Они хотят вам зла. Спрячьтесь от них. Если вам не дают покоя, нападайте!"', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_sleg_4', jsonb '"Вам хорошо и спокойно, вы благостны и полны добра. Жизнь прекрасна, вокруг друзья."', 'Сообщение для игрока о состоянии заболевания');
 
   -- Объект - страница для заявления заболеваний и ранений
   perform data.create_class(
@@ -24140,7 +24175,7 @@ begin
         "subtitle": "subtitle",
         "groups": [{"code": "med_drugs_group", 
                     "attributes": ["description"], 
-                    "actions": ["med_drugs_add_stimulant", "med_drugs_add_superbuff", "med_drugs_add_sleg"]}]
+                    "actions": ["med_drugs_add_stimulant", "med_drugs_add_superbuff", "med_drugs_add_sleg", "med_drugs_add_rio_vaccine"]}]
       }
     }
   ]');
@@ -26736,6 +26771,11 @@ begin
     'pallas_project.job_med_set_disease_level', 
     jsonb '{"person_code": "a9e4bc61-4e10-4c9e-a7de-d8f61536f657", "disease": "addiction", "level": 1}');
 
+  -- Генетическая болезнь у Лины Ковач
+  perform data.create_job(timestamp with time zone '2019-03-08 14:00:00', 
+    'pallas_project.job_med_set_disease_level', 
+    jsonb '{"person_code": "54e94c45-ce2a-459a-8613-9b75e23d9b68", "disease": "genetic", "level": 5}');
+
 end;
 $$
 language plpgsql;
@@ -29119,6 +29159,143 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.use_rio_vaccine(integer);
+
+create or replace function pallas_project.use_rio_vaccine(in_actor_id integer)
+returns void
+volatile
+as
+$$
+declare
+  v_orig_person_id integer := json.get_integer_opt(data.get_attribute_value(in_actor_id, 'system_person_original_id'), in_actor_id);
+  v_orig_person_code text := data.get_object_code(v_orig_person_id);
+  v_person_id integer; 
+
+  v_med_health jsonb := coalesce(data.get_attribute_value_for_update(v_orig_person_code || '_med_health', 'med_health'), jsonb '{}');
+  v_rio_level integer := json.get_integer_opt(json.get_object_opt(v_med_health, 'rio_miamore', jsonb '{}'), 'level', 0);
+begin
+  if v_rio_level <> 0 then
+    -- Cдвигаем болезнь в 0
+    perform pallas_project.act_med_set_disease_level(
+      null, 
+      null, 
+      format('{"person_code": "%s", "disease": "%s", "level": %s}', v_orig_person_code, 'rio_miamore', 0)::jsonb, 
+      null, 
+      null);
+
+    -- Запускаем процесс выздоровления
+    perform pallas_project.act_med_set_disease_level(
+      null, 
+      null, 
+      format('{"person_code": "%s", "disease": "%s", "level": %s}', v_orig_person_code, 'back_rio_miamore', v_rio_level-1)::jsonb, 
+      null, 
+      null);
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.use_sleg(integer);
+
+create or replace function pallas_project.use_sleg(in_actor_id integer)
+returns void
+volatile
+as
+$$
+declare
+  v_orig_person_id integer := json.get_integer_opt(data.get_attribute_value(in_actor_id, 'system_person_original_id'), in_actor_id);
+  v_orig_person_code text := data.get_object_code(v_orig_person_id);
+  v_person_id integer; 
+
+  v_message_text text;
+
+  v_med_sleg jsonb ;
+  v_last_sleg_job integer;
+
+  v_med_stimulant jsonb := coalesce(data.get_attribute_value_for_share(v_orig_person_code || '_med_health', 'med_stimulant'), jsonb '{}');
+  v_last_stimulant_job integer := json.get_integer_opt(json.get_object_opt(v_med_stimulant, 'last', jsonb '{}'), 'job', null);
+
+
+  v_changes jsonb[];
+  v_goood_effect integer := random.random_integer(1,3);
+  v_person_doubles integer[] := json.get_integer_array_opt(data.get_attribute_value(v_orig_person_id, 'system_person_doubles_id_list'), array[]::integer[]);
+begin
+
+  if v_goood_effect = 1 then
+    v_med_sleg := coalesce(data.get_attribute_value_for_update(v_orig_person_code || '_med_health', 'med_sleg'), jsonb '{}');
+    v_last_sleg_job := json.get_integer_opt(json.get_object_opt(v_med_sleg, 'last', jsonb '{}'), 'job', null);
+    -- Если есть джоб от приёма стимулятора, удаляем его
+    if v_last_stimulant_job is not null then
+      delete from data.jobs where id = v_last_stimulant_job;
+    end if;
+  -- Если слег уже принят c этим же эффектом, то удаляем джоб его окончания
+    if v_last_sleg_job is not null then 
+      delete from data.jobs where id = v_last_sleg_job;
+    else
+      perform data.change_object_and_notify(
+        data.get_object_id('mine_person'),
+        jsonb '[]' || data.attribute_change2jsonb('is_stimulant_used', jsonb 'true', v_orig_person_id));
+    end if;
+  -- Ставим, что принят стимулятор на персоны
+    v_changes := array[]::jsonb[];
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('system_person_is_stimulant_used', jsonb 'true'));
+    perform data.change_object_and_notify(v_orig_person_id, 
+                                          to_jsonb(v_changes),
+                                          null);
+    for v_person_id in (select * from unnest(v_person_doubles)) loop
+      perform data.change_object_and_notify(v_person_id,
+                                            to_jsonb(v_changes),
+                                            null);
+    end loop;
+    -- Вешаем джоб на час, чтобы отменить действие
+    v_last_sleg_job := data.create_job(clock_timestamp() + '1 hour'::interval, 
+      'pallas_project.job_unuse_stimulant', 
+      format('{"actor_id": %s}', v_orig_person_id)::jsonb);
+    v_message_text := 'Вы чувствуете, что выросли как профессионал. Ваша квалификация явно улучшилась. Эффект продлится 1 час';
+  elsif v_goood_effect = 2 then
+    v_message_text := 'Вы стали лучше считывать людей. Можете задать один любой вопрос любому человеку, а затем выяснить у мастера - правду ли ответили.';
+  elsif v_goood_effect = 3 then
+    v_message_text := 'Вы стали лучше управлять эмоциями и своим телом. В течение часа можете врать на допросе и игнорировать карточки.';
+  end if;
+
+  -- Уведомление о полезном эффекте
+  perform pp_utils.add_notification(v_orig_person_id, v_message_text);
+  for v_person_id in (select * from unnest(v_person_doubles)) loop
+    perform pp_utils.add_notification(v_person_id, v_message_text);
+  end loop;
+
+  -- Cдвигаем зависимость на начало
+  perform pallas_project.act_med_set_disease_level(
+    null, 
+    null, 
+    format('{"person_code": "%s", "disease": "%s", "level": %s}', v_orig_person_code, 'sleg_addiction', 1)::jsonb, 
+    null, 
+    null);
+
+  -- Запускаем побочные эффекты слега
+  perform pallas_project.act_med_set_disease_level(
+    null, 
+    null, 
+    format('{"person_code": "%s", "disease": "%s", "level": %s}', v_orig_person_code, 'sleg', 1)::jsonb, 
+    null, 
+    null);
+
+  -- Сохраняем инфу о приёме слега
+  if v_last_sleg_job is not null then
+    v_med_sleg := jsonb_set(
+      v_med_sleg,
+      array['last']::text[], 
+      jsonb_strip_nulls(format('{"job": %s}', coalesce(v_last_sleg_job::text, 'null'))::jsonb));
+    v_changes := array[]::jsonb[];
+    v_changes := array_append(v_changes, data.attribute_change2jsonb('med_sleg', v_med_sleg));
+    perform data.change_object_and_notify(data.get_object_id(v_orig_person_code || '_med_health'), 
+                                          to_jsonb(v_changes),
+                                          null);
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.use_stimulant(integer);
 
 create or replace function pallas_project.use_stimulant(in_actor_id integer)
@@ -29135,6 +29312,9 @@ declare
 
   v_med_stimulant jsonb := coalesce(data.get_attribute_value_for_update(v_orig_person_code || '_med_health', 'med_stimulant'), jsonb '{}');
   v_last_stimulant_job integer := json.get_integer_opt(json.get_object_opt(v_med_stimulant, 'last', jsonb '{}'), 'job', null);
+  v_med_sleg jsonb := coalesce(data.get_attribute_value_for_share(v_orig_person_code || '_med_health', 'med_sleg'), jsonb '{}');
+  v_last_sleg_job integer := json.get_integer_opt(json.get_object_opt(v_med_sleg, 'last', jsonb '{}'), 'job', null);
+  v_last_sleg_job_time timestamptz;
 
   v_med_health jsonb := coalesce(data.get_attribute_value_for_update(v_orig_person_code || '_med_health', 'med_health'), jsonb '{}');
   v_addiction_level integer := json.get_integer_opt(json.get_object_opt(v_med_health, 'addiction', jsonb '{}'), 'level', 0);
@@ -29147,10 +29327,24 @@ begin
   if v_last_stimulant_job is not null then 
     delete from data.jobs where id = v_last_stimulant_job;
   else
-    perform data.change_object_and_notify(
-      data.get_object_id('mine_person'),
-      jsonb '[]' || data.attribute_change2jsonb('is_stimulant_used', jsonb 'true', v_orig_person_id));
+    -- Если есть джоб от слега, то либо он в пределах получаса, и надо его удалить, либо он дальше получаса, и надо не ставить свой джоб
+    if v_last_sleg_job is not null then
+      select desired_time into v_last_sleg_job_time from data.jobs where id = v_last_sleg_job;
+    end if;
+    if v_last_sleg_job_time is null or v_last_sleg_job_time - clock_timestamp() < '30 minutes' then
+      if v_last_sleg_job is not null then
+        delete from data.jobs where id = v_last_sleg_job;
+      end if;
+      -- Вешаем джоб на полчаса, чтобы отменить действие
+      v_last_stimulant_job := data.create_job(clock_timestamp() + '30 minutes'::interval, 
+      'pallas_project.job_unuse_stimulant', 
+      format('{"actor_id": %s}', v_orig_person_id)::jsonb);
+    end if;
   end if;
+
+  perform data.change_object_and_notify(
+    data.get_object_id('mine_person'),
+    jsonb '[]' || data.attribute_change2jsonb('is_stimulant_used', jsonb 'true', v_orig_person_id));
 
 -- Ставим, что принят стимулятор на персоны, отправляем уведомление всем дублям
   perform pp_utils.add_notification(v_orig_person_id, v_message_text);
@@ -29165,11 +29359,6 @@ begin
                                           to_jsonb(v_changes),
                                           null);
   end loop;
-
-  -- Вешаем джоб на полчаса, чтобы отменить действие
-  v_last_stimulant_job := data.create_job(clock_timestamp() + '30 minutes'::interval, 
-      'pallas_project.job_unuse_stimulant', 
-      format('{"actor_id": %s}', v_orig_person_id)::jsonb);
 
   -- Если уже есть зависимость, то сдвигаем её на начало
   -- Если в этом цикле уже принимал, то начинаем зависимость
@@ -29695,6 +29884,8 @@ begin
     return 'Супер-баф';
   when v_text_value = 'sleg' then
     return 'Слег';
+  when v_text_value = 'rio_vaccine' then
+    return 'Сыворотка от вируса Рио Миаморе';
   else
     return 'Неизвестно';
   end case;
@@ -29719,7 +29910,9 @@ begin
     return 'В случае лёгкого ранения: позволяет использовать конечность и не чувствовать боли. Работает 5 минут. Затем вам станет сильно хуже, чем могло бы быть при обычном течении болезни.
 В случае тяжелого ранения: позволяет не терять сознание после ранения. Вы можете медленно передвигаться и разговаривать, не чувствуете боли. Работает 5 минут. После того, как супер-баф закончит действовать, вы впадёте в кому.';
   when v_text_value = 'sleg' then
-    return 'Слег';
+    return '?';
+  when v_text_value = 'rio_vaccine' then
+    return 'Лечит заболевание.';
   else
     return 'Неизвестно';
   end case;

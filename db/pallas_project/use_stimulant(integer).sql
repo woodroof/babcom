@@ -14,6 +14,9 @@ declare
 
   v_med_stimulant jsonb := coalesce(data.get_attribute_value_for_update(v_orig_person_code || '_med_health', 'med_stimulant'), jsonb '{}');
   v_last_stimulant_job integer := json.get_integer_opt(json.get_object_opt(v_med_stimulant, 'last', jsonb '{}'), 'job', null);
+  v_med_sleg jsonb := coalesce(data.get_attribute_value_for_share(v_orig_person_code || '_med_health', 'med_sleg'), jsonb '{}');
+  v_last_sleg_job integer := json.get_integer_opt(json.get_object_opt(v_med_sleg, 'last', jsonb '{}'), 'job', null);
+  v_last_sleg_job_time timestamptz;
 
   v_med_health jsonb := coalesce(data.get_attribute_value_for_update(v_orig_person_code || '_med_health', 'med_health'), jsonb '{}');
   v_addiction_level integer := json.get_integer_opt(json.get_object_opt(v_med_health, 'addiction', jsonb '{}'), 'level', 0);
@@ -26,10 +29,24 @@ begin
   if v_last_stimulant_job is not null then 
     delete from data.jobs where id = v_last_stimulant_job;
   else
-    perform data.change_object_and_notify(
-      data.get_object_id('mine_person'),
-      jsonb '[]' || data.attribute_change2jsonb('is_stimulant_used', jsonb 'true', v_orig_person_id));
+    -- Если есть джоб от слега, то либо он в пределах получаса, и надо его удалить, либо он дальше получаса, и надо не ставить свой джоб
+    if v_last_sleg_job is not null then
+      select desired_time into v_last_sleg_job_time from data.jobs where id = v_last_sleg_job;
+    end if;
+    if v_last_sleg_job_time is null or v_last_sleg_job_time - clock_timestamp() < '30 minutes' then
+      if v_last_sleg_job is not null then
+        delete from data.jobs where id = v_last_sleg_job;
+      end if;
+      -- Вешаем джоб на полчаса, чтобы отменить действие
+      v_last_stimulant_job := data.create_job(clock_timestamp() + '30 minutes'::interval, 
+      'pallas_project.job_unuse_stimulant', 
+      format('{"actor_id": %s}', v_orig_person_id)::jsonb);
+    end if;
   end if;
+
+  perform data.change_object_and_notify(
+    data.get_object_id('mine_person'),
+    jsonb '[]' || data.attribute_change2jsonb('is_stimulant_used', jsonb 'true', v_orig_person_id));
 
 -- Ставим, что принят стимулятор на персоны, отправляем уведомление всем дублям
   perform pp_utils.add_notification(v_orig_person_id, v_message_text);
@@ -44,11 +61,6 @@ begin
                                           to_jsonb(v_changes),
                                           null);
   end loop;
-
-  -- Вешаем джоб на полчаса, чтобы отменить действие
-  v_last_stimulant_job := data.create_job(clock_timestamp() + '30 minutes'::interval, 
-      'pallas_project.job_unuse_stimulant', 
-      format('{"actor_id": %s}', v_orig_person_id)::jsonb);
 
   -- Если уже есть зависимость, то сдвигаем её на начало
   -- Если в этом цикле уже принимал, то начинаем зависимость

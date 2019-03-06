@@ -14,6 +14,8 @@ begin
     return 'Супер-баф';
   when v_text_value = 'sleg' then
     return 'Слег';
+  when v_text_value = 'rio_vaccine' then
+    return 'Сыворотка от вируса Рио Миаморе';
   else
     return 'Неизвестно';
   end case;

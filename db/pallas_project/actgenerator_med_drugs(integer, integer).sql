@@ -11,7 +11,7 @@ declare
 begin
   assert in_actor_id is not null;
 
-  for v_drug_code in (select * from unnest(array['stimulant', 'superbuff', 'sleg'])) loop
+  for v_drug_code in (select * from unnest(array['stimulant', 'superbuff', 'sleg', 'rio_vaccine'])) loop
   v_actions_list := v_actions_list || 
         format(', "med_drugs_add_%s": {"code": "med_drugs_add_drug", "name": "%s", "disabled": false, '||
                 '"params": {"category": "%s"}}',
