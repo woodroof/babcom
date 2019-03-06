@@ -8,13 +8,22 @@ $$
 declare
   v_district record;
 begin
+  insert into data.params(code, value) values
+  ('ice_prices', jsonb '{"org_aqua_galactic": 2, "org_jonny_quick": 1, "org_midnight_diggers": 1}'),
+  ('foodstuff_prices', jsonb '{"org_alfa_prime": 2, "org_lenin_state_farm": 1, "org_ganymede_hydroponical_systems": 1}'),
+  ('medical_supplies_prices', jsonb '{"org_merck": 2, "org_flora": 1, "org_vector": 1}'),
+  ('uranium_prices', jsonb '{"org_westinghouse": 2, "org_trans_uranium": 1, "org_heavy_industries": 1}'),
+  ('methane_prices', jsonb '{"org_comet_petroleum": 2, "org_stardust_industries": 1, "org_pdvsa": 1}'),
+  ('goods_prices', jsonb '{"org_toom": 2, "org_amazon": 1, "org_big_warehouse": 1}');
+
   insert into data.actions(code, function) values
   ('change_next_tax', 'pallas_project.act_change_next_tax'),
   ('change_current_tax', 'pallas_project.act_change_current_tax'),
   ('change_next_budget', 'pallas_project.act_change_next_budget'),
   ('change_next_profit', 'pallas_project.act_change_next_profit'),
   ('transfer_org_money', 'pallas_project.act_transfer_org_money'),
-  ('change_org_money', 'pallas_project.act_change_org_money');
+  ('change_org_money', 'pallas_project.act_change_org_money'),
+  ('act_buy_primary_resource', 'pallas_project.act_buy_primary_resource');
 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
   ('system_org_synonym', null, 'Код оригинальной организации, string', 'system', null, null, false),
@@ -34,7 +43,19 @@ begin
   ('system_org_next_tax', null, null, 'system', null, null, false),
   ('org_next_tax', 'Налоговая ставка на следующий цикл', null, 'normal', 'full', 'pallas_project.vd_percent', true),
   ('system_org_current_tax_sum', null, 'Накопленная сумма налогов за текущий цикл', 'system', null, null, false),
-  ('org_current_tax_sum', 'Накопленная сумма налогов за текущий цикл', null, 'normal', 'full', 'pallas_project.vd_money', true);
+  ('org_current_tax_sum', 'Накопленная сумма налогов за текущий цикл', null, 'normal', 'full', 'pallas_project.vd_money', true),
+  ('system_resource_ice', null, null, 'system', null, null, false),
+  ('resource_ice', 'Лёд', null, 'normal', 'full', null, true),
+  ('system_resource_foodstuff', null, null, 'system', null, null, false),
+  ('resource_foodstuff', 'Продукты', null, 'normal', 'full', null, true),
+  ('system_resource_medical_supplies', null, null, 'system', null, null, false),
+  ('resource_medical_supplies', 'Медикаменты', null, 'normal', 'full', null, true),
+  ('system_resource_uranium', null, null, 'system', null, null, false),
+  ('resource_uranium', 'Уран', null, 'normal', 'full', null, true),
+  ('system_resource_methane', null, null, 'system', null, null, false),
+  ('resource_methane', 'Метан', null, 'normal', 'full', null, true),
+  ('system_resource_goods', null, null, 'system', null, null, false),
+  ('resource_goods', 'Товары', null, 'normal', 'full', null, true);
 
   perform data.create_class(
     'organization',
@@ -51,6 +72,12 @@ begin
             "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_tax", "org_next_tax", "org_current_tax_sum", "org_districts_control", "org_districts_influence"],
             "actions": ["transfer_money", "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5", "change_org_money", "change_current_tax", "change_next_tax", "change_next_budget", "change_next_profit", "show_transactions", "show_contracts", "show_claims"]
           },
+          {"code": "ice", "attributes": ["resource_ice"], "actions": ["buy_aqua_galactic", "buy_jonny_quick", "buy_midnight_diggers"]},
+          {"code": "foodstuff", "attributes": ["resource_foodstuff"], "actions": ["buy_alfa_prime", "buy_lenin_state_farm", "buy_ganymede_hydroponical_systems"]},
+          {"code": "medical_supplies", "attributes": ["resource_medical_supplies"], "actions": ["buy_merck", "buy_flora", "buy_vector"]},
+          {"code": "uranium", "attributes": ["resource_uranium"], "actions": ["buy_westinghouse", "buy_trans_uranium", "buy_heavy_industries"]},
+          {"code": "methane", "attributes": ["resource_methane"], "actions": ["buy_comet_petroleum", "buy_stardust_industries", "buy_pdvsa"]},
+          {"code": "goods", "attributes": ["resource_goods"], "actions": ["buy_toom", "buy_amazon", "buy_big_warehouse"]},
           {"code": "info", "attributes": ["description"]}
         ]
       },
@@ -67,7 +94,13 @@ begin
       "system_money": 55000,
       "system_org_tax": 25,
       "system_org_next_tax": 25,
-      "system_org_current_tax_sum": 0
+      "system_org_current_tax_sum": 0,
+      "system_resource_ice": 0,
+      "system_resource_foodstuff": 0,
+      "system_resource_medical_supplies": 0,
+      "system_resource_uranium": 0,
+      "system_resource_methane": 0,
+      "system_resource_goods": 0
     }');
   perform pallas_project.create_organization(
     'org_opa',
@@ -216,6 +249,11 @@ begin
     jsonb '{
       "title": "Сакура"
     }');
+  perform pallas_project.create_synonym(
+    'org_white_star',
+    jsonb '{
+      "title": "Сантьяго Де ла Круз компани"
+    }');
 
   -- Синонимы-поставщики
   -- Лёд
@@ -358,31 +396,6 @@ begin
         }',
         v_organization_list::text)::jsonb);
   end;
-
-  -- Лёд: org_aqua_galactic, org_jonny_quick, org_midnight_diggers
-  -- Продукты: org_alfa_prime, org_lenin_state_farm, org_ganymede_hydroponical_systems
-  -- Медикаменты: org_merck, org_flora, org_vector
-  -- Уран: org_westinghouse, org_trans_uranium, org_heavy_industries
-  -- Метан: org_comet_petroleum, org_stardust_industries, org_pdvsa
-  -- Товары: org_toom, org_amazon, org_big_warehouse
-
-  -- Люди:
-  --  org_administration: экономист - Александра Корсак, руководитель - Фрида Фогель
-  --  org_opa: Роберт Ли, Лаура Джаррет и Люк Ламбер
-  --  org_starbucks: Марк Попов
-  --  org_de_beers: Мишон Грей и Абрахам Грей
-  --  org_akira_sc: Марк Попов и Роберт Ли
-  --  org_clinic: Лина Ковач
-  --  org_star_helix: Кайла Ангас
-  --  org_teco_mars: Рашид Файзи
-  --  org_clean_asteroid: Янг
-  --  org_free_sky: мормон
-  --  org_cherry_orchard: Александра Корсак
-  --  org_tariel: Валентин Штерн
-  --  org_tatu: Шона Кагари
-
-  -- Прочие люди:
-  --  Сантьяго Де ла Круз (головной картель)
 end;
 $$
 language plpgsql;

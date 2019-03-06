@@ -66,6 +66,33 @@ begin
     perform data.set_attribute_value(v_org_id, 'org_budget', v_value, v_economist_group_id);
 
     perform data.add_object_to_object(v_org_id, 'budget_orgs');
+
+    if in_object_code = 'org_administration' then
+      v_value := data.get_attribute_value(v_org_id, 'system_resource_ice');
+      perform data.set_attribute_value(v_org_id, 'resource_ice', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_ice', v_value, v_head_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_ice', v_value, v_economist_group_id);
+      v_value := data.get_attribute_value(v_org_id, 'system_resource_foodstuff');
+      perform data.set_attribute_value(v_org_id, 'resource_foodstuff', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_foodstuff', v_value, v_head_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_foodstuff', v_value, v_economist_group_id);
+      v_value := data.get_attribute_value(v_org_id, 'system_resource_medical_supplies');
+      perform data.set_attribute_value(v_org_id, 'resource_medical_supplies', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_medical_supplies', v_value, v_head_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_medical_supplies', v_value, v_economist_group_id);
+      v_value := data.get_attribute_value(v_org_id, 'system_resource_uranium');
+      perform data.set_attribute_value(v_org_id, 'resource_uranium', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_uranium', v_value, v_head_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_uranium', v_value, v_economist_group_id);
+      v_value := data.get_attribute_value(v_org_id, 'system_resource_methane');
+      perform data.set_attribute_value(v_org_id, 'resource_methane', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_methane', v_value, v_head_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_methane', v_value, v_economist_group_id);
+      v_value := data.get_attribute_value(v_org_id, 'system_resource_goods');
+      perform data.set_attribute_value(v_org_id, 'resource_goods', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_goods', v_value, v_head_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_goods', v_value, v_economist_group_id);
+    end if;
   elsif v_org_economics_type = jsonb '"profit"' then
     v_value := data.get_attribute_value(v_org_id, 'system_org_profit');
     perform json.get_integer(v_value);

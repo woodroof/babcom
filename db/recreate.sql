@@ -9985,6 +9985,126 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_buy_primary_resource(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_buy_primary_resource(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_resource text := json.get_string(in_params, 'resource');
+  v_org_code text := json.get_string(in_params, 'org');
+  v_org_id integer := data.get_object_id(v_org_code);
+  v_count integer := json.get_integer(in_user_params, 'count');
+  v_prices jsonb := data.get_param(v_resource || '_prices');
+  v_price integer := json.get_integer(v_prices, v_org_code);
+  v_sum bigint := v_price * v_count;
+  v_receiver_sum bigint := floor(v_sum * 0.15);
+  v_adm_id integer := data.get_object_id('org_administration');
+  v_system_money_attr_id integer := data.get_attribute_id('system_money');
+  v_money_attr_id integer := data.get_attribute_id('money');
+  v_system_resource_attr_id integer := data.get_attribute_id('system_resource_' || v_resource);
+  v_resource_attr_id integer := data.get_attribute_id('resource_' || v_resource);
+  v_resource_count integer := json.get_integer(data.get_attribute_value_for_update(v_adm_id, v_system_resource_attr_id)) + v_count;
+  v_current_money bigint := json.get_bigint(data.get_attribute_value_for_update(v_adm_id, v_system_money_attr_id)) - v_sum;
+  v_real_object_code text := json.get_string(data.get_attribute_value(v_org_id, 'system_org_synonym'));
+  v_real_object_id integer := data.get_object_id(v_real_object_code);
+  v_object_current_sum bigint := json.get_bigint(data.get_attribute_value_for_update(v_real_object_id, 'system_money'));
+  v_comment text :=
+    format(
+      E'Покупка ресурсов\nИнициатор: %s',
+      pp_utils.link(v_actor_id));
+  v_notified boolean;
+  v_groups integer[] :=
+    array[
+      data.get_object_id(v_real_object_code || '_head'),
+      data.get_object_id(v_real_object_code || '_economist'),
+      data.get_object_id(v_real_object_code || '_auditor'),
+      data.get_object_id(v_real_object_code || '_temporary_auditor')];
+  v_org_groups integer[] :=
+    array[
+      data.get_object_id('org_administration_head'),
+      data.get_object_id('org_administration_economist'),
+      data.get_object_id('org_administration_auditor'),
+      data.get_object_id('org_administration_temporary_auditor')];
+begin
+  if v_current_money < 0 then
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'На счёте администрации нет нужной суммы');
+    return;
+  end if;
+
+  v_notified :=
+    data.change_current_object(
+      in_client_id,
+      in_request_id,
+      v_adm_id,
+      format(
+        '[
+          {"id": %s, "value": %s},
+          {"id": %s, "value": %s, "value_object_code": "master"},
+          {"id": %s, "value": %s, "value_object_code": "org_administration_head"},
+          {"id": %s, "value": %s, "value_object_code": "org_administration_economist"},
+          {"id": %s, "value": %s},
+          {"id": %s, "value": %s, "value_object_code": "master"},
+          {"id": %s, "value": %s, "value_object_code": "org_administration_head"},
+          {"id": %s, "value": %s, "value_object_code": "org_administration_economist"},
+          {"id": %s, "value": %s, "value_object_code": "org_administration_auditor"},
+          {"id": %s, "value": %s, "value_object_code": "org_administration_temporary_auditor"}
+        ]',
+        v_system_resource_attr_id,
+        v_resource_count,
+        v_resource_attr_id,
+        v_resource_count,
+        v_resource_attr_id,
+        v_resource_count,
+        v_resource_attr_id,
+        v_resource_count,
+        v_system_money_attr_id,
+        v_current_money,
+        v_money_attr_id,
+        v_current_money,
+        v_money_attr_id,
+        v_current_money,
+        v_money_attr_id,
+        v_current_money,
+        v_money_attr_id,
+        v_current_money,
+        v_money_attr_id,
+        v_current_money)::jsonb);
+  assert v_notified;
+
+  perform data.process_diffs_and_notify(
+    pallas_project.change_money(v_real_object_id, v_object_current_sum + v_receiver_sum, v_actor_id, 'Transfer'));
+
+  perform pallas_project.notify_transfer_sender(v_adm_id, v_sum);
+  perform pallas_project.notify_transfer_receiver(v_real_object_id, v_receiver_sum);
+
+  perform pallas_project.create_transaction(
+    v_adm_id,
+    null,
+    v_comment,
+    -v_sum,
+    v_current_money,
+    null,
+    v_org_id,
+    v_actor_id,
+    v_org_groups);
+  perform pallas_project.create_transaction(
+    v_real_object_id,
+    v_org_id,
+    v_comment,
+    v_receiver_sum,
+    v_object_current_sum + v_receiver_sum,
+    null,
+    v_adm_id,
+    v_actor_id,
+    v_groups);
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_buy_status(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_buy_status(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -18427,6 +18547,57 @@ begin
   end if;
 
   if v_is_real_org then
+    if v_object_code = 'org_administration' and v_is_economist then
+      declare
+        v_primary_resource text;
+        v_org record;
+        v_prices jsonb;
+      begin
+        for v_primary_resource in
+        (
+          select *
+          from unnest(array['ice', 'foodstuff', 'medical_supplies', 'uranium', 'methane', 'goods'])
+        )
+        loop
+          v_prices := data.get_param(v_primary_resource || '_prices');
+          for v_org in
+          (
+            select key, json.get_integer(value) as value
+            from jsonb_each(v_prices)
+          )
+          loop
+            v_actions :=
+              v_actions ||
+              format(
+                '{
+                  "buy_%s": {
+                    "code": "act_buy_primary_resource",
+                    "name": "Купить у %s (%s)",
+                    "disabled": false,
+                    "params": {
+                      "resource": "%s",
+                      "org": "%s"
+                    },
+                    "user_params": [
+                      {
+                        "code": "count",
+                        "description": "Количество",
+                        "type": "integer",
+                        "restrictions": {"min_value": 1}
+                      }
+                    ]
+                  }
+                }',
+                substring(v_org.key from 5),
+                json.get_string(data.get_attribute_value(v_org.key, 'title')),
+                pp_utils.format_money(v_org.value),
+                v_primary_resource,
+                v_org.key)::jsonb;
+          end loop;
+        end loop;
+      end;
+    end if;
+
     if v_master or v_is_head or v_is_economist or v_is_auditor then
       v_actions :=
         v_actions ||
@@ -19890,6 +20061,33 @@ begin
     perform data.set_attribute_value(v_org_id, 'org_budget', v_value, v_economist_group_id);
 
     perform data.add_object_to_object(v_org_id, 'budget_orgs');
+
+    if in_object_code = 'org_administration' then
+      v_value := data.get_attribute_value(v_org_id, 'system_resource_ice');
+      perform data.set_attribute_value(v_org_id, 'resource_ice', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_ice', v_value, v_head_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_ice', v_value, v_economist_group_id);
+      v_value := data.get_attribute_value(v_org_id, 'system_resource_foodstuff');
+      perform data.set_attribute_value(v_org_id, 'resource_foodstuff', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_foodstuff', v_value, v_head_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_foodstuff', v_value, v_economist_group_id);
+      v_value := data.get_attribute_value(v_org_id, 'system_resource_medical_supplies');
+      perform data.set_attribute_value(v_org_id, 'resource_medical_supplies', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_medical_supplies', v_value, v_head_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_medical_supplies', v_value, v_economist_group_id);
+      v_value := data.get_attribute_value(v_org_id, 'system_resource_uranium');
+      perform data.set_attribute_value(v_org_id, 'resource_uranium', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_uranium', v_value, v_head_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_uranium', v_value, v_economist_group_id);
+      v_value := data.get_attribute_value(v_org_id, 'system_resource_methane');
+      perform data.set_attribute_value(v_org_id, 'resource_methane', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_methane', v_value, v_head_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_methane', v_value, v_economist_group_id);
+      v_value := data.get_attribute_value(v_org_id, 'system_resource_goods');
+      perform data.set_attribute_value(v_org_id, 'resource_goods', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_goods', v_value, v_head_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_goods', v_value, v_economist_group_id);
+    end if;
   elsif v_org_economics_type = jsonb '"profit"' then
     v_value := data.get_attribute_value(v_org_id, 'system_org_profit');
     perform json.get_integer(v_value);
@@ -20529,7 +20727,8 @@ declare
 8. Подумать, нужно ли написать что-то администрации, клинике, Akira SC.
 9. Написать СВП о новых закупочных ценах на алмазы.
 10. Посмотреть, отреагировал ли [мормон](babcom:ac1b23d0-ba5f-4042-85d5-880a66254803) на запросы о помощи, изменить его влияние. Написать новые запросы, если нужно.
-11. В начале пятого цикла — проверить, купила ли в прошлом цикле организация [Тариель](babcom:org_tariel) лицензию у администрации за UN$1000.
+11. Подумать, нужно ли поменять коэффициент при покупке ресурсов (на начало игры - 0.15).
+12. В начале пятого цикла — проверить, купила ли в прошлом цикле организация [Тариель](babcom:org_tariel) лицензию у администрации за UN$1000.
 
 Справка по рейтингам и статусам:
 <100 10
@@ -24426,13 +24625,22 @@ $$
 declare
   v_district record;
 begin
+  insert into data.params(code, value) values
+  ('ice_prices', jsonb '{"org_aqua_galactic": 2, "org_jonny_quick": 1, "org_midnight_diggers": 1}'),
+  ('foodstuff_prices', jsonb '{"org_alfa_prime": 2, "org_lenin_state_farm": 1, "org_ganymede_hydroponical_systems": 1}'),
+  ('medical_supplies_prices', jsonb '{"org_merck": 2, "org_flora": 1, "org_vector": 1}'),
+  ('uranium_prices', jsonb '{"org_westinghouse": 2, "org_trans_uranium": 1, "org_heavy_industries": 1}'),
+  ('methane_prices', jsonb '{"org_comet_petroleum": 2, "org_stardust_industries": 1, "org_pdvsa": 1}'),
+  ('goods_prices', jsonb '{"org_toom": 2, "org_amazon": 1, "org_big_warehouse": 1}');
+
   insert into data.actions(code, function) values
   ('change_next_tax', 'pallas_project.act_change_next_tax'),
   ('change_current_tax', 'pallas_project.act_change_current_tax'),
   ('change_next_budget', 'pallas_project.act_change_next_budget'),
   ('change_next_profit', 'pallas_project.act_change_next_profit'),
   ('transfer_org_money', 'pallas_project.act_transfer_org_money'),
-  ('change_org_money', 'pallas_project.act_change_org_money');
+  ('change_org_money', 'pallas_project.act_change_org_money'),
+  ('act_buy_primary_resource', 'pallas_project.act_buy_primary_resource');
 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
   ('system_org_synonym', null, 'Код оригинальной организации, string', 'system', null, null, false),
@@ -24452,7 +24660,19 @@ begin
   ('system_org_next_tax', null, null, 'system', null, null, false),
   ('org_next_tax', 'Налоговая ставка на следующий цикл', null, 'normal', 'full', 'pallas_project.vd_percent', true),
   ('system_org_current_tax_sum', null, 'Накопленная сумма налогов за текущий цикл', 'system', null, null, false),
-  ('org_current_tax_sum', 'Накопленная сумма налогов за текущий цикл', null, 'normal', 'full', 'pallas_project.vd_money', true);
+  ('org_current_tax_sum', 'Накопленная сумма налогов за текущий цикл', null, 'normal', 'full', 'pallas_project.vd_money', true),
+  ('system_resource_ice', null, null, 'system', null, null, false),
+  ('resource_ice', 'Лёд', null, 'normal', 'full', null, true),
+  ('system_resource_foodstuff', null, null, 'system', null, null, false),
+  ('resource_foodstuff', 'Продукты', null, 'normal', 'full', null, true),
+  ('system_resource_medical_supplies', null, null, 'system', null, null, false),
+  ('resource_medical_supplies', 'Медикаменты', null, 'normal', 'full', null, true),
+  ('system_resource_uranium', null, null, 'system', null, null, false),
+  ('resource_uranium', 'Уран', null, 'normal', 'full', null, true),
+  ('system_resource_methane', null, null, 'system', null, null, false),
+  ('resource_methane', 'Метан', null, 'normal', 'full', null, true),
+  ('system_resource_goods', null, null, 'system', null, null, false),
+  ('resource_goods', 'Товары', null, 'normal', 'full', null, true);
 
   perform data.create_class(
     'organization',
@@ -24469,6 +24689,12 @@ begin
             "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_tax", "org_next_tax", "org_current_tax_sum", "org_districts_control", "org_districts_influence"],
             "actions": ["transfer_money", "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5", "change_org_money", "change_current_tax", "change_next_tax", "change_next_budget", "change_next_profit", "show_transactions", "show_contracts", "show_claims"]
           },
+          {"code": "ice", "attributes": ["resource_ice"], "actions": ["buy_aqua_galactic", "buy_jonny_quick", "buy_midnight_diggers"]},
+          {"code": "foodstuff", "attributes": ["resource_foodstuff"], "actions": ["buy_alfa_prime", "buy_lenin_state_farm", "buy_ganymede_hydroponical_systems"]},
+          {"code": "medical_supplies", "attributes": ["resource_medical_supplies"], "actions": ["buy_merck", "buy_flora", "buy_vector"]},
+          {"code": "uranium", "attributes": ["resource_uranium"], "actions": ["buy_westinghouse", "buy_trans_uranium", "buy_heavy_industries"]},
+          {"code": "methane", "attributes": ["resource_methane"], "actions": ["buy_comet_petroleum", "buy_stardust_industries", "buy_pdvsa"]},
+          {"code": "goods", "attributes": ["resource_goods"], "actions": ["buy_toom", "buy_amazon", "buy_big_warehouse"]},
           {"code": "info", "attributes": ["description"]}
         ]
       },
@@ -24485,7 +24711,13 @@ begin
       "system_money": 55000,
       "system_org_tax": 25,
       "system_org_next_tax": 25,
-      "system_org_current_tax_sum": 0
+      "system_org_current_tax_sum": 0,
+      "system_resource_ice": 0,
+      "system_resource_foodstuff": 0,
+      "system_resource_medical_supplies": 0,
+      "system_resource_uranium": 0,
+      "system_resource_methane": 0,
+      "system_resource_goods": 0
     }');
   perform pallas_project.create_organization(
     'org_opa',
@@ -24634,6 +24866,11 @@ begin
     jsonb '{
       "title": "Сакура"
     }');
+  perform pallas_project.create_synonym(
+    'org_white_star',
+    jsonb '{
+      "title": "Сантьяго Де ла Круз компани"
+    }');
 
   -- Синонимы-поставщики
   -- Лёд
@@ -24776,31 +25013,6 @@ begin
         }',
         v_organization_list::text)::jsonb);
   end;
-
-  -- Лёд: org_aqua_galactic, org_jonny_quick, org_midnight_diggers
-  -- Продукты: org_alfa_prime, org_lenin_state_farm, org_ganymede_hydroponical_systems
-  -- Медикаменты: org_merck, org_flora, org_vector
-  -- Уран: org_westinghouse, org_trans_uranium, org_heavy_industries
-  -- Метан: org_comet_petroleum, org_stardust_industries, org_pdvsa
-  -- Товары: org_toom, org_amazon, org_big_warehouse
-
-  -- Люди:
-  --  org_administration: экономист - Александра Корсак, руководитель - Фрида Фогель
-  --  org_opa: Роберт Ли, Лаура Джаррет и Люк Ламбер
-  --  org_starbucks: Марк Попов
-  --  org_de_beers: Мишон Грей и Абрахам Грей
-  --  org_akira_sc: Марк Попов и Роберт Ли
-  --  org_clinic: Лина Ковач
-  --  org_star_helix: Кайла Ангас
-  --  org_teco_mars: Рашид Файзи
-  --  org_clean_asteroid: Янг
-  --  org_free_sky: мормон
-  --  org_cherry_orchard: Александра Корсак
-  --  org_tariel: Валентин Штерн
-  --  org_tatu: Шона Кагари
-
-  -- Прочие люди:
-  --  Сантьяго Де ла Круз (головной картель)
 end;
 $$
 language plpgsql;
