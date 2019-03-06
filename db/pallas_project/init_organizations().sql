@@ -23,7 +23,8 @@ begin
   ('change_next_profit', 'pallas_project.act_change_next_profit'),
   ('transfer_org_money', 'pallas_project.act_transfer_org_money'),
   ('change_org_money', 'pallas_project.act_change_org_money'),
-  ('act_buy_primary_resource', 'pallas_project.act_buy_primary_resource');
+  ('act_buy_primary_resource', 'pallas_project.act_buy_primary_resource'),
+  ('act_produce_resource', 'pallas_project.act_produce_resource');
 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
   ('system_org_synonym', null, 'Код оригинальной организации, string', 'system', null, null, false),
@@ -55,7 +56,31 @@ begin
   ('system_resource_methane', null, null, 'system', null, null, false),
   ('resource_methane', 'Метан', null, 'normal', 'full', null, true),
   ('system_resource_goods', null, null, 'system', null, null, false),
-  ('resource_goods', 'Товары', null, 'normal', 'full', null, true);
+  ('resource_goods', 'Товары', null, 'normal', 'full', null, true),
+  ('system_ice_efficiency', null, null, 'system', null, null, false),
+  ('ice_efficiency', 'Эффективность переработки льда', null, 'normal', 'full', 'pallas_project.vd_eff_percent', true),
+  ('system_foodstuff_efficiency', null, null, 'system', null, null, false),
+  ('foodstuff_efficiency', 'Эффективность переработки продуктов', null, 'normal', 'full', 'pallas_project.vd_eff_percent', true),
+  ('system_medical_supplies_efficiency', null, null, 'system', null, null, false),
+  ('medical_supplies_efficiency', 'Эффективность переработки медикаментов', null, 'normal', 'full', 'pallas_project.vd_eff_percent', true),
+  ('system_uranium_efficiency', null, null, 'system', null, null, false),
+  ('uranium_efficiency', 'Эффективность переработки урана', null, 'normal', 'full', 'pallas_project.vd_eff_percent', true),
+  ('system_methane_efficiency', null, null, 'system', null, null, false),
+  ('methane_efficiency', 'Эффективность переработки метана', null, 'normal', 'full', 'pallas_project.vd_eff_percent', true),
+  ('system_goods_efficiency', null, null, 'system', null, null, false),
+  ('goods_efficiency', 'Эффективность переработки товаров', null, 'normal', 'full', 'pallas_project.vd_eff_percent', true),
+  ('system_resource_water', null, null, 'system', null, null, false),
+  ('resource_water', 'Вода', null, 'normal', 'full', null, true),
+  ('system_resource_food', null, null, 'system', null, null, false),
+  ('resource_food', 'Еда', null, 'normal', 'full', null, true),
+  ('system_resource_medicine', null, null, 'system', null, null, false),
+  ('resource_medicine', 'Лекарства', null, 'normal', 'full', null, true),
+  ('system_resource_power', null, null, 'system', null, null, false),
+  ('resource_power', 'Электричество', null, 'normal', 'full', null, true),
+  ('system_resource_fuel', null, null, 'system', null, null, false),
+  ('resource_fuel', 'Топливо', null, 'normal', 'full', null, true),
+  ('system_resource_spare_parts', null, null, 'system', null, null, false),
+  ('resource_spare_parts', 'Запчасти', null, 'normal', 'full', null, true);
 
   perform data.create_class(
     'organization',
@@ -72,12 +97,21 @@ begin
             "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_tax", "org_next_tax", "org_current_tax_sum", "org_districts_control", "org_districts_influence"],
             "actions": ["transfer_money", "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5", "change_org_money", "change_current_tax", "change_next_tax", "change_next_budget", "change_next_profit", "show_transactions", "show_contracts", "show_claims"]
           },
+
           {"code": "ice", "attributes": ["resource_ice"], "actions": ["buy_aqua_galactic", "buy_jonny_quick", "buy_midnight_diggers"]},
           {"code": "foodstuff", "attributes": ["resource_foodstuff"], "actions": ["buy_alfa_prime", "buy_lenin_state_farm", "buy_ganymede_hydroponical_systems"]},
           {"code": "medical_supplies", "attributes": ["resource_medical_supplies"], "actions": ["buy_merck", "buy_flora", "buy_vector"]},
           {"code": "uranium", "attributes": ["resource_uranium"], "actions": ["buy_westinghouse", "buy_trans_uranium", "buy_heavy_industries"]},
           {"code": "methane", "attributes": ["resource_methane"], "actions": ["buy_comet_petroleum", "buy_stardust_industries", "buy_pdvsa"]},
           {"code": "goods", "attributes": ["resource_goods"], "actions": ["buy_toom", "buy_amazon", "buy_big_warehouse"]},
+
+          {"code": "water", "attributes": ["resource_water", "ice_efficiency"], "actions": ["produce_water"]},
+          {"code": "food", "attributes": ["resource_food", "foodstuff_efficiency"], "actions": ["produce_food"]},
+          {"code": "medicine", "attributes": ["resource_medicine", "medical_supplies_efficiency"], "actions": ["produce_medicine"]},
+          {"code": "power", "attributes": ["resource_power", "uranium_efficiency"], "actions": ["produce_power"]},
+          {"code": "fuel", "attributes": ["resource_fuel", "methane_efficiency"], "actions": ["produce_fuel"]},
+          {"code": "spare_parts", "attributes": ["resource_spare_parts", "goods_efficiency"], "actions": ["produce_spare_parts"]},
+
           {"code": "info", "attributes": ["description"]}
         ]
       },
@@ -100,7 +134,19 @@ begin
       "system_resource_medical_supplies": 0,
       "system_resource_uranium": 0,
       "system_resource_methane": 0,
-      "system_resource_goods": 0
+      "system_resource_goods": 0,
+      "system_ice_efficiency": 75,
+      "system_foodstuff_efficiency": 75,
+      "system_medical_supplies_efficiency": 75,
+      "system_uranium_efficiency": 75,
+      "system_methane_efficiency": 75,
+      "system_goods_efficiency": 75,
+      "system_resource_water": 0,
+      "system_resource_food": 0,
+      "system_resource_medicine": 0,
+      "system_resource_power": 0,
+      "system_resource_fuel": 0,
+      "system_resource_spare_parts": 0
     }');
   perform pallas_project.create_organization(
     'org_opa',

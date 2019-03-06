@@ -44,36 +44,79 @@ begin
   end if;
 
   if v_is_real_org then
-    if v_object_code = 'org_administration' and v_is_economist then
-      declare
-        v_primary_resource text;
-        v_org record;
-        v_prices jsonb;
-      begin
-        for v_primary_resource in
-        (
-          select *
-          from unnest(array['ice', 'foodstuff', 'medical_supplies', 'uranium', 'methane', 'goods'])
-        )
-        loop
-          v_prices := data.get_param(v_primary_resource || '_prices');
-          for v_org in
+    if v_object_code = 'org_administration' then
+      if v_is_economist then
+        declare
+          v_primary_resource text;
+          v_org record;
+          v_prices jsonb;
+        begin
+          for v_primary_resource in
           (
-            select key, json.get_integer(value) as value
-            from jsonb_each(v_prices)
+            select *
+            from unnest(array['ice', 'foodstuff', 'medical_supplies', 'uranium', 'methane', 'goods'])
+          )
+          loop
+            v_prices := data.get_param(v_primary_resource || '_prices');
+            for v_org in
+            (
+              select key, json.get_integer(value) as value
+              from jsonb_each(v_prices)
+            )
+            loop
+              v_actions :=
+                v_actions ||
+                format(
+                  '{
+                    "buy_%s": {
+                      "code": "act_buy_primary_resource",
+                      "name": "Купить у %s (%s)",
+                      "disabled": false,
+                      "params": {
+                        "resource": "%s",
+                        "org": "%s"
+                      },
+                      "user_params": [
+                        {
+                          "code": "count",
+                          "description": "Количество",
+                          "type": "integer",
+                          "restrictions": {"min_value": 1}
+                        }
+                      ]
+                    }
+                  }',
+                  substring(v_org.key from 5),
+                  json.get_string(data.get_attribute_value(v_org.key, 'title')),
+                  pp_utils.format_money(v_org.value),
+                  v_primary_resource,
+                  v_org.key)::jsonb;
+            end loop;
+          end loop;
+        end;
+      end if;
+
+      if pp_utils.is_in_group(in_actor_id, 'org_administration_ecologist') then
+        declare
+          v_resource text;
+          v_org record;
+        begin
+          for v_resource in
+          (
+            select *
+            from unnest(array['water', 'food', 'medicine', 'power', 'fuel', 'spare_parts'])
           )
           loop
             v_actions :=
               v_actions ||
               format(
                 '{
-                  "buy_%s": {
-                    "code": "act_buy_primary_resource",
-                    "name": "Купить у %s (%s)",
+                  "produce_%s": {
+                    "code": "act_produce_resource",
+                    "name": "Произвести",
                     "disabled": false,
                     "params": {
-                      "resource": "%s",
-                      "org": "%s"
+                      "resource": "%s"
                     },
                     "user_params": [
                       {
@@ -85,14 +128,11 @@ begin
                     ]
                   }
                 }',
-                substring(v_org.key from 5),
-                json.get_string(data.get_attribute_value(v_org.key, 'title')),
-                pp_utils.format_money(v_org.value),
-                v_primary_resource,
-                v_org.key)::jsonb;
+                v_resource,
+                v_resource)::jsonb;
           end loop;
-        end loop;
-      end;
+        end;
+      end if;
     end if;
 
     if v_master or v_is_head or v_is_economist or v_is_auditor then

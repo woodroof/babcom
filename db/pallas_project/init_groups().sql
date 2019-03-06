@@ -37,6 +37,8 @@ begin
 
   perform data.create_object('profit_orgs', jsonb '{"priority": 71, "title": "Организации с безусловным доходом"}', 'group');
   perform data.create_object('budget_orgs', jsonb '{"priority": 73, "title": "Организации с бюджетом"}', 'group');
+
+  perform data.create_object('org_administration_ecologist', jsonb '{"priority": 79, "title": "Экологи администрации"}', 'group');
 end;
 $$
 language plpgsql;

@@ -59,6 +59,7 @@ begin
           {"id": %s, "value": %s, "value_object_code": "master"},
           {"id": %s, "value": %s, "value_object_code": "org_administration_head"},
           {"id": %s, "value": %s, "value_object_code": "org_administration_economist"},
+          {"id": %s, "value": %s, "value_object_code": "org_administration_ecologist"},
           {"id": %s, "value": %s},
           {"id": %s, "value": %s, "value_object_code": "master"},
           {"id": %s, "value": %s, "value_object_code": "org_administration_head"},
@@ -67,6 +68,8 @@ begin
           {"id": %s, "value": %s, "value_object_code": "org_administration_temporary_auditor"}
         ]',
         v_system_resource_attr_id,
+        v_resource_count,
+        v_resource_attr_id,
         v_resource_count,
         v_resource_attr_id,
         v_resource_count,

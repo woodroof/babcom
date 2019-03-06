@@ -11,6 +11,7 @@ declare
   v_org_id integer := data.create_object(in_object_code, in_attributes, 'organization');
   v_head_group_id integer := data.create_object(in_object_code || '_head', jsonb '{}');
   v_economist_group_id integer := data.create_object(in_object_code || '_economist', jsonb '{}');
+  v_ecologist_group_id integer;
   v_auditor_group_id integer := data.create_object(in_object_code || '_auditor', jsonb '{}');
   v_temporary_auditor_group_id integer := data.create_object(in_object_code || '_temporary_auditor', jsonb '{}');
   v_money jsonb := data.get_attribute_value(v_org_id, 'system_money');
@@ -66,33 +67,6 @@ begin
     perform data.set_attribute_value(v_org_id, 'org_budget', v_value, v_economist_group_id);
 
     perform data.add_object_to_object(v_org_id, 'budget_orgs');
-
-    if in_object_code = 'org_administration' then
-      v_value := data.get_attribute_value(v_org_id, 'system_resource_ice');
-      perform data.set_attribute_value(v_org_id, 'resource_ice', v_value, v_master_group_id);
-      perform data.set_attribute_value(v_org_id, 'resource_ice', v_value, v_head_group_id);
-      perform data.set_attribute_value(v_org_id, 'resource_ice', v_value, v_economist_group_id);
-      v_value := data.get_attribute_value(v_org_id, 'system_resource_foodstuff');
-      perform data.set_attribute_value(v_org_id, 'resource_foodstuff', v_value, v_master_group_id);
-      perform data.set_attribute_value(v_org_id, 'resource_foodstuff', v_value, v_head_group_id);
-      perform data.set_attribute_value(v_org_id, 'resource_foodstuff', v_value, v_economist_group_id);
-      v_value := data.get_attribute_value(v_org_id, 'system_resource_medical_supplies');
-      perform data.set_attribute_value(v_org_id, 'resource_medical_supplies', v_value, v_master_group_id);
-      perform data.set_attribute_value(v_org_id, 'resource_medical_supplies', v_value, v_head_group_id);
-      perform data.set_attribute_value(v_org_id, 'resource_medical_supplies', v_value, v_economist_group_id);
-      v_value := data.get_attribute_value(v_org_id, 'system_resource_uranium');
-      perform data.set_attribute_value(v_org_id, 'resource_uranium', v_value, v_master_group_id);
-      perform data.set_attribute_value(v_org_id, 'resource_uranium', v_value, v_head_group_id);
-      perform data.set_attribute_value(v_org_id, 'resource_uranium', v_value, v_economist_group_id);
-      v_value := data.get_attribute_value(v_org_id, 'system_resource_methane');
-      perform data.set_attribute_value(v_org_id, 'resource_methane', v_value, v_master_group_id);
-      perform data.set_attribute_value(v_org_id, 'resource_methane', v_value, v_head_group_id);
-      perform data.set_attribute_value(v_org_id, 'resource_methane', v_value, v_economist_group_id);
-      v_value := data.get_attribute_value(v_org_id, 'system_resource_goods');
-      perform data.set_attribute_value(v_org_id, 'resource_goods', v_value, v_master_group_id);
-      perform data.set_attribute_value(v_org_id, 'resource_goods', v_value, v_head_group_id);
-      perform data.set_attribute_value(v_org_id, 'resource_goods', v_value, v_economist_group_id);
-    end if;
   elsif v_org_economics_type = jsonb '"profit"' then
     v_value := data.get_attribute_value(v_org_id, 'system_org_profit');
     perform json.get_integer(v_value);
@@ -102,6 +76,134 @@ begin
     perform data.set_attribute_value(v_org_id, 'org_profit', v_value, v_economist_group_id);
 
     perform data.add_object_to_object(v_org_id, 'profit_orgs');
+  end if;
+
+  if in_object_code = 'org_administration' then
+    v_ecologist_group_id := data.get_object_id('org_administration_ecologist');
+
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_ice');
+    perform data.set_attribute_value(v_org_id, 'resource_ice', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_ice', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_ice', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_ice', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_foodstuff');
+    perform data.set_attribute_value(v_org_id, 'resource_foodstuff', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_foodstuff', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_foodstuff', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_foodstuff', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_medical_supplies');
+    perform data.set_attribute_value(v_org_id, 'resource_medical_supplies', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_medical_supplies', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_medical_supplies', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_medical_supplies', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_uranium');
+    perform data.set_attribute_value(v_org_id, 'resource_uranium', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_uranium', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_uranium', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_uranium', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_methane');
+    perform data.set_attribute_value(v_org_id, 'resource_methane', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_methane', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_methane', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_methane', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_goods');
+    perform data.set_attribute_value(v_org_id, 'resource_goods', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_goods', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_goods', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_goods', v_value, v_ecologist_group_id);
+
+    v_value := data.get_attribute_value(v_org_id, 'system_ice_efficiency');
+    perform data.set_attribute_value(v_org_id, 'ice_efficiency', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'ice_efficiency', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'ice_efficiency', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'ice_efficiency', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_foodstuff_efficiency');
+    perform data.set_attribute_value(v_org_id, 'foodstuff_efficiency', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'foodstuff_efficiency', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'foodstuff_efficiency', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'foodstuff_efficiency', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_medical_supplies_efficiency');
+    perform data.set_attribute_value(v_org_id, 'medical_supplies_efficiency', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'medical_supplies_efficiency', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'medical_supplies_efficiency', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'medical_supplies_efficiency', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_uranium_efficiency');
+    perform data.set_attribute_value(v_org_id, 'uranium_efficiency', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'uranium_efficiency', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'uranium_efficiency', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'uranium_efficiency', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_methane_efficiency');
+    perform data.set_attribute_value(v_org_id, 'methane_efficiency', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'methane_efficiency', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'methane_efficiency', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'methane_efficiency', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_goods_efficiency');
+    perform data.set_attribute_value(v_org_id, 'goods_efficiency', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'goods_efficiency', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'goods_efficiency', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'goods_efficiency', v_value, v_ecologist_group_id);
+
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_water');
+    perform data.set_attribute_value(v_org_id, 'resource_water', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_water', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_water', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_water', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_food');
+    perform data.set_attribute_value(v_org_id, 'resource_food', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_food', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_food', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_food', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_medicine');
+    perform data.set_attribute_value(v_org_id, 'resource_medicine', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_medicine', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_medicine', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_medicine', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_power');
+    perform data.set_attribute_value(v_org_id, 'resource_power', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_power', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_power', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_power', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_fuel');
+    perform data.set_attribute_value(v_org_id, 'resource_fuel', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_fuel', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_fuel', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_fuel', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_spare_parts');
+    perform data.set_attribute_value(v_org_id, 'resource_spare_parts', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_spare_parts', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_spare_parts', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_spare_parts', v_value, v_ecologist_group_id);
+  else
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_water');
+    if v_value is not null then
+      perform data.set_attribute_value(v_org_id, 'resource_water', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_water', v_value, v_head_group_id);
+    end if;
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_food');
+    if v_value is not null then
+      perform data.set_attribute_value(v_org_id, 'resource_food', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_food', v_value, v_head_group_id);
+    end if;
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_medicine');
+    if v_value is not null then
+      perform data.set_attribute_value(v_org_id, 'resource_medicine', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_medicine', v_value, v_head_group_id);
+    end if;
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_power');
+    if v_value is not null then
+      perform data.set_attribute_value(v_org_id, 'resource_power', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_power', v_value, v_head_group_id);
+    end if;
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_fuel');
+    if v_value is not null then
+      perform data.set_attribute_value(v_org_id, 'resource_fuel', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_fuel', v_value, v_head_group_id);
+    end if;
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_spare_parts');
+    if v_value is not null then
+      perform data.set_attribute_value(v_org_id, 'resource_spare_parts', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_spare_parts', v_value, v_head_group_id);
+    end if;
   end if;
 
   -- Создадим страницу с историей транзакций

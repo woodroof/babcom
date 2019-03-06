@@ -10046,6 +10046,7 @@ begin
           {"id": %s, "value": %s, "value_object_code": "master"},
           {"id": %s, "value": %s, "value_object_code": "org_administration_head"},
           {"id": %s, "value": %s, "value_object_code": "org_administration_economist"},
+          {"id": %s, "value": %s, "value_object_code": "org_administration_ecologist"},
           {"id": %s, "value": %s},
           {"id": %s, "value": %s, "value_object_code": "master"},
           {"id": %s, "value": %s, "value_object_code": "org_administration_head"},
@@ -10054,6 +10055,8 @@ begin
           {"id": %s, "value": %s, "value_object_code": "org_administration_temporary_auditor"}
         ]',
         v_system_resource_attr_id,
+        v_resource_count,
+        v_resource_attr_id,
         v_resource_count,
         v_resource_attr_id,
         v_resource_count,
@@ -15398,6 +15401,84 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_produce_resource(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_produce_resource(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_adm_id integer := data.get_object_id('org_administration');
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+  v_resource text := json.get_string(in_params, 'resource');
+  v_count integer := json.get_integer(in_user_params, 'count');
+  v_source_resource text := pp_utils.get_source_resource(v_resource);
+  v_efficiency integer := json.get_integer(data.get_attribute_value_for_share(v_adm_id, 'system_' || v_source_resource || '_efficiency'));
+
+  v_source_system_attr_id integer := data.get_attribute_id('system_resource_' || v_source_resource);
+  v_source_attr_id integer := data.get_attribute_id('resource_' || v_source_resource);
+  v_dest_system_attr_id integer := data.get_attribute_id('system_resource_' || v_resource);
+  v_dest_attr_id integer := data.get_attribute_id('resource_' || v_resource);
+
+  v_source integer := json.get_integer(data.get_attribute_value_for_update(v_adm_id, v_source_system_attr_id));
+  v_dest integer := json.get_integer(data.get_attribute_value_for_update(v_adm_id, v_dest_system_attr_id));
+
+  v_source_diff integer := ceil(v_count / 0.9 / (v_efficiency::numeric / 100));
+
+  v_notified boolean;
+begin
+  if v_source_diff > v_source then
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Нет нужного количества исходных ресурсов');
+    return;
+  end if;
+
+  v_source := v_source - v_source_diff;
+  v_dest := v_dest + v_count;
+
+  v_notified :=
+    data.change_current_object(
+      in_client_id,
+      in_request_id,
+      v_adm_id,
+      format(
+        '[
+          {"id": %s, "value": %s},
+          {"id": %s, "value": %s, "value_object_code": "master"},
+          {"id": %s, "value": %s, "value_object_code": "org_administration_head"},
+          {"id": %s, "value": %s, "value_object_code": "org_administration_economist"},
+          {"id": %s, "value": %s, "value_object_code": "org_administration_ecologist"},
+          {"id": %s, "value": %s},
+          {"id": %s, "value": %s, "value_object_code": "master"},
+          {"id": %s, "value": %s, "value_object_code": "org_administration_head"},
+          {"id": %s, "value": %s, "value_object_code": "org_administration_economist"},
+          {"id": %s, "value": %s, "value_object_code": "org_administration_ecologist"}
+        ]',
+        v_source_system_attr_id,
+        v_source,
+        v_source_attr_id,
+        v_source,
+        v_source_attr_id,
+        v_source,
+        v_source_attr_id,
+        v_source,
+        v_source_attr_id,
+        v_source,
+        v_dest_system_attr_id,
+        v_dest,
+        v_dest_attr_id,
+        v_dest,
+        v_dest_attr_id,
+        v_dest,
+        v_dest_attr_id,
+        v_dest,
+        v_dest_attr_id,
+        v_dest)::jsonb);
+  assert v_notified;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_remove_content(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_remove_content(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -18551,36 +18632,79 @@ begin
   end if;
 
   if v_is_real_org then
-    if v_object_code = 'org_administration' and v_is_economist then
-      declare
-        v_primary_resource text;
-        v_org record;
-        v_prices jsonb;
-      begin
-        for v_primary_resource in
-        (
-          select *
-          from unnest(array['ice', 'foodstuff', 'medical_supplies', 'uranium', 'methane', 'goods'])
-        )
-        loop
-          v_prices := data.get_param(v_primary_resource || '_prices');
-          for v_org in
+    if v_object_code = 'org_administration' then
+      if v_is_economist then
+        declare
+          v_primary_resource text;
+          v_org record;
+          v_prices jsonb;
+        begin
+          for v_primary_resource in
           (
-            select key, json.get_integer(value) as value
-            from jsonb_each(v_prices)
+            select *
+            from unnest(array['ice', 'foodstuff', 'medical_supplies', 'uranium', 'methane', 'goods'])
+          )
+          loop
+            v_prices := data.get_param(v_primary_resource || '_prices');
+            for v_org in
+            (
+              select key, json.get_integer(value) as value
+              from jsonb_each(v_prices)
+            )
+            loop
+              v_actions :=
+                v_actions ||
+                format(
+                  '{
+                    "buy_%s": {
+                      "code": "act_buy_primary_resource",
+                      "name": "Купить у %s (%s)",
+                      "disabled": false,
+                      "params": {
+                        "resource": "%s",
+                        "org": "%s"
+                      },
+                      "user_params": [
+                        {
+                          "code": "count",
+                          "description": "Количество",
+                          "type": "integer",
+                          "restrictions": {"min_value": 1}
+                        }
+                      ]
+                    }
+                  }',
+                  substring(v_org.key from 5),
+                  json.get_string(data.get_attribute_value(v_org.key, 'title')),
+                  pp_utils.format_money(v_org.value),
+                  v_primary_resource,
+                  v_org.key)::jsonb;
+            end loop;
+          end loop;
+        end;
+      end if;
+
+      if pp_utils.is_in_group(in_actor_id, 'org_administration_ecologist') then
+        declare
+          v_resource text;
+          v_org record;
+        begin
+          for v_resource in
+          (
+            select *
+            from unnest(array['water', 'food', 'medicine', 'power', 'fuel', 'spare_parts'])
           )
           loop
             v_actions :=
               v_actions ||
               format(
                 '{
-                  "buy_%s": {
-                    "code": "act_buy_primary_resource",
-                    "name": "Купить у %s (%s)",
+                  "produce_%s": {
+                    "code": "act_produce_resource",
+                    "name": "Произвести",
                     "disabled": false,
                     "params": {
-                      "resource": "%s",
-                      "org": "%s"
+                      "resource": "%s"
                     },
                     "user_params": [
                       {
@@ -18592,14 +18716,11 @@ begin
                     ]
                   }
                 }',
-                substring(v_org.key from 5),
-                json.get_string(data.get_attribute_value(v_org.key, 'title')),
-                pp_utils.format_money(v_org.value),
-                v_primary_resource,
-                v_org.key)::jsonb;
+                v_resource,
+                v_resource)::jsonb;
           end loop;
-        end loop;
-      end;
+        end;
+      end if;
     end if;
 
     if v_master or v_is_head or v_is_economist or v_is_auditor then
@@ -20010,6 +20131,7 @@ declare
   v_org_id integer := data.create_object(in_object_code, in_attributes, 'organization');
   v_head_group_id integer := data.create_object(in_object_code || '_head', jsonb '{}');
   v_economist_group_id integer := data.create_object(in_object_code || '_economist', jsonb '{}');
+  v_ecologist_group_id integer;
   v_auditor_group_id integer := data.create_object(in_object_code || '_auditor', jsonb '{}');
   v_temporary_auditor_group_id integer := data.create_object(in_object_code || '_temporary_auditor', jsonb '{}');
   v_money jsonb := data.get_attribute_value(v_org_id, 'system_money');
@@ -20065,33 +20187,6 @@ begin
     perform data.set_attribute_value(v_org_id, 'org_budget', v_value, v_economist_group_id);
 
     perform data.add_object_to_object(v_org_id, 'budget_orgs');
-
-    if in_object_code = 'org_administration' then
-      v_value := data.get_attribute_value(v_org_id, 'system_resource_ice');
-      perform data.set_attribute_value(v_org_id, 'resource_ice', v_value, v_master_group_id);
-      perform data.set_attribute_value(v_org_id, 'resource_ice', v_value, v_head_group_id);
-      perform data.set_attribute_value(v_org_id, 'resource_ice', v_value, v_economist_group_id);
-      v_value := data.get_attribute_value(v_org_id, 'system_resource_foodstuff');
-      perform data.set_attribute_value(v_org_id, 'resource_foodstuff', v_value, v_master_group_id);
-      perform data.set_attribute_value(v_org_id, 'resource_foodstuff', v_value, v_head_group_id);
-      perform data.set_attribute_value(v_org_id, 'resource_foodstuff', v_value, v_economist_group_id);
-      v_value := data.get_attribute_value(v_org_id, 'system_resource_medical_supplies');
-      perform data.set_attribute_value(v_org_id, 'resource_medical_supplies', v_value, v_master_group_id);
-      perform data.set_attribute_value(v_org_id, 'resource_medical_supplies', v_value, v_head_group_id);
-      perform data.set_attribute_value(v_org_id, 'resource_medical_supplies', v_value, v_economist_group_id);
-      v_value := data.get_attribute_value(v_org_id, 'system_resource_uranium');
-      perform data.set_attribute_value(v_org_id, 'resource_uranium', v_value, v_master_group_id);
-      perform data.set_attribute_value(v_org_id, 'resource_uranium', v_value, v_head_group_id);
-      perform data.set_attribute_value(v_org_id, 'resource_uranium', v_value, v_economist_group_id);
-      v_value := data.get_attribute_value(v_org_id, 'system_resource_methane');
-      perform data.set_attribute_value(v_org_id, 'resource_methane', v_value, v_master_group_id);
-      perform data.set_attribute_value(v_org_id, 'resource_methane', v_value, v_head_group_id);
-      perform data.set_attribute_value(v_org_id, 'resource_methane', v_value, v_economist_group_id);
-      v_value := data.get_attribute_value(v_org_id, 'system_resource_goods');
-      perform data.set_attribute_value(v_org_id, 'resource_goods', v_value, v_master_group_id);
-      perform data.set_attribute_value(v_org_id, 'resource_goods', v_value, v_head_group_id);
-      perform data.set_attribute_value(v_org_id, 'resource_goods', v_value, v_economist_group_id);
-    end if;
   elsif v_org_economics_type = jsonb '"profit"' then
     v_value := data.get_attribute_value(v_org_id, 'system_org_profit');
     perform json.get_integer(v_value);
@@ -20101,6 +20196,134 @@ begin
     perform data.set_attribute_value(v_org_id, 'org_profit', v_value, v_economist_group_id);
 
     perform data.add_object_to_object(v_org_id, 'profit_orgs');
+  end if;
+
+  if in_object_code = 'org_administration' then
+    v_ecologist_group_id := data.get_object_id('org_administration_ecologist');
+
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_ice');
+    perform data.set_attribute_value(v_org_id, 'resource_ice', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_ice', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_ice', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_ice', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_foodstuff');
+    perform data.set_attribute_value(v_org_id, 'resource_foodstuff', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_foodstuff', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_foodstuff', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_foodstuff', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_medical_supplies');
+    perform data.set_attribute_value(v_org_id, 'resource_medical_supplies', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_medical_supplies', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_medical_supplies', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_medical_supplies', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_uranium');
+    perform data.set_attribute_value(v_org_id, 'resource_uranium', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_uranium', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_uranium', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_uranium', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_methane');
+    perform data.set_attribute_value(v_org_id, 'resource_methane', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_methane', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_methane', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_methane', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_goods');
+    perform data.set_attribute_value(v_org_id, 'resource_goods', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_goods', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_goods', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_goods', v_value, v_ecologist_group_id);
+
+    v_value := data.get_attribute_value(v_org_id, 'system_ice_efficiency');
+    perform data.set_attribute_value(v_org_id, 'ice_efficiency', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'ice_efficiency', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'ice_efficiency', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'ice_efficiency', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_foodstuff_efficiency');
+    perform data.set_attribute_value(v_org_id, 'foodstuff_efficiency', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'foodstuff_efficiency', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'foodstuff_efficiency', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'foodstuff_efficiency', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_medical_supplies_efficiency');
+    perform data.set_attribute_value(v_org_id, 'medical_supplies_efficiency', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'medical_supplies_efficiency', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'medical_supplies_efficiency', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'medical_supplies_efficiency', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_uranium_efficiency');
+    perform data.set_attribute_value(v_org_id, 'uranium_efficiency', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'uranium_efficiency', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'uranium_efficiency', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'uranium_efficiency', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_methane_efficiency');
+    perform data.set_attribute_value(v_org_id, 'methane_efficiency', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'methane_efficiency', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'methane_efficiency', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'methane_efficiency', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_goods_efficiency');
+    perform data.set_attribute_value(v_org_id, 'goods_efficiency', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'goods_efficiency', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'goods_efficiency', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'goods_efficiency', v_value, v_ecologist_group_id);
+
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_water');
+    perform data.set_attribute_value(v_org_id, 'resource_water', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_water', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_water', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_water', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_food');
+    perform data.set_attribute_value(v_org_id, 'resource_food', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_food', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_food', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_food', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_medicine');
+    perform data.set_attribute_value(v_org_id, 'resource_medicine', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_medicine', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_medicine', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_medicine', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_power');
+    perform data.set_attribute_value(v_org_id, 'resource_power', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_power', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_power', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_power', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_fuel');
+    perform data.set_attribute_value(v_org_id, 'resource_fuel', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_fuel', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_fuel', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_fuel', v_value, v_ecologist_group_id);
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_spare_parts');
+    perform data.set_attribute_value(v_org_id, 'resource_spare_parts', v_value, v_master_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_spare_parts', v_value, v_head_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_spare_parts', v_value, v_economist_group_id);
+    perform data.set_attribute_value(v_org_id, 'resource_spare_parts', v_value, v_ecologist_group_id);
+  else
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_water');
+    if v_value is not null then
+      perform data.set_attribute_value(v_org_id, 'resource_water', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_water', v_value, v_head_group_id);
+    end if;
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_food');
+    if v_value is not null then
+      perform data.set_attribute_value(v_org_id, 'resource_food', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_food', v_value, v_head_group_id);
+    end if;
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_medicine');
+    if v_value is not null then
+      perform data.set_attribute_value(v_org_id, 'resource_medicine', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_medicine', v_value, v_head_group_id);
+    end if;
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_power');
+    if v_value is not null then
+      perform data.set_attribute_value(v_org_id, 'resource_power', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_power', v_value, v_head_group_id);
+    end if;
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_fuel');
+    if v_value is not null then
+      perform data.set_attribute_value(v_org_id, 'resource_fuel', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_fuel', v_value, v_head_group_id);
+    end if;
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_spare_parts');
+    if v_value is not null then
+      perform data.set_attribute_value(v_org_id, 'resource_spare_parts', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_spare_parts', v_value, v_head_group_id);
+    end if;
   end if;
 
   -- Создадим страницу с историей транзакций
@@ -23471,6 +23694,8 @@ begin
 
   perform data.create_object('profit_orgs', jsonb '{"priority": 71, "title": "Организации с безусловным доходом"}', 'group');
   perform data.create_object('budget_orgs', jsonb '{"priority": 73, "title": "Организации с бюджетом"}', 'group');
+
+  perform data.create_object('org_administration_ecologist', jsonb '{"priority": 79, "title": "Экологи администрации"}', 'group');
 end;
 $$
 language plpgsql;
@@ -24625,6 +24850,8 @@ begin
   perform data.add_object_to_object(data.get_object_id('74bc1a0f-72d9-4271-b358-0ef464f3cbf9'), data.get_object_id('org_starbucks_auditor'));
   perform data.add_object_to_object(data.get_object_id('ac1b23d0-ba5f-4042-85d5-880a66254803'), data.get_object_id('org_free_sky_head'));
 
+  perform data.add_object_to_object(data.get_object_id('95a3dc9e-8512-44ab-9173-29f0f4fd6e05'), data.get_object_id('org_administration_ecologist'));
+
   -- Заполняем "Мои организации"
   perform data.set_attribute_value('b7845724-0c9a-498e-8b2f-a01455c22399_my_organizations', 'content', jsonb '["org_administration"]');
   perform data.set_attribute_value('0d07f15b-2952-409b-b22e-4042cf70acc6_my_organizations', 'content', jsonb '["org_administration", "org_cherry_orchard"]');
@@ -24646,6 +24873,7 @@ begin
   perform data.set_attribute_value('d23550d0-d599-4cf2-9a15-1594fd2df2b2_my_organizations', 'content', jsonb '["org_tatu"]');
   perform data.set_attribute_value('74bc1a0f-72d9-4271-b358-0ef464f3cbf9_my_organizations', 'content', jsonb '["org_starbucks"]');
   perform data.set_attribute_value('ac1b23d0-ba5f-4042-85d5-880a66254803_my_organizations', 'content', jsonb '["org_free_sky"]');
+  perform data.set_attribute_value('95a3dc9e-8512-44ab-9173-29f0f4fd6e05_my_organizations', 'content', jsonb '["org_administration"]');
 end;
 $$
 language plpgsql;
@@ -24675,7 +24903,8 @@ begin
   ('change_next_profit', 'pallas_project.act_change_next_profit'),
   ('transfer_org_money', 'pallas_project.act_transfer_org_money'),
   ('change_org_money', 'pallas_project.act_change_org_money'),
-  ('act_buy_primary_resource', 'pallas_project.act_buy_primary_resource');
+  ('act_buy_primary_resource', 'pallas_project.act_buy_primary_resource'),
+  ('act_produce_resource', 'pallas_project.act_produce_resource');
 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
   ('system_org_synonym', null, 'Код оригинальной организации, string', 'system', null, null, false),
@@ -24707,7 +24936,31 @@ begin
   ('system_resource_methane', null, null, 'system', null, null, false),
   ('resource_methane', 'Метан', null, 'normal', 'full', null, true),
   ('system_resource_goods', null, null, 'system', null, null, false),
-  ('resource_goods', 'Товары', null, 'normal', 'full', null, true);
+  ('resource_goods', 'Товары', null, 'normal', 'full', null, true),
+  ('system_ice_efficiency', null, null, 'system', null, null, false),
+  ('ice_efficiency', 'Эффективность переработки льда', null, 'normal', 'full', 'pallas_project.vd_eff_percent', true),
+  ('system_foodstuff_efficiency', null, null, 'system', null, null, false),
+  ('foodstuff_efficiency', 'Эффективность переработки продуктов', null, 'normal', 'full', 'pallas_project.vd_eff_percent', true),
+  ('system_medical_supplies_efficiency', null, null, 'system', null, null, false),
+  ('medical_supplies_efficiency', 'Эффективность переработки медикаментов', null, 'normal', 'full', 'pallas_project.vd_eff_percent', true),
+  ('system_uranium_efficiency', null, null, 'system', null, null, false),
+  ('uranium_efficiency', 'Эффективность переработки урана', null, 'normal', 'full', 'pallas_project.vd_eff_percent', true),
+  ('system_methane_efficiency', null, null, 'system', null, null, false),
+  ('methane_efficiency', 'Эффективность переработки метана', null, 'normal', 'full', 'pallas_project.vd_eff_percent', true),
+  ('system_goods_efficiency', null, null, 'system', null, null, false),
+  ('goods_efficiency', 'Эффективность переработки товаров', null, 'normal', 'full', 'pallas_project.vd_eff_percent', true),
+  ('system_resource_water', null, null, 'system', null, null, false),
+  ('resource_water', 'Вода', null, 'normal', 'full', null, true),
+  ('system_resource_food', null, null, 'system', null, null, false),
+  ('resource_food', 'Еда', null, 'normal', 'full', null, true),
+  ('system_resource_medicine', null, null, 'system', null, null, false),
+  ('resource_medicine', 'Лекарства', null, 'normal', 'full', null, true),
+  ('system_resource_power', null, null, 'system', null, null, false),
+  ('resource_power', 'Электричество', null, 'normal', 'full', null, true),
+  ('system_resource_fuel', null, null, 'system', null, null, false),
+  ('resource_fuel', 'Топливо', null, 'normal', 'full', null, true),
+  ('system_resource_spare_parts', null, null, 'system', null, null, false),
+  ('resource_spare_parts', 'Запчасти', null, 'normal', 'full', null, true);
 
   perform data.create_class(
     'organization',
@@ -24724,12 +24977,21 @@ begin
             "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_tax", "org_next_tax", "org_current_tax_sum", "org_districts_control", "org_districts_influence"],
             "actions": ["transfer_money", "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5", "change_org_money", "change_current_tax", "change_next_tax", "change_next_budget", "change_next_profit", "show_transactions", "show_contracts", "show_claims"]
           },
+
           {"code": "ice", "attributes": ["resource_ice"], "actions": ["buy_aqua_galactic", "buy_jonny_quick", "buy_midnight_diggers"]},
           {"code": "foodstuff", "attributes": ["resource_foodstuff"], "actions": ["buy_alfa_prime", "buy_lenin_state_farm", "buy_ganymede_hydroponical_systems"]},
           {"code": "medical_supplies", "attributes": ["resource_medical_supplies"], "actions": ["buy_merck", "buy_flora", "buy_vector"]},
           {"code": "uranium", "attributes": ["resource_uranium"], "actions": ["buy_westinghouse", "buy_trans_uranium", "buy_heavy_industries"]},
           {"code": "methane", "attributes": ["resource_methane"], "actions": ["buy_comet_petroleum", "buy_stardust_industries", "buy_pdvsa"]},
           {"code": "goods", "attributes": ["resource_goods"], "actions": ["buy_toom", "buy_amazon", "buy_big_warehouse"]},
+
+          {"code": "water", "attributes": ["resource_water", "ice_efficiency"], "actions": ["produce_water"]},
+          {"code": "food", "attributes": ["resource_food", "foodstuff_efficiency"], "actions": ["produce_food"]},
+          {"code": "medicine", "attributes": ["resource_medicine", "medical_supplies_efficiency"], "actions": ["produce_medicine"]},
+          {"code": "power", "attributes": ["resource_power", "uranium_efficiency"], "actions": ["produce_power"]},
+          {"code": "fuel", "attributes": ["resource_fuel", "methane_efficiency"], "actions": ["produce_fuel"]},
+          {"code": "spare_parts", "attributes": ["resource_spare_parts", "goods_efficiency"], "actions": ["produce_spare_parts"]},
+
           {"code": "info", "attributes": ["description"]}
         ]
       },
@@ -24752,7 +25014,19 @@ begin
       "system_resource_medical_supplies": 0,
       "system_resource_uranium": 0,
       "system_resource_methane": 0,
-      "system_resource_goods": 0
+      "system_resource_goods": 0,
+      "system_ice_efficiency": 75,
+      "system_foodstuff_efficiency": 75,
+      "system_medical_supplies_efficiency": 75,
+      "system_uranium_efficiency": 75,
+      "system_methane_efficiency": 75,
+      "system_goods_efficiency": 75,
+      "system_resource_water": 0,
+      "system_resource_food": 0,
+      "system_resource_medicine": 0,
+      "system_resource_power": 0,
+      "system_resource_fuel": 0,
+      "system_resource_spare_parts": 0
     }');
   perform pallas_project.create_organization(
     'org_opa',
@@ -29770,6 +30044,19 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.vd_eff_percent(integer, jsonb, data.card_type, integer);
+
+create or replace function pallas_project.vd_eff_percent(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
+returns text
+immutable
+as
+$$
+begin
+  return floor(json.get_integer(in_value) * 0.9) || '%';
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.vd_health_care_status(integer, jsonb, data.card_type, integer);
 
 create or replace function pallas_project.vd_health_care_status(in_attribute_id integer, in_value jsonb, in_card_type data.card_type, in_actor_id integer)
@@ -30555,6 +30842,32 @@ begin
   end loop;
 
   return v_password;
+end;
+$$
+language plpgsql;
+
+-- drop function pp_utils.get_source_resource(text);
+
+create or replace function pp_utils.get_source_resource(in_resource text)
+returns text
+immutable
+as
+$$
+begin
+  if in_resource = 'water' then
+    return 'ice';
+  elsif in_resource = 'food' then
+    return 'foodstuff';
+  elsif in_resource = 'medicine' then
+    return 'medical_supplies';
+  elsif in_resource = 'power' then
+    return 'uranium';
+  elsif in_resource = 'fuel' then
+    return 'methane';
+  else
+    assert in_resource = 'spare_parts';
+    return 'goods';
+  end if;
 end;
 $$
 language plpgsql;
