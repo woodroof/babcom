@@ -25221,7 +25221,7 @@ begin
         "groups": [
           {
             "code": "personal_info",
-            "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_tax", "org_next_tax", "org_current_tax_sum", "org_districts_control", "org_districts_influence"],
+            "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_tax", "org_next_tax", "org_current_tax_sum", "org_districts_control", "org_districts_influence", "resource_ore", "resource_iridium", "resource_diamonds"],
             "actions": [
               "transfer_money",
               "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5",
@@ -27458,6 +27458,12 @@ declare
   v_district_tax_attr_id integer := data.get_attribute_id('district_tax');
   v_district_control_attr_id integer := data.get_attribute_id('district_control');
   v_system_district_tax_coeff_attr_id integer := data.get_attribute_id('system_district_tax_coeff');
+  v_system_resource_ore_attr_id integer := data.get_attribute_id('system_resource_ore');
+  v_system_resource_iridium_attr_id integer := data.get_attribute_id('system_resource_iridium');
+  v_system_resource_diamonds_attr_id integer := data.get_attribute_id('system_resource_diamonds');
+  v_resource_ore_attr_id integer := data.get_attribute_id('resource_ore');
+  v_resource_iridium_attr_id integer := data.get_attribute_id('resource_iridium');
+  v_resource_diamonds_attr_id integer := data.get_attribute_id('resource_diamonds');
 
   v_system_person_life_support_status_attr_id integer := data.get_attribute_id('system_person_life_support_status');
   v_system_person_health_care_status_attr_id integer := data.get_attribute_id('system_person_health_care_status');
@@ -28215,6 +28221,48 @@ begin
             v_transactions_content := to_jsonb(data.get_object_code(v_transaction_id)) || v_transactions_content;
           end;
         end loop;
+
+        if v_org.code = 'org_de_beers' then
+          -- Отправляем руду, алмазы и иридий
+          declare
+            v_ore integer := json.get_integer(data.get_raw_attribute_value_for_update(v_org.id, v_system_resource_ore_attr_id));
+            v_iridium integer := json.get_integer(data.get_raw_attribute_value_for_update(v_org.id, v_system_resource_iridium_attr_id));
+            v_diamonds integer := json.get_integer(data.get_raw_attribute_value_for_update(v_org.id, v_system_resource_diamonds_attr_id));
+          begin
+            if v_ore != 0 then
+              v_changes :=
+                v_changes ||
+                data.attribute_change2jsonb(v_system_resource_ore_attr_id, jsonb '0') ||
+                data.attribute_change2jsonb(v_resource_ore_attr_id, jsonb '0', v_master_group_id) ||
+                data.attribute_change2jsonb(v_resource_ore_attr_id, jsonb '0', v_head_group_id);
+            end if;
+
+            if v_iridium != 0 then
+              v_changes :=
+                v_changes ||
+                data.attribute_change2jsonb(v_system_resource_iridium_attr_id, jsonb '0') ||
+                data.attribute_change2jsonb(v_resource_iridium_attr_id, jsonb '0', v_master_group_id) ||
+                data.attribute_change2jsonb(v_resource_iridium_attr_id, jsonb '0', v_head_group_id);
+            end if;
+
+            if v_diamonds != 0 then
+              v_changes :=
+                v_changes ||
+                data.attribute_change2jsonb(v_system_resource_diamonds_attr_id, jsonb '0') ||
+                data.attribute_change2jsonb(v_resource_diamonds_attr_id, jsonb '0', v_master_group_id) ||
+                data.attribute_change2jsonb(v_resource_diamonds_attr_id, jsonb '0', v_head_group_id);
+            end if;
+
+            v_master_notifications :=
+              v_master_notifications ||
+              to_jsonb(
+                format(
+                  'Де Бирс отправил %s руды, %s иридия, %s алмазов',
+                  v_ore,
+                  v_iridium,
+                  v_diamonds));
+          end;
+        end if;
 
         v_object_changes :=
           v_object_changes ||
