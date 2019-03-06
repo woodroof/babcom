@@ -20336,7 +20336,7 @@ begin
   )
   loop
     perform pp_utils.list_prepend_and_notify(v_my_documents_id, v_document_code, data.get_object_id(v_person_code));
-    perform pp_utils.list_prepend_and_notify(v_my_documents_id, v_document_code, v_master_group_id);
+    perform pp_utils.list_replace_to_head_and_notify(v_my_documents_id, v_document_code, v_master_group_id);
   end loop;
 end;
 $$
