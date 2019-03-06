@@ -20748,9 +20748,9 @@ end;
 $$
 language plpgsql;
 
--- drop function pallas_project.create_route(text, text, text, jsonb, text[]);
+-- drop function pallas_project.create_route(text, text, text, text, text[]);
 
-create or replace function pallas_project.create_route(in_title text, in_subtitle text, in_description text, in_route_points jsonb, in_actors text[])
+create or replace function pallas_project.create_route(in_title text, in_subtitle text, in_description text, in_route_points text, in_actors text[])
 returns void
 volatile
 as
@@ -20758,20 +20758,15 @@ $$
 -- Не для использования на игре, т.к. обновляет атрибуты напрямую, без уведомлений и блокировок!
 declare
   v_my_documents_id integer := data.get_object_id('my_documents');
-  v_route_code text := substring((pgcrypto.gen_random_uuid())::text for 6);
   v_route_document_id integer;
   v_route_document_code text;
   v_actor text;
   v_actor_id integer;
 begin
-  perform data.create_object(
-    v_route_code,
-    jsonb_build_object('route_points', in_route_points),
-    'route');
   v_route_document_id :=
     data.create_object(
       null,
-      jsonb_build_object('title', in_title, 'subtitle', in_subtitle, 'description', in_description, 'route_code', v_route_code),
+      jsonb_build_object('title', in_title, 'subtitle', in_subtitle, 'description', in_description, 'route_points', in_route_points),
       'route_document');
   v_route_document_code := data.get_object_code(v_route_document_id);
 
@@ -20929,10 +20924,11 @@ declare
   v_description text :=
 'Уведомление в мастерский чат приходит за 15 минут до наступления цикла. Это время даётся на то, чтобы:
 1. [Изменить](babcom:prices), если нужно, стоимость коина и стоимости в коинах статусов.
-2. Пройтись по гражданам ООН (кроме экономиста и начальника шахты) и вручную изменить им рейтинг.
-3. Пройтись по организациям с бюджетом и, если нужно, изменить им бюджет.
-4. Пройтись по организациям с безусловным доходом и, если нужно, изменить им доход.
-5. Начиная с конца второго цикла - списать UN$500 с организации [Тариель](babcom:org_tariel).
+2. Изменить, если нужно, потребление ресурсов секторами (руками в базе!).
+3. Пройтись по гражданам ООН (кроме экономиста и начальника шахты) и вручную изменить им рейтинг.
+4. Пройтись по организациям с бюджетом и, если нужно, изменить им бюджет.
+5. Пройтись по организациям с безусловным доходом и, если нужно, изменить им доход.
+6. Начиная с конца второго цикла - списать UN$500 с организации [Тариель](babcom:org_tariel).
 
 Граждане ООН:
 %s
@@ -26864,8 +26860,7 @@ as
 $$
 begin
   insert into data.attributes(code, name, type, card_type, can_be_overridden) values
-  ('route_code', 'Код маршрута', 'normal', 'full', false),
-  ('route_points', null, 'hidden', 'full', false);
+  ('route_points', null, 'normal', 'full', false);
 
   -- Классы для маршрутов
   perform data.create_class(
@@ -26873,39 +26868,39 @@ begin
     jsonb '{
       "type": "route_document",
       "is_visible": true,
-      "template": {"title": "title", "subtitle": "subtitle", "groups": [{"code": "group", "attributes": ["description", "route_code"]}]}
-    }');
-  perform data.create_class(
-    'route',
-    jsonb '{
-      "type": "route",
-      "is_visible": true,
-      "template": {"groups": []}
+      "template": {
+        "title": "title",
+        "subtitle": "subtitle",
+        "groups": [
+          {"code": "group", "attributes": ["description"]},
+          {"code": "group", "name": "Точки маршрута", "attributes": ["route_points"]}
+        ]
+      }
     }');
 
   perform pallas_project.create_route(
     'Маршрут',
     'TODO — Алмазная жила',
     'TODO описание',
-    jsonb '[[1,1], [1,2], [2,2]]',
+    '(1,1) (1,2) (2,2)',
     array['2ce20542-04f1-418f-99eb-3c9d2665f733']);
   perform pallas_project.create_route(
     'Маршрут',
     'TODO — Теко Марс, склад 1',
     'TODO описание',
-    jsonb '[[1,1], [1,2], [2,2]]',
+    '(1,1) (1,2) (2,2)',
     array['1fbcf296-e9ad-43b0-9064-1da3ff6d326d', '8f7b1cc6-28cd-4fb1-8c81-e0ab1c0df5c9', 'ea68988b-b540-4685-aefb-cbd999f4c9ba']);
   perform pallas_project.create_route(
     'Маршрут',
     'TODO — Теко Марс, склад 2',
     'TODO описание',
-    jsonb '[[1,1], [1,2], [2,2]]',
+    '(1,1) (1,2) (2,2)',
     array['1fbcf296-e9ad-43b0-9064-1da3ff6d326d', '8f7b1cc6-28cd-4fb1-8c81-e0ab1c0df5c9', 'ea68988b-b540-4685-aefb-cbd999f4c9ba']);
   perform pallas_project.create_route(
     'Маршрут',
     'TODO — Картель, склад',
     'TODO описание',
-    jsonb '[[1,1], [1,2], [2,2]]',
+    '(1,1) (1,2) (2,2)',
     array['0a0dc809-7bf1-41ee-bfe7-700fd26c1c0a', '1fbcf296-e9ad-43b0-9064-1da3ff6d326d']);
 end;
 $$
