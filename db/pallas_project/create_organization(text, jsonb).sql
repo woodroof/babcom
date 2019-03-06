@@ -204,6 +204,22 @@ begin
       perform data.set_attribute_value(v_org_id, 'resource_spare_parts', v_value, v_master_group_id);
       perform data.set_attribute_value(v_org_id, 'resource_spare_parts', v_value, v_head_group_id);
     end if;
+
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_ore');
+    if v_value is not null then
+      perform data.set_attribute_value(v_org_id, 'resource_ore', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_ore', v_value, v_head_group_id);
+    end if;
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_iridium');
+    if v_value is not null then
+      perform data.set_attribute_value(v_org_id, 'resource_iridium', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_iridium', v_value, v_head_group_id);
+    end if;
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_diamonds');
+    if v_value is not null then
+      perform data.set_attribute_value(v_org_id, 'resource_diamonds', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_diamonds', v_value, v_head_group_id);
+    end if;
   end if;
 
   -- Создадим страницу с историей транзакций

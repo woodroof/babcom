@@ -402,6 +402,59 @@ begin
               v_my_organization.title,
               v_my_organization.code,
               v_object_code)::jsonb;
+
+          if
+            v_object_code in ('org_administration', 'org_star_helix', 'org_clinic', 'org_akira_sc', 'org_teco_mars', 'org_de_beers') and
+            v_my_organization.code in ('org_administration', 'org_star_helix', 'org_clinic', 'org_akira_sc', 'org_teco_mars', 'org_de_beers')
+          then
+            declare
+              v_resource text;
+            begin
+              for v_resource in
+              (
+                select *
+                from unnest(array['water', 'power', 'fuel', 'spare_parts'])
+              )
+              loop
+                v_actions :=
+                  v_actions ||
+                  format(
+                    '{
+                      "transfer_org_%s%s": {
+                        "code": "transfer_org_resource",
+                        "name": "Передать %s из запасов организации %s",
+                        "disabled": false,
+                        "params": {
+                          "org_code": "%s",
+                          "receiver_code": "%s",
+                          "resource": "%s"
+                        },
+                        "user_params": [
+                          {
+                            "code": "count",
+                            "description": "Количество",
+                            "type": "integer",
+                            "restrictions": {"min_value": 1}
+                          },
+                          {
+                            "code": "comment",
+                            "description": "Комментарий",
+                            "type": "string",
+                            "restrictions": {"max_length": 1000, "multiline": true}
+                          }
+                        ]
+                      }
+                    }',
+                    v_resource,
+                    v_my_organization.num,
+                    pallas_project.resource_to_text_r(v_resource),
+                    v_my_organization.title,
+                    v_my_organization.code,
+                    v_object_code,
+                    v_resource)::jsonb;
+              end loop;
+            end;
+          end if;
         end loop;
       end if;
     end if;

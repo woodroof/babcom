@@ -15927,6 +15927,177 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.act_transfer_org_resource(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_transfer_org_resource(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
+
+  v_dest_code text := json.get_string(in_params, 'receiver_code');
+  v_dest_id integer := data.get_object_id(v_dest_code);
+  v_source_code text := json.get_string(in_params, 'org_code');
+  v_source_id integer := data.get_object_id(v_source_code);
+  v_resource text := json.get_string(in_params, 'resource');
+  v_count bigint := json.get_bigint(in_user_params, 'count');
+  v_comment text := pp_utils.trim(json.get_string(in_user_params, 'comment'));
+
+  v_res_system_attr_id integer := data.get_attribute_id('system_resource_' || v_resource);
+  v_res_attr_id integer := data.get_attribute_id('resource_' || v_resource);
+
+  v_source_count integer := json.get_integer_opt(data.get_attribute_value_for_update(v_source_id, v_res_system_attr_id), 0) - v_count;
+  v_dest_count integer := json.get_integer_opt(data.get_attribute_value_for_update(v_dest_id, v_res_system_attr_id), 0) + v_count;
+
+  v_changes jsonb;
+  v_notified boolean;
+
+  v_title_attr_id integer := data.get_attribute_id('title');
+
+  v_source_comment text;
+  v_dest_comment text;
+
+  v_org_person_id integer;
+begin
+  if v_source_count < 0 then
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'У организации нет нужного количества ресурса.');
+    return;
+  end if;
+
+  v_changes :=
+    format(
+      '[
+        {"id": %s, "value": %s},
+        {"id": %s, "value": %s, "value_object_code": "master"},
+        {"id": %s, "value": %s, "value_object_code": "%s_head"},
+        {"id": %s, "value": %s, "value_object_code": "%s_economist"}
+      ]',
+      v_res_system_attr_id,
+      v_dest_count,
+      v_res_attr_id,
+      v_dest_count,
+      v_res_attr_id,
+      v_dest_count,
+      v_dest_code,
+      v_res_attr_id,
+      v_dest_count,
+      v_dest_code)::jsonb;
+
+  if v_dest_code = 'org_administration' then
+    v_changes :=
+      v_changes ||
+      format(
+        '[
+          {"id": %s, "value": %s, "value_object_code": "org_administration_ecologist"}
+        ]',
+        v_res_attr_id,
+        v_dest_count)::jsonb;
+  end if;
+
+  v_notified :=
+    data.change_current_object(
+      in_client_id,
+      in_request_id,
+      v_dest_id,
+      v_changes);
+  if not v_notified then
+    perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
+
+  v_changes :=
+    format(
+      '[
+        {"id": %s, "value": %s},
+        {"id": %s, "value": %s, "value_object_code": "master"},
+        {"id": %s, "value": %s, "value_object_code": "%s_head"},
+        {"id": %s, "value": %s, "value_object_code": "%s_economist"}
+      ]',
+      v_res_system_attr_id,
+      v_source_count,
+      v_res_attr_id,
+      v_source_count,
+      v_res_attr_id,
+      v_source_count,
+      v_source_code,
+      v_res_attr_id,
+      v_source_count,
+      v_source_code)::jsonb;
+
+  if v_source_code = 'org_administration' then
+    v_changes :=
+      v_changes ||
+      format(
+        '[
+          {"id": %s, "value": %s, "value_object_code": "org_administration_ecologist"}
+        ]',
+        v_res_attr_id,
+        v_source_count)::jsonb;
+  end if;
+
+  perform data.change_object_and_notify(
+    v_source_id,
+    v_changes);
+
+  v_source_comment :=
+    format(
+      E'Организация %s передала ресурс %s в количестве %s организации %s.\nИнициатор: %s%s',
+      pp_utils.link(v_source_id),
+      pallas_project.resource_to_text_i(v_resource),
+      v_count,
+      pp_utils.link(v_dest_id),
+      pp_utils.link(v_actor_id),
+      (case when v_comment = '' then '' else E'\nКомментарий:\n' || v_comment end));
+
+  for v_org_person_id in
+  (
+    select distinct object_id
+    from data.object_objects
+    where
+      parent_object_id in (
+        data.get_object_id(v_source_code || '_head'),
+        data.get_object_id(v_source_code || '_economist')) and
+      object_id != parent_object_id
+  )
+  loop
+    perform pp_utils.add_notification(
+      v_org_person_id,
+      v_source_comment,
+      v_source_id,
+      true);
+  end loop;
+
+  v_dest_comment :=
+    format(
+      E'Организация %s получила ресурс %s в количестве %s от организации %s.%s',
+      pp_utils.link(v_dest_id),
+      pallas_project.resource_to_text_i(v_resource),
+      v_count,
+      pp_utils.link(v_source_id),
+      (case when v_comment = '' then '' else E'\nКомментарий:\n' || v_comment end));
+
+  for v_org_person_id in
+  (
+    select distinct object_id
+    from data.object_objects
+    where
+      parent_object_id in (
+        data.get_object_id(v_dest_code || '_head'),
+        data.get_object_id(v_dest_code || '_economist')) and
+      object_id != parent_object_id
+  )
+  loop
+    perform pp_utils.add_notification(
+      v_org_person_id,
+      v_dest_comment,
+      v_dest_id,
+      true);
+  end loop;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.act_unsuspend_contract(integer, text, jsonb, jsonb, jsonb);
 
 create or replace function pallas_project.act_unsuspend_contract(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
@@ -18990,6 +19161,59 @@ begin
               v_my_organization.title,
               v_my_organization.code,
               v_object_code)::jsonb;
+
+          if
+            v_object_code in ('org_administration', 'org_star_helix', 'org_clinic', 'org_akira_sc', 'org_teco_mars', 'org_de_beers') and
+            v_my_organization.code in ('org_administration', 'org_star_helix', 'org_clinic', 'org_akira_sc', 'org_teco_mars', 'org_de_beers')
+          then
+            declare
+              v_resource text;
+            begin
+              for v_resource in
+              (
+                select *
+                from unnest(array['water', 'power', 'fuel', 'spare_parts'])
+              )
+              loop
+                v_actions :=
+                  v_actions ||
+                  format(
+                    '{
+                      "transfer_org_%s%s": {
+                        "code": "transfer_org_resource",
+                        "name": "Передать %s из запасов организации %s",
+                        "disabled": false,
+                        "params": {
+                          "org_code": "%s",
+                          "receiver_code": "%s",
+                          "resource": "%s"
+                        },
+                        "user_params": [
+                          {
+                            "code": "count",
+                            "description": "Количество",
+                            "type": "integer",
+                            "restrictions": {"min_value": 1}
+                          },
+                          {
+                            "code": "comment",
+                            "description": "Комментарий",
+                            "type": "string",
+                            "restrictions": {"max_length": 1000, "multiline": true}
+                          }
+                        ]
+                      }
+                    }',
+                    v_resource,
+                    v_my_organization.num,
+                    pallas_project.resource_to_text_r(v_resource),
+                    v_my_organization.title,
+                    v_my_organization.code,
+                    v_object_code,
+                    v_resource)::jsonb;
+              end loop;
+            end;
+          end if;
         end loop;
       end if;
     end if;
@@ -20323,6 +20547,22 @@ begin
     if v_value is not null then
       perform data.set_attribute_value(v_org_id, 'resource_spare_parts', v_value, v_master_group_id);
       perform data.set_attribute_value(v_org_id, 'resource_spare_parts', v_value, v_head_group_id);
+    end if;
+
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_ore');
+    if v_value is not null then
+      perform data.set_attribute_value(v_org_id, 'resource_ore', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_ore', v_value, v_head_group_id);
+    end if;
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_iridium');
+    if v_value is not null then
+      perform data.set_attribute_value(v_org_id, 'resource_iridium', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_iridium', v_value, v_head_group_id);
+    end if;
+    v_value := data.get_attribute_value(v_org_id, 'system_resource_diamonds');
+    if v_value is not null then
+      perform data.set_attribute_value(v_org_id, 'resource_diamonds', v_value, v_master_group_id);
+      perform data.set_attribute_value(v_org_id, 'resource_diamonds', v_value, v_head_group_id);
     end if;
   end if;
 
@@ -24900,7 +25140,8 @@ begin
   ('transfer_org_money', 'pallas_project.act_transfer_org_money'),
   ('change_org_money', 'pallas_project.act_change_org_money'),
   ('act_buy_primary_resource', 'pallas_project.act_buy_primary_resource'),
-  ('act_produce_resource', 'pallas_project.act_produce_resource');
+  ('act_produce_resource', 'pallas_project.act_produce_resource'),
+  ('transfer_org_resource', 'pallas_project.act_transfer_org_resource');
 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
   ('system_org_synonym', null, 'Код оригинальной организации, string', 'system', null, null, false),
@@ -24921,6 +25162,7 @@ begin
   ('org_next_tax', 'Налоговая ставка на следующий цикл', null, 'normal', 'full', 'pallas_project.vd_percent', true),
   ('system_org_current_tax_sum', null, 'Накопленная сумма налогов за текущий цикл', 'system', null, null, false),
   ('org_current_tax_sum', 'Накопленная сумма налогов за текущий цикл', null, 'normal', 'full', 'pallas_project.vd_money', true),
+
   ('system_resource_ice', null, null, 'system', null, null, false),
   ('resource_ice', 'Лёд', null, 'normal', 'full', null, true),
   ('system_resource_foodstuff', null, null, 'system', null, null, false),
@@ -24933,6 +25175,7 @@ begin
   ('resource_methane', 'Метан', null, 'normal', 'full', null, true),
   ('system_resource_goods', null, null, 'system', null, null, false),
   ('resource_goods', 'Товары', null, 'normal', 'full', null, true),
+
   ('system_ice_efficiency', null, null, 'system', null, null, false),
   ('ice_efficiency', 'Эффективность переработки льда', null, 'normal', 'full', 'pallas_project.vd_eff_percent', true),
   ('system_foodstuff_efficiency', null, null, 'system', null, null, false),
@@ -24945,6 +25188,7 @@ begin
   ('methane_efficiency', 'Эффективность переработки метана', null, 'normal', 'full', 'pallas_project.vd_eff_percent', true),
   ('system_goods_efficiency', null, null, 'system', null, null, false),
   ('goods_efficiency', 'Эффективность переработки товаров', null, 'normal', 'full', 'pallas_project.vd_eff_percent', true),
+
   ('system_resource_water', null, null, 'system', null, null, false),
   ('resource_water', 'Вода', null, 'normal', 'full', null, true),
   ('system_resource_food', null, null, 'system', null, null, false),
@@ -24956,7 +25200,14 @@ begin
   ('system_resource_fuel', null, null, 'system', null, null, false),
   ('resource_fuel', 'Топливо', null, 'normal', 'full', null, true),
   ('system_resource_spare_parts', null, null, 'system', null, null, false),
-  ('resource_spare_parts', 'Запчасти', null, 'normal', 'full', null, true);
+  ('resource_spare_parts', 'Запчасти', null, 'normal', 'full', null, true),
+
+  ('system_resource_ore', null, null, 'system', null, null, false),
+  ('resource_ore', 'Железная руда', null, 'normal', 'full', null, true),
+  ('system_resource_iridium', null, null, 'system', null, null, false),
+  ('resource_iridium', 'Иридий', null, 'normal', 'full', null, true),
+  ('system_resource_diamonds', null, null, 'system', null, null, false),
+  ('resource_diamonds', 'Алмазы', null, 'normal', 'full', null, true);
 
   perform data.create_class(
     'organization',
@@ -24971,7 +25222,27 @@ begin
           {
             "code": "personal_info",
             "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_tax", "org_next_tax", "org_current_tax_sum", "org_districts_control", "org_districts_influence"],
-            "actions": ["transfer_money", "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5", "change_org_money", "change_current_tax", "change_next_tax", "change_next_budget", "change_next_profit", "show_transactions", "show_contracts", "show_claims"]
+            "actions": [
+              "transfer_money",
+              "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5",
+              "change_org_money",
+              "change_current_tax",
+              "change_next_tax",
+              "change_next_budget",
+              "change_next_profit",
+              "show_transactions",
+              "show_contracts",
+              "show_claims"]
+          },
+
+          {
+            "code": "res_transfer",
+            "actions": [
+              "transfer_org_water1", "transfer_org_water2", "transfer_org_water3", "transfer_org_water4", "transfer_org_water5",
+              "transfer_org_power1", "transfer_org_power2", "transfer_org_power3", "transfer_org_power4", "transfer_org_power5",
+              "transfer_org_fuel1", "transfer_org_fuel2", "transfer_org_fuel3", "transfer_org_fuel4", "transfer_org_fuel5",
+              "transfer_org_spare_parts1", "transfer_org_spare_parts2", "transfer_org_spare_parts3", "transfer_org_spare_parts4", "transfer_org_spare_parts5"
+            ]
           },
 
           {"code": "ice", "attributes": ["resource_ice"], "actions": ["buy_aqua_galactic", "buy_jonny_quick", "buy_midnight_diggers"]},
@@ -25051,7 +25322,10 @@ begin
       "title": "Де Бирс",
       "system_org_economics_type": "budget",
       "system_org_budget": 1380,
-      "system_money": 1380
+      "system_money": 1380,
+      "system_resource_ore": 0,
+      "system_resource_iridium": 0,
+      "system_resource_diamonds": 0
     }');
   perform pallas_project.create_organization(
     'org_akira_sc',
@@ -28974,6 +29248,58 @@ begin
   end loop;
 
   return v_ret_val;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.resource_to_text_i(text);
+
+create or replace function pallas_project.resource_to_text_i(in_control text)
+returns text
+immutable
+as
+$$
+begin
+  if in_control = 'water' then
+    return 'вода';
+  elsif in_control = 'food' then
+    return 'еда';
+  elsif in_control = 'medicine' then
+    return 'лекарства';
+  elsif in_control = 'power' then
+    return 'электричество';
+  elsif in_control = 'fuel' then
+    return 'топливо';
+  end if;
+
+  assert in_control = 'spare_parts';
+  return 'запчасти';
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.resource_to_text_r(text);
+
+create or replace function pallas_project.resource_to_text_r(in_control text)
+returns text
+immutable
+as
+$$
+begin
+  if in_control = 'water' then
+    return 'воду';
+  elsif in_control = 'food' then
+    return 'еду';
+  elsif in_control = 'medicine' then
+    return 'лекарства';
+  elsif in_control = 'power' then
+    return 'электричество';
+  elsif in_control = 'fuel' then
+    return 'топливо';
+  end if;
+
+  assert in_control = 'spare_parts';
+  return 'запчасти';
 end;
 $$
 language plpgsql;

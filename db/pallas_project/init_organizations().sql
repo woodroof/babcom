@@ -24,7 +24,8 @@ begin
   ('transfer_org_money', 'pallas_project.act_transfer_org_money'),
   ('change_org_money', 'pallas_project.act_change_org_money'),
   ('act_buy_primary_resource', 'pallas_project.act_buy_primary_resource'),
-  ('act_produce_resource', 'pallas_project.act_produce_resource');
+  ('act_produce_resource', 'pallas_project.act_produce_resource'),
+  ('transfer_org_resource', 'pallas_project.act_transfer_org_resource');
 
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
   ('system_org_synonym', null, 'Код оригинальной организации, string', 'system', null, null, false),
@@ -45,6 +46,7 @@ begin
   ('org_next_tax', 'Налоговая ставка на следующий цикл', null, 'normal', 'full', 'pallas_project.vd_percent', true),
   ('system_org_current_tax_sum', null, 'Накопленная сумма налогов за текущий цикл', 'system', null, null, false),
   ('org_current_tax_sum', 'Накопленная сумма налогов за текущий цикл', null, 'normal', 'full', 'pallas_project.vd_money', true),
+
   ('system_resource_ice', null, null, 'system', null, null, false),
   ('resource_ice', 'Лёд', null, 'normal', 'full', null, true),
   ('system_resource_foodstuff', null, null, 'system', null, null, false),
@@ -57,6 +59,7 @@ begin
   ('resource_methane', 'Метан', null, 'normal', 'full', null, true),
   ('system_resource_goods', null, null, 'system', null, null, false),
   ('resource_goods', 'Товары', null, 'normal', 'full', null, true),
+
   ('system_ice_efficiency', null, null, 'system', null, null, false),
   ('ice_efficiency', 'Эффективность переработки льда', null, 'normal', 'full', 'pallas_project.vd_eff_percent', true),
   ('system_foodstuff_efficiency', null, null, 'system', null, null, false),
@@ -69,6 +72,7 @@ begin
   ('methane_efficiency', 'Эффективность переработки метана', null, 'normal', 'full', 'pallas_project.vd_eff_percent', true),
   ('system_goods_efficiency', null, null, 'system', null, null, false),
   ('goods_efficiency', 'Эффективность переработки товаров', null, 'normal', 'full', 'pallas_project.vd_eff_percent', true),
+
   ('system_resource_water', null, null, 'system', null, null, false),
   ('resource_water', 'Вода', null, 'normal', 'full', null, true),
   ('system_resource_food', null, null, 'system', null, null, false),
@@ -80,7 +84,14 @@ begin
   ('system_resource_fuel', null, null, 'system', null, null, false),
   ('resource_fuel', 'Топливо', null, 'normal', 'full', null, true),
   ('system_resource_spare_parts', null, null, 'system', null, null, false),
-  ('resource_spare_parts', 'Запчасти', null, 'normal', 'full', null, true);
+  ('resource_spare_parts', 'Запчасти', null, 'normal', 'full', null, true),
+
+  ('system_resource_ore', null, null, 'system', null, null, false),
+  ('resource_ore', 'Железная руда', null, 'normal', 'full', null, true),
+  ('system_resource_iridium', null, null, 'system', null, null, false),
+  ('resource_iridium', 'Иридий', null, 'normal', 'full', null, true),
+  ('system_resource_diamonds', null, null, 'system', null, null, false),
+  ('resource_diamonds', 'Алмазы', null, 'normal', 'full', null, true);
 
   perform data.create_class(
     'organization',
@@ -95,7 +106,27 @@ begin
           {
             "code": "personal_info",
             "attributes": ["org_synonym", "org_economics_type", "money", "org_budget", "org_profit", "org_tax", "org_next_tax", "org_current_tax_sum", "org_districts_control", "org_districts_influence"],
-            "actions": ["transfer_money", "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5", "change_org_money", "change_current_tax", "change_next_tax", "change_next_budget", "change_next_profit", "show_transactions", "show_contracts", "show_claims"]
+            "actions": [
+              "transfer_money",
+              "transfer_org_money1", "transfer_org_money2", "transfer_org_money3", "transfer_org_money4", "transfer_org_money5",
+              "change_org_money",
+              "change_current_tax",
+              "change_next_tax",
+              "change_next_budget",
+              "change_next_profit",
+              "show_transactions",
+              "show_contracts",
+              "show_claims"]
+          },
+
+          {
+            "code": "res_transfer",
+            "actions": [
+              "transfer_org_water1", "transfer_org_water2", "transfer_org_water3", "transfer_org_water4", "transfer_org_water5",
+              "transfer_org_power1", "transfer_org_power2", "transfer_org_power3", "transfer_org_power4", "transfer_org_power5",
+              "transfer_org_fuel1", "transfer_org_fuel2", "transfer_org_fuel3", "transfer_org_fuel4", "transfer_org_fuel5",
+              "transfer_org_spare_parts1", "transfer_org_spare_parts2", "transfer_org_spare_parts3", "transfer_org_spare_parts4", "transfer_org_spare_parts5"
+            ]
           },
 
           {"code": "ice", "attributes": ["resource_ice"], "actions": ["buy_aqua_galactic", "buy_jonny_quick", "buy_midnight_diggers"]},
@@ -175,7 +206,10 @@ begin
       "title": "Де Бирс",
       "system_org_economics_type": "budget",
       "system_org_budget": 1380,
-      "system_money": 1380
+      "system_money": 1380,
+      "system_resource_ore": 0,
+      "system_resource_iridium": 0,
+      "system_resource_diamonds": 0
     }');
   perform pallas_project.create_organization(
     'org_akira_sc',
