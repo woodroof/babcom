@@ -14,7 +14,7 @@ begin
   ('system_blog_author', null, 'Автор блога', 'system', null, null, false),
   ('blog_author', 'Автор', 'Автор блога', 'normal', 'full', 'pallas_project.vd_link', true),
   ('blog_is_mute', null, 'Признак отлюченного уведомления о новых сообщениях блога', 'normal', null, 'pallas_project.vd_chat_is_mute', true),
-  ('blog_message_text', null, 'Текст сообщения в блоге', 'normal', 'full', null, false),
+  ('blog_message_text', null, 'Текст сообщения в блоге', 'normal', null, null, false),
   ('blog_message_time', null, 'Время публикации', 'normal', null, null, false),
   ('system_blog_message_like', null, 'Признак того, что вы залайкали сообщение', 'system', null, null, true),
   ('blog_message_like_count', null, 'Количество лайков у сообщения', 'system', null, null, false),
@@ -87,6 +87,7 @@ begin
     {"code": "actions_function", "value": "pallas_project.actgenerator_blogs_news"},
     {"code": "independent_from_actor_list_elements", "value": true},
     {"code": "independent_from_object_list_elements", "value": true},
+    {"code": "list_element_function", "value": "pallas_project.lef_do_nothing"},
     {"code": "list_actions_function", "value": "pallas_project.actgenerator_blog_content"},
     {
       "code": "template",
@@ -113,6 +114,7 @@ begin
     {"code": "actions_function", "value": "pallas_project.actgenerator_blog"},
     {"code": "independent_from_actor_list_elements", "value": true},
     {"code": "independent_from_object_list_elements", "value": true},
+    {"code": "list_element_function", "value": "pallas_project.lef_do_nothing"},
     {"code": "list_actions_function", "value": "pallas_project.actgenerator_blog_content"},
     {
       "code": "mini_card_template",
@@ -153,7 +155,7 @@ begin
       "value": {
         "groups": [
           {"code": "blog_message_group1", 
-            "attributes": ["blog_name", "blog_message_time", "title"], 
+            "attributes": ["title", "blog_message_time", "blog_name", "blog_message_text"], 
             "actions": ["blog_message_like", "blog_message_edit", "blog_message_delete", "blog_message_chat"]
           }
         ]

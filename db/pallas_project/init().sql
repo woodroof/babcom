@@ -163,6 +163,7 @@ begin
   perform pallas_project.init_statuses();
   perform pallas_project.init_document_list();
   perform pallas_project.init_mine();
+  perform pallas_project.init_blog_list();
 end;
 $$
 language plpgsql;
