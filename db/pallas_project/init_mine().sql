@@ -10,7 +10,8 @@ begin
   ('mine_available_equipment', 'hidden', 'full', true),
   ('mine_available_companies', 'hidden', 'full', true),
   ('mine_map', 'hidden', null, false),
-  ('mine_equipment', 'hidden', null, false);
+  ('mine_equipment', 'hidden', null, false),
+  ('other_equipment', 'hidden', null, false);
 
   insert into data.params(code, value) values
   ('customs_coords', jsonb '{"x": 10, "y": 10}'),
@@ -133,6 +134,24 @@ begin
         "14": {"x":11, "y":12, "type":"brillmine", "actor_id": false, "fueled": true, "broken":false, "firm":"TM", "content":[]},
         "15": {"x":11, "y":13, "type":"stonemine", "actor_id": false, "fueled": true, "broken":false, "firm":"DB", "content":[]},
         "16": {"x":11, "y":14, "type":"ironmine", "actor_id": false, "fueled": true, "broken":false, "firm":"DB", "content":[]}
+      }
+    }');
+
+  perform data.create_object(
+    'other_equipment',
+    jsonb '{
+      "type": "other_equipment",
+      "is_visible": true,
+      "template": {"groups": []},
+      "other_equipment": {
+        "other1": {"type":"heavy_equip", "on": true, "broken":false, "firm":"DB", "content":[]},
+        "other2": {"type":"heavy_equip", "on": true, "broken":false, "firm":"DB", "content":[]},
+        "other3": {"type":"heavy_equip", "on": true, "broken":false, "firm":"TM", "content":[]},
+        "other4": {"type":"heavy_equip", "on": true, "broken":false, "firm":"AC", "content":[]},
+        "other5": {"type":"heavy_equip", "on": true, "broken":false, "firm":"DB", "content":[]},
+        "other6": {"type":"heavy_equip", "on": true, "broken":false, "firm":"TM", "content":[]},
+        "other7": {"type":"heavy_equip", "on": true, "broken":false, "firm":"DB", "content":[]},
+        "other8": {"type":"heavy_equip", "on": true, "broken":false, "firm":"TM", "content":[]}
       }
     }');
 
