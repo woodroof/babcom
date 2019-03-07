@@ -111,6 +111,9 @@ begin
         }',
         v_actor_code,
         v_actor_code)::jsonb;
+      v_actions := v_actions || 
+        ('{"notify_everyone": {"code": "notify_everyone", "name": "Уведомление для всех", "disabled": false, '||
+                '"params": {}, "user_params": [{"code": "message", "description": "Введите текст уведомления", "type": "string"}]}}')::jsonb;
       if data.get_boolean_param('game_in_progress') then
         v_actions :=
           v_actions ||

@@ -53,7 +53,7 @@ begin
           {"code": "menu_notifications", "actions": ["notifications"]},
           {"code": "menu_lottery", "actions": ["lottery"]},
           {"code": "menu_personal", "actions": ["login", "profile", "transactions", "statuses", "next_statuses", "med_health", "chats", "documents", "medicine", "customs", "my_contracts", "my_organizations", "claims", "important_notifications", "med_drugs", "mine", "equipment"]},
-          {"code": "menu_social", "actions": ["news", "all_chats", "debatles", "master_chats"]},
+          {"code": "menu_social", "actions": ["news", "all_chats", "debatles", "master_chats", "notify_everyone"]},
           {"code": "menu_info", "actions": ["all_contracts", "persons", "districts", "organizations"]},
           {"code": "menu_cycle", "actions": ["cycle_checklist", "prices"]},
           {"code": "menu_finish_game", "actions": ["finish_game"]},
@@ -113,7 +113,8 @@ begin
   ('create_random_person', 'pallas_project.act_create_random_person'),
   ('remove_notification', 'pallas_project.act_remove_notification'),
   ('clear_notifications', 'pallas_project.act_clear_notifications'),
-  ('finish_game', 'pallas_project.act_finish_game');
+  ('finish_game', 'pallas_project.act_finish_game'),
+  ('notify_everyone', 'pallas_project.act_notify_everyone');
 
   -- Объект для завершения цикла
   perform data.create_object(
