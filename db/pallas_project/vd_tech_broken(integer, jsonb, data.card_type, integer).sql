@@ -6,12 +6,16 @@ immutable
 as
 $$
 declare
-  v_value boolean := json.get_boolean(in_value);
+  v_value text := json.get_string(in_value);
 begin
-  case when v_value then
+  case when v_value = 'broken' then
     return 'Сломано';
-  else
+  when v_value = 'working' then
     return 'Исправно';
+  when v_value = 'reparing' then
+    return 'Ремонтируется';
+  else
+    return 'Неизвестно';
   end case;
 end;
 $$

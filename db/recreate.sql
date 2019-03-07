@@ -15646,26 +15646,105 @@ volatile
 as
 $$
 declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_tech_code text := json.get_string(in_params, 'tech_code');
   v_tech_id text := replace(v_tech_code, 'equipment_', '');
+  v_tech_broken text := data.get_attribute_value_for_update(v_tech_code, 'tech_broken');
   v_message_sent boolean := false;
   v_mine_equipment_id integer := data.get_object_id('mine_equipment');
   v_mine_equipment_json jsonb := data.get_attribute_value_for_update(v_mine_equipment_id, 'mine_equipment');
 begin
   assert in_request_id is not null;
 
+  if v_tech_broken = 'broken' then 
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Нельзя сломать уже сломанное');
+    return;
+  end if;
+
   if not json.get_boolean_opt(json.get_object_opt(v_mine_equipment_json, v_tech_id, jsonb '{}'), 'broken', true) then
     v_mine_equipment_json := jsonb_set(v_mine_equipment_json, array[v_tech_id, 'broken'], jsonb 'true');
-     perform data.change_object_and_notify(in_client_id, 
-                                           in_request_id,
-                                           v_mine_equipment_id, 
-                                           jsonb_build_array(data.attribute_change2jsonb('mine_equipment', v_mine_equipment_json)));
+    perform data.change_object_and_notify(v_mine_equipment_id, 
+                                           jsonb_build_array(data.attribute_change2jsonb('mine_equipment', v_mine_equipment_json)),
+                                           v_actor_id);
 
     v_message_sent := data.change_current_object(in_client_id, 
                                                  in_request_id,
                                                  data.get_object_id(v_tech_code), 
-                                                 jsonb_build_array(data.attribute_change2jsonb('tech_broken', jsonb 'true')));
+                                                 jsonb_build_array(data.attribute_change2jsonb('tech_broken', jsonb '"broken"')));
   end if;
+  if not v_message_sent then
+   perform api_utils.create_ok_notification(in_client_id, in_request_id);
+  end if;
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_tech_repare(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_tech_repare(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_actor_id integer := data.get_active_actor_id(in_client_id);  
+  v_tech_code text := json.get_string(in_params, 'tech_code');
+  v_tech_broken text := json.get_string(data.get_attribute_value_for_update(v_tech_code, 'tech_broken'));
+  v_tech_skill integer := json.get_integer_opt(data.get_attribute_value_for_share(v_actor_id, 'system_person_tech_skill'), null);
+  v_system_person_repare_count jsonb := coalesce(data.get_attribute_value_for_update(v_actor_id, 'system_person_repare_count'), jsonb '{}');
+  v_economic_cycle_number integer := data.get_integer_param('economic_cycle_number');
+  v_last_cycle_repare integer := json.get_integer_opt(v_system_person_repare_count, 'cycle', 0);
+  v_repare_count integer;
+  v_is_stimulant_used boolean := json.get_boolean_opt(data.get_attribute_value_for_share(v_actor_id, 'system_person_is_stimulant_used'), false);
+  v_total_skill integer;
+  v_seconds integer;
+  v_message_sent boolean := false;
+  v_is_master boolean := pp_utils.is_in_group(v_actor_id, 'master');
+begin
+  assert in_request_id is not null;
+  if v_tech_broken not in ('broken') then 
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Нельзя починить несломанное');
+    return;
+  end if;
+  if v_tech_skill is null and not v_is_master then
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Вы не умеете чинить');
+    return;
+  end if;
+  if v_last_cycle_repare = v_economic_cycle_number then
+    v_repare_count := json.get_integer(v_system_person_repare_count, 'count');
+    if v_repare_count > 2 and not v_is_master then
+        perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Вы исчерпали запас запчастей для ремонта в этом цикле');
+        return;
+    end if;
+  end if;
+
+  if v_repare_count is not null then
+    v_system_person_repare_count := jsonb_set(v_system_person_repare_count, array['count'], to_jsonb(v_repare_count + 1));
+  else
+    v_system_person_repare_count := jsonb_build_object('cycle', v_economic_cycle_number, 'count', 1);
+  end if;
+  perform data.change_object_and_notify(v_actor_id, 
+                                        jsonb_build_array(data.attribute_change2jsonb('system_person_repare_count', v_system_person_repare_count)),
+                                        v_actor_id);
+  v_total_skill := v_tech_skill + (case when v_is_stimulant_used then 1 else 0 end);
+  if v_total_skill = 0 then
+    v_seconds := 120;
+  elsif v_total_skill = 1 then
+    v_seconds := 90;
+  elsif v_total_skill >=2 then
+    v_seconds := 60;
+  elsif v_is_master then
+    v_total_skill := -100;
+    v_seconds := 3;
+  end if;
+    perform data.create_job(clock_timestamp() + (v_seconds::text || ' seconds')::interval, 
+    'pallas_project.job_tech_repare', 
+    format('{"tech_code": "%s", "skill": %s}', v_tech_code, v_total_skill)::jsonb);
+
+  v_message_sent := data.change_current_object(in_client_id, 
+                                               in_request_id,
+                                               data.get_object_id(v_tech_code), 
+                                               jsonb_build_array(data.attribute_change2jsonb('tech_broken', jsonb '"reparing"')));
   if not v_message_sent then
    perform api_utils.create_ok_notification(in_client_id, in_request_id);
   end if;
@@ -19797,6 +19876,43 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.actgenerator_tech(integer, integer);
+
+create or replace function pallas_project.actgenerator_tech(in_object_id integer, in_actor_id integer)
+returns jsonb
+volatile
+as
+$$
+declare
+  v_actions_list text := '';
+  v_is_master boolean;
+  v_tech_skill integer := json.get_integer_opt(data.get_attribute_value_for_share(in_actor_id, 'system_person_tech_skill'), null);
+  v_tech_broken text := json.get_string(data.get_attribute_value_for_update(in_object_id, 'tech_broken'));
+  v_tech_code text := data.get_object_code(in_object_id);
+begin
+  assert in_actor_id is not null;
+
+  v_is_master := pp_utils.is_in_group(in_actor_id, 'master');
+
+  if v_is_master and v_tech_broken in ('working') then
+    v_actions_list := v_actions_list || 
+          format(', "tech_break": {"code": "tech_break", "name": "Сломать", "disabled": false,'||
+                  '"params": {"tech_code": "%s"}}',
+                  v_tech_code);
+  end if;
+
+  if (v_is_master or v_tech_skill is not null) and v_tech_broken in ('broken') then
+    v_actions_list := v_actions_list || 
+          format(', "tech_repare": {"code": "tech_repare", "name": "Починить", "disabled": false,'||
+                  '"params": {"tech_code": "%s"}}',
+                  v_tech_code);
+  end if;
+
+  return jsonb ('{'||trim(v_actions_list,',')||'}');
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.change_aster_to_un(integer, integer);
 
 create or replace function pallas_project.change_aster_to_un(in_aster_id integer, in_actor_id integer)
@@ -21325,7 +21441,7 @@ begin
           format('[
             {"code": "title", "value": "%s"},
             {"code": "tech_type", "value": "%s"},
-            {"code": "tech_broken", "value": %s},
+            {"code": "tech_broken", "value": "%s"},
             {"code": "tech_qr", "value": "%s"}
             ]',
             v_tech_type,
@@ -21337,7 +21453,7 @@ begin
       end if;
       v_equipment_list := v_equipment_list 
         || E'\n' || pp_utils.link('equipment_' || v_tech_id) 
-        || '(broken: ' || json.get_boolean_opt(v_tech_object, 'x', null) 
+        || ' (broken: ' || json.get_boolean_opt(v_tech_object, 'broken', null) 
         || ', x: ' || json.get_integer_opt(v_tech_object, 'x', -100) 
         || ', y: '|| json.get_integer_opt(v_tech_object, 'y', -100) 
         || ', firm: ' || json.get_string_opt(v_tech_object, 'firm', '-') ||')';
@@ -25080,7 +25196,9 @@ begin
   ('take_equipment', 'pallas_project.act_take_equipment'),
   ('free_equipment', 'pallas_project.act_free_equipment'),
   ('move_equipment', 'pallas_project.act_move_equipment'),
-  ('add_equipment', 'pallas_project.act_add_equipment');
+  ('add_equipment', 'pallas_project.act_add_equipment'),
+  ('tech_break', 'pallas_project.act_tech_break'),
+  ('tech_repare', 'pallas_project.act_tech_repare');
 
   -- train (CM) все
   -- buksir (AC) чамберс онил
@@ -25217,11 +25335,12 @@ begin
   jsonb '[
     {"code": "title", "value": "Оборудование"},
     {"code": "is_visible", "value": true},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_tech"},
     {
       "code": "template",
       "value": {
         "title": "tech_type",
-        "groups": [{"code": "tech_group", "attributes": ["tech_broken", "tech_qr"], "actions": ["tech_broke", "tech_repare"]}]
+        "groups": [{"code": "tech_group", "attributes": ["tech_broken", "tech_qr"], "actions": ["tech_break", "tech_repare"]}]
       }
     }
   ]');
@@ -28737,6 +28856,40 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.job_tech_repare(jsonb);
+
+create or replace function pallas_project.job_tech_repare(in_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_tech_code text := json.get_string(in_params, 'tech_code');
+  v_tech_id text := replace(v_tech_code, 'equipment_', '');
+  v_skill integer := json.get_integer(in_params, 'skill');
+  v_tech_broken text := json.get_string(data.get_attribute_value_for_update(v_tech_code, 'tech_broken'));
+  v_random integer := random.random_integer(1, 10);
+  v_mine_equipment_id integer := data.get_object_id('mine_equipment');
+  v_mine_equipment_json jsonb := data.get_attribute_value_for_update(v_mine_equipment_id, 'mine_equipment');
+begin
+  if v_tech_broken = 'reparing' then
+    if (v_skill = 0 and v_random > 5) or (v_skill = 1 and v_random > 3) or (v_skill >= 2 and v_random > 1) or (v_skill = -100) then
+      perform data.change_object_and_notify(data.get_object_id(v_tech_code), 
+                                          jsonb_build_array(data.attribute_change2jsonb('tech_broken', jsonb '"working"')));
+      v_mine_equipment_json := jsonb_set(v_mine_equipment_json, array[v_tech_id, 'broken'], jsonb 'false');
+      perform data.change_object_and_notify(v_mine_equipment_id, 
+                                           jsonb_build_array(data.attribute_change2jsonb('mine_equipment', v_mine_equipment_json)),
+                                           null);
+
+    else
+      perform data.change_object_and_notify(data.get_object_id(v_tech_code), 
+                                          jsonb_build_array(data.attribute_change2jsonb('tech_broken', jsonb '"broken"')));
+    end if;
+  end if;
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.job_unuse_stimulant(jsonb);
 
 create or replace function pallas_project.job_unuse_stimulant(in_params jsonb)
@@ -31416,12 +31569,16 @@ immutable
 as
 $$
 declare
-  v_value boolean := json.get_boolean(in_value);
+  v_value text := json.get_string(in_value);
 begin
-  case when v_value then
+  case when v_value = 'broken' then
     return 'Сломано';
-  else
+  when v_value = 'working' then
     return 'Исправно';
+  when v_value = 'reparing' then
+    return 'Ремонтируется';
+  else
+    return 'Неизвестно';
   end case;
 end;
 $$

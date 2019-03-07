@@ -19,7 +19,9 @@ begin
   ('take_equipment', 'pallas_project.act_take_equipment'),
   ('free_equipment', 'pallas_project.act_free_equipment'),
   ('move_equipment', 'pallas_project.act_move_equipment'),
-  ('add_equipment', 'pallas_project.act_add_equipment');
+  ('add_equipment', 'pallas_project.act_add_equipment'),
+  ('tech_break', 'pallas_project.act_tech_break'),
+  ('tech_repare', 'pallas_project.act_tech_repare');
 
   -- train (CM) все
   -- buksir (AC) чамберс онил
@@ -156,11 +158,12 @@ begin
   jsonb '[
     {"code": "title", "value": "Оборудование"},
     {"code": "is_visible", "value": true},
+    {"code": "actions_function", "value": "pallas_project.actgenerator_tech"},
     {
       "code": "template",
       "value": {
         "title": "tech_type",
-        "groups": [{"code": "tech_group", "attributes": ["tech_broken", "tech_qr"], "actions": ["tech_broke", "tech_repare"]}]
+        "groups": [{"code": "tech_group", "attributes": ["tech_broken", "tech_qr"], "actions": ["tech_break", "tech_repare"]}]
       }
     }
   ]');

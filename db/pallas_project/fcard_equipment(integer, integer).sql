@@ -23,7 +23,7 @@ begin
           format('[
             {"code": "title", "value": "%s"},
             {"code": "tech_type", "value": "%s"},
-            {"code": "tech_broken", "value": %s},
+            {"code": "tech_broken", "value": "%s"},
             {"code": "tech_qr", "value": "%s"}
             ]',
             v_tech_type,
@@ -35,7 +35,7 @@ begin
       end if;
       v_equipment_list := v_equipment_list 
         || E'\n' || pp_utils.link('equipment_' || v_tech_id) 
-        || '(broken: ' || json.get_boolean_opt(v_tech_object, 'x', null) 
+        || ' (broken: ' || json.get_boolean_opt(v_tech_object, 'broken', null) 
         || ', x: ' || json.get_integer_opt(v_tech_object, 'x', -100) 
         || ', y: '|| json.get_integer_opt(v_tech_object, 'y', -100) 
         || ', firm: ' || json.get_string_opt(v_tech_object, 'firm', '-') ||')';
