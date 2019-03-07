@@ -12,6 +12,12 @@ begin
   ('mine_map', 'hidden', null, false),
   ('mine_equipment', 'hidden', null, false);
 
+  insert into data.params(code, value) values
+  ('customs_coords', jsonb '{"x": 10, "y": 10}'),
+  ('de_beers_coords', jsonb '{"x": 11, "y": 11}'),
+  ('dock_coords', jsonb '{"x": 12, "y": 12}'),
+  ('contraband_coords', jsonb '{"x": 13, "y": 13}');
+
   insert into data.actions(code, function) values
   ('save_map', 'pallas_project.act_save_map'),
   ('add_content', 'pallas_project.act_add_content'),
