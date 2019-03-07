@@ -16,8 +16,6 @@ declare
   v_length integer;
   v_id integer;
   v_object_id integer;
-  v_object_code text;
-  v_data jsonb;
   v_ignore boolean;
 begin
   if in_subsciptions_ids is null then
@@ -30,12 +28,8 @@ begin
   (
     select
       cs.client_id,
-      array_agg(array[cs.id, cs.object_id]) client_subscriptions,
-      array_agg(o.code) client_object_codes,
-      array_agg(cs.data) client_datas
+      array_agg(array[cs.id, cs.object_id]) client_subscriptions
     from data.client_subscriptions cs
-    join data.objects o on
-      o.id = cs.object_id
     where cs.id = any(in_subsciptions_ids)
     group by client_id
   )
@@ -46,24 +40,11 @@ begin
     for i in 1..v_length loop
       v_id := v_client.client_subscriptions[i][1];
       v_object_id := v_client.client_subscriptions[i][2];
-      v_object_code := v_client.client_object_codes[i];
-      v_data := v_client.client_datas[i];
       v_ignore := json.get_boolean_opt(data.get_attribute_value(v_object_id, in_ignore_list_elements_attr_id), false);
 
       if not v_ignore then
         select
-          jsonb_agg(
-            jsonb_build_object(
-              'id',
-              cso.id,
-              'object_id',
-              cso.object_id,
-              'object_code',
-              o.code,
-              'index',
-              cso.index,
-              'data',
-              cso.data))
+          jsonb_agg(cso.id)
         into v_list_objects
         from data.client_subscription_objects cso
         join data.objects o on
@@ -86,16 +67,8 @@ begin
         jsonb_build_object(
           'id',
           v_id,
-          'client_id',
-          v_client.client_id,
           'actor_id',
           v_actor_id,
-          'object_id',
-          v_object_id,
-          'object_code',
-          v_object_code,
-          'data',
-          v_data,
           'content',
           data.get_attribute_value(v_object_id, v_content_attr_id, v_actor_id),
           'list_objects',

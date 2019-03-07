@@ -11,6 +11,8 @@ declare
   v_set_invisible integer[];
 
   v_content_attr_id integer;
+  v_full_card_function_attr_id integer;
+  v_is_visible_attr_id integer;
   v_subscription record;
   v_full_card_function text;
   v_new_data jsonb;
@@ -27,24 +29,30 @@ begin
   end if;
 
   v_content_attr_id := data.get_attribute_id('content');
+  v_full_card_function_attr_id := data.get_attribute_id('full_card_function');
+  v_is_visible_attr_id := data.get_attribute_id('is_visible');
 
   for v_subscription in
   (
     select
-      json.get_integer(value, 'id') as id,
-      json.get_integer(value, 'client_id') as client_id,
-      json.get_integer(value, 'object_id') as object_id,
-      json.get_string(value, 'object_code') as object_code,
+      cs.id as id,
+      cs.client_id,
+      cs.object_id,
+      o.code object_code,
       json.get_integer(value, 'actor_id') as actor_id,
-      value->'data' as data,
+      cs.data,
       json.get_array_opt(value, 'content', null) as content,
       value->'list_objects' as list_objects
-    from jsonb_array_elements(in_state)
+    from jsonb_array_elements(in_state) s
+    join data.client_subscriptions cs on
+      cs.id = json.get_integer(value, 'id')
+    join data.objects o on
+      o.id = cs.object_id
   )
   loop
     v_full_card_function :=
       json.get_string_opt(
-        data.get_attribute_value(v_subscription.object_id, 'full_card_function'),
+        data.get_attribute_value(v_subscription.object_id, v_full_card_function_attr_id),
         null);
 
     if v_full_card_function is not null then
@@ -53,7 +61,7 @@ begin
     end if;
 
     -- Объект стал невидимым - отправляем специальный diff и вычищаем подписки
-    if not json.get_boolean_opt(data.get_attribute_value(v_subscription.object_id, 'is_visible', v_subscription.actor_id), false) then
+    if not json.get_boolean_opt(data.get_attribute_value(v_subscription.object_id, v_is_visible_attr_id, v_subscription.actor_id), false) then
       v_ret_val :=
         v_ret_val ||
         jsonb_build_object(
@@ -98,6 +106,7 @@ begin
         v_add jsonb;
         v_remove jsonb;
       begin
+
         v_content_diff := data.calc_content_diff(v_subscription.content, v_new_content);
 
         v_add := json.get_array(v_content_diff, 'add');
@@ -237,14 +246,18 @@ begin
         for v_list in
         (
           select
-            json.get_integer(value, 'id') as id,
-            json.get_integer(value, 'object_id') as object_id,
-            value->'object_code' as object_code,
-            value->'data' as data,
-            json.get_integer(value, 'index') as index
-          from jsonb_array_elements(v_subscription.list_objects)
+            cso.id,
+            cso.object_id,
+            o.code as object_code,
+            cso.data,
+            cso.index
+          from jsonb_array_elements(v_subscription.list_objects) lo
+          join data.client_subscription_objects cso on
+            cso.id = json.get_integer(value)
+          join data.objects o on
+            o.id = cso.object_id
           -- Удалённые из content'а мы уже обработали
-          where json.get_integer(value, 'object_id') not in (
+          where cso.object_id not in (
             select o.id
             from jsonb_array_elements(v_remove_list_changes) e
             join data.objects o on

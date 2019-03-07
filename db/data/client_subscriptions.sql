@@ -5,7 +5,6 @@ create table data.client_subscriptions(
   client_id integer not null,
   object_id integer not null,
   data jsonb not null,
-  constraint client_subscriptions_object_check check(data.is_instance(object_id)),
   constraint client_subscriptions_pk primary key(id),
   constraint client_subscriptions_unique_object_client unique(object_id, client_id)
 );

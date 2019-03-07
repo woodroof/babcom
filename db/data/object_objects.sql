@@ -8,9 +8,6 @@ create table data.object_objects(
   start_time timestamp with time zone not null default clock_timestamp(),
   start_reason text,
   start_actor_id integer,
-  constraint object_objects_intermediate_object_ids_check check(intarray.uniq(intarray.sort(intermediate_object_ids)) = intarray.sort(intermediate_object_ids)),
-  constraint object_objects_object_check check(data.is_instance(object_id)),
-  constraint object_objects_parent_object_check check(data.is_instance(parent_object_id)),
   constraint object_objects_pk primary key(id)
 );
 

@@ -4878,6 +4878,8 @@ declare
   v_set_invisible integer[];
 
   v_content_attr_id integer;
+  v_full_card_function_attr_id integer;
+  v_is_visible_attr_id integer;
   v_subscription record;
   v_full_card_function text;
   v_new_data jsonb;
@@ -4894,24 +4896,30 @@ begin
   end if;
 
   v_content_attr_id := data.get_attribute_id('content');
+  v_full_card_function_attr_id := data.get_attribute_id('full_card_function');
+  v_is_visible_attr_id := data.get_attribute_id('is_visible');
 
   for v_subscription in
   (
     select
-      json.get_integer(value, 'id') as id,
-      json.get_integer(value, 'client_id') as client_id,
-      json.get_integer(value, 'object_id') as object_id,
-      json.get_string(value, 'object_code') as object_code,
+      cs.id as id,
+      cs.client_id,
+      cs.object_id,
+      o.code object_code,
       json.get_integer(value, 'actor_id') as actor_id,
-      value->'data' as data,
+      cs.data,
       json.get_array_opt(value, 'content', null) as content,
       value->'list_objects' as list_objects
-    from jsonb_array_elements(in_state)
+    from jsonb_array_elements(in_state) s
+    join data.client_subscriptions cs on
+      cs.id = json.get_integer(value, 'id')
+    join data.objects o on
+      o.id = cs.object_id
   )
   loop
     v_full_card_function :=
       json.get_string_opt(
-        data.get_attribute_value(v_subscription.object_id, 'full_card_function'),
+        data.get_attribute_value(v_subscription.object_id, v_full_card_function_attr_id),
         null);
 
     if v_full_card_function is not null then
@@ -4920,7 +4928,7 @@ begin
     end if;
 
     -- Объект стал невидимым - отправляем специальный diff и вычищаем подписки
-    if not json.get_boolean_opt(data.get_attribute_value(v_subscription.object_id, 'is_visible', v_subscription.actor_id), false) then
+    if not json.get_boolean_opt(data.get_attribute_value(v_subscription.object_id, v_is_visible_attr_id, v_subscription.actor_id), false) then
       v_ret_val :=
         v_ret_val ||
         jsonb_build_object(
@@ -4965,6 +4973,7 @@ begin
         v_add jsonb;
         v_remove jsonb;
       begin
+
         v_content_diff := data.calc_content_diff(v_subscription.content, v_new_content);
 
         v_add := json.get_array(v_content_diff, 'add');
@@ -5104,14 +5113,18 @@ begin
         for v_list in
         (
           select
-            json.get_integer(value, 'id') as id,
-            json.get_integer(value, 'object_id') as object_id,
-            value->'object_code' as object_code,
-            value->'data' as data,
-            json.get_integer(value, 'index') as index
-          from jsonb_array_elements(v_subscription.list_objects)
+            cso.id,
+            cso.object_id,
+            o.code as object_code,
+            cso.data,
+            cso.index
+          from jsonb_array_elements(v_subscription.list_objects) lo
+          join data.client_subscription_objects cso on
+            cso.id = json.get_integer(value)
+          join data.objects o on
+            o.id = cso.object_id
           -- Удалённые из content'а мы уже обработали
-          where json.get_integer(value, 'object_id') not in (
+          where cso.object_id not in (
             select o.id
             from jsonb_array_elements(v_remove_list_changes) e
             join data.objects o on
@@ -5268,8 +5281,6 @@ declare
   v_length integer;
   v_id integer;
   v_object_id integer;
-  v_object_code text;
-  v_data jsonb;
   v_ignore boolean;
 begin
   if in_subsciptions_ids is null then
@@ -5282,12 +5293,8 @@ begin
   (
     select
       cs.client_id,
-      array_agg(array[cs.id, cs.object_id]) client_subscriptions,
-      array_agg(o.code) client_object_codes,
-      array_agg(cs.data) client_datas
+      array_agg(array[cs.id, cs.object_id]) client_subscriptions
     from data.client_subscriptions cs
-    join data.objects o on
-      o.id = cs.object_id
     where cs.id = any(in_subsciptions_ids)
     group by client_id
   )
@@ -5298,24 +5305,11 @@ begin
     for i in 1..v_length loop
       v_id := v_client.client_subscriptions[i][1];
       v_object_id := v_client.client_subscriptions[i][2];
-      v_object_code := v_client.client_object_codes[i];
-      v_data := v_client.client_datas[i];
       v_ignore := json.get_boolean_opt(data.get_attribute_value(v_object_id, in_ignore_list_elements_attr_id), false);
 
       if not v_ignore then
         select
-          jsonb_agg(
-            jsonb_build_object(
-              'id',
-              cso.id,
-              'object_id',
-              cso.object_id,
-              'object_code',
-              o.code,
-              'index',
-              cso.index,
-              'data',
-              cso.data))
+          jsonb_agg(cso.id)
         into v_list_objects
         from data.client_subscription_objects cso
         join data.objects o on
@@ -5338,16 +5332,8 @@ begin
         jsonb_build_object(
           'id',
           v_id,
-          'client_id',
-          v_client.client_id,
           'actor_id',
           v_actor_id,
-          'object_id',
-          v_object_id,
-          'object_code',
-          v_object_code,
-          'data',
-          v_data,
           'content',
           data.get_attribute_value(v_object_id, v_content_attr_id, v_actor_id),
           'list_objects',
@@ -28512,20 +28498,78 @@ volatile
 as
 $$
 declare
-  v_person_id integer;
+  v_notification_code text;
+  v_notification_id integer;
+  v_notification_jsonb jsonb;
+
+  v_title_attribute_id integer := data.get_attribute_id('title');
+  v_system_person_notification_count_attribute_id integer := data.get_attribute_id('system_person_notification_count');
+  v_content_attribute_id integer := data.get_attribute_id('content');
+  v_is_visible_attribute_id integer := data.get_attribute_id('is_visible');
+
+  v_changes jsonb := jsonb '[]';
+  v_notif_changes jsonb := jsonb '[]';
+  v_person record;
 begin
   if data.get_boolean_param('game_in_progress') then
-    for v_person_id in
+    insert into data.objects(class_id)
+    values(data.get_class_id('notification'))
+    returning id, code into v_notification_id, v_notification_code;
+
+    v_notification_jsonb := to_jsonb(v_notification_code);
+
+    insert into data.attribute_values(object_id, attribute_id, value, value_object_id)
+    values(v_notification_id, v_title_attribute_id, to_jsonb('До конца цикла остался один час! Не забудьте купить статусы обслуживания.'::text), null);
+
+    for v_person in
     (
-      select object_id
-      from data.object_objects
+      select
+        o.id,
+        o.code,
+        data.get_raw_attribute_value_for_update(o.id, v_system_person_notification_count_attribute_id) as nc,
+        n.id as n_id,
+        data.get_raw_attribute_value_for_update(n.id, v_content_attribute_id) as content
+      from data.object_objects oo
+      join data.objects o on
+        o.id = oo.object_id
+      join data.objects n on
+        n.code = o.code || '_notifications'
       where
         parent_object_id = data.get_object_id('all_person') and
         object_id != parent_object_id
     )
     loop
-      perform pp_utils.add_notification(v_person_id, 'До конца цикла остался один час! Не забудьте купить статусы обслуживания.');
+      v_changes :=
+        v_changes ||
+        jsonb_build_object(
+          'id',
+          v_person.id,
+          'changes',
+          jsonb '[]' ||
+          data.attribute_change2jsonb(v_system_person_notification_count_attribute_id, to_jsonb(json.get_integer(v_person.nc) + 1)));
+      v_changes :=
+        v_changes ||
+        jsonb_build_object(
+          'id',
+          v_person.n_id,
+          'changes',
+          jsonb '[]' ||
+          data.attribute_change2jsonb(v_content_attribute_id, v_notification_jsonb || v_person.content));
+
+      v_notif_changes :=
+        v_notif_changes ||
+        data.attribute_change2jsonb(v_is_visible_attribute_id, jsonb 'true', v_person.id);
     end loop;
+
+    v_changes :=
+      v_changes ||
+      jsonb_build_object(
+        'id',
+        v_notification_id,
+        'changes',
+        v_notif_changes);
+
+    perform data.process_diffs_and_notify(data.change_objects(v_changes));
 
     perform pallas_project.send_to_master_chat('До конца цикла остался один час, можно начинать [подводить итоги](babcom:cycle_checklist).');
   end if;
@@ -34856,8 +34900,7 @@ create table data.attribute_values(
   start_time timestamp with time zone not null default clock_timestamp(),
   start_reason text,
   start_actor_id integer,
-  constraint attribute_values_pk primary key(id),
-  constraint attribute_values_value_object_check check((value_object_id is null) or (data.can_attribute_be_overridden(attribute_id) and data.is_instance(value_object_id)))
+  constraint attribute_values_pk primary key(id)
 );
 
 comment on column data.attribute_values.value_object_id is 'Объект, для которого переопределено значение атрибута. В случае, если видно несколько переопределённых значений, выбирается значение для объекта с наивысшим приоритетом.';
@@ -34876,7 +34919,6 @@ create table data.attribute_values_journal(
   end_time timestamp with time zone not null,
   end_reason text,
   end_actor_id integer,
-  constraint attribute_values_journal_object_check check(data.is_instance(object_id)),
   constraint attribute_values_journal_pk primary key(id)
 );
 
@@ -34909,7 +34951,6 @@ create table data.client_subscription_objects(
   index integer not null,
   data jsonb,
   constraint client_subscription_objects_index_check check(index > 0),
-  constraint client_subscription_objects_object_check check(data.is_instance(object_id)),
   constraint client_subscription_objects_pk primary key(id),
   constraint client_subscription_objects_unique_csi_i unique(client_subscription_id, index) deferrable,
   constraint client_subscription_objects_unique_oi_csi unique(object_id, client_subscription_id)
@@ -34922,7 +34963,6 @@ create table data.client_subscriptions(
   client_id integer not null,
   object_id integer not null,
   data jsonb not null,
-  constraint client_subscriptions_object_check check(data.is_instance(object_id)),
   constraint client_subscriptions_pk primary key(id),
   constraint client_subscriptions_unique_object_client unique(object_id, client_id)
 );
@@ -34935,7 +34975,6 @@ create table data.clients(
   is_connected boolean not null,
   login_id integer,
   actor_id integer,
-  constraint clients_actor_check check((actor_id is null) or data.is_instance(actor_id)),
   constraint clients_pk primary key(id),
   constraint clients_unique_code unique(code)
 );
@@ -34958,7 +34997,6 @@ create table data.log(
   event_time timestamp with time zone not null default clock_timestamp(),
   message text not null,
   actor_id integer,
-  constraint log_actor_check check((actor_id is null) or data.is_instance(actor_id)),
   constraint log_pk primary key(id)
 );
 
@@ -34969,7 +35007,6 @@ create table data.login_actors(
   login_id integer not null,
   actor_id integer not null,
   is_main boolean not null default false,
-  constraint login_actors_actor_check check(data.is_instance(actor_id)),
   constraint login_actors_pk primary key(id),
   constraint login_actors_unique_login_actor unique(login_id, actor_id)
 );
@@ -35001,7 +35038,6 @@ create table data.notifications(
   type data.notification_type not null,
   message jsonb not null,
   client_id integer,
-  constraint notifications_client_check check((type = 'client_message'::data.notification_type) = (client_id is not null)),
   constraint notifications_pk primary key(id),
   constraint notifications_unique_code unique(code)
 );
@@ -35016,9 +35052,6 @@ create table data.object_objects(
   start_time timestamp with time zone not null default clock_timestamp(),
   start_reason text,
   start_actor_id integer,
-  constraint object_objects_intermediate_object_ids_check check(intarray.uniq(intarray.sort(intermediate_object_ids)) = intarray.sort(intermediate_object_ids)),
-  constraint object_objects_object_check check(data.is_instance(object_id)),
-  constraint object_objects_parent_object_check check(data.is_instance(parent_object_id)),
   constraint object_objects_pk primary key(id)
 );
 
@@ -35047,7 +35080,6 @@ create table data.objects(
   code text default (pgcrypto.gen_random_uuid())::text,
   type data.object_type not null default 'instance'::data.object_type,
   class_id integer,
-  constraint objects_class_reference_check check((class_id is null) or ((type = 'instance'::data.object_type) and (not data.is_instance(class_id)))),
   constraint objects_pk primary key(id),
   constraint objects_unique_code unique(code)
 );
