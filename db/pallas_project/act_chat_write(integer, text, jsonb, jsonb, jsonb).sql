@@ -101,8 +101,9 @@ begin
         v_chat_unread_messages := json.get_integer_opt(data.get_raw_attribute_value_for_update(v_chat_id, v_chat_unread_messages_attribute_id, v_person_id), 0);
         v_changes := array_append(v_changes, data.attribute_change2jsonb(v_chat_unread_messages_attribute_id, to_jsonb(v_chat_unread_messages + 1), v_person_id));
       end if;
-      if v_person_id <> v_actor_id 
+      if v_person_id <> v_actor_id
         and not v_is_actor_subscribed
+        and v_chat_unread_messages = 0 -- Уведомляем только о первом непрочитанном сообщении
         and not json.get_boolean_opt(data.get_raw_attribute_value_for_share(v_chat_id, 'chat_is_mute', v_person_id), false) then
         perform pp_utils.add_notification(v_person_id, v_notification_text, v_chat_id);
       end if;

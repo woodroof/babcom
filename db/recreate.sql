@@ -11458,8 +11458,9 @@ begin
         v_chat_unread_messages := json.get_integer_opt(data.get_raw_attribute_value_for_update(v_chat_id, v_chat_unread_messages_attribute_id, v_person_id), 0);
         v_changes := array_append(v_changes, data.attribute_change2jsonb(v_chat_unread_messages_attribute_id, to_jsonb(v_chat_unread_messages + 1), v_person_id));
       end if;
-      if v_person_id <> v_actor_id 
+      if v_person_id <> v_actor_id
         and not v_is_actor_subscribed
+        and v_chat_unread_messages = 0 -- Уведомляем только о первом непрочитанном сообщении
         and not json.get_boolean_opt(data.get_raw_attribute_value_for_share(v_chat_id, 'chat_is_mute', v_person_id), false) then
         perform pp_utils.add_notification(v_person_id, v_notification_text, v_chat_id);
       end if;
@@ -21451,6 +21452,24 @@ end;
 $$
 language plpgsql;
 
+-- drop function pallas_project.fcard_chat(integer, integer);
+
+create or replace function pallas_project.fcard_chat(in_object_id integer, in_actor_id integer)
+returns void
+volatile
+as
+$$
+declare
+  v_chat_unread_messages_attribute_id integer := data.get_attribute_id('chat_unread_messages');
+begin
+  perform data.change_object_and_notify(in_object_id, 
+                                        jsonb_build_array(data.attribute_change2jsonb(v_chat_unread_messages_attribute_id, null, in_actor_id)),
+                                        in_actor_id);
+
+end;
+$$
+language plpgsql;
+
 -- drop function pallas_project.fcard_cycle_checklist(integer, integer);
 
 create or replace function pallas_project.fcard_cycle_checklist(object_id integer, actor_id integer)
@@ -25098,6 +25117,7 @@ declare
   v_actions_function_attribute_id integer := data.get_attribute_id('actions_function');
   v_template_attribute_id integer := data.get_attribute_id('template');
   v_list_element_function_attribute_id integer := data.get_attribute_id('list_element_function');
+  v_full_card_function_attribute_id integer := data.get_attribute_id('full_card_function');
   v_content_attribute_id integer := data.get_attribute_id('content');
   v_priority_attribute_id integer := data.get_attribute_id('priority');
 
@@ -25150,7 +25170,6 @@ begin
     {"code": "is_visible", "value": true},
     {"code": "title", "value": "Чаты"},
     {"code": "actions_function", "value": "pallas_project.actgenerator_chats"},
-    {"code": "list_element_function", "value": "pallas_project.lef_chats"},
     {"code": "content", "value": []},
     {
       "code": "template",
@@ -25172,7 +25191,6 @@ begin
   (v_chats_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
   (v_chats_id, v_title_attribute_id, jsonb '"Все игровые чаты"', null),
   (v_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"', null),
-  (v_chats_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chats"', null),
   (v_chats_id, v_content_attribute_id, jsonb '[]', null),
   (
     v_chats_id,
@@ -25197,7 +25215,6 @@ begin
     {"code": "is_visible", "value": true},
     {"code": "title", "value": "Общение с мастерами"},
     {"code": "actions_function", "value": "pallas_project.actgenerator_chats"},
-    {"code": "list_element_function", "value": "pallas_project.lef_chats"},
     {"code": "content", "value": []},
     {
       "code": "template",
@@ -25219,6 +25236,7 @@ begin
   (v_chat_class_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
   (v_chat_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chat"', null),
   (v_chat_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_do_nothing"', null),
+  (v_chat_class_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_chat"', null),
   (v_chat_class_id, v_system_chat_can_invite_attribute_id, jsonb 'true', null),
   (v_chat_class_id, v_system_chat_can_leave_attribute_id, jsonb 'true', null),
   (v_chat_class_id, v_system_chat_can_mute_attribute_id, jsonb 'true', null),

@@ -14,6 +14,7 @@ declare
   v_actions_function_attribute_id integer := data.get_attribute_id('actions_function');
   v_template_attribute_id integer := data.get_attribute_id('template');
   v_list_element_function_attribute_id integer := data.get_attribute_id('list_element_function');
+  v_full_card_function_attribute_id integer := data.get_attribute_id('full_card_function');
   v_content_attribute_id integer := data.get_attribute_id('content');
   v_priority_attribute_id integer := data.get_attribute_id('priority');
 
@@ -66,7 +67,6 @@ begin
     {"code": "is_visible", "value": true},
     {"code": "title", "value": "Чаты"},
     {"code": "actions_function", "value": "pallas_project.actgenerator_chats"},
-    {"code": "list_element_function", "value": "pallas_project.lef_chats"},
     {"code": "content", "value": []},
     {
       "code": "template",
@@ -88,7 +88,6 @@ begin
   (v_chats_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
   (v_chats_id, v_title_attribute_id, jsonb '"Все игровые чаты"', null),
   (v_chats_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chats"', null),
-  (v_chats_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_chats"', null),
   (v_chats_id, v_content_attribute_id, jsonb '[]', null),
   (
     v_chats_id,
@@ -113,7 +112,6 @@ begin
     {"code": "is_visible", "value": true},
     {"code": "title", "value": "Общение с мастерами"},
     {"code": "actions_function", "value": "pallas_project.actgenerator_chats"},
-    {"code": "list_element_function", "value": "pallas_project.lef_chats"},
     {"code": "content", "value": []},
     {
       "code": "template",
@@ -135,6 +133,7 @@ begin
   (v_chat_class_id, v_is_visible_attribute_id, jsonb 'true', v_master_group_id),
   (v_chat_class_id, v_actions_function_attribute_id, jsonb '"pallas_project.actgenerator_chat"', null),
   (v_chat_class_id, v_list_element_function_attribute_id, jsonb '"pallas_project.lef_do_nothing"', null),
+  (v_chat_class_id, v_full_card_function_attribute_id, jsonb '"pallas_project.fcard_chat"', null),
   (v_chat_class_id, v_system_chat_can_invite_attribute_id, jsonb 'true', null),
   (v_chat_class_id, v_system_chat_can_leave_attribute_id, jsonb 'true', null),
   (v_chat_class_id, v_system_chat_can_mute_attribute_id, jsonb 'true', null),
