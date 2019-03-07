@@ -844,6 +844,16 @@ begin
                   v_diamonds));
           end;
         end if;
+        if v_org.code = 'org_clinic' then
+          -- Добавляем больнице панацелин
+          v_changes :=
+            v_changes ||
+            data.attribute_change2jsonb('system_resource_panacelin', jsonb '25');
+
+            v_master_notifications :=
+              v_master_notifications ||
+              jsonb '"Гос. клинике установлено 25 панацелина"';
+        end if;
 
         v_object_changes :=
           v_object_changes ||
