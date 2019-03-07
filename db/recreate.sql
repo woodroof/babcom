@@ -21204,7 +21204,7 @@ declare
   v_description text :=
 'Уведомление в мастерский чат приходит за 15 минут до наступления цикла. Это время даётся на то, чтобы:
 1. [Изменить](babcom:prices), если нужно, стоимость коина и стоимости в коинах статусов.
-2. Изменить, если нужно, потребление ресурсов секторами (руками в базе!).
+2. Пересчитать (руками в базе!) потребление ресурсов секторами.
 3. Пройтись по гражданам ООН (кроме экономиста и начальника шахты) и вручную изменить им рейтинг.
 4. Пройтись по организациям с бюджетом и, если нужно, изменить им бюджет.
 5. Пройтись по организациям с безусловным доходом и, если нужно, изменить им доход.
@@ -22355,14 +22355,12 @@ begin
   insert into data.params(code, value, description) values
   ('customs_goods', 
   jsonb '{
-    "кефир": ["life"],
     "мяч": [],
     "одежда синтетическая": [],
-    "лабораторные мыши": ["life"],
     "кабель электрический": ["metal"],
     "набор мебели IKEA": ["metal"],
     "кофеварка": ["metal"],
-    "аптечка \"Здоровый астер\"": ["life", "metal"],
+    "аптечка \"Здоровый астер\"": ["metal"],
     "лампы осветительные": ["metal"],
     "коммуникатор NOD300": ["metal"],
     "шляпа": [],
@@ -22398,10 +22396,8 @@ begin
     "мыло": [],
     "карамель": [],
     "краска": [],
-    "кот": ["live"],
-    "кот Шрёдингера": [],
+    "кот Шрёдингера (муляж)": [],
     "гантели": ["metal"],
-    "растение в горшке": ["life"],
     "переключатель": [],
     "крем для рук": [],
     "шнурки": [],
@@ -23153,16 +23149,14 @@ returns void
 volatile
 as
 $$
-declare
-  v_districts jsonb := '[]';
-  v_district record;
 begin
   insert into data.attributes(code, name, description, type, card_type, value_description_function, can_be_overridden) values
   ('district_control', 'Контроль', null, 'normal', null, 'pallas_project.vd_district_control', false),
   ('district_population', 'Население', null, 'normal', null, null, false),
   ('district_influence', 'Влияние', null, 'normal', null, 'pallas_project.vd_district_influence', false),
   ('district_tax', 'Налоговая ставка', null, 'normal', null, 'pallas_project.vd_percent', false),
-  ('system_district_tax_coeff', null, 'Коэффициент, на который умножаются налоговые поступления', 'system', null, null, false);
+  ('system_district_tax_coeff', null, 'Коэффициент, на который умножаются налоговые поступления', 'system', null, null, false),
+  ('system_district_resources', null, null, 'system', null, null, false);
 
   insert into data.actions(code, function) values
   ('district_change_control', 'pallas_project.act_district_change_control'),
@@ -23194,74 +23188,126 @@ begin
     ]');
 
   -- Районы
-  for v_district in
-  (
-    select
-      json.get_string(value, 'sector') sector,
-      json.get_number(value, 'coeff') coeff,
-      json.get_integer(value, 'population') population,
-      json.get_integer(value, 'district_tax') tax,
-      json.get_object(value, 'district_influence') influence,
-      value->'district_control' control
-    from jsonb_array_elements(
-      jsonb '[
-        {"sector": "A", "coeff": 2.5, "population": 22500, "district_tax": 25, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
-        {"sector": "B", "coeff": 5, "population": 45000, "district_tax": 25, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
-        {"sector": "C", "coeff": 7.5, "population": 67500, "district_tax": 25, "district_influence": {"opa": 0, "cartel": 0, "administration": 1}, "district_control": "administration"},
-        {"sector": "D", "coeff": 12.5, "population": 112500, "district_tax": 10, "district_influence": {"opa": 1, "cartel": 0, "administration": 0}, "district_control": "opa"},
-        {"sector": "E", "coeff": 25, "population": 225000, "district_tax": 0, "district_influence": {"opa": 0, "cartel": 0, "administration": 0}, "district_control": null},
-        {"sector": "F", "coeff": 12.5, "population": 112500, "district_tax": 10, "district_influence": {"opa": 1, "cartel": 0, "administration": 0}, "district_control": "opa"},
-        {"sector": "G", "coeff": 25, "population": 225000, "district_tax": 20, "district_influence": {"opa": 0, "cartel": 1, "administration": 0}, "district_control": "cartel"}
-      ]')
-  )
-  loop
-    perform data.create_object(
-      'sector_' || v_district.sector,
-      format(
-        '[
-          {"code": "title", "value": "%s"},
-          {"code": "system_district_tax_coeff", "value": %s},
-          {"code": "district_population", "value": %s},
-          {"code": "district_tax", "value": %s},
-          {"code": "district_influence", "value": %s},
-          {"code": "district_control", "value": %s},
-          {"code": "content", "value": []},
-          {"code": "content", "value": [], "value_object_code": "master"}
-        ]',
-        'Сектор ' || v_district.sector,
-        v_district.coeff,
-        v_district.population,
-        v_district.tax,
-        v_district.influence::text,
-        v_district.control::text)::jsonb,
-      'district');
-
-    v_districts := v_districts || to_jsonb('sector_' || v_district.sector);
-  end loop;
+  perform data.create_object(
+    'sector_A',
+    jsonb '[
+      {"code": "title", "value": "Сектор A"},
+      {"code": "system_district_tax_coeff", "value": 2.5},
+      {"code": "district_population", "value": 22500},
+      {"code": "district_tax", "value": 25},
+      {"code": "district_influence", "value": {"opa": 0, "cartel": 0, "administration": 1}},
+      {"code": "district_control", "value": "administration"},
+      {"code": "content", "value": []},
+      {"code": "content", "value": [], "value_object_code": "master"},
+      {"code": "system_district_resources", "value": {"water": 202.5, "food": 202.5, "medicine": 202.5, "power": 202.5}}
+    ]',
+    'district');
+  perform data.create_object(
+    'sector_B',
+    jsonb '[
+      {"code": "title", "value": "Сектор B"},
+      {"code": "system_district_tax_coeff", "value": 5},
+      {"code": "district_population", "value": 45000},
+      {"code": "district_tax", "value": 25},
+      {"code": "district_influence", "value": {"opa": 0, "cartel": 0, "administration": 1}},
+      {"code": "district_control", "value": "administration"},
+      {"code": "content", "value": []},
+      {"code": "content", "value": [], "value_object_code": "master"},
+      {"code": "system_district_resources", "value": {"water": 405, "food": 405, "medicine": 405, "power": 405}}
+    ]',
+    'district');
+  perform data.create_object(
+    'sector_C',
+    jsonb '[
+      {"code": "title", "value": "Сектор C"},
+      {"code": "system_district_tax_coeff", "value": 7.5},
+      {"code": "district_population", "value": 67500},
+      {"code": "district_tax", "value": 25},
+      {"code": "district_influence", "value": {"opa": 0, "cartel": 0, "administration": 1}},
+      {"code": "district_control", "value": "administration"},
+      {"code": "content", "value": []},
+      {"code": "content", "value": [], "value_object_code": "master"},
+      {"code": "system_district_resources", "value": {"water": 405, "food": 405, "medicine": 405, "power": 405}}
+    ]',
+    'district');
+  perform data.create_object(
+    'sector_D',
+    jsonb '[
+      {"code": "title", "value": "Сектор D"},
+      {"code": "system_district_tax_coeff", "value": 12.5},
+      {"code": "district_population", "value": 112500},
+      {"code": "district_tax", "value": 10},
+      {"code": "district_influence", "value": {"opa": 1, "cartel": 0, "administration": 0}},
+      {"code": "district_control", "value": "opa"},
+      {"code": "content", "value": []},
+      {"code": "content", "value": [], "value_object_code": "master"},
+      {"code": "system_district_resources", "value": {"water": 675, "food": 675, "medicine": 675, "power": 675}}
+    ]',
+    'district');
+  perform data.create_object(
+    'sector_E',
+    jsonb '[
+      {"code": "title", "value": "Сектор E"},
+      {"code": "system_district_tax_coeff", "value": 25},
+      {"code": "district_population", "value": 225000},
+      {"code": "district_tax", "value": 0},
+      {"code": "district_influence", "value": {"opa": 0, "cartel": 0, "administration": 0}},
+      {"code": "district_control", "value": null},
+      {"code": "content", "value": []},
+      {"code": "content", "value": [], "value_object_code": "master"},
+      {"code": "system_district_resources", "value": {"water": 1350, "food": 1350, "medicine": 1350, "power": 1350}}
+    ]',
+    'district');
+  perform data.create_object(
+    'sector_F',
+    jsonb '[
+      {"code": "title", "value": "Сектор F"},
+      {"code": "system_district_tax_coeff", "value": 12.5},
+      {"code": "district_population", "value": 112500},
+      {"code": "district_tax", "value": 10},
+      {"code": "district_influence", "value": {"opa": 1, "cartel": 0, "administration": 0}},
+      {"code": "district_control", "value": "opa"},
+      {"code": "content", "value": []},
+      {"code": "content", "value": [], "value_object_code": "master"},
+      {"code": "system_district_resources", "value": {"water": 337.5, "food": 337.5, "medicine": 337.5, "power": 337.5}}
+    ]',
+    'district');
+  perform data.create_object(
+    'sector_G',
+    jsonb '[
+      {"code": "title", "value": "Сектор G"},
+      {"code": "system_district_tax_coeff", "value": 25},
+      {"code": "district_population", "value": 225000},
+      {"code": "district_tax", "value": 20},
+      {"code": "district_influence", "value": {"opa": 0, "cartel": 1, "administration": 0}},
+      {"code": "district_control", "value": "cartel"},
+      {"code": "content", "value": []},
+      {"code": "content", "value": [], "value_object_code": "master"},
+      {"code": "system_district_resources", "value": {"water": 675, "food": 675, "medicine": 675, "power": 675}}
+    ]',
+    'district');
 
   -- Список районов
   perform data.create_object(
     'districts',
-    format(
-      '[
-        {"code": "type", "value": "districts"},
-        {"code": "is_visible", "value": true},
-        {"code": "title", "value": "Районы"},
-        {"code": "independent_from_actor_list_elements", "value": true},
-        {"code": "independent_from_object_list_elements", "value": true},
-        {
-          "code": "template",
-          "value": {
-            "title": "title",
-            "groups": []
-          }
-        },
-        {
-          "code": "content",
-          "value": %s
+    jsonb '[
+      {"code": "type", "value": "districts"},
+      {"code": "is_visible", "value": true},
+      {"code": "title", "value": "Районы"},
+      {"code": "independent_from_actor_list_elements", "value": true},
+      {"code": "independent_from_object_list_elements", "value": true},
+      {
+        "code": "template",
+        "value": {
+          "title": "title",
+          "groups": []
         }
-      ]',
-      v_districts::text)::jsonb);
+      },
+      {
+        "code": "content",
+        "value": ["sector_A", "sector_B", "sector_C", "sector_D", "sector_E", "sector_F", "sector_G"]
+      }
+    ]');
 end;
 $$
 language plpgsql;
@@ -27516,16 +27562,14 @@ declare
   v_changes jsonb := jsonb '[]';
 begin
   if v_package_status = 'checking' then
-    if v_check_type = 'life' and data.get_raw_attribute_value(v_package_id, 'package_what') = jsonb '"кот Шрёдингера"' then
+    if v_check_type = 'life' and data.get_raw_attribute_value(v_package_id, 'package_what') = jsonb '"кот Шрёдингера (муляж)"' then
       if random.random_integer(0, 1) = 0 then
-        v_object_changes := v_object_changes || data.attribute_change2jsonb('package_what', jsonb '"мёртвый кот"');
+        v_object_changes := v_object_changes || data.attribute_change2jsonb('package_what', jsonb '"мёртвый кот (муляж)"');
         v_check_result := false;
       else
         v_object_changes :=
           v_object_changes ||
-          data.attribute_change2jsonb('package_what', jsonb '"кот"') ||
-          data.attribute_change2jsonb('system_package_reactions', jsonb '["life"]') ||
-          data.attribute_change2jsonb('package_reactions', jsonb '["life"]', 'master');
+          data.attribute_change2jsonb('package_what', jsonb '"кот (муляж)"');
         v_check_result := true;
       end if;
     elsif array_position(v_system_package_reactions, v_check_type) is not null then
@@ -27609,12 +27653,21 @@ declare
   v_district_tax_attr_id integer := data.get_attribute_id('district_tax');
   v_district_control_attr_id integer := data.get_attribute_id('district_control');
   v_system_district_tax_coeff_attr_id integer := data.get_attribute_id('system_district_tax_coeff');
+  v_system_resource_water_attr_id integer := data.get_attribute_id('system_resource_water');
+  v_system_resource_food_attr_id integer := data.get_attribute_id('system_resource_food');
+  v_system_resource_medicine_attr_id integer := data.get_attribute_id('system_resource_medicine');
+  v_system_resource_power_attr_id integer := data.get_attribute_id('system_resource_power');
   v_system_resource_ore_attr_id integer := data.get_attribute_id('system_resource_ore');
   v_system_resource_iridium_attr_id integer := data.get_attribute_id('system_resource_iridium');
   v_system_resource_diamonds_attr_id integer := data.get_attribute_id('system_resource_diamonds');
+  v_resource_water_attr_id integer := data.get_attribute_id('resource_water');
+  v_resource_food_attr_id integer := data.get_attribute_id('resource_food');
+  v_resource_medicine_attr_id integer := data.get_attribute_id('resource_medicine');
+  v_resource_power_attr_id integer := data.get_attribute_id('resource_power');
   v_resource_ore_attr_id integer := data.get_attribute_id('resource_ore');
   v_resource_iridium_attr_id integer := data.get_attribute_id('resource_iridium');
   v_resource_diamonds_attr_id integer := data.get_attribute_id('resource_diamonds');
+  v_system_district_resources_attr_id integer := data.get_attribute_id('system_district_resources');
 
   v_system_person_life_support_status_attr_id integer := data.get_attribute_id('system_person_life_support_status');
   v_system_person_health_care_status_attr_id integer := data.get_attribute_id('system_person_health_care_status');
@@ -27645,12 +27698,15 @@ declare
   v_district_controls jsonb;
   v_district_tax_coeff jsonb;
   v_district_tax_total jsonb;
+  v_district_resources jsonb;
 
   v_person_id integer;
   v_org record;
 
   v_master_notifications jsonb := jsonb '[]';
   v_object_changes jsonb := jsonb '[]';
+
+  v_adm_resources_message text;
 begin
   if not data.get_boolean_param('game_in_progress') then
     return;
@@ -27674,8 +27730,15 @@ begin
     jsonb_object_agg(o.code, o.id) ids,
     jsonb_object_agg(o.code, data.get_raw_attribute_value_for_share(o.id, v_district_control_attr_id)) control,
     jsonb_object_agg(o.code, data.get_raw_attribute_value_for_share(o.id, v_system_district_tax_coeff_attr_id)) coeff,
-    jsonb_object_agg(o.code, jsonb '0') tax_total
-  into v_district_taxes, v_district_ids, v_district_controls, v_district_tax_coeff, v_district_tax_total
+    jsonb_object_agg(o.code, jsonb '0') tax_total,
+    jsonb_agg(data.get_raw_attribute_value_for_share(o.id, v_system_district_resources_attr_id)) resources
+  into
+    v_district_taxes,
+    v_district_ids,
+    v_district_controls,
+    v_district_tax_coeff,
+    v_district_tax_total,
+    v_district_resources
   from jsonb_array_elements(data.get_raw_attribute_value(data.get_object_id('districts'), v_content_attr_id)) d
   join data.objects o on
     o.code = json.get_string(d.value);
@@ -28413,8 +28476,7 @@ begin
                   v_iridium,
                   v_diamonds));
           end;
-        end if;
-        if v_org.code = 'org_clinic' then
+        elsif v_org.code = 'org_clinic' then
           -- Добавляем больнице панацелин
           v_changes :=
             v_changes ||
@@ -28423,6 +28485,84 @@ begin
             v_master_notifications :=
               v_master_notifications ||
               jsonb '"Гос. клинике установлено 25 панацелина"';
+        elsif v_org.code = 'org_administration' then
+          declare
+            v_water_sum integer;
+            v_food_sum integer;
+            v_medicine_sum integer;
+            v_power_sum integer;
+
+            v_water integer := json.get_integer(data.get_attribute_value_for_update(v_org.id, v_system_resource_water_attr_id));
+            v_food integer := json.get_integer(data.get_attribute_value_for_update(v_org.id, v_system_resource_food_attr_id));
+            v_medicine integer := json.get_integer(data.get_attribute_value_for_update(v_org.id, v_system_resource_medicine_attr_id));
+            v_power integer := json.get_integer(data.get_attribute_value_for_update(v_org.id, v_system_resource_power_attr_id));
+
+            v_ecologist_group_id integer := data.get_object_id('org_administration_ecologist');
+          begin
+            select
+              ceil(sum(json.get_number(value, 'water'))),
+              ceil(sum(json.get_number(value, 'food'))),
+              ceil(sum(json.get_number(value, 'medicine'))),
+              ceil(sum(json.get_number(value, 'power')))
+            into v_water_sum, v_food_sum, v_medicine_sum, v_power_sum
+            from jsonb_array_elements(v_district_resources);
+
+            v_water := v_water - v_water_sum;
+            v_food := v_food - v_food_sum;
+            v_medicine := v_medicine - v_medicine_sum;
+            v_power := v_power - v_power_sum;
+
+            if v_water >= 0 and v_food >= 0 and v_medicine >= 0 and v_power >= 0 then
+              v_adm_resources_message := 'Администрации хватило ресурсов на обеспечение всех районов';
+            else
+              v_adm_resources_message :=
+                format(
+                  'Администрации не хватило на обеспечение районов:%s%s%s%s',
+                  (case when v_water >= 0 then '' else format(E'\n%s воды', -v_water) end),
+                  (case when v_food >= 0 then '' else format(E'\n%s еды', -v_food) end),
+                  (case when v_medicine >= 0 then '' else format(E'\n%s лекарств',-v_medicine) end),
+                  (case when v_power >= 0 then '' else format(E'\n%s электричества', -v_power) end));
+              if v_water < 0 then
+                v_water := 0;
+              end if;
+              if v_food < 0 then
+                v_food := 0;
+              end if;
+              if v_medicine < 0 then
+                v_medicine := 0;
+              end if;
+              if v_power < 0 then
+                v_power := 0;
+              end if;
+            end if;
+
+            v_master_notifications :=
+              v_master_notifications ||
+              to_jsonb(v_adm_resources_message);
+
+            v_changes :=
+              v_changes ||
+              data.attribute_change2jsonb(v_system_resource_water_attr_id, to_jsonb(v_water)) ||
+              data.attribute_change2jsonb(v_resource_water_attr_id, to_jsonb(v_water), v_master_group_id) ||
+              data.attribute_change2jsonb(v_resource_water_attr_id, to_jsonb(v_water), v_head_group_id) ||
+              data.attribute_change2jsonb(v_resource_water_attr_id, to_jsonb(v_water), v_economist_group_id) ||
+              data.attribute_change2jsonb(v_resource_water_attr_id, to_jsonb(v_water), v_ecologist_group_id) ||
+              data.attribute_change2jsonb(v_system_resource_food_attr_id, to_jsonb(v_food)) ||
+              data.attribute_change2jsonb(v_resource_food_attr_id, to_jsonb(v_food), v_master_group_id) ||
+              data.attribute_change2jsonb(v_resource_food_attr_id, to_jsonb(v_food), v_head_group_id) ||
+              data.attribute_change2jsonb(v_resource_food_attr_id, to_jsonb(v_food), v_economist_group_id) ||
+              data.attribute_change2jsonb(v_resource_food_attr_id, to_jsonb(v_food), v_ecologist_group_id) ||
+              data.attribute_change2jsonb(v_system_resource_medicine_attr_id, to_jsonb(v_medicine)) ||
+              data.attribute_change2jsonb(v_resource_medicine_attr_id, to_jsonb(v_medicine), v_master_group_id) ||
+              data.attribute_change2jsonb(v_resource_medicine_attr_id, to_jsonb(v_medicine), v_head_group_id) ||
+              data.attribute_change2jsonb(v_resource_medicine_attr_id, to_jsonb(v_medicine), v_economist_group_id) ||
+              data.attribute_change2jsonb(v_resource_medicine_attr_id, to_jsonb(v_medicine), v_ecologist_group_id) ||
+              data.attribute_change2jsonb(v_system_resource_power_attr_id, to_jsonb(v_power)) ||
+              data.attribute_change2jsonb(v_resource_power_attr_id, to_jsonb(v_power), v_master_group_id) ||
+              data.attribute_change2jsonb(v_resource_power_attr_id, to_jsonb(v_power), v_head_group_id) ||
+              data.attribute_change2jsonb(v_resource_power_attr_id, to_jsonb(v_power), v_economist_group_id) ||
+              data.attribute_change2jsonb(v_resource_power_attr_id, to_jsonb(v_power), v_ecologist_group_id);
+          end;
         end if;
 
         v_object_changes :=
@@ -28437,6 +28577,26 @@ begin
   end loop;
 
   perform data.process_diffs_and_notify(data.change_objects(v_object_changes));
+
+  declare
+    v_org_person_id integer;
+  begin
+    for v_org_person_id in
+    (
+      select distinct object_id
+      from data.object_objects
+      where
+        parent_object_id in (
+          data.get_object_id('org_administration_head'),
+          data.get_object_id('org_administration_economist')) and
+        object_id != parent_object_id
+    )
+    loop
+      perform pp_utils.add_notification(
+        v_org_person_id,
+        v_adm_resources_message);
+    end loop;
+  end;
 
   declare
     v_message text := 'Начался цикл ' || v_new_cycle_num;

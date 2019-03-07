@@ -23,16 +23,14 @@ declare
   v_changes jsonb := jsonb '[]';
 begin
   if v_package_status = 'checking' then
-    if v_check_type = 'life' and data.get_raw_attribute_value(v_package_id, 'package_what') = jsonb '"кот Шрёдингера"' then
+    if v_check_type = 'life' and data.get_raw_attribute_value(v_package_id, 'package_what') = jsonb '"кот Шрёдингера (муляж)"' then
       if random.random_integer(0, 1) = 0 then
-        v_object_changes := v_object_changes || data.attribute_change2jsonb('package_what', jsonb '"мёртвый кот"');
+        v_object_changes := v_object_changes || data.attribute_change2jsonb('package_what', jsonb '"мёртвый кот (муляж)"');
         v_check_result := false;
       else
         v_object_changes :=
           v_object_changes ||
-          data.attribute_change2jsonb('package_what', jsonb '"кот"') ||
-          data.attribute_change2jsonb('system_package_reactions', jsonb '["life"]') ||
-          data.attribute_change2jsonb('package_reactions', jsonb '["life"]', 'master');
+          data.attribute_change2jsonb('package_what', jsonb '"кот (муляж)"');
         v_check_result := true;
       end if;
     elsif array_position(v_system_package_reactions, v_check_type) is not null then

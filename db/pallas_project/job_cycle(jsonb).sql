@@ -39,12 +39,21 @@ declare
   v_district_tax_attr_id integer := data.get_attribute_id('district_tax');
   v_district_control_attr_id integer := data.get_attribute_id('district_control');
   v_system_district_tax_coeff_attr_id integer := data.get_attribute_id('system_district_tax_coeff');
+  v_system_resource_water_attr_id integer := data.get_attribute_id('system_resource_water');
+  v_system_resource_food_attr_id integer := data.get_attribute_id('system_resource_food');
+  v_system_resource_medicine_attr_id integer := data.get_attribute_id('system_resource_medicine');
+  v_system_resource_power_attr_id integer := data.get_attribute_id('system_resource_power');
   v_system_resource_ore_attr_id integer := data.get_attribute_id('system_resource_ore');
   v_system_resource_iridium_attr_id integer := data.get_attribute_id('system_resource_iridium');
   v_system_resource_diamonds_attr_id integer := data.get_attribute_id('system_resource_diamonds');
+  v_resource_water_attr_id integer := data.get_attribute_id('resource_water');
+  v_resource_food_attr_id integer := data.get_attribute_id('resource_food');
+  v_resource_medicine_attr_id integer := data.get_attribute_id('resource_medicine');
+  v_resource_power_attr_id integer := data.get_attribute_id('resource_power');
   v_resource_ore_attr_id integer := data.get_attribute_id('resource_ore');
   v_resource_iridium_attr_id integer := data.get_attribute_id('resource_iridium');
   v_resource_diamonds_attr_id integer := data.get_attribute_id('resource_diamonds');
+  v_system_district_resources_attr_id integer := data.get_attribute_id('system_district_resources');
 
   v_system_person_life_support_status_attr_id integer := data.get_attribute_id('system_person_life_support_status');
   v_system_person_health_care_status_attr_id integer := data.get_attribute_id('system_person_health_care_status');
@@ -75,12 +84,15 @@ declare
   v_district_controls jsonb;
   v_district_tax_coeff jsonb;
   v_district_tax_total jsonb;
+  v_district_resources jsonb;
 
   v_person_id integer;
   v_org record;
 
   v_master_notifications jsonb := jsonb '[]';
   v_object_changes jsonb := jsonb '[]';
+
+  v_adm_resources_message text;
 begin
   if not data.get_boolean_param('game_in_progress') then
     return;
@@ -104,8 +116,15 @@ begin
     jsonb_object_agg(o.code, o.id) ids,
     jsonb_object_agg(o.code, data.get_raw_attribute_value_for_share(o.id, v_district_control_attr_id)) control,
     jsonb_object_agg(o.code, data.get_raw_attribute_value_for_share(o.id, v_system_district_tax_coeff_attr_id)) coeff,
-    jsonb_object_agg(o.code, jsonb '0') tax_total
-  into v_district_taxes, v_district_ids, v_district_controls, v_district_tax_coeff, v_district_tax_total
+    jsonb_object_agg(o.code, jsonb '0') tax_total,
+    jsonb_agg(data.get_raw_attribute_value_for_share(o.id, v_system_district_resources_attr_id)) resources
+  into
+    v_district_taxes,
+    v_district_ids,
+    v_district_controls,
+    v_district_tax_coeff,
+    v_district_tax_total,
+    v_district_resources
   from jsonb_array_elements(data.get_raw_attribute_value(data.get_object_id('districts'), v_content_attr_id)) d
   join data.objects o on
     o.code = json.get_string(d.value);
@@ -843,8 +862,7 @@ begin
                   v_iridium,
                   v_diamonds));
           end;
-        end if;
-        if v_org.code = 'org_clinic' then
+        elsif v_org.code = 'org_clinic' then
           -- Добавляем больнице панацелин
           v_changes :=
             v_changes ||
@@ -853,6 +871,84 @@ begin
             v_master_notifications :=
               v_master_notifications ||
               jsonb '"Гос. клинике установлено 25 панацелина"';
+        elsif v_org.code = 'org_administration' then
+          declare
+            v_water_sum integer;
+            v_food_sum integer;
+            v_medicine_sum integer;
+            v_power_sum integer;
+
+            v_water integer := json.get_integer(data.get_attribute_value_for_update(v_org.id, v_system_resource_water_attr_id));
+            v_food integer := json.get_integer(data.get_attribute_value_for_update(v_org.id, v_system_resource_food_attr_id));
+            v_medicine integer := json.get_integer(data.get_attribute_value_for_update(v_org.id, v_system_resource_medicine_attr_id));
+            v_power integer := json.get_integer(data.get_attribute_value_for_update(v_org.id, v_system_resource_power_attr_id));
+
+            v_ecologist_group_id integer := data.get_object_id('org_administration_ecologist');
+          begin
+            select
+              ceil(sum(json.get_number(value, 'water'))),
+              ceil(sum(json.get_number(value, 'food'))),
+              ceil(sum(json.get_number(value, 'medicine'))),
+              ceil(sum(json.get_number(value, 'power')))
+            into v_water_sum, v_food_sum, v_medicine_sum, v_power_sum
+            from jsonb_array_elements(v_district_resources);
+
+            v_water := v_water - v_water_sum;
+            v_food := v_food - v_food_sum;
+            v_medicine := v_medicine - v_medicine_sum;
+            v_power := v_power - v_power_sum;
+
+            if v_water >= 0 and v_food >= 0 and v_medicine >= 0 and v_power >= 0 then
+              v_adm_resources_message := 'Администрации хватило ресурсов на обеспечение всех районов';
+            else
+              v_adm_resources_message :=
+                format(
+                  'Администрации не хватило на обеспечение районов:%s%s%s%s',
+                  (case when v_water >= 0 then '' else format(E'\n%s воды', -v_water) end),
+                  (case when v_food >= 0 then '' else format(E'\n%s еды', -v_food) end),
+                  (case when v_medicine >= 0 then '' else format(E'\n%s лекарств',-v_medicine) end),
+                  (case when v_power >= 0 then '' else format(E'\n%s электричества', -v_power) end));
+              if v_water < 0 then
+                v_water := 0;
+              end if;
+              if v_food < 0 then
+                v_food := 0;
+              end if;
+              if v_medicine < 0 then
+                v_medicine := 0;
+              end if;
+              if v_power < 0 then
+                v_power := 0;
+              end if;
+            end if;
+
+            v_master_notifications :=
+              v_master_notifications ||
+              to_jsonb(v_adm_resources_message);
+
+            v_changes :=
+              v_changes ||
+              data.attribute_change2jsonb(v_system_resource_water_attr_id, to_jsonb(v_water)) ||
+              data.attribute_change2jsonb(v_resource_water_attr_id, to_jsonb(v_water), v_master_group_id) ||
+              data.attribute_change2jsonb(v_resource_water_attr_id, to_jsonb(v_water), v_head_group_id) ||
+              data.attribute_change2jsonb(v_resource_water_attr_id, to_jsonb(v_water), v_economist_group_id) ||
+              data.attribute_change2jsonb(v_resource_water_attr_id, to_jsonb(v_water), v_ecologist_group_id) ||
+              data.attribute_change2jsonb(v_system_resource_food_attr_id, to_jsonb(v_food)) ||
+              data.attribute_change2jsonb(v_resource_food_attr_id, to_jsonb(v_food), v_master_group_id) ||
+              data.attribute_change2jsonb(v_resource_food_attr_id, to_jsonb(v_food), v_head_group_id) ||
+              data.attribute_change2jsonb(v_resource_food_attr_id, to_jsonb(v_food), v_economist_group_id) ||
+              data.attribute_change2jsonb(v_resource_food_attr_id, to_jsonb(v_food), v_ecologist_group_id) ||
+              data.attribute_change2jsonb(v_system_resource_medicine_attr_id, to_jsonb(v_medicine)) ||
+              data.attribute_change2jsonb(v_resource_medicine_attr_id, to_jsonb(v_medicine), v_master_group_id) ||
+              data.attribute_change2jsonb(v_resource_medicine_attr_id, to_jsonb(v_medicine), v_head_group_id) ||
+              data.attribute_change2jsonb(v_resource_medicine_attr_id, to_jsonb(v_medicine), v_economist_group_id) ||
+              data.attribute_change2jsonb(v_resource_medicine_attr_id, to_jsonb(v_medicine), v_ecologist_group_id) ||
+              data.attribute_change2jsonb(v_system_resource_power_attr_id, to_jsonb(v_power)) ||
+              data.attribute_change2jsonb(v_resource_power_attr_id, to_jsonb(v_power), v_master_group_id) ||
+              data.attribute_change2jsonb(v_resource_power_attr_id, to_jsonb(v_power), v_head_group_id) ||
+              data.attribute_change2jsonb(v_resource_power_attr_id, to_jsonb(v_power), v_economist_group_id) ||
+              data.attribute_change2jsonb(v_resource_power_attr_id, to_jsonb(v_power), v_ecologist_group_id);
+          end;
         end if;
 
         v_object_changes :=
@@ -867,6 +963,26 @@ begin
   end loop;
 
   perform data.process_diffs_and_notify(data.change_objects(v_object_changes));
+
+  declare
+    v_org_person_id integer;
+  begin
+    for v_org_person_id in
+    (
+      select distinct object_id
+      from data.object_objects
+      where
+        parent_object_id in (
+          data.get_object_id('org_administration_head'),
+          data.get_object_id('org_administration_economist')) and
+        object_id != parent_object_id
+    )
+    loop
+      perform pp_utils.add_notification(
+        v_org_person_id,
+        v_adm_resources_message);
+    end loop;
+  end;
 
   declare
     v_message text := 'Начался цикл ' || v_new_cycle_num;
