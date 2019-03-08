@@ -60,7 +60,7 @@ begin
   ('system_resource_goods', null, null, 'system', null, null, false),
   ('resource_goods', 'Товары', null, 'normal', 'full', null, true),
   ('system_resource_panacelin', null, null, 'system', null, null, false),
-  ('resource_panacelin', 'Панацелин', null, 'hidden', null, null, true),
+  ('resource_panacelin', 'Панацелин', null, 'normal', null, null, true),
 
   ('system_ice_efficiency', null, null, 'system', null, null, false),
   ('ice_efficiency', 'Эффективность переработки льда', null, 'normal', 'full', 'pallas_project.vd_eff_percent', true),

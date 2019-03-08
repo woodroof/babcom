@@ -18,7 +18,7 @@ declare
   v_disease text;
 begin
   assert in_actor_id is not null;
-
+/*
   for v_disease in (select * from unnest(array['wound', 'radiation', 'asthma', 'rio_miamore', 'addiction', 'genetic', 'sleg', 'sleg_addiction', 'back_rio_miamore'])) loop
     select x.level into v_level
     from jsonb_to_record(jsonb_extract_path(v_med_health, v_disease)) as x(level integer);
@@ -40,7 +40,40 @@ begin
                     case when v_time_to_next is not null then v_next_level else v_level end);
     end if;
   end loop;
+  */
+  v_actions_list := v_actions_list || 
+        format(', "med_diagnostic": {"code": "med_diagnostic", "name": "Диагностика", "disabled": false,'||
+                '"params": {"person_code": "%s"}}',
+                v_person_code);
 
+  if pp_utils.is_in_group(in_actor_id, 'doctor') then
+    v_actions_list := v_actions_list || 
+          format(', "med_cure_wound": {"code": "med_cure", "name": "Хирургическое вмешатальство", "disabled": false,'||
+                  '"params": {"med_computer_code": "%s", "person_code": "%s", "disease": "wound"}}',
+                  v_medcomputer_code,
+                  v_person_code);
+  end if;
+  v_actions_list := v_actions_list || 
+          format(', "med_cure_radiation": {"code": "med_cure", "name": "Фентаксал", "disabled": false,'||
+                  '"params": {"med_computer_code": "%s", "person_code": "%s", "disease": "radiation"}}',
+                  v_medcomputer_code,
+                  v_person_code);
+  v_actions_list := v_actions_list || 
+          format(', "med_cure_asthma": {"code": "med_cure", "name": "Акандорол", "disabled": false,'||
+                  '"params": {"med_computer_code": "%s", "person_code": "%s", "disease": "asthma"}}',
+                  v_medcomputer_code,
+                  v_person_code);
+  v_actions_list := v_actions_list || 
+          format(', "med_cure_addiction": {"code": "med_cure", "name": "Атромадил", "disabled": false,'||
+                  '"params": {"med_computer_code": "%s", "person_code": "%s", "disease": "addiction"}}',
+                  v_medcomputer_code,
+                  v_person_code);
+  v_actions_list := v_actions_list || 
+          format(', "med_cure_sleg_addiction": {"code": "med_cure", "name": "Нейротоник", "disabled": false,'||
+                  '"params": {"med_computer_code": "%s", "person_code": "%s", "disease": "sleg_addiction"}}',
+                  v_medcomputer_code,
+                  v_person_code);
+  /*
   v_actions_list := v_actions_list || 
         format(', "med_cure": {"code": "med_cure", "name": "med_cure", "disabled": false,'||
                 '"params": {"med_computer_code": "%s", "person_code": "%s"},
@@ -51,7 +84,7 @@ begin
                                 {"code": "med_clinic_panacelin_price", "description": "Стоимость лечения в панацелине", "type": "integer"}]}',
                 v_medcomputer_code,
                 v_person_code);
-
+*/
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;
 $$

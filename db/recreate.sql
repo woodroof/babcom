@@ -14907,12 +14907,10 @@ declare
   v_actor_id integer := data.get_active_actor_id(in_client_id);
   v_med_computer_code text := json.get_string(in_params, 'med_computer_code');
   v_person_code text := json.get_string(in_params, 'person_code');
-  v_disease text := json.get_string(in_user_params, 'disease');
-  v_level integer := json.get_integer(in_user_params, 'level');
-  v_message text := json.get_string(in_user_params, 'message');
-  v_med_clinic_money_price integer := json.get_integer(in_user_params, 'med_clinic_money_price');
-  v_med_clinic_panacelin_price integer := json.get_integer(in_user_params, 'med_clinic_panacelin_price');
-  v_diagnosted integer;
+  v_disease text := json.get_string(in_params, 'disease');
+  v_message text;
+  v_med_clinic_money_price integer := 20;
+  v_med_clinic_panacelin_price integer := 1;
 
   v_clinic_money integer;
   v_resource_panacelin integer;
@@ -14935,17 +14933,111 @@ declare
   v_med_skill integer := json.get_integer_opt(data.get_attribute_value(v_actor_id, 'system_person_med_skill'), null);
   v_is_stimulant boolean := json.get_boolean_opt(data.get_attribute_value(v_actor_id, 'system_person_is_stimulant_used'), null);
 
+  v_med_asthma integer;
 begin
+  select coalesce(max(json.get_integer_opt(data.get_attribute_value_for_share(x, 'system_person_health_care_status'), 0)), 0) into v_health_care_status 
+    from unnest(json.get_integer_array_opt(data.get_attribute_value(v_person_id, 'system_person_doubles_id_list'), array[]::integer[])) as x;
+  v_orig_health_care_status := json.get_integer_opt(data.get_attribute_value_for_share(v_person_id, 'system_person_health_care_status'), 0);
+  if v_orig_health_care_status > v_health_care_status then
+    v_health_care_status := v_orig_health_care_status;
+  end if;
+
+  if v_disease in ('addiction', 'sleg_addiction') and v_health_care_status < 3 then
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Вылечить не удалось', 'Пациент должен иметь золотой статус медицинского обслуживания, чтобы получить лекарство от наркотической зависимости');
+    return;
+  end if;
 
   v_person_id := json.get_integer_opt(data.get_attribute_value(v_person_id, 'system_person_original_id'), v_person_id);
   v_person_code := data.get_object_code(v_person_id);
 
-  perform pallas_project.act_med_set_disease_level(
+  v_med_health := coalesce(data.get_attribute_value_for_update(v_person_code || '_med_health', 'med_health'), jsonb '{}');
+
+  if json.get_integer_opt(json.get_object_opt(v_med_health, v_disease, jsonb '{}'), 'level', 0) <> 0 then
+    if v_disease = 'wound' then
+      if v_med_skill < 1 and not v_is_stimulant then 
+        perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Вылечить не удалось', 'У вас недостаточно компетенции, чтобы помочь этому пациенту.');
+        return;
+      end if;
+      if v_health_care_status < 2 then
+        case random.random_integer(1,3)
+          when 1 then v_message := 'У вас кружится голова, вас знобит, вас мучает жажда. Пройдет через 30 минут.';
+          when 2 then v_message := 'Вы чувствуете себя очень слабым. Час не можете бегать, пользоваться оружием и работать.';
+          when 3 then v_message := 'Приступы мучительной боли будет преследовать вас ещё час. Вспоминайте раз в 5-7 минут о месте ранения и страдайте.';
+          else null;
+        end case;
+      elsif v_health_care_status < 3 then
+        case random.random_integer(1,3)
+          when 1 then v_message := 'У вас кружится голова, вас знобит, вас мучает жажда. Пройдет через 15 минут.';
+          when 2 then v_message := 'Вы чувствуете себя очень слабым. Полчаса не можете бегать, пользоваться оружием и работать.';
+          else v_message := null;
+        end case;
+      end if;
+      perform pallas_project.act_med_set_disease_level(
         null, 
         null, 
-        format('{"person_code": "%s", "disease": "%s", "level": %s, "without_message": true}', v_person_code, v_disease, v_level)::jsonb, 
+        format('{"person_code": "%s", "disease": "%s", "level": %s}', v_person_code, v_disease, 0)::jsonb, 
         null, 
         null);
+    elsif v_disease = 'radiation' then
+      perform pallas_project.act_med_set_disease_level(
+        null, 
+        null, 
+        format('{"person_code": "%s", "disease": "%s", "level": %s}', v_person_code, v_disease, 0)::jsonb, 
+        null, 
+        null);
+    elsif v_disease = 'asthma' then
+      v_med_asthma := json.get_integer_opt(data.get_attribute_value_for_update(v_person_code || '_med_health', 'med_asthma'), 0);
+      if v_med_asthma >= 2 then
+        perform pallas_project.act_med_set_disease_level(
+          null, 
+          null, 
+          format('{"person_code": "%s", "disease": "%s", "level": %s}', v_person_code, v_disease, 0)::jsonb, 
+          null, 
+          null);
+      else
+        perform pallas_project.act_med_set_disease_level(
+          null, 
+          null, 
+          format('{"person_code": "%s", "disease": "%s", "level": %s}', v_person_code, v_disease, 1)::jsonb, 
+          null, 
+          null);
+      end if;
+      v_changes := array[]::jsonb[];
+      v_changes := array_append(v_changes, data.attribute_change2jsonb('med_asthma', case when v_med_asthma >=2 then null else to_jsonb(v_med_asthma + 1) end));
+      perform data.change_object_and_notify(data.get_object_id(v_person_code || '_med_health'), 
+                                            to_jsonb(v_changes),
+                                            null);
+    elsif v_disease = 'addiction' then
+      v_med_clinic_money_price := 40;
+      v_med_clinic_panacelin_price := 2;
+      perform pallas_project.act_med_set_disease_level(
+        null, 
+        null, 
+        format('{"person_code": "%s", "disease": "%s", "level": %s}', v_person_code, v_disease, 0)::jsonb, 
+        null, 
+        null);
+    elsif v_disease = 'sleg_addiction' then
+      v_med_clinic_money_price := 40;
+      v_med_clinic_panacelin_price := 2;
+      perform pallas_project.act_med_set_disease_level(
+        null, 
+        null, 
+        format('{"person_code": "%s", "disease": "%s", "level": %s}', v_person_code, v_disease, 0)::jsonb, 
+        null, 
+        null);
+    end if;
+
+  else
+    if v_disease = 'wound' then
+      perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Вылечить не удалось', 'Хирургическое вмешательство в данном случае неприменимо.');
+        return;
+    end if;
+    if v_disease in ('addiction','sleg_addiction') then
+      v_med_clinic_money_price := 40;
+      v_med_clinic_panacelin_price := 2;
+    end if;
+    v_message := 'Вы чувствуете лёгкую тошноту. Через несколько секунд она пройдёт.';
+  end if;
 
   if coalesce(v_message,'') <> '' then
     perform pp_utils.add_notification(v_person_id, v_message);
@@ -14957,6 +15049,10 @@ begin
   v_changes := array[]::jsonb[];
   if pp_utils.is_in_group(v_actor_id, 'unofficial_doctor') then
     v_clinic_money := json.get_bigint_opt(data.get_attribute_value('org_clean_asteroid', 'system_money'), 0);
+    if v_clinic_money < v_med_clinic_money_price then
+      perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Не удалось', 'Недостаточно денег на счёте организации');
+      return;
+    end if;
     v_diff := pallas_project.change_money(data.get_object_id('org_clean_asteroid'), v_clinic_money - v_med_clinic_money_price, v_actor_id, 'Cure');
     perform pallas_project.create_transaction(
           data.get_object_id('org_clean_asteroid'),
@@ -14976,40 +15072,77 @@ begin
 
   elsif pp_utils.is_in_group(v_actor_id, 'doctor') then
     v_resource_panacelin := json.get_bigint_opt(data.get_attribute_value('org_clinic', 'system_resource_panacelin'), 0);
+    if v_resource_panacelin < v_med_clinic_panacelin_price then
+      perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Не удалось', 'Недостаточно ресурсов');
+      return;
+    end if;
     v_changes := array_append(v_changes, data.attribute_change2jsonb('system_resource_panacelin', to_jsonb(v_resource_panacelin - v_med_clinic_panacelin_price)));
-    perform data.change_object_and_notify(data.get_object_id('org_clean_asteroid'), 
+    perform data.change_object_and_notify(data.get_object_id('org_clinic'), 
                                          to_jsonb(v_changes),
                                          null);
-  end if;
+  end if;  
 
   v_changes := array[]::jsonb[];
-  v_med_health := coalesce(data.get_attribute_value_for_share(v_person_code || '_med_health', 'med_health'), jsonb '{}');
-  v_changes := array_append(v_changes, data.attribute_change2jsonb('med_health', v_med_health));
   if pp_utils.is_in_group(v_actor_id, 'unofficial_doctor') then
     v_changes := array_append(v_changes, data.attribute_change2jsonb('med_clinic_money', to_jsonb(v_clinic_money - v_med_clinic_money_price)));
   elsif pp_utils.is_in_group(v_actor_id, 'doctor') then
     v_changes := array_append(v_changes, data.attribute_change2jsonb('resource_panacelin', to_jsonb(v_resource_panacelin - v_med_clinic_panacelin_price)));
   end if;
 
-  v_changes := array_append(v_changes, data.attribute_change2jsonb('med_skill', to_jsonb(v_med_skill)));
-  v_changes := array_append(v_changes, data.attribute_change2jsonb('is_stimulant_used', to_jsonb(v_is_stimulant)));
+  perform data.change_object_and_notify(data.get_object_id(v_med_computer_code), 
+                                        to_jsonb(v_changes));
 
-  select coalesce(max(json.get_integer_opt(data.get_attribute_value_for_share(x, 'system_person_health_care_status'), 0)), 0) into v_health_care_status 
-    from unnest(json.get_integer_array_opt(data.get_attribute_value(v_person_id, 'system_person_doubles_id_list'), array[]::integer[])) as x;
-  v_orig_health_care_status := json.get_integer_opt(data.get_attribute_value_for_share(v_person_id, 'system_person_health_care_status'), 0);
-  if v_orig_health_care_status > v_health_care_status then
-    v_health_care_status := v_orig_health_care_status;
-  end if;
-  v_changes := array_append(v_changes, data.attribute_change2jsonb('med_health_care_status', to_jsonb(v_health_care_status)));
 
-  v_message_sent := data.change_current_object(in_client_id, 
-                                               in_request_id,
-                                               data.get_object_id(v_med_computer_code), 
-                                               to_jsonb(v_changes));
-  if not v_message_sent then
-    perform api_utils.create_ok_notification(in_client_id, in_request_id);
-  end if;
+
+    if v_disease = 'wound' then
+        perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Вы провели хирургическую операцию', 'Спросите у пациента, как он себя чувствует');
+    else
+      perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Вы дали пациенту лекарство', 'Спросите у него, как он себя чувствует');
+    end if;
   end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.act_med_diagnostic(integer, text, jsonb, jsonb, jsonb);
+
+create or replace function pallas_project.act_med_diagnostic(in_client_id integer, in_request_id text, in_params jsonb, in_user_params jsonb, in_default_params jsonb)
+returns void
+volatile
+as
+$$
+declare
+  v_person_code text := json.get_string(in_params, 'person_code');
+  v_med_health jsonb;
+  v_diseases text[];
+  v_disease text;
+  v_level integer;
+  v_message text;
+begin
+  assert in_request_id is not null;
+
+  v_med_health := coalesce(data.get_attribute_value_for_update(v_person_code || '_med_health', 'med_health'), jsonb '{}');
+
+  select array_agg(x) into v_diseases from jsonb_object_keys(v_med_health) as x
+  where x in ('wound', 'radiation', 'asthma', 'rio_miamore', 'addiction', 'sleg_addiction', 'genetic')
+    and json.get_integer_opt(json.get_object_opt(v_med_health, x, jsonb '{}'), 'level', 0) <> 0;
+
+  if v_diseases is not null and coalesce(array_length(v_diseases, 1), 0) > 0 then
+    v_disease := v_diseases[random.random_integer(1, array_length(v_diseases, 1))];
+    v_level := json.get_integer(json.get_object(v_med_health, v_disease), 'level');
+    v_message := data.get_string_param('med_diag_' || v_disease || '_' || v_level);
+    perform pallas_project.act_med_set_disease_level(
+      null, 
+      null, 
+      format('{"person_code": "%s", "disease": "%s", "level": %s}', v_person_code, v_disease, v_level + 1)::jsonb, 
+      null, 
+      null);
+  end if;
+  if coalesce(v_message, '') = '' then
+    v_message := 'Состояние не определено.';
+  end if;
+  perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Сообщение аппарата диагностики', v_message);
+
+end;
 $$
 language plpgsql;
 
@@ -18315,7 +18448,7 @@ declare
   v_disease text;
 begin
   assert in_actor_id is not null;
-
+/*
   for v_disease in (select * from unnest(array['wound', 'radiation', 'asthma', 'rio_miamore', 'addiction', 'genetic', 'sleg', 'sleg_addiction', 'back_rio_miamore'])) loop
     select x.level into v_level
     from jsonb_to_record(jsonb_extract_path(v_med_health, v_disease)) as x(level integer);
@@ -18337,7 +18470,40 @@ begin
                     case when v_time_to_next is not null then v_next_level else v_level end);
     end if;
   end loop;
+  */
+  v_actions_list := v_actions_list || 
+        format(', "med_diagnostic": {"code": "med_diagnostic", "name": "Диагностика", "disabled": false,'||
+                '"params": {"person_code": "%s"}}',
+                v_person_code);
 
+  if pp_utils.is_in_group(in_actor_id, 'doctor') then
+    v_actions_list := v_actions_list || 
+          format(', "med_cure_wound": {"code": "med_cure", "name": "Хирургическое вмешатальство", "disabled": false,'||
+                  '"params": {"med_computer_code": "%s", "person_code": "%s", "disease": "wound"}}',
+                  v_medcomputer_code,
+                  v_person_code);
+  end if;
+  v_actions_list := v_actions_list || 
+          format(', "med_cure_radiation": {"code": "med_cure", "name": "Фентаксал", "disabled": false,'||
+                  '"params": {"med_computer_code": "%s", "person_code": "%s", "disease": "radiation"}}',
+                  v_medcomputer_code,
+                  v_person_code);
+  v_actions_list := v_actions_list || 
+          format(', "med_cure_asthma": {"code": "med_cure", "name": "Акандорол", "disabled": false,'||
+                  '"params": {"med_computer_code": "%s", "person_code": "%s", "disease": "asthma"}}',
+                  v_medcomputer_code,
+                  v_person_code);
+  v_actions_list := v_actions_list || 
+          format(', "med_cure_addiction": {"code": "med_cure", "name": "Атромадил", "disabled": false,'||
+                  '"params": {"med_computer_code": "%s", "person_code": "%s", "disease": "addiction"}}',
+                  v_medcomputer_code,
+                  v_person_code);
+  v_actions_list := v_actions_list || 
+          format(', "med_cure_sleg_addiction": {"code": "med_cure", "name": "Нейротоник", "disabled": false,'||
+                  '"params": {"med_computer_code": "%s", "person_code": "%s", "disease": "sleg_addiction"}}',
+                  v_medcomputer_code,
+                  v_person_code);
+  /*
   v_actions_list := v_actions_list || 
         format(', "med_cure": {"code": "med_cure", "name": "med_cure", "disabled": false,'||
                 '"params": {"med_computer_code": "%s", "person_code": "%s"},
@@ -18348,7 +18514,7 @@ begin
                                 {"code": "med_clinic_panacelin_price", "description": "Стоимость лечения в панацелине", "type": "integer"}]}',
                 v_medcomputer_code,
                 v_person_code);
-
+*/
   return jsonb ('{'||trim(v_actions_list,',')||'}');
 end;
 $$
@@ -25852,7 +26018,8 @@ begin
 -- *format med_stimulant*{"last": {"job": 4837438}, "cycle1": 1, "cycle2": 3}
   ('med_sleg', null, 'Данные о приёме слега', 'system', null, null, false),
 -- *format med_sleg*{"last": {"job": 4837438}}
-  ('med_clinic_money', null, 'Остаток на счёте клиники', 'hidden', null, null, false),
+  ('med_asthma', null, 'Сколько раз уже полечили', 'system', null, null, false),
+  ('med_clinic_money', 'Остаток на счёте клиники', 'Остаток на счёте клиники', 'normal', null, null, false),
   ('med_person_code', null, 'Код пациента', 'hidden', null, null, false),
   ('med_health_care_status', null, 'Статус обслуживания пациента', 'hidden', null, null, false),
   ('med_drug_qr_link',null, 'Ссылка для QR-кода', 'normal', 'mini', null, false),
@@ -25946,7 +26113,68 @@ begin
   ('med_sleg_1', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
   ('med_sleg_2', jsonb '"Вы чувствуете себя беспомощным и верите всему, что вам говорят. Эти люди поняли буквально всё и сейчас поделятся с вами этим знанием. Если вокруг вас никого нет, отправьтесь на поиски. "', 'Сообщение для игрока о состоянии заболевания'),
   ('med_sleg_3', jsonb '"Вам очень страшно - вокруг враги. Они хотят вам зла. Спрячьтесь от них. Если вам не дают покоя, нападайте!"', 'Сообщение для игрока о состоянии заболевания'),
-  ('med_sleg_4', jsonb '"Вам хорошо и спокойно, вы благостны и полны добра. Жизнь прекрасна, вокруг друзья."', 'Сообщение для игрока о состоянии заболевания');
+  ('med_sleg_4', jsonb '"Вам хорошо и спокойно, вы благостны и полны добра. Жизнь прекрасна, вокруг друзья."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_diag_wound_0', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_diag_wound_1', jsonb '"Повреждения мышечной ткани, разрыв кожных покровов. Легкая потеря крови."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_wound_2', jsonb '"Повреждения мышечной ткани, разрыв кожных покровов. Серьезная потеря крови."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_wound_3', jsonb '"Повреждения мышечной ткани, разрыв кожных покровов. Сильная потеря крови."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_wound_4', jsonb '"Воспалительный процесс в месте ранения."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_wound_5', jsonb '"Нарушение кровотока в месте ранения. Загноение."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_wound_6', jsonb '"Заражение крови. Обширный воспалительный процесс. Поражение внутренних органов."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_wound_7', jsonb '"Организм на грани смерти. Опасность полного отказа органов."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_wound_8', jsonb '""', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_radiation_0', jsonb '""', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_radiation_1', jsonb '"Воспаление эпидермиса."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_radiation_2', jsonb '"Поражены эпидермис и слизистые оболочки."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_radiation_3', jsonb '"Поражение радиацией затронуло эпидермис, слизистые оболочки, мышечную ткань, лёгкие и кишечник."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_radiation_4', jsonb '"Поражение радиацией затронуло эпидермис, слизистые оболочки, мышечную ткань. Отказ лёгких, печени и почек. "', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_radiation_5', jsonb '"Поражение радиацией затронуло эпидермис, слизистые оболочки, мышечную ткань, лёгкие и кишечник. Отказ печени и почек. Обширное поражение радиацией костного мозга, сердца и мозга. Высок риск полного отказа органов. "', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_radiation_6', jsonb '""', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_asthma_0', jsonb '""', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_asthma_1', jsonb '"Поражение дыхательных путей. Сужение просвета бронхов"', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_asthma_2', jsonb '"Травматические изменения дыхательной системы. Опасность астматического приступа."', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_diag_asthma_3', jsonb '"Отёк слизистой оболочки дыхательных путей."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_asthma_4', jsonb '"Сужение просвета бронхов. Отёк слизистой оболочки дыхательных путей."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_asthma_5', jsonb '"Травматические изменения дыхательной системы. Опасность астматического приступа."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_asthma_6', jsonb '"Отёк слизистой оболочки дыхательных путей."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_asthma_7', jsonb '"Сужение просвета бронхов. Отёк слизистой оболочки дыхательных путей."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_asthma_8', jsonb '"Сильный отёк дыхательных путей."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_rio_miamore_0', jsonb '""', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_rio_miamore_1', jsonb '"Отёк слизистой оболочки дыхательных путей."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_rio_miamore_2', jsonb '"Отёк слизистой оболочки дыхательных путей."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_rio_miamore_3', jsonb '"Повышенная температура. Повышенный уровень лейкоцитов в крови."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_rio_miamore_4', jsonb '"Повышенная температура. Повышенный уровень лейкоцитов в крови. Воспаление эпидермиса. "', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_rio_miamore_5', jsonb '"Сужение просвета бронхов. Отёк слизистой оболочки дыхательных путей."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_rio_miamore_6', jsonb '"Сильный отёк дыхательных путей."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_rio_miamore_7', jsonb '"Поражение вегетативной нервной системы"', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_rio_miamore_8', jsonb '"Поражение вегетативной нервной системы. Воспаление оболочек мозга. "', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_rio_miamore_9', jsonb '""', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_addiction_0', jsonb '" "', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_addiction_1', jsonb '""', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_addiction_2', jsonb '"Абстинентный синдром."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_addiction_3', jsonb '"Абстинентный синдром."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_addiction_4', jsonb '"Абстинентный синдром."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_addiction_5', jsonb '"Абстинентный синдром. Неврологическая фаза."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_addiction_6', jsonb '"Абстинентный синдром. Неврологическая фаза."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_addiction_7', jsonb '"Психоактивная фаза абстинентного синдрома."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_addiction_8', jsonb '"Психоактивная фаза абстинентного синдрома."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_addiction_9', jsonb '"Критическая фаза абстинентного синдрома."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_sleg_addiction_0', jsonb '" "', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_sleg_addiction_1', jsonb '""', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_sleg_addiction_2', jsonb '"Абстинентный синдром."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_sleg_addiction_3', jsonb '"Абстинентный синдром."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_sleg_addiction_4', jsonb '"Абстинентный синдром."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_sleg_addiction_5', jsonb '"Абстинентный синдром. Неврологическая фаза."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_sleg_addiction_6', jsonb '"Абстинентный синдром. Неврологическая фаза."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_sleg_addiction_7', jsonb '"Психоактивная фаза абстинентного синдрома."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_sleg_addiction_8', jsonb '"Психоактивная фаза абстинентного синдрома."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_sleg_addiction_9', jsonb '"Критическая фаза абстинентного синдрома."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_genetic_0', jsonb '""', 'Сообщение для игрока о состоянии заболевания'),
+  ('med_diag_genetic_1', jsonb '"Отёк слизистой оболочки дыхательных путей."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_genetic_2', jsonb '"Повышенная температура. Нарушение терморегуляции и поражение дыхательных путей."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_genetic_3', jsonb '"Сильная анемия. Поражение дыхательных путей и процессов терморегуляции."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_genetic_4', jsonb '"Разрушительные процессы в орагнизме в следствие травматизации особыми белками. Поражение ЦНС. Сильная анемия. Поражение дыхательных путей и процессов терморегуляции."', 'Сообщение для врача о состоянии заболевания'),
+  ('med_diag_genetic_5', jsonb '""', 'Сообщение для врача о состоянии заболевания');
 
   -- Объект - страница для заявления заболеваний и ранений
   perform data.create_class(
@@ -26019,14 +26247,24 @@ begin
       "value": {
         "title": "title",
         "subtitle": "subtitle",
-        "groups": [{"code": "diagnostics_group", 
+        "groups": [{"code": "info_group", 
+                    "attributes": ["med_clinic_money", 
+                                "resource_panacelin"]},
+                  {"code": "diagnostics_group", 
                     "actions": ["med_diagnose_wound", 
                                 "med_diagnose_radiation", 
                                 "med_diagnose_asthma", 
                                 "med_diagnose_rio_miamore", 
                                 "med_diagnose_addiction",
                                 "med_diagnose_genetic",
-                                "med_cure"]}]
+                                "med_diagnostic"]},
+                   {"code": "cure_group", 
+                    "actions": ["med_cure",
+                                "med_cure_wound",
+                                "med_cure_radiation",
+                                "med_cure_asthma",
+                                "med_cure_addiction",
+                                "med_cure_sleg_addiction"]}]
       }
     }
   ]');
@@ -26093,7 +26331,8 @@ begin
   ('med_open_medicine', 'pallas_project.act_med_open_medicine'),
   ('med_cure','pallas_project.act_med_cure'),
   ('med_drugs_add_drug', 'pallas_project.act_med_drugs_add_drug'),
-  ('med_drug_use', 'pallas_project.act_med_drug_use');
+  ('med_drug_use', 'pallas_project.act_med_drug_use'),
+  ('med_diagnostic', 'pallas_project.act_med_diagnostic');
 end;
 $$
 language plpgsql;
@@ -26635,7 +26874,7 @@ begin
   ('system_resource_goods', null, null, 'system', null, null, false),
   ('resource_goods', 'Товары', null, 'normal', 'full', null, true),
   ('system_resource_panacelin', null, null, 'system', null, null, false),
-  ('resource_panacelin', 'Панацелин', null, 'hidden', null, null, true),
+  ('resource_panacelin', 'Панацелин', null, 'normal', null, null, true),
 
   ('system_ice_efficiency', null, null, 'system', null, null, false),
   ('ice_efficiency', 'Эффективность переработки льда', null, 'normal', 'full', 'pallas_project.vd_eff_percent', true),
