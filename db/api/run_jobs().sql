@@ -12,6 +12,7 @@ declare
   v_desired_time timestamp with time zone;
   v_deadlock_count integer := 0;
   v_start_time timestamp with time zone;
+  v_ms integer;
 begin
   loop
     delete from data.jobs
@@ -56,7 +57,11 @@ begin
       end;
     end loop;
 
-    perform data.metric_set_max('max_job_time_ms', (extract(epoch from clock_timestamp() - v_start_time) * 1000)::integer);
+    v_ms := (extract(epoch from clock_timestamp() - v_start_time) * 1000)::integer;
+    perform data.metric_set_max('max_job_time_ms', v_ms);
+    if v_ms >= 500 then
+      perform data.log('warning', format(E'Slow job detected: %s ms\nFunction: %s\nParams:\n%s', v_ms, v_function, v_params));
+    end if;
   end loop;
 
   select min(desired_time)
