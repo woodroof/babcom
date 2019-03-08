@@ -14410,12 +14410,22 @@ declare
 
   v_person_id integer;
   v_message text := 'Пользователь "' || json.get_string(data.get_attribute_value(v_actor_id, 'title')) || '" поделился с вами документом';
+  v_title_attr_id integer := data.get_attribute_id('title');
+  v_persons text;
+  v_person_message text := 'Вы поделились документом со следующими пользователями: ';
 begin
   assert in_request_id is not null;
+
+  select string_agg(json.get_string(data.get_attribute_value(a.value, v_title_attr_id)), ', ')
+  into v_persons
+  from unnest(v_system_document_temp_share_list) a(value);
+
+  v_person_message := v_person_message || v_persons;
 
   for v_person_id in (select * from unnest(v_system_document_temp_share_list)) loop
     perform pp_utils.add_notification(v_person_id, v_message, v_document_id, true);
   end loop;
+  perform pp_utils.add_notification(v_actor_id, v_person_message, v_document_id, true);
 
   perform api_utils.create_go_back_action_notification(in_client_id, in_request_id);
 end;
@@ -18158,10 +18168,10 @@ begin
     if v_is_master or (in_actor_id = v_document_author and (v_document_category = 'private' or v_document_status = 'draft')) then
       v_actions_list := v_actions_list || 
           format(', "document_edit": {"code": "document_edit", "name": "Редактировать", "disabled": false, "params": {"document_code": "%s"}, 
-  "user_params": [{"code": "title", "description": "Заголовок", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"},
+  "user_params": [{"code": "title", "description": "Заголовок", "type": "string", "restrictions": {"min_length": 1}, "default_value": %s},
   {"code": "document_text", "description": "Текст документа", "type": "string", "restrictions": {"min_length": 1, "multiline": true}, "default_value": %s}]}',
                   v_document_code,
-                  json.get_string_opt(data.get_raw_attribute_value_for_share(in_object_id, 'title'), null),
+                  coalesce(data.get_raw_attribute_value_for_share(in_object_id, 'title')::text, '""'),
                   coalesce(data.get_attribute_value_for_share(in_object_id, 'document_text')::text, '""'));
 
       v_actions_list := v_actions_list || 
@@ -18225,7 +18235,7 @@ begin
                v_document_code);
     end if;
   end if;
-  return jsonb ('{'||trim(v_actions_list,',')||'}');
+  return ('{'||trim(v_actions_list,',')||'}')::jsonb;
 end;
 $$
 language plpgsql;
