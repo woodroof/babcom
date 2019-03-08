@@ -741,7 +741,7 @@ begin
       "system_person_administrative_services_status":0,
       "system_person_med_skill":0
     }',
-    array['all_person', 'player', 'aster', 'cartel']);
+    array['all_person', 'player', 'aster']);
   perform pallas_project.create_person(
     'e0c49e51-779f-4f21-bb94-bbbad33bc6e2',
     'rar0',
@@ -1174,7 +1174,7 @@ begin
       "system_person_life_support_status":3,
       "system_person_administrative_services_status":0
     }',
-    array['all_person', 'player', 'aster', 'opa', 'cartel', 'customs_officer']);
+    array['all_person', 'player', 'aster', 'opa', 'customs_officer']);
   perform pallas_project.create_person(
     '555e076c-ff8d-4dbb-a6c6-9d935314ff59',
     'uomo',
