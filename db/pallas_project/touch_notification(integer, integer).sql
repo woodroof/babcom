@@ -16,7 +16,6 @@ declare
       json.get_string_array(data.get_raw_attribute_value_for_update(v_notifications_id, v_content_attr_id)),
       v_notification_code);
 begin
-  perform data.set_attribute_value(in_object_id, 'is_visible', jsonb 'false', in_actor_id);
   perform data.change_object_and_notify(
     in_actor_id,
     jsonb_build_object('system_person_notification_count', v_notifications_count),

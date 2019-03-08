@@ -52,7 +52,7 @@ begin
       format(
         'Покупка %s статуса "%s"',
         (case when v_status_value = 1 then 'бронзового' when v_status_value = 2 then 'серебряного' else 'золотого' end),
-        json.get_string(data.get_raw_attribute_value(data.get_class_id(v_status_name || '_status_page'), 'title'))),
+        json.get_string(data.get_raw_attribute_value(data.get_class_id(v_status_name || '_status_page'), 'subtitle'))),
       -v_price,
       v_current_sum - v_price,
       null,
