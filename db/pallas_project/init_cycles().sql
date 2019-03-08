@@ -9,8 +9,8 @@ declare
   v_time timestamp with time zone;
   v_cycle_times timestamp with time zone[] :=
     array[
-      timestamp with time zone '2019-03-08 20:00:00',
-      timestamp with time zone '2019-03-09 02:00:00',
+      timestamp with time zone '2019-03-08 21:00:00',
+      timestamp with time zone '2019-03-09 03:00:00',
       timestamp with time zone '2019-03-09 13:00:00',
       timestamp with time zone '2019-03-09 18:00:00',
       timestamp with time zone '2019-03-09 22:00:00',

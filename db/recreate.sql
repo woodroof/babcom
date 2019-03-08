@@ -23460,8 +23460,8 @@ declare
   v_time timestamp with time zone;
   v_cycle_times timestamp with time zone[] :=
     array[
-      timestamp with time zone '2019-03-08 20:00:00',
-      timestamp with time zone '2019-03-09 02:00:00',
+      timestamp with time zone '2019-03-08 21:00:00',
+      timestamp with time zone '2019-03-09 03:00:00',
       timestamp with time zone '2019-03-09 13:00:00',
       timestamp with time zone '2019-03-09 18:00:00',
       timestamp with time zone '2019-03-09 22:00:00',
@@ -29025,12 +29025,12 @@ as
 $$
 begin
   -- Зависимость от стимуляторов a9e4bc61-4e10-4c9e-a7de-d8f61536f657
-  perform data.create_job(timestamp with time zone '2019-03-08 14:00:00', 
+  perform data.create_job(timestamp with time zone '2019-03-08 16:00:00', 
     'pallas_project.job_med_set_disease_level', 
     jsonb '{"person_code": "a9e4bc61-4e10-4c9e-a7de-d8f61536f657", "disease": "addiction", "level": 1}');
 
   -- Генетическая болезнь у Лины Ковач
-  perform data.create_job(timestamp with time zone '2019-03-08 14:00:00', 
+  perform data.create_job(timestamp with time zone '2019-03-08 16:00:00', 
     'pallas_project.job_med_set_disease_level', 
     jsonb '{"person_code": "54e94c45-ce2a-459a-8613-9b75e23d9b68", "disease": "genetic", "level": 5}');
 
