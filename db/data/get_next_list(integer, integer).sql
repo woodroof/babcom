@@ -20,6 +20,7 @@ declare
   v_count integer := 0;
   v_has_more boolean := false;
   v_objects jsonb[] := array[]::jsonb[];
+  v_max_index integer;
 begin
   assert v_actor_id is not null;
 
@@ -48,10 +49,17 @@ begin
     raise exception 'Client % has no subscription for object %', client_id, object_id;
   end if;
 
+  select max(index) + 1
+  into v_max_index
+  from data.client_subscription_objects
+  where client_subscription_id = v_client_subscription_id;
+
+  v_max_index := coalesce(v_max_index, 0);
+
   for v_object in
     select
       o.id id,
-      c.num as index
+      row_number() over(order by c.num) as index
     from (
       select
         row_number() over() as num,
@@ -64,7 +72,7 @@ begin
         select object_id
         from data.client_subscription_objects
         where client_subscription_id = v_client_subscription_id)
-    order by c.num
+    order by index
   loop
     if v_count = v_page_size then
       v_has_more := true;
@@ -89,7 +97,7 @@ begin
     end if;
 
     insert into data.client_subscription_objects(client_subscription_id, object_id, index, data)
-    values(v_client_subscription_id, v_object.id, v_object.index, v_data);
+    values(v_client_subscription_id, v_object.id, v_object.index + v_max_index, v_data);
 
     if not v_is_visible then
       continue;
