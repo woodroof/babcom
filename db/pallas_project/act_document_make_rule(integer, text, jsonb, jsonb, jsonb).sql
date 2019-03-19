@@ -9,7 +9,7 @@ declare
   v_document_code text := json.get_string(in_params, 'document_code');
   v_document_id integer := data.get_object_id(v_document_code);
   v_actor_id integer := data.get_active_actor_id(in_client_id);
-  v_document_category text := json.get_string_opt(data.get_attribute_value_for_update(v_document_id, 'system_document_category'),'~');
+  v_document_category text := json.get_string_opt(data.get_attribute_value_for_update(v_document_id, 'document_category'),'~');
   v_my_documents_id integer := data.get_object_id('my_documents');
   v_rules_documents_id integer := data.get_object_id('rules_documents');
   v_person_id integer;

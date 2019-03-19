@@ -14300,7 +14300,7 @@ declare
   v_document_code text := json.get_string(in_params, 'document_code');
   v_document_id integer := data.get_object_id(v_document_code);
   v_actor_id integer := data.get_active_actor_id(in_client_id);
-  v_document_category text := json.get_string_opt(data.get_attribute_value_for_update(v_document_id, 'system_document_category'),'~');
+  v_document_category text := json.get_string_opt(data.get_attribute_value_for_update(v_document_id, 'document_category'),'~');
   v_my_documents_id integer := data.get_object_id('my_documents');
   v_rules_documents_id integer := data.get_object_id('rules_documents');
   v_person_id integer;
@@ -16877,9 +16877,9 @@ begin
   if (v_is_master and v_chat_parent_list <> 'master_chats') or v_chat_can_rename then
     v_actions_list := v_actions_list || 
         format(', "chat_rename": {"code": "chat_rename", "name": "Переименовать чат", "disabled": false, "warning": "Чат поменяет имя для всех его участников.",'||
-                '"params": {"chat_code": "%s"}, "user_params": [{"code": "title", "description": "Введите имя чата", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"}]}',
+                '"params": {"chat_code": "%s"}, "user_params": [{"code": "title", "description": "Введите имя чата", "type": "string", "restrictions": {"min_length": 1}, "default_value": %s}]}',
                 v_chat_code,
-                json.get_string_opt(data.get_raw_attribute_value_for_share(in_object_id, 'title'), null));
+                coalesce(data.get_raw_attribute_value_for_share(in_object_id, 'title')::text, '""'));
   end if;
 
   if not v_chat_cant_write and (not v_is_master or v_chat_parent_list = 'master_chats') then
@@ -31746,6 +31746,47 @@ begin
     data.attribute_change2jsonb(v_org_districts_influence_attr_id, v_org_districts_influence, 'master') ||
     data.attribute_change2jsonb(v_org_districts_influence_attr_id, v_org_districts_influence, v_org_code || '_head') ||
     data.attribute_change2jsonb(v_org_districts_influence_attr_id, v_org_districts_influence, v_org_code || '_economist'));
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.update_person_list();
+
+create or replace function pallas_project.update_person_list()
+returns void
+volatile
+as
+$$
+declare
+  v_list jsonb;
+  v_master_list jsonb;
+begin
+  -- Список для игроков
+  select jsonb_agg(o.code order by data.get_attribute_value(o.id, 'title'))
+  into v_list
+  from data.object_objects oo
+  join data.objects o on
+    o.id = oo.object_id
+  where
+    oo.parent_object_id = data.get_object_id('player') and
+    oo.object_id != oo.parent_object_id;
+
+  -- Список для мастеров
+  select jsonb_agg(o.code order by data.get_attribute_value(o.id, 'title'))
+  into v_master_list
+  from data.object_objects oo
+  join data.objects o on
+    o.id = oo.object_id
+  where
+    oo.parent_object_id = data.get_object_id('all_person') and
+    oo.object_id != oo.parent_object_id;
+
+  -- Создаём объект
+  perform data.change_object_and_notify(
+    data.get_object_id('persons'),
+    jsonb '[]' ||
+    data.attribute_change2jsonb('content', v_list) ||
+    data.attribute_change2jsonb('content', v_master_list, 'master'));
 end;
 $$
 language plpgsql;

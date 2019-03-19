@@ -64,9 +64,9 @@ begin
   if (v_is_master and v_chat_parent_list <> 'master_chats') or v_chat_can_rename then
     v_actions_list := v_actions_list || 
         format(', "chat_rename": {"code": "chat_rename", "name": "Переименовать чат", "disabled": false, "warning": "Чат поменяет имя для всех его участников.",'||
-                '"params": {"chat_code": "%s"}, "user_params": [{"code": "title", "description": "Введите имя чата", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"}]}',
+                '"params": {"chat_code": "%s"}, "user_params": [{"code": "title", "description": "Введите имя чата", "type": "string", "restrictions": {"min_length": 1}, "default_value": %s}]}',
                 v_chat_code,
-                json.get_string_opt(data.get_raw_attribute_value_for_share(in_object_id, 'title'), null));
+                coalesce(data.get_raw_attribute_value_for_share(in_object_id, 'title')::text, '""'));
   end if;
 
   if not v_chat_cant_write and (not v_is_master or v_chat_parent_list = 'master_chats') then
