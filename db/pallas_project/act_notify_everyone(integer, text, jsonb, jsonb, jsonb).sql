@@ -35,7 +35,6 @@ begin
       select
         o.id,
         o.code,
-        data.get_raw_attribute_value_for_update(o.id, v_system_person_notification_count_attribute_id) as nc,
         n.id as n_id,
         data.get_raw_attribute_value_for_update(n.id, v_content_attribute_id) as content
       from data.object_objects oo
@@ -55,7 +54,7 @@ begin
           v_person.id,
           'changes',
           jsonb '[]' ||
-          data.attribute_change2jsonb(v_system_person_notification_count_attribute_id, to_jsonb(json.get_integer(v_person.nc) + 1)));
+          data.attribute_change2jsonb(v_system_person_notification_count_attribute_id, to_jsonb(jsonb_array_length(v_person.content) + 1)));
       v_changes :=
         v_changes ||
         jsonb_build_object(

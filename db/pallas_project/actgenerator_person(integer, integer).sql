@@ -101,29 +101,31 @@ begin
           -v_opa_rating + 1)::jsonb;
       end if;
 
-      if v_economy_type not in (jsonb '"fixed"', jsonb '"fixed_with_money"') then
-        v_actions :=
-          v_actions ||
-          format('{
-            "open_next_statuses": {
-              "code": "act_open_object",
-              "name": "Посмотреть купленные статусы на следующий цикл",
-              "disabled": false,
-              "params": {
-                "object_code": "%s_next_statuses"
+      if v_economy_type != jsonb '"fixed"' then
+        if v_economy_type != jsonb '"fixed_with_money"' then
+          v_actions :=
+            v_actions ||
+            format('{
+              "open_next_statuses": {
+                "code": "act_open_object",
+                "name": "Посмотреть купленные статусы на следующий цикл",
+                "disabled": false,
+                "params": {
+                  "object_code": "%s_next_statuses"
+                }
+              },
+              "open_contracts": {
+                "code": "act_open_object",
+                "name": "Посмотреть контракты",
+                "disabled": false,
+                "params": {
+                  "object_code": "%s_contracts"
+                }
               }
-            },
-            "open_contracts": {
-              "code": "act_open_object",
-              "name": "Посмотреть контракты",
-              "disabled": false,
-              "params": {
-                "object_code": "%s_contracts"
-              }
-            }
-          }',
-          v_object_code,
-          v_object_code)::jsonb;
+            }',
+            v_object_code,
+            v_object_code)::jsonb;
+        end if;
 
         if v_economy_type != jsonb '"un"' then
           v_money := json.get_integer(data.get_attribute_value_for_share(in_object_id, 'system_money'));

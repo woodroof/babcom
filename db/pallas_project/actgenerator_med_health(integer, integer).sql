@@ -21,12 +21,12 @@ begin
   from jsonb_to_record(jsonb_extract_path(v_med_health, 'wound')) as x(level integer);
 
   v_actions_list := v_actions_list || 
-        format(', "med_light_wound": {"code": "med_set_disease_level", "name": "Получил лёгкое ранение (конечности)", "disabled": %s,'||
+        format(', "med_light_wound": {"code": "med_set_disease_level", "name": "Получил лёгкое ранение (конечности)", "disabled": %s, "warning": "Вы уверены, что получили ранение?",'||
                 '"params": {"person_code": "%s", "disease": "wound", "level": 1}}',
                 case when coalesce(v_level, 0) < 1 then 'false' else 'true' end,
                 v_person_code);
   v_actions_list := v_actions_list || 
-        format(', "med_heavy_wound": {"code": "med_set_disease_level", "name": "Получил тяжёлое ранение (корпус)", "disabled": %s,'||
+        format(', "med_heavy_wound": {"code": "med_set_disease_level", "name": "Получил тяжёлое ранение (корпус)", "disabled": %s, "warning": "Вы уверены, что получили ранение?",'||
                 '"params": {"person_code": "%s", "disease": "wound", "level": 2}}',
                 case when coalesce(v_level, 0) < 2 then 'false' else 'true' end,
                 v_person_code);
@@ -35,7 +35,7 @@ begin
   from jsonb_to_record(jsonb_extract_path(v_med_health, 'radiation')) as x(level integer);
 
   v_actions_list := v_actions_list || 
-        format(', "med_irradiated": {"code": "med_set_disease_level", "name": "Получил дозу облучения", "disabled": %s,'||
+        format(', "med_irradiated": {"code": "med_set_disease_level", "name": "Получил дозу облучения", "disabled": %s, "warning": "Вы уверены, что получили дозу облучения?",'||
                 '"params": {"person_code": "%s", "disease": "radiation", "level": 1}}',
                 case when coalesce(v_level, 0) < 1 then 'false' else 'true' end,
                 v_person_code);

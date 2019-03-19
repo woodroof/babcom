@@ -39,16 +39,16 @@ begin
   where id = v_login_id
   for share;
 
-  for v_actor_function in
-    select actor_id, json.get_string_opt(data.get_attribute_value(actor_id, 'actor_function'), null) as actor_function
-    from data.login_actors
-    where login_id = v_login_id
-  loop
-    if v_actor_function is not null then
-      execute format('select %s($1)', v_actor_function.actor_function)
-      using v_actor_function.actor_id;
-    end if;
-  end loop;
+  --for v_actor_function in
+  --  select actor_id, json.get_string_opt(data.get_attribute_value(actor_id, 'actor_function'), null) as actor_function
+  --  from data.login_actors
+  --  where login_id = v_login_id
+  --loop
+  --  if v_actor_function is not null then
+  --    execute format('select %s($1)', v_actor_function.actor_function)
+  --    using v_actor_function.actor_id;
+  --  end if;
+  --end loop;
 
   for v_actor in
     select
@@ -75,11 +75,11 @@ begin
     if v_template ? 'title' then
       v_title_attribute_id := data.get_attribute_id(json.get_string(v_template, 'title'));
 
-      if data.can_attribute_be_overridden(v_title_attribute_id) then
-        v_title := json.get_string_opt(data.get_attribute_value(v_actor.id, v_title_attribute_id, v_actor.id), null);
-      else
+      --if data.can_attribute_be_overridden(v_title_attribute_id) then
+      --  v_title := json.get_string_opt(data.get_attribute_value(v_actor.id, v_title_attribute_id, v_actor.id), null);
+      --else
         v_title := json.get_string_opt(data.get_attribute_value(v_actor.id, v_title_attribute_id), null);
-      end if;
+      --end if;
     end if;
 
     if v_template ? 'subtitle' then

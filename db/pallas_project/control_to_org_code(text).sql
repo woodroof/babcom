@@ -8,6 +8,8 @@ $$
 begin
   if in_control = 'opa' or in_control = 'administration' then
     return 'org_' || in_control;
+  elsif in_control = 'opab' then
+    return 'org_free_sky';
   end if;
 
   assert in_control = 'cartel';

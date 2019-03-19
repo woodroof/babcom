@@ -10,6 +10,8 @@ begin
     return 'administration';
   elsif in_org_code = 'org_opa' then
     return 'opa';
+  elsif in_org_code = 'org_free_sky' then
+    return 'opab';
   end if;
 
   assert in_org_code = 'org_starbucks';

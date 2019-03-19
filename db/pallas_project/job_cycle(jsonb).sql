@@ -188,7 +188,7 @@ begin
               v_transactions ||
               format(
                 '{
-                  "comment": "Спасибо, что выбрали наш инвестиционный фонд.\nГлава ИФ ООН Ашшурбанапал Ганди",
+                  "comment": "Спасибо, что выбрали нашу инвестиционную компанию.\nИФ ООН",
                   "value": %s,
                   "balance": 0
                 }',
@@ -410,6 +410,7 @@ begin
         -- Меняем текущие статусы на будущие и обнуляем будущие, а также проставляем money, person_coin и cycle
         declare
           v_next_statuses_id integer := data.get_object_id(v_person_code || '_next_statuses');
+          v_statuses_id integer := data.get_object_id(v_person_code || '_statuses');
 
           v_life_support_next_status jsonb := data.get_raw_attribute_value_for_update(v_next_statuses_id, v_life_support_next_status_attr_id);
           v_health_care_next_status jsonb := data.get_raw_attribute_value_for_update(v_next_statuses_id, v_health_care_next_status_attr_id);
@@ -488,6 +489,19 @@ begin
                 v_administrative_services_next_status_attr_id,
                 (case when v_economy_type = 'un' then v_person_coin_attr_id else v_money_attr_id end),
                 (case when v_economy_type = 'un' then v_system_person_coin else v_system_money end))::jsonb);
+
+          v_object_changes :=
+            v_object_changes ||
+            jsonb_build_object(
+              'id',
+              v_statuses_id,
+              'changes',
+              format(
+                '[
+                  {"id": %s, "value": %s}
+                ]',
+                v_cycle_attr_id,
+                v_new_cycle_num)::jsonb);
 
           v_changes :=
             v_changes ||

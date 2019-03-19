@@ -13,7 +13,7 @@ declare
   v_comment text := json.get_string(in_user_params, 'comment');
   v_notified boolean;
 begin
-  if v_un_rating_diff = 0 then
+  if v_opa_rating_diff = 0 then
     perform api_utils.create_ok_notification(in_client_id, in_request_id);
     return;
   end if;

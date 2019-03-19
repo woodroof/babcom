@@ -10,7 +10,6 @@ declare
   v_system_person_notification_count_attr_id integer := data.get_attribute_id('system_person_notification_count');
   v_redirect_object_id integer := json.get_integer_opt(data.get_raw_attribute_value(in_list_object_id, 'redirect'), null);
   v_content_attr_id integer := data.get_attribute_id('content');
-  v_notifications_count integer := json.get_integer(data.get_attribute_value_for_update(v_actor_id, v_system_person_notification_count_attr_id)) - 1;
   v_content text[] :=
     array_remove(
       json.get_string_array(data.get_raw_attribute_value_for_update(in_object_id, v_content_attr_id)),
@@ -30,7 +29,7 @@ begin
     'Open notification');
   perform data.change_object_and_notify(
     v_actor_id,
-    jsonb_build_object('system_person_notification_count', v_notifications_count),
+    jsonb_build_object('system_person_notification_count', to_jsonb(coalesce(array_length(v_content, 1), 0))),
     v_actor_id,
     'Open notification');
 end;

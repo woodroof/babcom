@@ -35,11 +35,11 @@ begin
     v_actions_list := v_actions_list || 
         format(', "blog_rename": {"code": "blog_rename", "name": "Переименовать блог", "disabled": false,'||
                 '"params": {"blog_code": "%s"}, 
-                 "user_params": [{"code": "title", "description": "Введите имя блога", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"},
-                                 {"code": "subtitle", "description": "Введите описание блога", "type": "string", "default_value": "%s"}]}',
+                 "user_params": [{"code": "title", "description": "Введите имя блога", "type": "string", "restrictions": {"min_length": 1}, "default_value": %s},
+                                 {"code": "subtitle", "description": "Введите описание блога", "type": "string", "default_value": %s}]}',
                 v_blog_code,
-                json.get_string_opt(data.get_raw_attribute_value_for_share(in_object_id, 'title'), null),
-                json.get_string_opt(data.get_raw_attribute_value_for_share(in_object_id, 'subtitle'), null));
+                coalesce(data.get_raw_attribute_value_for_share(in_object_id, 'title')::text, '""'),
+                coalesce(data.get_raw_attribute_value_for_share(in_object_id, 'subtitle')::text, '""'));
 
     v_actions_list := v_actions_list || 
         format(', "blog_write": {"code": "blog_write", "name": "Написать", "disabled": false, '||

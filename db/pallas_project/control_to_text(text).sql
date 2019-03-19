@@ -8,6 +8,8 @@ $$
 begin
   if in_control = 'opa' then
     return 'СВП';
+  elsif in_control = 'opab' then
+    return 'СВПб';
   elsif in_control = 'administration' then
     return 'Администрация';
   end if;

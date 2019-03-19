@@ -35,6 +35,8 @@ begin
   end if;
 
   v_diff := pallas_project.change_money(v_actor_id, v_current_sum - v_price, v_actor_id, 'Status purchase');
+  perform data.process_diffs_and_notify(v_diff);
+
   perform pallas_project.create_transaction(
     v_actor_id,
     null,
@@ -45,8 +47,8 @@ begin
     null,
     v_actor_id,
     array[v_actor_id]);
+
   v_diff :=
-    v_diff ||
     data.change_object(
       v_object_id,
       jsonb '[]' || data.attribute_change2jsonb('lottery_ticket_count', to_jsonb(v_lottery_ticket_count + 1), v_actor_id),

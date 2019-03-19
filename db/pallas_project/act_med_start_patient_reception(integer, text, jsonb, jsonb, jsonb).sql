@@ -32,6 +32,11 @@ begin
     inner join data.login_actors la on l.id = la.login_id
   where l.code = v_patient_login;
 
+  if v_person_id is null then
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Неверный пароль');
+    return;
+  end if;
+
   v_person_id := json.get_integer_opt(data.get_attribute_value(v_person_id, 'system_person_original_id'), v_person_id);
 
   v_med_health := coalesce(data.get_attribute_value(data.get_object_code(v_person_id) || '_med_health', 'med_health'), jsonb '{}');

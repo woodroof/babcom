@@ -296,7 +296,7 @@ begin
     set is_connected = true
     where id = v_client_id;
 
-    perform data.log('info', format('Connected client with code "%s"', in_client_code));
+    --perform data.log('info', format('Connected client with code "%s"', in_client_code));
   end if;
 end;
 $$
@@ -377,7 +377,7 @@ begin
   delete from data.client_subscriptions
   where client_id = v_client_id;
 
-  perform data.log('info', format('Disconnected client with code "%s"', in_client_code));
+  --perform data.log('info', format('Disconnected client with code "%s"', in_client_code));
 end;
 $$
 language plpgsql;
@@ -712,16 +712,16 @@ begin
   where id = v_login_id
   for share;
 
-  for v_actor_function in
-    select actor_id, json.get_string_opt(data.get_attribute_value(actor_id, 'actor_function'), null) as actor_function
-    from data.login_actors
-    where login_id = v_login_id
-  loop
-    if v_actor_function is not null then
-      execute format('select %s($1)', v_actor_function.actor_function)
-      using v_actor_function.actor_id;
-    end if;
-  end loop;
+  --for v_actor_function in
+  --  select actor_id, json.get_string_opt(data.get_attribute_value(actor_id, 'actor_function'), null) as actor_function
+  --  from data.login_actors
+  --  where login_id = v_login_id
+  --loop
+  --  if v_actor_function is not null then
+  --    execute format('select %s($1)', v_actor_function.actor_function)
+  --    using v_actor_function.actor_id;
+  --  end if;
+  --end loop;
 
   for v_actor in
     select
@@ -748,11 +748,11 @@ begin
     if v_template ? 'title' then
       v_title_attribute_id := data.get_attribute_id(json.get_string(v_template, 'title'));
 
-      if data.can_attribute_be_overridden(v_title_attribute_id) then
-        v_title := json.get_string_opt(data.get_attribute_value(v_actor.id, v_title_attribute_id, v_actor.id), null);
-      else
+      --if data.can_attribute_be_overridden(v_title_attribute_id) then
+      --  v_title := json.get_string_opt(data.get_attribute_value(v_actor.id, v_title_attribute_id, v_actor.id), null);
+      --else
         v_title := json.get_string_opt(data.get_attribute_value(v_actor.id, v_title_attribute_id), null);
-      end if;
+      --end if;
     end if;
 
     if v_template ? 'subtitle' then
@@ -9956,6 +9956,8 @@ begin
   end if;
 
   v_diff := pallas_project.change_money(v_actor_id, v_current_sum - v_price, v_actor_id, 'Status purchase');
+  perform data.process_diffs_and_notify(v_diff);
+
   perform pallas_project.create_transaction(
     v_actor_id,
     null,
@@ -9966,8 +9968,8 @@ begin
     null,
     v_actor_id,
     array[v_actor_id]);
+
   v_diff :=
-    v_diff ||
     data.change_object(
       v_object_id,
       jsonb '[]' || data.attribute_change2jsonb('lottery_ticket_count', to_jsonb(v_lottery_ticket_count + 1), v_actor_id),
@@ -10770,7 +10772,7 @@ declare
   v_comment text := json.get_string(in_user_params, 'comment');
   v_notified boolean;
 begin
-  if v_un_rating_diff = 0 then
+  if v_opa_rating_diff = 0 then
     perform api_utils.create_ok_notification(in_client_id, in_request_id);
     return;
   end if;
@@ -11252,7 +11254,7 @@ begin
       if v_chat_parent_list = 'master_chats' then
         perform pp_utils.list_replace_to_head_and_notify(data.get_object_id(v_person_code || '_master_chats'), v_chat_code, null);
       elsif v_chat_parent_list = 'chats' then
-        perform pp_utils.list_replace_to_head_and_notify(data.get_object_id(v_person_code || '_chats'), v_chat_code, v_person_id);
+        perform pp_utils.list_replace_to_head_and_notify(data.get_object_id(v_person_code || '_chats'), v_chat_code, null);
       end if;
       if v_person_id <> v_actor_id 
         and not json.get_boolean_opt(data.get_attribute_value(v_chat_id, 'chat_is_mute', v_person_id), false) then
@@ -15140,6 +15142,8 @@ declare
   v_disease text;
   v_level integer;
   v_message text;
+  v_disease_params jsonb;
+  v_next_level integer;
 begin
   assert in_request_id is not null;
 
@@ -15153,12 +15157,21 @@ begin
     v_disease := v_diseases[random.random_integer(1, array_length(v_diseases, 1))];
     v_level := json.get_integer(json.get_object(v_med_health, v_disease), 'level');
     v_message := data.get_string_param('med_diag_' || v_disease || '_' || v_level);
-    perform pallas_project.act_med_set_disease_level(
-      null, 
-      null, 
-      format('{"person_code": "%s", "disease": "%s", "level": %s}', v_person_code, v_disease, v_level + 1)::jsonb, 
-      null, 
-      null);
+
+    v_disease_params := data.get_param('med_' || v_disease );
+
+      select coalesce(x.next_level, v_level + 1) into v_next_level
+      from jsonb_to_record(jsonb_extract_path(v_disease_params, 'l' || v_level)) as x(next_level integer);
+
+    if json.get_object_opt(v_disease_params, 'l' || v_next_level, null) is not null then
+
+      perform pallas_project.act_med_set_disease_level(
+        null, 
+        null, 
+        format('{"person_code": "%s", "disease": "%s", "level": %s}', v_person_code, v_disease, v_next_level)::jsonb, 
+        null, 
+        null);
+    end if;
   end if;
   if coalesce(v_message, '') = '' then
     v_message := 'Состояние не определено.';
@@ -15452,6 +15465,11 @@ begin
     inner join data.login_actors la on l.id = la.login_id
   where l.code = v_patient_login;
 
+  if v_person_id is null then
+    perform api_utils.create_show_message_action_notification(in_client_id, in_request_id, 'Ошибка', 'Неверный пароль');
+    return;
+  end if;
+
   v_person_id := json.get_integer_opt(data.get_attribute_value(v_person_id, 'system_person_original_id'), v_person_id);
 
   v_med_health := coalesce(data.get_attribute_value(data.get_object_code(v_person_id) || '_med_health', 'med_health'), jsonb '{}');
@@ -15579,7 +15597,6 @@ begin
       select
         o.id,
         o.code,
-        data.get_raw_attribute_value_for_update(o.id, v_system_person_notification_count_attribute_id) as nc,
         n.id as n_id,
         data.get_raw_attribute_value_for_update(n.id, v_content_attribute_id) as content
       from data.object_objects oo
@@ -15599,7 +15616,7 @@ begin
           v_person.id,
           'changes',
           jsonb '[]' ||
-          data.attribute_change2jsonb(v_system_person_notification_count_attribute_id, to_jsonb(json.get_integer(v_person.nc) + 1)));
+          data.attribute_change2jsonb(v_system_person_notification_count_attribute_id, to_jsonb(jsonb_array_length(v_person.content) + 1)));
       v_changes :=
         v_changes ||
         jsonb_build_object(
@@ -16604,11 +16621,11 @@ begin
     v_actions_list := v_actions_list || 
         format(', "blog_rename": {"code": "blog_rename", "name": "Переименовать блог", "disabled": false,'||
                 '"params": {"blog_code": "%s"}, 
-                 "user_params": [{"code": "title", "description": "Введите имя блога", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"},
-                                 {"code": "subtitle", "description": "Введите описание блога", "type": "string", "default_value": "%s"}]}',
+                 "user_params": [{"code": "title", "description": "Введите имя блога", "type": "string", "restrictions": {"min_length": 1}, "default_value": %s},
+                                 {"code": "subtitle", "description": "Введите описание блога", "type": "string", "default_value": %s}]}',
                 v_blog_code,
-                json.get_string_opt(data.get_raw_attribute_value_for_share(in_object_id, 'title'), null),
-                json.get_string_opt(data.get_raw_attribute_value_for_share(in_object_id, 'subtitle'), null));
+                coalesce(data.get_raw_attribute_value_for_share(in_object_id, 'title')::text, '""'),
+                coalesce(data.get_raw_attribute_value_for_share(in_object_id, 'subtitle')::text, '""'));
 
     v_actions_list := v_actions_list || 
         format(', "blog_write": {"code": "blog_write", "name": "Написать", "disabled": false, '||
@@ -16651,10 +16668,10 @@ begin
     v_actions_list := v_actions_list || 
         format(', "blog_message_edit": {"code": "blog_message_edit", "name": "Редактировать", "disabled": false,'||
                 '"params": {"blog_message_code": "%s", "is_list": true}, 
-                 "user_params": [{"code": "title", "description": "Заголовок", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"},
+                 "user_params": [{"code": "title", "description": "Заголовок", "type": "string", "restrictions": {"min_length": 1}, "default_value": %s},
                                  {"code": "text", "description": "Текст сообщения", "type": "string", "restrictions": {"min_length": 1, "multiline": true}, "default_value": %s}]}',
                 v_blog_message_code,
-                json.get_string_opt(data.get_raw_attribute_value_for_share(in_list_object_id, 'title'), null),
+                coalesce(data.get_raw_attribute_value_for_share(in_list_object_id, 'title')::text, '""'),
                 coalesce(data.get_raw_attribute_value_for_share(in_list_object_id, 'blog_message_text')::text, '""'));
 
     v_actions_list := v_actions_list || 
@@ -16723,10 +16740,10 @@ begin
     v_actions_list := v_actions_list || 
         format(', "blog_message_edit": {"code": "blog_message_edit", "name": "Редактировать", "disabled": false,'||
                 '"params": {"blog_message_code": "%s"}, 
-                 "user_params": [{"code": "title", "description": "Заголовок", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"},
+                 "user_params": [{"code": "title", "description": "Заголовок", "type": "string", "restrictions": {"min_length": 1}, "default_value": %s},
                                  {"code": "text", "description": "Текст сообщения", "type": "string", "restrictions": {"min_length": 1, "multiline": true}, "default_value": %s}]}',
                 v_blog_message_code,
-                json.get_string_opt(data.get_raw_attribute_value_for_share(in_object_id, 'title'), null),
+                coalesce(data.get_raw_attribute_value_for_share(in_object_id, 'title')::text, '""'),
                 coalesce(data.get_raw_attribute_value_for_share(in_object_id, 'blog_message_text')::text, '""'));
 
     v_actions_list := v_actions_list || 
@@ -18620,12 +18637,12 @@ begin
   from jsonb_to_record(jsonb_extract_path(v_med_health, 'wound')) as x(level integer);
 
   v_actions_list := v_actions_list || 
-        format(', "med_light_wound": {"code": "med_set_disease_level", "name": "Получил лёгкое ранение (конечности)", "disabled": %s,'||
+        format(', "med_light_wound": {"code": "med_set_disease_level", "name": "Получил лёгкое ранение (конечности)", "disabled": %s, "warning": "Вы уверены, что получили ранение?",'||
                 '"params": {"person_code": "%s", "disease": "wound", "level": 1}}',
                 case when coalesce(v_level, 0) < 1 then 'false' else 'true' end,
                 v_person_code);
   v_actions_list := v_actions_list || 
-        format(', "med_heavy_wound": {"code": "med_set_disease_level", "name": "Получил тяжёлое ранение (корпус)", "disabled": %s,'||
+        format(', "med_heavy_wound": {"code": "med_set_disease_level", "name": "Получил тяжёлое ранение (корпус)", "disabled": %s, "warning": "Вы уверены, что получили ранение?",'||
                 '"params": {"person_code": "%s", "disease": "wound", "level": 2}}',
                 case when coalesce(v_level, 0) < 2 then 'false' else 'true' end,
                 v_person_code);
@@ -18634,7 +18651,7 @@ begin
   from jsonb_to_record(jsonb_extract_path(v_med_health, 'radiation')) as x(level integer);
 
   v_actions_list := v_actions_list || 
-        format(', "med_irradiated": {"code": "med_set_disease_level", "name": "Получил дозу облучения", "disabled": %s,'||
+        format(', "med_irradiated": {"code": "med_set_disease_level", "name": "Получил дозу облучения", "disabled": %s, "warning": "Вы уверены, что получили дозу облучения?",'||
                 '"params": {"person_code": "%s", "disease": "radiation", "level": 1}}',
                 case when coalesce(v_level, 0) < 1 then 'false' else 'true' end,
                 v_person_code);
@@ -19778,29 +19795,31 @@ begin
           -v_opa_rating + 1)::jsonb;
       end if;
 
-      if v_economy_type not in (jsonb '"fixed"', jsonb '"fixed_with_money"') then
-        v_actions :=
-          v_actions ||
-          format('{
-            "open_next_statuses": {
-              "code": "act_open_object",
-              "name": "Посмотреть купленные статусы на следующий цикл",
-              "disabled": false,
-              "params": {
-                "object_code": "%s_next_statuses"
+      if v_economy_type != jsonb '"fixed"' then
+        if v_economy_type != jsonb '"fixed_with_money"' then
+          v_actions :=
+            v_actions ||
+            format('{
+              "open_next_statuses": {
+                "code": "act_open_object",
+                "name": "Посмотреть купленные статусы на следующий цикл",
+                "disabled": false,
+                "params": {
+                  "object_code": "%s_next_statuses"
+                }
+              },
+              "open_contracts": {
+                "code": "act_open_object",
+                "name": "Посмотреть контракты",
+                "disabled": false,
+                "params": {
+                  "object_code": "%s_contracts"
+                }
               }
-            },
-            "open_contracts": {
-              "code": "act_open_object",
-              "name": "Посмотреть контракты",
-              "disabled": false,
-              "params": {
-                "object_code": "%s_contracts"
-              }
-            }
-          }',
-          v_object_code,
-          v_object_code)::jsonb;
+            }',
+            v_object_code,
+            v_object_code)::jsonb;
+        end if;
 
         if v_economy_type != jsonb '"un"' then
           v_money := json.get_integer(data.get_attribute_value_for_share(in_object_id, 'system_money'));
@@ -20495,6 +20514,8 @@ $$
 begin
   if in_control = 'opa' or in_control = 'administration' then
     return 'org_' || in_control;
+  elsif in_control = 'opab' then
+    return 'org_free_sky';
   end if;
 
   assert in_control = 'cartel';
@@ -20513,6 +20534,8 @@ $$
 begin
   if in_control = 'opa' then
     return 'СВП';
+  elsif in_control = 'opab' then
+    return 'СВПб';
   elsif in_control = 'administration' then
     return 'Администрация';
   end if;
@@ -29106,7 +29129,7 @@ begin
         v_object_changes :=
           v_object_changes ||
           data.attribute_change2jsonb('package_what', jsonb '"кот (муляж)"');
-        v_check_result := true;
+        v_check_result := false;
       end if;
     elsif array_position(v_system_package_reactions, v_check_type) is not null then
       v_check_result := true;
@@ -29338,7 +29361,7 @@ begin
               v_transactions ||
               format(
                 '{
-                  "comment": "Спасибо, что выбрали наш инвестиционный фонд.\nГлава ИФ ООН Ашшурбанапал Ганди",
+                  "comment": "Спасибо, что выбрали нашу инвестиционную компанию.\nИФ ООН",
                   "value": %s,
                   "balance": 0
                 }',
@@ -29560,6 +29583,7 @@ begin
         -- Меняем текущие статусы на будущие и обнуляем будущие, а также проставляем money, person_coin и cycle
         declare
           v_next_statuses_id integer := data.get_object_id(v_person_code || '_next_statuses');
+          v_statuses_id integer := data.get_object_id(v_person_code || '_statuses');
 
           v_life_support_next_status jsonb := data.get_raw_attribute_value_for_update(v_next_statuses_id, v_life_support_next_status_attr_id);
           v_health_care_next_status jsonb := data.get_raw_attribute_value_for_update(v_next_statuses_id, v_health_care_next_status_attr_id);
@@ -29638,6 +29662,19 @@ begin
                 v_administrative_services_next_status_attr_id,
                 (case when v_economy_type = 'un' then v_person_coin_attr_id else v_money_attr_id end),
                 (case when v_economy_type = 'un' then v_system_person_coin else v_system_money end))::jsonb);
+
+          v_object_changes :=
+            v_object_changes ||
+            jsonb_build_object(
+              'id',
+              v_statuses_id,
+              'changes',
+              format(
+                '[
+                  {"id": %s, "value": %s}
+                ]',
+                v_cycle_attr_id,
+                v_new_cycle_num)::jsonb);
 
           v_changes :=
             v_changes ||
@@ -30878,7 +30915,6 @@ declare
   v_system_person_notification_count_attr_id integer := data.get_attribute_id('system_person_notification_count');
   v_redirect_object_id integer := json.get_integer_opt(data.get_raw_attribute_value(in_list_object_id, 'redirect'), null);
   v_content_attr_id integer := data.get_attribute_id('content');
-  v_notifications_count integer := json.get_integer(data.get_attribute_value_for_update(v_actor_id, v_system_person_notification_count_attr_id)) - 1;
   v_content text[] :=
     array_remove(
       json.get_string_array(data.get_raw_attribute_value_for_update(in_object_id, v_content_attr_id)),
@@ -30898,7 +30934,7 @@ begin
     'Open notification');
   perform data.change_object_and_notify(
     v_actor_id,
-    jsonb_build_object('system_person_notification_count', v_notifications_count),
+    jsonb_build_object('system_person_notification_count', to_jsonb(coalesce(array_length(v_content, 1), 0))),
     v_actor_id,
     'Open notification');
 end;
@@ -31109,6 +31145,8 @@ begin
     return 'administration';
   elsif in_org_code = 'org_opa' then
     return 'opa';
+  elsif in_org_code = 'org_free_sky' then
+    return 'opab';
   end if;
 
   assert in_org_code = 'org_starbucks';
@@ -31746,6 +31784,35 @@ begin
     data.attribute_change2jsonb(v_org_districts_influence_attr_id, v_org_districts_influence, 'master') ||
     data.attribute_change2jsonb(v_org_districts_influence_attr_id, v_org_districts_influence, v_org_code || '_head') ||
     data.attribute_change2jsonb(v_org_districts_influence_attr_id, v_org_districts_influence, v_org_code || '_economist'));
+end;
+$$
+language plpgsql;
+
+-- drop function pallas_project.update_organization_list();
+
+create or replace function pallas_project.update_organization_list()
+returns void
+volatile
+as
+$$
+declare
+  v_district record;
+begin
+  -- Создадим объект со списком организаций
+  declare
+    v_organization_list jsonb;
+    v_class_id integer := data.get_class_id('organization');
+  begin
+    select jsonb_agg(o.code order by data.get_raw_attribute_value(o.code, 'title'))
+    into v_organization_list
+    from data.objects o
+    where o.class_id = v_class_id;
+
+    perform data.change_object_and_notify(
+      data.get_object_id('organizations'),
+      jsonb '[]' ||
+      data.attribute_change2jsonb('content', v_organization_list));
+  end;
 end;
 $$
 language plpgsql;
@@ -33093,8 +33160,8 @@ declare
   v_system_person_notification_count_attribute_id integer := data.get_attribute_id('system_person_notification_count');
 
   v_notifications_id integer := data.get_object_id(data.get_object_code(in_object_id) || '_notifications');
-  v_notification_count integer :=
-    json.get_integer(data.get_attribute_value_for_update(in_object_id, v_system_person_notification_count_attribute_id)) + 1;
+
+  v_count integer;
 begin
   if in_redirect_object_id is not null then
     v_redirect_object_code := data.get_object_code(in_redirect_object_id);
@@ -33116,7 +33183,11 @@ begin
 
   -- Вставляем в начало списка и рассылаем уведомления
   perform pp_utils.list_prepend_and_notify(v_notifications_id, v_notification_code, null);
-  perform data.change_object_and_notify(in_object_id, jsonb '[]' || data.attribute_change2jsonb(v_system_person_notification_count_attribute_id, to_jsonb(v_notification_count)));
+  v_count := jsonb_array_length(data.get_raw_attribute_value(v_notifications_id, 'content'));
+  perform data.change_object_and_notify(
+    in_object_id,
+    jsonb '[]' ||
+    data.attribute_change2jsonb(v_system_person_notification_count_attribute_id, to_jsonb(v_count)));
 
   if in_is_important then
     perform pallas_project.send_to_important_notifications(in_object_id, in_text, v_redirect_object_code);

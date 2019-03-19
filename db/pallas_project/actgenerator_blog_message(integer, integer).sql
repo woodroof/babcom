@@ -26,10 +26,10 @@ begin
     v_actions_list := v_actions_list || 
         format(', "blog_message_edit": {"code": "blog_message_edit", "name": "Редактировать", "disabled": false,'||
                 '"params": {"blog_message_code": "%s"}, 
-                 "user_params": [{"code": "title", "description": "Заголовок", "type": "string", "restrictions": {"min_length": 1}, "default_value": "%s"},
+                 "user_params": [{"code": "title", "description": "Заголовок", "type": "string", "restrictions": {"min_length": 1}, "default_value": %s},
                                  {"code": "text", "description": "Текст сообщения", "type": "string", "restrictions": {"min_length": 1, "multiline": true}, "default_value": %s}]}',
                 v_blog_message_code,
-                json.get_string_opt(data.get_raw_attribute_value_for_share(in_object_id, 'title'), null),
+                coalesce(data.get_raw_attribute_value_for_share(in_object_id, 'title')::text, '""'),
                 coalesce(data.get_raw_attribute_value_for_share(in_object_id, 'blog_message_text')::text, '""'));
 
     v_actions_list := v_actions_list || 

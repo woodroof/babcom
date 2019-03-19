@@ -31,7 +31,7 @@ begin
         v_object_changes :=
           v_object_changes ||
           data.attribute_change2jsonb('package_what', jsonb '"кот (муляж)"');
-        v_check_result := true;
+        v_check_result := false;
       end if;
     elsif array_position(v_system_package_reactions, v_check_type) is not null then
       v_check_result := true;

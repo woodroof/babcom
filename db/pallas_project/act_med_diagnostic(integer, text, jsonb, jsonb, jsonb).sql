@@ -12,6 +12,8 @@ declare
   v_disease text;
   v_level integer;
   v_message text;
+  v_disease_params jsonb;
+  v_next_level integer;
 begin
   assert in_request_id is not null;
 
@@ -25,12 +27,21 @@ begin
     v_disease := v_diseases[random.random_integer(1, array_length(v_diseases, 1))];
     v_level := json.get_integer(json.get_object(v_med_health, v_disease), 'level');
     v_message := data.get_string_param('med_diag_' || v_disease || '_' || v_level);
-    perform pallas_project.act_med_set_disease_level(
-      null, 
-      null, 
-      format('{"person_code": "%s", "disease": "%s", "level": %s}', v_person_code, v_disease, v_level + 1)::jsonb, 
-      null, 
-      null);
+
+    v_disease_params := data.get_param('med_' || v_disease );
+
+      select coalesce(x.next_level, v_level + 1) into v_next_level
+      from jsonb_to_record(jsonb_extract_path(v_disease_params, 'l' || v_level)) as x(next_level integer);
+
+    if json.get_object_opt(v_disease_params, 'l' || v_next_level, null) is not null then
+
+      perform pallas_project.act_med_set_disease_level(
+        null, 
+        null, 
+        format('{"person_code": "%s", "disease": "%s", "level": %s}', v_person_code, v_disease, v_next_level)::jsonb, 
+        null, 
+        null);
+    end if;
   end if;
   if coalesce(v_message, '') = '' then
     v_message := 'Состояние не определено.';
